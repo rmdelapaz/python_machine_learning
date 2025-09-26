@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Master Support Vector Machines (SVM) in Python. Learn linear and non-linear classification, kernel tricks, hyperparameter tuning, and practical applications.">
+    <title>Support Vector Machines - Python Data Science Path</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script src="js/course-enhancements.js" defer></script>
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    
+    <main id="main-content">
+    <header role="banner">
+        <h1>Support Vector Machines</h1>
+        <div class="reading-time" aria-label="Estimated reading time"></div>
+    </header>
+    
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="index.html">Home</a>
+        <span class="separator">›</span>
+        <a href="#">Machine Learning Module</a>
+        <span class="separator">›</span>
+        <a href="#">Supervised Learning</a>
+        <span class="separator">›</span>
+        <span class="current">Support Vector Machines</span>
+    </nav>
+
+    <h2>Maximum Margin Classification! 🎯</h2>
+    
+    <blockquote>
+        <p>Support Vector Machines find the optimal hyperplane that maximizes the margin between classes. With the kernel trick, SVMs can efficiently handle non-linear decision boundaries in high-dimensional spaces. Master this powerful algorithm that excels at both linear and non-linear classification tasks.</p>
+    </blockquote>
+
+    <h2>SVM Conceptual Framework</h2>
+    
+    <div class="mermaid">
+    graph TD
+        A[Support Vector Machines] --> B[Linear SVM]
+        A --> C[Non-linear SVM]
+        
+        B --> D[Hard Margin]
+        B --> E[Soft Margin]
+        
+        C --> F[Kernel Trick]
+        F --> G[RBF Kernel]
+        F --> H[Polynomial Kernel]
+        F --> I[Sigmoid Kernel]
+        
+        E --> K[C Parameter]
+        G --> M[Gamma Parameter]
+        
+        style A fill:#f9f,stroke:#333,stroke-width:2px
+        style F fill:#bbf,stroke:#333,stroke-width:2px
+        style K fill:#9f9,stroke:#333,stroke-width:2px
+    </div>
+
+    <h2>Understanding Support Vector Machines</h2>
+    
+    <h3>Core Concepts and Linear SVM</h3>
+    <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.svm import SVC, SVR, LinearSVC
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.datasets import make_classification, make_circles, make_moons
+import warnings
+warnings.filterwarnings('ignore')
+
+# Generate different types of data
+np.random.seed(42)
+
+# Linear separable data
+X_linear, y_linear = make_classification(
+    n_samples=200, n_features=2, n_redundant=0,
+    n_informative=2, n_clusters_per_class=1,
+    flip_y=0.1, random_state=42
+)
+
+# Non-linear data
+X_circles, y_circles = make_circles(n_samples=200, noise=0.1, 
+                                   factor=0.5, random_state=42)
+X_moons, y_moons = make_moons(n_samples=200, noise=0.15, random_state=42)
+
+class SVMAnalyzer:
+    """Comprehensive SVM Analysis Tool"""
+    
+    def __init__(self):
+        self.models = {}
+        self.results = {}
+        
+    def visualize_linear_svm(self, X, y):
+        """Visualize linear SVM with different C values"""
+        
+        # Scale features
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
+        # C values to test
+        C_values = [0.01, 0.1, 1, 10, 100]
+        
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        axes = axes.flatten()
+        
+        for idx, C in enumerate(C_values):
+            # Train SVM
+            svm = SVC(kernel='linear', C=C)
+            svm.fit(X_scaled, y)
+            
+            # Get support vectors
+            support_vectors = scaler.inverse_transform(svm.support_vectors_)
+            
+            # Create mesh for decision boundary
+            h = 0.02
+            x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
+            y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
+            xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                               np.arange(y_min, y_max, h))
+            
+            # Predict on mesh
+            Z = svm.predict(scaler.transform(np.c_[xx.ravel(), yy.ravel()]))
+            Z = Z.reshape(xx.shape)
+            
+            # Plot
+            axes[idx].contourf(xx, yy, Z, alpha=0.4, cmap=plt.cm.RdBu)
+            axes[idx].scatter(X[:, 0], X[:, 1], c=y, cmap=plt.cm.RdBu, 
+                            edgecolor='black', s=30)
+            axes[idx].scatter(support_vectors[:, 0], support_vectors[:, 1], 
+                            s=100, facecolors='none', edgecolors='green', 
+                            linewidths=2, label=f'SVs: {len(support_vectors)}')
+            
+            axes[idx].set_title(f'C = {C}')
+            axes[idx].set_xlabel('Feature 1')
+            axes[idx].set_ylabel('Feature 2')
+            axes[idx].legend()
+        
+        # Remove extra subplot
+        fig.delaxes(axes[5])
+        
+        plt.suptitle('Linear SVM with Different Regularization (C)', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+    
+    def kernel_comparison(self, X, y):
+        """Compare different kernel functions"""
+        
+        kernels = ['linear', 'poly', 'rbf', 'sigmoid']
+        
+        # Scale data
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_scaled, y, test_size=0.3, random_state=42
+        )
+        
+        results = {}
+        
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        axes = axes.flatten()
+        
+        for idx, kernel in enumerate(kernels):
+            # Train SVM
+            svm = SVC(kernel=kernel, C=1.0)
+            svm.fit(X_train, y_train)
+            
+            # Store model and results
+            self.models[kernel] = svm
+            y_pred = svm.predict(X_test)
+            results[kernel] = {
+                'accuracy': accuracy_score(y_test, y_pred),
+                'n_support': len(svm.support_vectors_)
+            }
+            
+            # Visualization
+            h = 0.02
+            x_min, x_max = X_scaled[:, 0].min() - 0.5, X_scaled[:, 0].max() + 0.5
+            y_min, y_max = X_scaled[:, 1].min() - 0.5, X_scaled[:, 1].max() + 0.5
+            xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                               np.arange(y_min, y_max, h))
+            
+            Z = svm.predict(np.c_[xx.ravel(), yy.ravel()])
+            Z = Z.reshape(xx.shape)
+            
+            axes[idx].contourf(xx, yy, Z, alpha=0.4, cmap=plt.cm.coolwarm)
+            axes[idx].scatter(X_scaled[:, 0], X_scaled[:, 1], c=y, 
+                            cmap=plt.cm.coolwarm, edgecolor='black', s=30)
+            axes[idx].scatter(svm.support_vectors_[:, 0], 
+                            svm.support_vectors_[:, 1],
+                            s=100, facecolors='none', edgecolors='green', 
+                            linewidths=2)
+            
+            axes[idx].set_title(f'{kernel.upper()} Kernel\n'
+                               f'Acc: {results[kernel]["accuracy"]:.3f}, '
+                               f'SVs: {results[kernel]["n_support"]}')
+            axes[idx].set_xlabel('Feature 1')
+            axes[idx].set_ylabel('Feature 2')
+        
+        plt.suptitle('SVM Kernel Comparison', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+        
+        return results
+
+# Initialize analyzer
+analyzer = SVMAnalyzer()
+
+print("="*60)
+print("SUPPORT VECTOR MACHINES FUNDAMENTALS")
+print("="*60)
+
+# Visualize linear SVM
+print("\nVisualizing Linear SVM with different C values...")
+analyzer.visualize_linear_svm(X_linear, y_linear)
+
+# Kernel comparison
+print("\nComparing different kernels...")
+kernel_results = analyzer.kernel_comparison(X_circles, y_circles)
+
+print("\nKernel Performance Summary:")
+for kernel, metrics in kernel_results.items():
+    print(f"{kernel.upper():8} - Accuracy: {metrics['accuracy']:.3f}, "
+          f"Support Vectors: {metrics['n_support']}")</code></pre>
+
+    <h2>Hyperparameter Optimization</h2>
+    
+    <h3>Grid Search and Cross-Validation</h3>
+    <pre class="language-python"><code>class SVMTuner:
+    """Hyperparameter tuning for SVM"""
+    
+    def __init__(self):
+        self.best_model = None
+        self.cv_results = None
+        
+    def grid_search_optimization(self, X, y):
+        """Perform grid search for optimal parameters"""
+        
+        # Scale data
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_scaled, y, test_size=0.2, random_state=42
+        )
+        
+        # Define parameter grid
+        param_grid = [
+            # Linear kernel
+            {'kernel': ['linear'], 'C': [0.01, 0.1, 1, 10, 100]},
+            
+            # RBF kernel
+            {'kernel': ['rbf'], 
+             'C': [0.1, 1, 10, 100],
+             'gamma': ['scale', 'auto', 0.001, 0.01, 0.1, 1]},
+            
+            # Polynomial kernel
+            {'kernel': ['poly'],
+             'C': [0.1, 1, 10],
+             'degree': [2, 3, 4],
+             'gamma': ['scale', 'auto']}
+        ]
+        
+        # Grid search
+        print("Performing Grid Search...")
+        grid_search = GridSearchCV(
+            SVC(random_state=42),
+            param_grid,
+            cv=5,
+            scoring='accuracy',
+            n_jobs=-1,
+            verbose=1
+        )
+        
+        grid_search.fit(X_train, y_train)
+        
+        # Store results
+        self.best_model = grid_search.best_estimator_
+        self.cv_results = pd.DataFrame(grid_search.cv_results_)
+        
+        # Test performance
+        y_pred = self.best_model.predict(X_test)
+        test_accuracy = accuracy_score(y_test, y_pred)
+        
+        print(f"\nBest Parameters: {grid_search.best_params_}")
+        print(f"Best CV Score: {grid_search.best_score_:.4f}")
+        print(f"Test Accuracy: {test_accuracy:.4f}")
+        
+        return grid_search.best_params_, test_accuracy
+    
+    def c_gamma_heatmap(self, X, y):
+        """Analyze interaction between C and gamma parameters"""
+        
+        # Scale data
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_scaled, y, test_size=0.3, random_state=42
+        )
+        
+        # Parameter ranges
+        C_range = np.logspace(-2, 3, 6)
+        gamma_range = np.logspace(-3, 2, 6)
+        
+        # Create grid
+        scores = np.zeros((len(C_range), len(gamma_range)))
+        
+        for i, C in enumerate(C_range):
+            for j, gamma in enumerate(gamma_range):
+                svm = SVC(kernel='rbf', C=C, gamma=gamma)
+                svm.fit(X_train, y_train)
+                scores[i, j] = svm.score(X_test, y_test)
+        
+        # Visualization
+        plt.figure(figsize=(10, 8))
+        plt.imshow(scores, cmap='YlOrRd', aspect='auto')
+        plt.colorbar(label='Test Accuracy')
+        plt.xticks(range(len(gamma_range)), [f'{g:.1e}' for g in gamma_range])
+        plt.yticks(range(len(C_range)), [f'{c:.1e}' for c in C_range])
+        plt.xlabel('Gamma')
+        plt.ylabel('C')
+        plt.title('C-Gamma Parameter Interaction Heatmap')
+        
+        # Add text annotations
+        for i in range(len(C_range)):
+            for j in range(len(gamma_range)):
+                plt.text(j, i, f'{scores[i, j]:.2f}',
+                        ha='center', va='center', color='black')
+        
+        plt.tight_layout()
+        plt.show()
+        
+        return scores
+
+# Hyperparameter tuning
+tuner = SVMTuner()
+
+print("\n" + "="*60)
+print("HYPERPARAMETER OPTIMIZATION")
+print("="*60)
+
+# Grid search
+best_params, test_acc = tuner.grid_search_optimization(X_circles, y_circles)
+
+# C-Gamma interaction
+print("\nAnalyzing C-Gamma interaction...")
+scores_grid = tuner.c_gamma_heatmap(X_circles, y_circles)</code></pre>
+
+    <h2>Support Vector Regression (SVR)</h2>
+    
+    <h3>Regression with SVM</h3>
+    <pre class="language-python"><code>from sklearn.svm import SVR
+
+# Generate regression data
+np.random.seed(42)
+X_reg = np.sort(5 * np.random.rand(200))
+y_reg = np.sin(X_reg) + 0.2 * np.random.randn(200)
+
+def svr_demonstration():
+    """Demonstrate Support Vector Regression"""
+    
+    # Reshape data
+    X_reg_reshaped = X_reg.reshape(-1, 1)
+    
+    # Different epsilon values
+    epsilon_values = [0.01, 0.1, 0.5]
+    
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    
+    for idx, epsilon in enumerate(epsilon_values):
+        # Train SVR
+        svr = SVR(kernel='rbf', C=100, epsilon=epsilon)
+        svr.fit(X_reg_reshaped, y_reg)
+        y_pred = svr.predict(X_reg_reshaped)
+        
+        # Plot
+        axes[idx].scatter(X_reg, y_reg, alpha=0.5, label='Data')
+        axes[idx].plot(X_reg, y_pred, 'r-', label='SVR fit', linewidth=2)
+        axes[idx].fill_between(X_reg, 
+                              y_pred - epsilon, 
+                              y_pred + epsilon,
+                              alpha=0.2, color='red', 
+                              label=f'ε-tube (ε={epsilon})')
+        
+        # Mark support vectors
+        axes[idx].scatter(X_reg[svr.support_], y_reg[svr.support_],
+                        s=100, facecolors='none', edgecolors='green',
+                        linewidths=2, label='Support Vectors')
+        
+        axes[idx].set_xlabel('X')
+        axes[idx].set_ylabel('y')
+        axes[idx].set_title(f'ε = {epsilon}, SVs = {len(svr.support_)}')
+        axes[idx].legend()
+        axes[idx].grid(True, alpha=0.3)
+    
+    plt.suptitle('SVR Epsilon-Insensitive Tube', fontsize=14)
+    plt.tight_layout()
+    plt.show()
+
+print("\n" + "="*60)
+print("SUPPORT VECTOR REGRESSION")
+print("="*60)
+svr_demonstration()</code></pre>
+
+    <h2>Practical Applications</h2>
+    
+    <h3>One-Class SVM for Anomaly Detection</h3>
+    <pre class="language-python"><code>from sklearn.svm import OneClassSVM
+
+def one_class_svm_demo(X_normal):
+    """One-Class SVM for anomaly detection"""
+    
+    # Train One-Class SVM
+    nu = 0.1  # Expected fraction of outliers
+    ocsvm = OneClassSVM(kernel='rbf', nu=nu, gamma='auto')
+    ocsvm.fit(X_normal)
+    
+    # Generate anomalous data
+    np.random.seed(42)
+    X_anomalies = np.random.uniform(low=-4, high=4, size=(20, 2))
+    
+    # Combine data
+    X_combined = np.vstack([X_normal, X_anomalies])
+    y_true = np.array([1]*len(X_normal) + [-1]*len(X_anomalies))
+    
+    # Predict
+    y_pred = ocsvm.predict(X_combined)
+    
+    # Visualization
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # Decision boundary
+    h = 0.02
+    x_min, x_max = X_combined[:, 0].min() - 1, X_combined[:, 0].max() + 1
+    y_min, y_max = X_combined[:, 1].min() - 1, X_combined[:, 1].max() + 1
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                       np.arange(y_min, y_max, h))
+    
+    Z = ocsvm.predict(np.c_[xx.ravel(), yy.ravel()])
+    Z = Z.reshape(xx.shape)
+    
+    axes[0].contourf(xx, yy, Z, levels=[-1, 0, 1], 
+                    colors=['red', 'white'], alpha=0.3)
+    axes[0].contour(xx, yy, Z, levels=[0], colors='black', linewidths=2)
+    
+    # Plot points
+    axes[0].scatter(X_normal[:, 0], X_normal[:, 1], 
+                   c='blue', label='Normal', s=30)
+    axes[0].scatter(X_anomalies[:, 0], X_anomalies[:, 1], 
+                   c='red', marker='^', label='Anomalies', s=50)
+    
+    axes[0].set_xlabel('Feature 1')
+    axes[0].set_ylabel('Feature 2')
+    axes[0].set_title('One-Class SVM Anomaly Detection')
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+    
+    # Decision scores
+    decision_scores = ocsvm.decision_function(X_combined)
+    
+    axes[1].hist(decision_scores[y_true == 1], bins=20, 
+                alpha=0.5, label='Normal', color='blue')
+    axes[1].hist(decision_scores[y_true == -1], bins=20, 
+                alpha=0.5, label='Anomaly', color='red')
+    axes[1].axvline(x=0, color='black', linestyle='--', 
+                   label='Decision Boundary')
+    axes[1].set_xlabel('Decision Score')
+    axes[1].set_ylabel('Frequency')
+    axes[1].set_title('Decision Score Distribution')
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+    
+    plt.suptitle('One-Class SVM for Anomaly Detection', fontsize=14)
+    plt.tight_layout()
+    plt.show()
+    
+    # Print metrics
+    from sklearn.metrics import classification_report
+    print("\nOne-Class SVM Performance:")
+    print(classification_report(y_true, y_pred, 
+                               target_names=['Anomaly', 'Normal']))
+
+print("\n" + "="*60)
+print("ONE-CLASS SVM FOR ANOMALY DETECTION")
+print("="*60)
+
+# Use circles data as normal
+normal_data = X_circles[y_circles == 0]
+one_class_svm_demo(normal_data)</code></pre>
+
+    <h2>Best Practices and Tips</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("SVM BEST PRACTICES")
+print("="*60)
+
+best_practices = """
+KEY GUIDELINES:
+
+1. ALWAYS SCALE FEATURES
+   • Use StandardScaler or MinMaxScaler
+   • SVM is very sensitive to feature scales
+   • Performance will be poor without scaling
+
+2. KERNEL SELECTION:
+   • Start with RBF (good default)
+   • Use linear for high-dimensional sparse data
+   • Use polynomial for known polynomial relationships
+   • Custom kernels for domain-specific problems
+
+3. HYPERPARAMETER TUNING:
+   • C: Start with [0.001, 0.01, 0.1, 1, 10, 100, 1000]
+   • gamma (RBF): Try ['scale', 'auto', 0.001, 0.01, 0.1, 1]
+   • Use grid search with cross-validation
+
+4. COMPUTATIONAL EFFICIENCY:
+   • Use LinearSVC for linear kernel (much faster)
+   • Consider SGDClassifier for large datasets
+   • Set cache_size for large datasets
+   • Use probability=False unless needed
+
+5. WHEN TO USE SVM:
+   ✓ High-dimensional data (text, images)
+   ✓ Clear margin of separation exists
+   ✓ Non-linear problems (with kernels)
+   ✓ Robust classification needed
+   ✗ Very large datasets (>50,000 samples)
+   ✗ Need probability estimates
+   ✗ Need interpretability
+
+6. COMMON PITFALLS:
+   • Not scaling features
+   • Using default parameters without tuning
+   • Using SVM for very large datasets
+   • Ignoring class imbalance
+"""
+
+print(best_practices)
+
+# Summary comparison
+comparison_data = {
+    'Algorithm': ['SVM', 'Random Forest', 'Neural Network', 'Logistic Reg', 'KNN'],
+    'Speed': ['Slow', 'Medium', 'Slow', 'Fast', 'Fast'],
+    'Accuracy': ['High', 'High', 'Very High', 'Medium', 'Medium'],
+    'Interpretability': ['Low', 'Medium', 'Very Low', 'High', 'Low'],
+    'Non-linearity': ['Yes', 'Yes', 'Yes', 'No', 'Yes'],
+    'Scaling Required': ['Yes', 'No', 'Yes', 'Beneficial', 'Yes'],
+    'High Dimensions': ['Excellent', 'Good', 'Good', 'Good', 'Poor']
+}
+
+comparison_df = pd.DataFrame(comparison_data)
+print("\n" + "="*60)
+print("ALGORITHM COMPARISON")
+print("="*60)
+print(comparison_df.to_string(index=False))</code></pre>
+
+    <h2>Practice Exercises</h2>
+    
+    <h3>Exercise 1: Custom Kernel Implementation</h3>
+    <p>Implement and test custom kernel functions:</p>
+    <ol>
+        <li>Create a string kernel for text data</li>
+        <li>Design a composite kernel combining RBF and polynomial</li>
+        <li>Compare performance with standard kernels</li>
+        <li>Analyze computational complexity</li>
+    </ol>
+
+    <h3>Exercise 2: Multi-class Classification</h3>
+    <p>Implement multi-class SVM strategies:</p>
+    <ol>
+        <li>Compare One-vs-One and One-vs-Rest approaches</li>
+        <li>Implement probability calibration</li>
+        <li>Handle imbalanced multi-class data</li>
+        <li>Optimize for different metrics (F1, AUC)</li>
+    </ol>
+
+    <h3>Exercise 3: Large-scale SVM</h3>
+    <p>Handle large datasets efficiently:</p>
+    <ol>
+        <li>Implement online SVM with SGD</li>
+        <li>Use kernel approximations (Nyström method)</li>
+        <li>Compare LinearSVC vs SVC with linear kernel</li>
+        <li>Benchmark performance trade-offs</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+        <li>🎯 SVM finds the maximum margin hyperplane between classes</li>
+        <li>🔄 The kernel trick enables non-linear decision boundaries</li>
+        <li>⚖️ C parameter balances margin maximization vs misclassification</li>
+        <li>📊 RBF kernel is a good default for non-linear problems</li>
+        <li>📏 Feature scaling is CRITICAL for SVM performance</li>
+        <li>🎪 Support vectors are the only points that matter</li>
+        <li>💾 Memory efficient but computationally intensive</li>
+        <li>🔬 Strong theoretical foundation in statistical learning</li>
+        <li>🚀 Excellent for high-dimensional data</li>
+        <li>⚡ Use LinearSVC for linear kernels (much faster)</li>
+    </ul>
+
+    <h2>Further Resources</h2>
+    <ul>
+        <li><a href="https://www.csie.ntu.edu.tw/~cjlin/libsvm/">LIBSVM - A Library for Support Vector Machines</a></li>
+        <li><a href="https://scikit-learn.org/stable/modules/svm.html">Scikit-learn SVM Documentation</a></li>
+        <li><a href="https://web.stanford.edu/~hastie/ElemStatLearn/">Elements of Statistical Learning</a></li>
+        <li><a href="https://www.support-vector-machines.org/">Support Vector Machines Information</a></li>
+    </ul>
+
+    <!-- Navigation at the bottom -->
+    <nav class="lesson-nav" aria-label="Lesson navigation">
+        <a href="ml_random_forests.html" class="prev-lesson" aria-label="Previous lesson">Previous: Random Forests</a>
+        <a href="index.html" class="home-link" aria-label="Course home">Course Home</a>
+        <a href="ml_gradient_boosting.html" class="next-lesson" aria-label="Next lesson">Next: Gradient Boosting</a>
+    </nav>
+    
+    </main>
+    <script src="js/clipboard.js"></script>
+</body>
+</html>

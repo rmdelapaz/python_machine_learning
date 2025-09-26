@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Preprocessing - Python Data Science</title>
+    <link rel="stylesheet" href="styles/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    <nav class="nav-container">
+        <a href="index.html" class="nav-logo">Python Data Science</a>
+        <div class="nav-links">
+            <a href="numpy_arrays_vs_lists.html">NumPy</a>
+            <a href="pandas_dataframes_series.html">Pandas</a>
+            <a href="matplotlib_line_scatter_bar.html">Matplotlib</a>
+            <a href="ml_sklearn_basics.html">Machine Learning</a>
+            <a href="nlp_text_preprocessing.html" class="active">NLP</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>📝 Text Preprocessing: Preparing Text for NLP</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>Text preprocessing is the foundation of Natural Language Processing, transforming raw text into a format suitable for machine learning algorithms. From cleaning and tokenization to stemming and lemmatization, these techniques are essential for extracting meaningful insights from textual data. This lesson covers fundamental text preprocessing techniques, handling different text formats, dealing with noise and special characters, normalization methods, and building robust preprocessing pipelines for various NLP tasks.</p>
+        </div>
+
+        <h2>NLP and Text Preprocessing Fundamentals</h2>
+        
+        <pre class="language-python"><code>import re
+import string
+import unicodedata
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from collections import Counter, defaultdict
+import warnings
+warnings.filterwarnings('ignore')
+
+# NLTK imports
+import nltk
+from nltk.tokenize import word_tokenize, sent_tokenize, RegexpTokenizer
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer, LancasterStemmer, SnowballStemmer
+from nltk.stem import WordNetLemmatizer
+from nltk.chunk import ne_chunk
+from nltk.tag import pos_tag
+
+# Download required NLTK data
+nltk.download('punkt', quiet=True)
+nltk.download('stopwords', quiet=True)
+nltk.download('wordnet', quiet=True)
+nltk.download('averaged_perceptron_tagger', quiet=True)
+nltk.download('maxent_ne_chunker', quiet=True)
+nltk.download('words', quiet=True)
+nltk.download('omw-1.4', quiet=True)
+
+# spaCy (if available)
+try:
+    import spacy
+    nlp = spacy.load('en_core_web_sm')
+    SPACY_AVAILABLE = True
+except:
+    SPACY_AVAILABLE = False
+    print("Note: spaCy not available. Install with: pip install spacy")
+    print("      Then: python -m spacy download en_core_web_sm")
+
+print("="*60)
+print("TEXT PREPROCESSING FUNDAMENTALS")
+print("="*60)
+
+text_preprocessing_concepts = """
+TEXT PREPROCESSING KEY CONCEPTS:
+
+1. CLEANING:
+   • Remove HTML/XML tags
+   • Handle special characters
+   • Remove/replace URLs, emails
+   • Fix encoding issues
+   • Handle whitespace
+
+2. TOKENIZATION:
+   • Word tokenization
+   • Sentence tokenization
+   • Subword tokenization
+   • Character tokenization
+   • Custom tokenizers
+
+3. NORMALIZATION:
+   • Lowercasing
+   • Expanding contractions
+   • Removing accents
+   • Number normalization
+   • Date/time standardization
+
+4. STOP WORDS:
+   • Common words removal
+   • Domain-specific stop words
+   • Language-specific lists
+   • Custom stop word lists
+
+5. STEMMING:
+   • Porter Stemmer
+   • Lancaster Stemmer
+   • Snowball Stemmer
+   • Reduces words to root form
+   • Language-specific rules
+
+6. LEMMATIZATION:
+   • Dictionary-based
+   • Considers POS tags
+   • Returns valid words
+   • More accurate than stemming
+   • Computationally expensive
+
+7. ADDITIONAL TECHNIQUES:
+   • N-gram extraction
+   • Part-of-speech tagging
+   • Named entity recognition
+   • Dependency parsing
+   • Spell correction
+"""
+
+print(text_preprocessing_concepts)</code></pre>
+
+        <h2>Basic Text Cleaning</h2>
+        
+        <pre class="language-python"><code>class TextCleaner:
+    """Basic text cleaning operations"""
+    
+    def __init__(self):
+        self.url_pattern = re.compile(r'https?://\S+|www\.\S+')
+        self.email_pattern = re.compile(r'\S+@\S+')
+        self.html_pattern = re.compile(r'<[^<]+?>')
+        self.mention_pattern = re.compile(r'@\w+')
+        self.hashtag_pattern = re.compile(r'#\w+')
+        self.number_pattern = re.compile(r'\d+')
+        
+    def remove_urls(self, text):
+        """Remove URLs from text"""
+        return self.url_pattern.sub(' ', text)
+    
+    def remove_emails(self, text):
+        """Remove email addresses"""
+        return self.email_pattern.sub(' ', text)
+    
+    def remove_html_tags(self, text):
+        """Remove HTML tags"""
+        return self.html_pattern.sub(' ', text)
+    
+    def remove_mentions(self, text):
+        """Remove @mentions (Twitter style)"""
+        return self.mention_pattern.sub(' ', text)
+    
+    def remove_hashtags(self, text):
+        """Remove hashtags"""
+        return self.hashtag_pattern.sub(' ', text)
+    
+    def replace_numbers(self, text, replacement='NUM'):
+        """Replace numbers with placeholder"""
+        return self.number_pattern.sub(replacement, text)
+    
+    def remove_punctuation(self, text, keep_sentences=False):
+        """Remove punctuation marks"""
+        if keep_sentences:
+            # Keep sentence-ending punctuation
+            punct_to_remove = string.punctuation.replace('.', '').replace('!', '').replace('?', '')
+        else:
+            punct_to_remove = string.punctuation
+        
+        translator = str.maketrans('', '', punct_to_remove)
+        return text.translate(translator)
+    
+    def remove_extra_whitespace(self, text):
+        """Remove extra whitespace"""
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
+    
+    def remove_non_ascii(self, text):
+        """Remove non-ASCII characters"""
+        return ''.join(char for char in text if ord(char) < 128)
+    
+    def remove_accents(self, text):
+        """Remove accents from characters"""
+        nfkd_form = unicodedata.normalize('NFKD', text)
+        return ''.join([char for char in nfkd_form if not unicodedata.combining(char)])
+    
+    def expand_contractions(self, text):
+        """Expand contractions (e.g., don't -> do not)"""
+        contractions_dict = {
+            "ain't": "am not",
+            "aren't": "are not",
+            "can't": "cannot",
+            "couldn't": "could not",
+            "didn't": "did not",
+            "doesn't": "does not",
+            "don't": "do not",
+            "hadn't": "had not",
+            "hasn't": "has not",
+            "haven't": "have not",
+            "he'd": "he would",
+            "he'll": "he will",
+            "he's": "he is",
+            "I'd": "I would",
+            "I'll": "I will",
+            "I'm": "I am",
+            "I've": "I have",
+            "isn't": "is not",
+            "it's": "it is",
+            "let's": "let us",
+            "mustn't": "must not",
+            "shan't": "shall not",
+            "she'd": "she would",
+            "she'll": "she will",
+            "she's": "she is",
+            "shouldn't": "should not",
+            "that's": "that is",
+            "there's": "there is",
+            "they'd": "they would",
+            "they'll": "they will",
+            "they're": "they are",
+            "they've": "they have",
+            "wasn't": "was not",
+            "we'd": "we would",
+            "we'll": "we will",
+            "we're": "we are",
+            "we've": "we have",
+            "weren't": "were not",
+            "what's": "what is",
+            "where's": "where is",
+            "who's": "who is",
+            "won't": "will not",
+            "wouldn't": "would not",
+            "you'd": "you would",
+            "you'll": "you will",
+            "you're": "you are",
+            "you've": "you have"
+        }
+        
+        pattern = re.compile(r'\b(' + '|'.join(contractions_dict.keys()) + r')\b')
+        
+        def replace(match):
+            return contractions_dict[match.group(0)]
+        
+        return pattern.sub(replace, text.lower())
+    
+    def clean_text(self, text, steps=None):
+        """Apply multiple cleaning steps"""
+        if steps is None:
+            steps = ['html', 'urls', 'emails', 'mentions', 'hashtags', 
+                    'punctuation', 'whitespace']
+        
+        for step in steps:
+            if step == 'html':
+                text = self.remove_html_tags(text)
+            elif step == 'urls':
+                text = self.remove_urls(text)
+            elif step == 'emails':
+                text = self.remove_emails(text)
+            elif step == 'mentions':
+                text = self.remove_mentions(text)
+            elif step == 'hashtags':
+                text = self.remove_hashtags(text)
+            elif step == 'numbers':
+                text = self.replace_numbers(text)
+            elif step == 'punctuation':
+                text = self.remove_punctuation(text)
+            elif step == 'whitespace':
+                text = self.remove_extra_whitespace(text)
+            elif step == 'accents':
+                text = self.remove_accents(text)
+            elif step == 'contractions':
+                text = self.expand_contractions(text)
+            elif step == 'lowercase':
+                text = text.lower()
+        
+        return text
+
+# Demonstrate text cleaning
+cleaner = TextCleaner()
+
+print("\n" + "="*60)
+print("TEXT CLEANING DEMONSTRATION")
+print("="*60)
+
+# Sample messy text
+sample_text = """
+<p>Check out this AMAZING article at https://example.com! 🎉</p>
+Don't forget to email me at john.doe@email.com or follow @myhandle.
+We've got 100+ tips for you! #NLP #TextProcessing #DataScience
+This text has    extra   spaces   and café has accénts.
+"""
+
+print("Original Text:")
+print(sample_text)
+print("\n" + "-"*40)
+
+# Apply different cleaning steps
+print("\nAfter removing HTML tags:")
+print(cleaner.remove_html_tags(sample_text))
+
+print("\nAfter removing URLs and emails:")
+text = cleaner.remove_urls(sample_text)
+text = cleaner.remove_emails(text)
+print(text)
+
+print("\nAfter expanding contractions:")
+print(cleaner.expand_contractions(sample_text))
+
+print("\nFully cleaned text:")
+cleaned = cleaner.clean_text(sample_text, 
+                            steps=['html', 'urls', 'emails', 'mentions', 
+                                  'hashtags', 'contractions', 'numbers',
+                                  'punctuation', 'whitespace', 'lowercase'])
+print(cleaned)</code></pre>
+
+        <h2>Tokenization Techniques</h2>
+        
+        <pre class="language-python"><code>class Tokenizer:
+    """Various tokenization techniques"""
+    
+    def __init__(self):
+        self.word_tokenizer = word_tokenize
+        self.sent_tokenizer = sent_tokenize
+        self.regex_tokenizer = RegexpTokenizer(r'\w+')
+        
+    def word_tokenization(self, text):
+        """Basic word tokenization"""
+        return word_tokenize(text)
+    
+    def sentence_tokenization(self, text):
+        """Sentence tokenization"""
+        return sent_tokenize(text)
+    
+    def regex_tokenization(self, text, pattern=r'\w+'):
+        """Custom regex-based tokenization"""
+        tokenizer = RegexpTokenizer(pattern)
+        return tokenizer.tokenize(text)
+    
+    def character_tokenization(self, text):
+        """Character-level tokenization"""
+        return list(text)
+    
+    def ngram_tokenization(self, text, n=2):
+        """N-gram tokenization"""
+        tokens = self.word_tokenization(text.lower())
+        ngrams = []
+        
+        for i in range(len(tokens) - n + 1):
+            ngram = ' '.join(tokens[i:i+n])
+            ngrams.append(ngram)
+        
+        return ngrams
+    
+    def subword_tokenization(self, text, vocab_size=100):
+        """Simple subword tokenization (BPE-like)"""
+        # This is a simplified version - real BPE is more complex
+        tokens = text.split()
+        
+        # Count character pairs
+        pairs = defaultdict(int)
+        for word in tokens:
+            for i in range(len(word) - 1):
+                pairs[word[i:i+2]] += 1
+        
+        # Get most common pairs
+        common_pairs = sorted(pairs.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        # Create subword tokens
+        subwords = []
+        for word in tokens:
+            subword = []
+            i = 0
+            while i < len(word):
+                # Check if any common pair matches
+                matched = False
+                for pair, _ in common_pairs:
+                    if word[i:i+len(pair)] == pair:
+                        subword.append(pair)
+                        i += len(pair)
+                        matched = True
+                        break
+                
+                if not matched:
+                    subword.append(word[i])
+                    i += 1
+            
+            subwords.extend(subword)
+        
+        return subwords
+    
+    def whitespace_tokenization(self, text):
+        """Simple whitespace tokenization"""
+        return text.split()
+    
+    def custom_tokenization(self, text, preserve_case=False, preserve_punctuation=False):
+        """Custom tokenization with options"""
+        if not preserve_case:
+            text = text.lower()
+        
+        if preserve_punctuation:
+            # Keep punctuation as separate tokens
+            pattern = r'\w+|[^\w\s]'
+        else:
+            pattern = r'\w+'
+        
+        return re.findall(pattern, text)
+    
+    def compare_tokenizers(self, text):
+        """Compare different tokenization methods"""
+        results = {
+            'Word Tokenize': self.word_tokenization(text),
+            'Whitespace': self.whitespace_tokenization(text),
+            'Regex': self.regex_tokenization(text),
+            'Custom': self.custom_tokenization(text, preserve_punctuation=True)
+        }
+        
+        # Visualization
+        fig, axes = plt.subplots(2, 2, figsize=(14, 8))
+        axes = axes.flatten()
+        
+        for idx, (name, tokens) in enumerate(results.items()):
+            # Token length distribution
+            token_lengths = [len(token) for token in tokens]
+            axes[idx].hist(token_lengths, bins=15, edgecolor='black', alpha=0.7)
+            axes[idx].set_xlabel('Token Length')
+            axes[idx].set_ylabel('Frequency')
+            axes[idx].set_title(f'{name}\nTotal tokens: {len(tokens)}')
+            axes[idx].grid(True, alpha=0.3)
+        
+        plt.suptitle('Tokenization Methods Comparison', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return results
+
+# Tokenization demonstration
+tokenizer = Tokenizer()
+
+print("\n" + "="*60)
+print("TOKENIZATION TECHNIQUES")
+print("="*60)
+
+sample_text = """Natural Language Processing (NLP) is fascinating! 
+It involves many techniques: tokenization, stemming, and more.
+Let's explore these methods step-by-step."""
+
+print("Original Text:")
+print(sample_text)
+print("\n" + "-"*40)
+
+# Word tokenization
+print("\nWord Tokenization:")
+word_tokens = tokenizer.word_tokenization(sample_text)
+print(word_tokens)
+
+# Sentence tokenization
+print("\nSentence Tokenization:")
+sentences = tokenizer.sentence_tokenization(sample_text)
+for i, sent in enumerate(sentences):
+    print(f"  {i+1}. {sent}")
+
+# N-gram tokenization
+print("\nBigram Tokenization:")
+bigrams = tokenizer.ngram_tokenization(sample_text, n=2)
+print(bigrams[:10])  # Show first 10
+
+print("\nTrigram Tokenization:")
+trigrams = tokenizer.ngram_tokenization(sample_text, n=3)
+print(trigrams[:10])  # Show first 10
+
+# Compare tokenizers
+print("\nComparing Tokenization Methods:")
+comparison = tokenizer.compare_tokenizers(sample_text)</code></pre>
+
+        <h2>Stop Words and Normalization</h2>
+        
+        <pre class="language-python"><code>class TextNormalizer:
+    """Text normalization and stop words removal"""
+    
+    def __init__(self):
+        self.stop_words_en = set(stopwords.words('english'))
+        self.stop_words_custom = set()
+        
+    def remove_stopwords(self, tokens, language='english', custom_stopwords=None):
+        """Remove stop words from tokenized text"""
+        stop_words = set(stopwords.words(language))
+        
+        if custom_stopwords:
+            stop_words.update(custom_stopwords)
+        
+        return [token for token in tokens if token.lower() not in stop_words]
+    
+    def get_stopword_statistics(self, text):
+        """Analyze stop words in text"""
+        tokens = word_tokenize(text.lower())
+        
+        total_tokens = len(tokens)
+        stopword_tokens = [t for t in tokens if t in self.stop_words_en]
+        content_tokens = [t for t in tokens if t not in self.stop_words_en and t.isalnum()]
+        
+        stats = {
+            'total_tokens': total_tokens,
+            'stopword_count': len(stopword_tokens),
+            'content_count': len(content_tokens),
+            'stopword_ratio': len(stopword_tokens) / total_tokens if total_tokens > 0 else 0,
+            'unique_stopwords': len(set(stopword_tokens)),
+            'unique_content': len(set(content_tokens))
+        }
+        
+        return stats
+    
+    def normalize_case(self, text, method='lower'):
+        """Normalize text case"""
+        if method == 'lower':
+            return text.lower()
+        elif method == 'upper':
+            return text.upper()
+        elif method == 'title':
+            return text.title()
+        elif method == 'sentence':
+            # Capitalize first letter of sentences
+            sentences = sent_tokenize(text)
+            return ' '.join(sent.capitalize() for sent in sentences)
+        else:
+            return text
+    
+    def normalize_numbers(self, text):
+        """Normalize different number formats"""
+        # Replace digits with word representation
+        number_words = {
+            '0': 'zero', '1': 'one', '2': 'two', '3': 'three', '4': 'four',
+            '5': 'five', '6': 'six', '7': 'seven', '8': 'eight', '9': 'nine'
+        }
+        
+        # Replace individual digits
+        for digit, word in number_words.items():
+            text = text.replace(digit, f' {word} ')
+        
+        return text
+    
+    def normalize_dates(self, text):
+        """Normalize date formats to standard form"""
+        # Common date patterns
+        date_patterns = [
+            (r'\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b', r'\2/\1/\3'),  # MM/DD/YYYY
+            (r'\b(\d{4})[/-](\d{1,2})[/-](\d{1,2})\b', r'\2/\3/\1'),    # YYYY/MM/DD
+        ]
+        
+        for pattern, replacement in date_patterns:
+            text = re.sub(pattern, replacement, text)
+        
+        return text
+    
+    def create_custom_stopwords(self, domain='general'):
+        """Create domain-specific stop words"""
+        domain_stopwords = {
+            'general': [],
+            'social_media': ['rt', 'dm', 'hashtag', 'follow', 'like', 'share'],
+            'academic': ['therefore', 'however', 'moreover', 'furthermore', 'hence'],
+            'technical': ['system', 'method', 'approach', 'technique', 'process'],
+            'business': ['revenue', 'profit', 'market', 'business', 'company']
+        }
+        
+        return domain_stopwords.get(domain, [])
+    
+    def visualize_stopwords(self, text):
+        """Visualize stop words distribution"""
+        tokens = word_tokenize(text.lower())
+        
+        # Categorize tokens
+        stopword_freq = Counter([t for t in tokens if t in self.stop_words_en])
+        content_freq = Counter([t for t in tokens if t not in self.stop_words_en and t.isalnum()])
+        
+        # Get top words
+        top_stopwords = stopword_freq.most_common(10)
+        top_content = content_freq.most_common(10)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Stop words frequency
+        if top_stopwords:
+            words, counts = zip(*top_stopwords)
+            axes[0].barh(range(len(words)), counts, color='coral')
+            axes[0].set_yticks(range(len(words)))
+            axes[0].set_yticklabels(words)
+            axes[0].set_xlabel('Frequency')
+            axes[0].set_title('Top 10 Stop Words')
+            axes[0].invert_yaxis()
+        
+        # Content words frequency
+        if top_content:
+            words, counts = zip(*top_content)
+            axes[1].barh(range(len(words)), counts, color='steelblue')
+            axes[1].set_yticks(range(len(words)))
+            axes[1].set_yticklabels(words)
+            axes[1].set_xlabel('Frequency')
+            axes[1].set_title('Top 10 Content Words')
+            axes[1].invert_yaxis()
+        
+        plt.suptitle('Stop Words vs Content Words Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return stopword_freq, content_freq
+
+# Normalization demonstration
+normalizer = TextNormalizer()
+
+print("\n" + "="*60)
+print("TEXT NORMALIZATION AND STOP WORDS")
+print("="*60)
+
+sample_text = """
+The quick brown fox jumps over the lazy dog. This is a common phrase
+used for testing. It contains all 26 letters of the English alphabet.
+Testing dates like 2024/03/15 and 03-15-2024. Numbers like 123 appear too.
+"""
+
+print("Original Text:")
+print(sample_text)
+
+# Tokenize
+tokens = word_tokenize(sample_text)
+print(f"\nOriginal tokens ({len(tokens)} tokens):")
+print(tokens)
+
+# Remove stop words
+filtered_tokens = normalizer.remove_stopwords(tokens)
+print(f"\nAfter stop word removal ({len(filtered_tokens)} tokens):")
+print(filtered_tokens)
+
+# Stop word statistics
+stats = normalizer.get_stopword_statistics(sample_text)
+print("\nStop Word Statistics:")
+for key, value in stats.items():
+    if 'ratio' in key:
+        print(f"  {key}: {value:.2%}")
+    else:
+        print(f"  {key}: {value}")
+
+# Visualize stop words
+print("\nVisualizing word distributions:")
+normalizer.visualize_stopwords(sample_text)</code></pre>
+
+        <h2>Stemming and Lemmatization</h2>
+        
+        <pre class="language-python"><code>class StemmingLemmatization:
+    """Stemming and lemmatization techniques"""
+    
+    def __init__(self):
+        self.porter_stemmer = PorterStemmer()
+        self.lancaster_stemmer = LancasterStemmer()
+        self.snowball_stemmer = SnowballStemmer('english')
+        self.lemmatizer = WordNetLemmatizer()
+        
+    def porter_stem(self, tokens):
+        """Apply Porter stemming"""
+        return [self.porter_stemmer.stem(token) for token in tokens]
+    
+    def lancaster_stem(self, tokens):
+        """Apply Lancaster stemming"""
+        return [self.lancaster_stemmer.stem(token) for token in tokens]
+    
+    def snowball_stem(self, tokens):
+        """Apply Snowball stemming"""
+        return [self.snowball_stemmer.stem(token) for token in tokens]
+    
+    def lemmatize(self, tokens, pos='n'):
+        """Apply lemmatization with POS tag"""
+        return [self.lemmatizer.lemmatize(token, pos=pos) for token in tokens]
+    
+    def lemmatize_with_pos(self, tokens):
+        """Lemmatize with automatic POS tagging"""
+        # Get POS tags
+        pos_tags = pos_tag(tokens)
+        
+        # Map POS tags to WordNet tags
+        def get_wordnet_pos(tag):
+            if tag.startswith('J'):
+                return 'a'  # adjective
+            elif tag.startswith('V'):
+                return 'v'  # verb
+            elif tag.startswith('N'):
+                return 'n'  # noun
+            elif tag.startswith('R'):
+                return 'r'  # adverb
+            else:
+                return 'n'  # default to noun
+        
+        lemmatized = []
+        for word, tag in pos_tags:
+            wn_tag = get_wordnet_pos(tag)
+            lemmatized.append(self.lemmatizer.lemmatize(word.lower(), pos=wn_tag))
+        
+        return lemmatized
+    
+    def compare_techniques(self, text):
+        """Compare stemming and lemmatization"""
+        # Tokenize and clean
+        tokens = word_tokenize(text.lower())
+        tokens = [t for t in tokens if t.isalpha()]
+        
+        # Apply different techniques
+        results = {
+            'Original': tokens,
+            'Porter Stem': self.porter_stem(tokens),
+            'Lancaster Stem': self.lancaster_stem(tokens),
+            'Snowball Stem': self.snowball_stem(tokens),
+            'Lemmatization': self.lemmatize_with_pos(tokens)
+        }
+        
+        # Create comparison DataFrame
+        comparison_df = pd.DataFrame(results)
+        
+        return comparison_df
+    
+    def demonstrate_differences(self):
+        """Demonstrate differences between stemming and lemmatization"""
+        
+        test_words = [
+            'running', 'runs', 'ran', 'runner',
+            'better', 'good', 'best',
+            'going', 'goes', 'went',
+            'having', 'had', 'has',
+            'organizational', 'organize', 'organizing',
+            'multiplication', 'multiply', 'multiplying',
+            'universe', 'universal', 'university'
+        ]
+        
+        results = {
+            'Word': test_words,
+            'Porter': [self.porter_stemmer.stem(w) for w in test_words],
+            'Lancaster': [self.lancaster_stemmer.stem(w) for w in test_words],
+            'Snowball': [self.snowball_stemmer.stem(w) for w in test_words],
+            'Lemma': [self.lemmatizer.lemmatize(w) for w in test_words]
+        }
+        
+        df = pd.DataFrame(results)
+        
+        # Visualization
+        fig, ax = plt.subplots(figsize=(12, 8))
+        
+        # Calculate reduction ratios
+        methods = ['Porter', 'Lancaster', 'Snowball', 'Lemma']
+        reduction_ratios = []
+        
+        for method in methods:
+            original_chars = sum(len(w) for w in test_words)
+            reduced_chars = sum(len(w) for w in results[method])
+            ratio = 1 - (reduced_chars / original_chars)
+            reduction_ratios.append(ratio)
+        
+        # Plot reduction ratios
+        bars = ax.bar(methods, reduction_ratios, color=['blue', 'green', 'orange', 'red'])
+        ax.set_ylabel('Character Reduction Ratio')
+        ax.set_title('Stemming vs Lemmatization: Aggressiveness Comparison')
+        ax.grid(True, alpha=0.3, axis='y')
+        
+        # Add value labels
+        for bar, ratio in zip(bars, reduction_ratios):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{ratio:.2%}', ha='center', va='bottom')
+        
+        plt.tight_layout()
+        plt.show()
+        
+        return df
+
+# Stemming and lemmatization demonstration
+stem_lemma = StemmingLemmatization()
+
+print("\n" + "="*60)
+print("STEMMING AND LEMMATIZATION")
+print("="*60)
+
+sample_text = """
+The children are playing in the garden. They played yesterday too.
+Running quickly, the runner easily won the race. 
+Organizations are organizing various organized events.
+"""
+
+print("Original Text:")
+print(sample_text)
+print("\n" + "-"*40)
+
+# Compare techniques
+comparison = stem_lemma.compare_techniques(sample_text)
+print("\nComparison of Techniques (first 10 words):")
+print(comparison.head(10))
+
+# Demonstrate differences
+print("\nDetailed Comparison of Methods:")
+differences_df = stem_lemma.demonstrate_differences()
+print(differences_df.to_string())
+
+print("\nAnalyzing reduction aggressiveness...")</code></pre>
+
+        <h2>Complete Preprocessing Pipeline</h2>
+        
+        <pre class="language-python"><code>class TextPreprocessingPipeline:
+    """Complete text preprocessing pipeline"""
+    
+    def __init__(self):
+        self.cleaner = TextCleaner()
+        self.tokenizer = Tokenizer()
+        self.normalizer = TextNormalizer()
+        self.stem_lemma = StemmingLemmatization()
+        
+    def basic_pipeline(self, text):
+        """Basic preprocessing pipeline"""
+        # Clean
+        text = self.cleaner.clean_text(text)
+        
+        # Tokenize
+        tokens = self.tokenizer.word_tokenization(text)
+        
+        # Remove stop words
+        tokens = self.normalizer.remove_stopwords(tokens)
+        
+        # Lemmatize
+        tokens = self.stem_lemma.lemmatize_with_pos(tokens)
+        
+        return tokens
+    
+    def advanced_pipeline(self, text, config=None):
+        """Configurable preprocessing pipeline"""
+        
+        if config is None:
+            config = {
+                'lowercase': True,
+                'remove_html': True,
+                'remove_urls': True,
+                'remove_emails': True,
+                'remove_punctuation': True,
+                'expand_contractions': True,
+                'remove_stopwords': True,
+                'stemming': False,
+                'lemmatization': True,
+                'min_token_length': 2,
+                'max_token_length': 20
+            }
+        
+        # Cleaning steps
+        if config.get('remove_html'):
+            text = self.cleaner.remove_html_tags(text)
+        if config.get('remove_urls'):
+            text = self.cleaner.remove_urls(text)
+        if config.get('remove_emails'):
+            text = self.cleaner.remove_emails(text)
+        if config.get('expand_contractions'):
+            text = self.cleaner.expand_contractions(text)
+        if config.get('lowercase'):
+            text = text.lower()
+        
+        # Tokenization
+        tokens = self.tokenizer.word_tokenization(text)
+        
+        # Remove punctuation tokens
+        if config.get('remove_punctuation'):
+            tokens = [t for t in tokens if t.isalnum()]
+        
+        # Remove stop words
+        if config.get('remove_stopwords'):
+            tokens = self.normalizer.remove_stopwords(tokens)
+        
+        # Stemming or lemmatization
+        if config.get('lemmatization'):
+            tokens = self.stem_lemma.lemmatize_with_pos(tokens)
+        elif config.get('stemming'):
+            tokens = self.stem_lemma.porter_stem(tokens)
+        
+        # Filter by token length
+        min_len = config.get('min_token_length', 1)
+        max_len = config.get('max_token_length', 50)
+        tokens = [t for t in tokens if min_len <= len(t) <= max_len]
+        
+        return tokens
+    
+    def batch_process(self, texts, config=None):
+        """Process multiple texts"""
+        processed = []
+        for text in texts:
+            tokens = self.advanced_pipeline(text, config)
+            processed.append(tokens)
+        return processed
+    
+    def pipeline_comparison(self, text):
+        """Compare different pipeline configurations"""
+        
+        configs = {
+            'Minimal': {
+                'lowercase': True,
+                'remove_punctuation': True,
+                'remove_stopwords': False,
+                'lemmatization': False
+            },
+            'Standard': {
+                'lowercase': True,
+                'remove_urls': True,
+                'remove_punctuation': True,
+                'remove_stopwords': True,
+                'lemmatization': True
+            },
+            'Aggressive': {
+                'lowercase': True,
+                'remove_html': True,
+                'remove_urls': True,
+                'remove_emails': True,
+                'remove_punctuation': True,
+                'expand_contractions': True,
+                'remove_stopwords': True,
+                'stemming': True,
+                'min_token_length': 3
+            }
+        }
+        
+        results = {}
+        for name, config in configs.items():
+            tokens = self.advanced_pipeline(text, config)
+            results[name] = {
+                'tokens': tokens,
+                'count': len(tokens),
+                'unique': len(set(tokens)),
+                'avg_length': np.mean([len(t) for t in tokens]) if tokens else 0
+            }
+        
+        # Visualization
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        
+        # Token counts
+        names = list(results.keys())
+        counts = [results[n]['count'] for n in names]
+        axes[0, 0].bar(names, counts, color=['blue', 'green', 'red'])
+        axes[0, 0].set_ylabel('Token Count')
+        axes[0, 0].set_title('Total Tokens')
+        axes[0, 0].grid(True, alpha=0.3, axis='y')
+        
+        # Unique tokens
+        unique = [results[n]['unique'] for n in names]
+        axes[0, 1].bar(names, unique, color=['blue', 'green', 'red'])
+        axes[0, 1].set_ylabel('Unique Tokens')
+        axes[0, 1].set_title('Vocabulary Size')
+        axes[0, 1].grid(True, alpha=0.3, axis='y')
+        
+        # Average token length
+        avg_lengths = [results[n]['avg_length'] for n in names]
+        axes[1, 0].bar(names, avg_lengths, color=['blue', 'green', 'red'])
+        axes[1, 0].set_ylabel('Average Length')
+        axes[1, 0].set_title('Average Token Length')
+        axes[1, 0].grid(True, alpha=0.3, axis='y')
+        
+        # Sample tokens
+        axes[1, 1].axis('off')
+        sample_text = "Sample Tokens:\n\n"
+        for name in names:
+            sample = ' '.join(results[name]['tokens'][:10])
+            sample_text += f"{name}:\n{sample}...\n\n"
+        axes[1, 1].text(0.1, 0.5, sample_text, fontsize=10, 
+                       verticalalignment='center', family='monospace')
+        
+        plt.suptitle('Pipeline Configuration Comparison', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return results
+
+# Complete pipeline demonstration
+pipeline = TextPreprocessingPipeline()
+
+print("\n" + "="*60)
+print("COMPLETE PREPROCESSING PIPELINE")
+print("="*60)
+
+sample_text = """
+<html>
+<body>
+Check out our NEW product at https://shop.example.com! 
+Contact us at info@company.com for more information.
+
+We're offering a 25% discount this week. Don't miss out!
+Our customers say it's the BEST product they've ever used.
+
+#Sale #Discount #BestProduct @company
+    <script src="js/clipboard.js"></script>
+</body>
+</html>
+"""
+
+print("Original Text:")
+print(sample_text)
+print("\n" + "-"*40)
+
+# Basic pipeline
+print("\nBasic Pipeline Output:")
+basic_tokens = pipeline.basic_pipeline(sample_text)
+print(f"Tokens ({len(basic_tokens)}): {basic_tokens}")
+
+# Compare different configurations
+print("\nComparing Pipeline Configurations:")
+comparison = pipeline.pipeline_comparison(sample_text)
+
+print("\nPipeline Statistics:")
+for name, stats in comparison.items():
+    print(f"\n{name}:")
+    print(f"  Total tokens: {stats['count']}")
+    print(f"  Unique tokens: {stats['unique']}")
+    print(f"  Avg token length: {stats['avg_length']:.2f}")</code></pre>
+
+        <h2>Best Practices and Common Pitfalls</h2>
+        
+        <pre class="language-python"><code>print("\n" + "="*60)
+print("TEXT PREPROCESSING BEST PRACTICES")
+print("="*60)
+
+best_practices = """
+BEST PRACTICES:
+
+1. UNDERSTAND YOUR DATA:
+   • Language and encoding
+   • Domain-specific terminology
+   • Noise characteristics
+   • Text format and structure
+
+2. PRESERVE IMPORTANT INFORMATION:
+   • Don't over-clean
+   • Keep domain-specific terms
+   • Consider context importance
+   • Preserve named entities when needed
+
+3. CONSISTENCY:
+   • Use same preprocessing for train/test
+   • Document preprocessing steps
+   • Version control pipelines
+   • Maintain reproducibility
+
+4. TASK-SPECIFIC PREPROCESSING:
+   • Classification: Aggressive cleaning often OK
+   • NER: Preserve case and punctuation
+   • Sentiment: Keep emoticons, intensifiers
+   • Topic modeling: Focus on content words
+
+5. PERFORMANCE OPTIMIZATION:
+   • Cache preprocessed data
+   • Use vectorized operations
+   • Parallel processing for large datasets
+   • Consider memory usage
+
+6. VALIDATION:
+   • Spot-check preprocessing results
+   • Measure impact on downstream tasks
+   • Compare before/after statistics
+   • Test edge cases
+
+COMMON PITFALLS:
+
+1. OVER-PREPROCESSING:
+   • Removing too much information
+   • Aggressive stemming losing meaning
+   • Removing all numbers/dates when relevant
+
+2. INCONSISTENCY:
+   • Different preprocessing for train/test
+   • Changing pipeline mid-project
+   • Not documenting steps
+
+3. IGNORING CONTEXT:
+   • Removing negations (changes sentiment)
+   • Breaking multi-word expressions
+   • Losing word order information
+
+4. TECHNICAL ISSUES:
+   • Encoding problems (UTF-8 vs ASCII)
+   • Memory issues with large texts
+   • Slow processing without optimization
+
+5. DOMAIN BLINDNESS:
+   • Using generic stop words for specialized text
+   • Not handling domain-specific abbreviations
+   • Missing important punctuation (e.g., medical)
+"""
+
+print(best_practices)
+
+# Language-specific considerations
+language_tips = """
+LANGUAGE-SPECIFIC CONSIDERATIONS:
+
+English:
+• Contractions handling
+• Phrasal verbs preservation
+• American vs British spelling
+
+Non-English:
+• Language-specific tokenizers
+• Diacritics and accents
+• Right-to-left languages
+• Character-based languages (Chinese, Japanese)
+
+Multi-lingual:
+• Language detection first
+• Separate pipelines per language
+• Unicode normalization
+• Translation considerations
+"""
+
+print(language_tips)</code></pre>
+
+        <h2>Practice Exercises</h2>
+        
+        <div class="exercise-card">
+            <h3>Exercise 1: Build Custom Preprocessing Pipeline</h3>
+            <p>Create a domain-specific text preprocessing pipeline:</p>
+            <ol>
+                <li>Choose a domain (medical, legal, social media)</li>
+                <li>Identify domain-specific requirements</li>
+                <li>Create custom stop words list</li>
+                <li>Handle domain-specific entities</li>
+                <li>Implement custom tokenization rules</li>
+                <li>Evaluate on domain texts</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 2: Multilingual Text Preprocessor</h3>
+            <p>Build a preprocessor for multiple languages:</p>
+            <ol>
+                <li>Implement language detection</li>
+                <li>Create language-specific pipelines</li>
+                <li>Handle mixed-language texts</li>
+                <li>Normalize across languages</li>
+                <li>Compare preprocessing effectiveness</li>
+                <li>Handle transliteration</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 3: Preprocessing for Different NLP Tasks</h3>
+            <p>Optimize preprocessing for various tasks:</p>
+            <ol>
+                <li>Sentiment analysis pipeline</li>
+                <li>Named entity recognition pipeline</li>
+                <li>Text classification pipeline</li>
+                <li>Topic modeling pipeline</li>
+                <li>Machine translation pipeline</li>
+                <li>Compare and evaluate differences</li>
+            </ol>
+        </div>
+
+        <h2>Summary and Key Takeaways</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 Key Points to Remember</h3>
+            <ul>
+                <li><strong>Cleaning:</strong> Remove noise but preserve meaningful information</li>
+                <li><strong>Tokenization:</strong> Choose appropriate granularity for your task</li>
+                <li><strong>Normalization:</strong> Ensure consistency across your dataset</li>
+                <li><strong>Stop Words:</strong> Consider domain-specific and task requirements</li>
+                <li><strong>Stemming vs Lemmatization:</strong> Trade-off between speed and accuracy</li>
+                <li><strong>Pipeline Design:</strong> Modular, configurable, and reproducible</li>
+                <li><strong>Task-Specific:</strong> Preprocessing depends on downstream application</li>
+                <li><strong>Validation:</strong> Always verify preprocessing output quality</li>
+            </ul>
+        </div>
+
+        <div class="navigation">
+            <a href="ml_recommendation_systems.html" class="nav-button">← Previous: Recommendation Systems</a>
+            <a href="index.html" class="nav-button">Home</a>
+            <a href="nlp_bow_tfidf.html" class="nav-button">Next: Bag of Words & TF-IDF →</a>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+    <script>
+        // Additional interactive features
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add line numbers to code blocks
+            const codeBlocks = document.querySelectorAll('pre code');
+            
+            codeBlocks.forEach(block => {
+                if (block.textContent.includes('class')) {
+                    block.classList.add('line-numbers');
+                }
+            });
+            
+            // Smooth scroll for navigation
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

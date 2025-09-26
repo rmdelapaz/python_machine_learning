@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Master Hierarchical Clustering in Python. Learn agglomerative and divisive clustering, dendrograms, linkage methods, and practical applications.">
+    <title>Hierarchical Clustering - Python Data Science Path</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script src="js/course-enhancements.js" defer></script>
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    
+    <main id="main-content">
+    <header role="banner">
+        <h1>Hierarchical Clustering</h1>
+        <div class="reading-time" aria-label="Estimated reading time"></div>
+    </header>
+    
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="index.html">Home</a>
+        <span class="separator">›</span>
+        <a href="#">Machine Learning Module</a>
+        <span class="separator">›</span>
+        <a href="#">Unsupervised Learning</a>
+        <span class="separator">›</span>
+        <span class="current">Hierarchical Clustering</span>
+    </nav>
+
+    <h2>Building Cluster Hierarchies! 🌳</h2>
+    
+    <blockquote>
+        <p>Hierarchical clustering builds a tree of clusters, revealing relationships at multiple scales. Unlike K-means, it doesn't require specifying the number of clusters upfront and provides a complete hierarchy of clustering solutions. Master dendrograms, linkage methods, and discover natural groupings in your data through this powerful unsupervised learning technique.</p>
+    </blockquote>
+
+    <h2>Hierarchical Clustering Framework</h2>
+    
+    <div class="mermaid">
+    graph TD
+        A[Hierarchical Clustering] --> B[Agglomerative]
+        A --> C[Divisive]
+        
+        B --> D[Bottom-Up]
+        B --> E[Linkage Methods]
+        
+        C --> F[Top-Down]
+        C --> G[Split Criteria]
+        
+        E --> H[Single Linkage]
+        E --> I[Complete Linkage]
+        E --> J[Average Linkage]
+        E --> K[Ward Linkage]
+        
+        D --> L[Start: Individual Points]
+        D --> M[Merge Closest]
+        D --> N[End: Single Cluster]
+        
+        F --> O[Start: All Points]
+        F --> P[Split Clusters]
+        F --> Q[End: Individual Points]
+        
+        style A fill:#f9f,stroke:#333,stroke-width:2px
+        style B fill:#bbf,stroke:#333,stroke-width:2px
+        style E fill:#9f9,stroke:#333,stroke-width:2px
+    </div>
+
+    <h2>Understanding Hierarchical Clustering</h2>
+    
+    <h3>Core Concepts and Implementation</h3>
+    <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.datasets import make_blobs, make_moons, make_circles
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import silhouette_score, adjusted_rand_score
+from scipy.cluster.hierarchy import dendrogram, linkage, fcluster, cut_tree
+from scipy.spatial.distance import pdist, squareform
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+
+# Generate different types of data
+np.random.seed(42)
+
+# Blob data
+X_blobs, y_blobs = make_blobs(n_samples=150, centers=3, n_features=2,
+                              cluster_std=0.5, random_state=42)
+
+# Non-convex shapes
+X_moons, y_moons = make_moons(n_samples=150, noise=0.1, random_state=42)
+X_circles, y_circles = make_circles(n_samples=150, noise=0.05, factor=0.5, 
+                                   random_state=42)
+
+class HierarchicalClusteringAnalyzer:
+    """Comprehensive Hierarchical Clustering Analysis"""
+    
+    def __init__(self):
+        self.linkage_matrix = None
+        self.labels = None
+        self.models = {}
+        
+    def manual_agglomerative(self, X, linkage='single'):
+        """
+        Manual implementation of agglomerative clustering
+        """
+        n_samples = X.shape[0]
+        
+        # Initialize: each point is its own cluster
+        clusters = [[i] for i in range(n_samples)]
+        
+        # Distance matrix
+        distances = squareform(pdist(X, metric='euclidean'))
+        np.fill_diagonal(distances, np.inf)
+        
+        # History for dendrogram
+        history = []
+        cluster_distances = []
+        
+        print(f"Manual Agglomerative Clustering ({linkage} linkage)")
+        print("="*50)
+        
+        cluster_id = n_samples
+        
+        while len(clusters) > 1:
+            # Find minimum distance
+            min_dist = np.inf
+            merge_i, merge_j = -1, -1
+            
+            for i in range(len(clusters)):
+                for j in range(i + 1, len(clusters)):
+                    # Calculate distance between clusters
+                    if linkage == 'single':
+                        # Minimum distance between points
+                        dist = np.min([distances[p1, p2] 
+                                      for p1 in clusters[i] 
+                                      for p2 in clusters[j]])
+                    elif linkage == 'complete':
+                        # Maximum distance between points
+                        dist = np.max([distances[p1, p2] 
+                                      for p1 in clusters[i] 
+                                      for p2 in clusters[j]])
+                    elif linkage == 'average':
+                        # Average distance between points
+                        dist = np.mean([distances[p1, p2] 
+                                       for p1 in clusters[i] 
+                                       for p2 in clusters[j]])
+                    
+                    if dist < min_dist:
+                        min_dist = dist
+                        merge_i, merge_j = i, j
+            
+            # Merge clusters
+            new_cluster = clusters[merge_i] + clusters[merge_j]
+            
+            # Record merge
+            history.append([merge_i, merge_j, min_dist, len(new_cluster)])
+            cluster_distances.append(min_dist)
+            
+            # Update clusters list
+            clusters = [c for idx, c in enumerate(clusters) 
+                       if idx not in [merge_i, merge_j]]
+            clusters.append(new_cluster)
+            
+            cluster_id += 1
+            
+            if len(clusters) % 10 == 0:
+                print(f"Clusters remaining: {len(clusters)}")
+        
+        return history, cluster_distances
+    
+    def compare_linkage_methods(self, X, n_clusters=3):
+        """Compare different linkage methods"""
+        
+        linkage_methods = ['single', 'complete', 'average', 'ward']
+        
+        fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+        
+        for idx, method in enumerate(linkage_methods):
+            # Perform clustering
+            model = AgglomerativeClustering(n_clusters=n_clusters, linkage=method)
+            labels = model.fit_predict(X)
+            self.models[method] = model
+            
+            # Plot clusters
+            axes[0, idx].scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', 
+                               s=50, alpha=0.7)
+            axes[0, idx].set_title(f'{method.capitalize()} Linkage')
+            axes[0, idx].grid(True, alpha=0.3)
+            
+            # Calculate silhouette score
+            if len(np.unique(labels)) > 1:
+                score = silhouette_score(X, labels)
+                axes[0, idx].text(0.02, 0.98, f'Silhouette: {score:.3f}',
+                                transform=axes[0, idx].transAxes,
+                                fontsize=10, verticalalignment='top',
+                                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+            
+            # Create dendrogram
+            Z = linkage(X, method=method)
+            dendrogram(Z, ax=axes[1, idx], truncate_mode='level', p=4,
+                      no_labels=True, color_threshold=0)
+            axes[1, idx].set_title(f'{method.capitalize()} Dendrogram')
+            axes[1, idx].set_xlabel('Sample Index')
+            axes[1, idx].set_ylabel('Distance')
+        
+        plt.suptitle('Linkage Methods Comparison', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return self.models
+    
+    def create_dendrogram(self, X, method='ward', color_threshold=None):
+        """Create and analyze dendrogram"""
+        
+        # Compute linkage matrix
+        self.linkage_matrix = linkage(X, method=method)
+        
+        # Create figure with subplots
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        
+        # Full dendrogram
+        dend = dendrogram(self.linkage_matrix, ax=axes[0],
+                         color_threshold=color_threshold,
+                         above_threshold_color='gray')
+        axes[0].set_title('Full Dendrogram')
+        axes[0].set_xlabel('Sample Index')
+        axes[0].set_ylabel('Distance')
+        axes[0].grid(True, alpha=0.3)
+        
+        # Truncated dendrogram
+        dendrogram(self.linkage_matrix, ax=axes[1],
+                  truncate_mode='level', p=3,
+                  color_threshold=color_threshold,
+                  above_threshold_color='gray')
+        axes[1].set_title('Truncated Dendrogram (Level 3)')
+        axes[1].set_xlabel('Sample Index or (Cluster Size)')
+        axes[1].set_ylabel('Distance')
+        axes[1].grid(True, alpha=0.3)
+        
+        # Distance plot
+        distances = self.linkage_matrix[:, 2]
+        axes[2].plot(range(1, len(distances) + 1), distances[::-1], 'o-')
+        axes[2].set_xlabel('Number of Clusters')
+        axes[2].set_ylabel('Distance')
+        axes[2].set_title('Cluster Distance Evolution')
+        axes[2].grid(True, alpha=0.3)
+        
+        # Find elbow
+        if len(distances) > 2:
+            # Calculate second derivative
+            accel = np.diff(distances, 2)
+            if len(accel) > 0:
+                elbow_idx = np.argmax(accel) + 2
+                axes[2].axvline(x=len(distances) - elbow_idx, color='red', 
+                               linestyle='--', label=f'Elbow: {len(distances) - elbow_idx} clusters')
+                axes[2].legend()
+        
+        plt.suptitle('Dendrogram Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return self.linkage_matrix, dend
+    
+    def cut_dendrogram(self, X, linkage_matrix=None, n_clusters=None, 
+                      distance_threshold=None):
+        """Cut dendrogram at different levels"""
+        
+        if linkage_matrix is None:
+            linkage_matrix = self.linkage_matrix
+        
+        if linkage_matrix is None:
+            raise ValueError("No linkage matrix available. Run create_dendrogram first.")
+        
+        # Different ways to cut the dendrogram
+        cuts = {}
+        
+        if n_clusters:
+            # Cut to get specific number of clusters
+            cuts['n_clusters'] = fcluster(linkage_matrix, n_clusters, 
+                                         criterion='maxclust')
+        
+        if distance_threshold:
+            # Cut at specific distance
+            cuts['distance'] = fcluster(linkage_matrix, distance_threshold,
+                                       criterion='distance')
+        
+        # Visualize cuts
+        fig, axes = plt.subplots(1, len(cuts), figsize=(6*len(cuts), 5))
+        
+        if len(cuts) == 1:
+            axes = [axes]
+        
+        for idx, (method, labels) in enumerate(cuts.items()):
+            axes[idx].scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis',
+                            s=50, alpha=0.7)
+            axes[idx].set_title(f'Cut Method: {method}\n{len(np.unique(labels))} clusters')
+            axes[idx].grid(True, alpha=0.3)
+            
+            # Calculate and display silhouette score
+            if len(np.unique(labels)) > 1:
+                score = silhouette_score(X, labels)
+                axes[idx].text(0.02, 0.98, f'Silhouette: {score:.3f}',
+                             transform=axes[idx].transAxes,
+                             fontsize=10, verticalalignment='top',
+                             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        plt.suptitle('Dendrogram Cutting Methods', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return cuts
+    
+    def hierarchical_heatmap(self, X, method='ward', metric='euclidean'):
+        """Create hierarchical clustering heatmap"""
+        
+        # Compute linkage for both rows and columns
+        row_linkage = linkage(X, method=method, metric=metric)
+        
+        # If X is square, we can cluster columns too
+        if X.shape[0] == X.shape[1]:
+            col_linkage = linkage(X.T, method=method, metric=metric)
+        else:
+            col_linkage = None
+        
+        # Create clustermap
+        g = sns.clustermap(X, row_linkage=row_linkage, col_linkage=col_linkage,
+                          cmap='coolwarm', figsize=(10, 10),
+                          cbar_kws={'label': 'Value'})
+        
+        g.fig.suptitle('Hierarchical Clustering Heatmap', y=1.02)
+        plt.show()
+        
+        return g
+    
+    def stability_analysis(self, X, n_clusters_range=range(2, 10)):
+        """Analyze clustering stability across different numbers of clusters"""
+        
+        methods = ['single', 'complete', 'average', 'ward']
+        
+        results = {method: {'silhouette': [], 'calinski': []} 
+                  for method in methods}
+        
+        for n_clusters in n_clusters_range:
+            for method in methods:
+                model = AgglomerativeClustering(n_clusters=n_clusters, 
+                                              linkage=method)
+                labels = model.fit_predict(X)
+                
+                # Calculate metrics
+                if len(np.unique(labels)) > 1:
+                    from sklearn.metrics import calinski_harabasz_score
+                    
+                    silhouette = silhouette_score(X, labels)
+                    calinski = calinski_harabasz_score(X, labels)
+                    
+                    results[method]['silhouette'].append(silhouette)
+                    results[method]['calinski'].append(calinski)
+                else:
+                    results[method]['silhouette'].append(0)
+                    results[method]['calinski'].append(0)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Silhouette scores
+        for method in methods:
+            axes[0].plot(n_clusters_range, results[method]['silhouette'],
+                        'o-', label=method, linewidth=2)
+        axes[0].set_xlabel('Number of Clusters')
+        axes[0].set_ylabel('Silhouette Score')
+        axes[0].set_title('Silhouette Score vs Number of Clusters')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        
+        # Calinski-Harabasz scores
+        for method in methods:
+            axes[1].plot(n_clusters_range, results[method]['calinski'],
+                        'o-', label=method, linewidth=2)
+        axes[1].set_xlabel('Number of Clusters')
+        axes[1].set_ylabel('Calinski-Harabasz Score')
+        axes[1].set_title('Calinski-Harabasz Score vs Number of Clusters')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.suptitle('Clustering Stability Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return results
+
+# Initialize analyzer
+analyzer = HierarchicalClusteringAnalyzer()
+
+print("="*60)
+print("HIERARCHICAL CLUSTERING FUNDAMENTALS")
+print("="*60)
+
+# Manual implementation
+print("\nManual Agglomerative Clustering:")
+history, distances = analyzer.manual_agglomerative(X_blobs[:20], linkage='single')
+print(f"Final merge distance: {distances[-1]:.3f}")
+
+# Compare linkage methods
+print("\n" + "="*60)
+print("LINKAGE METHODS COMPARISON")
+print("="*60)
+models = analyzer.compare_linkage_methods(X_blobs)
+
+# Create dendrogram
+print("\nCreating dendrogram analysis...")
+linkage_matrix, dend = analyzer.create_dendrogram(X_blobs, method='ward')
+
+# Cut dendrogram
+print("\nCutting dendrogram at different levels...")
+cuts = analyzer.cut_dendrogram(X_blobs, linkage_matrix, 
+                              n_clusters=3, distance_threshold=10)
+
+# Stability analysis
+print("\nPerforming stability analysis...")
+stability_results = analyzer.stability_analysis(X_blobs)</code></pre>
+
+    <h2>Advanced Hierarchical Clustering</h2>
+    
+    <h3>Distance Metrics and Custom Linkage</h3>
+    <pre class="language-python"><code>from scipy.spatial.distance import cdist
+from sklearn.metrics import pairwise_distances
+
+class AdvancedHierarchical:
+    """Advanced hierarchical clustering techniques"""
+    
+    def __init__(self):
+        self.distance_matrices = {}
+        self.custom_linkages = {}
+        
+    def compare_distance_metrics(self, X, n_clusters=3):
+        """Compare different distance metrics"""
+        
+        metrics = ['euclidean', 'manhattan', 'cosine', 'correlation']
+        
+        fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+        
+        for idx, metric in enumerate(metrics):
+            # Calculate distance matrix
+            if metric == 'correlation':
+                # Correlation distance
+                dist_matrix = 1 - np.corrcoef(X)
+            else:
+                dist_matrix = pairwise_distances(X, metric=metric)
+            
+            self.distance_matrices[metric] = dist_matrix
+            
+            # Perform clustering
+            model = AgglomerativeClustering(n_clusters=n_clusters,
+                                          affinity='precomputed',
+                                          linkage='average')
+            labels = model.fit_predict(dist_matrix)
+            
+            # Plot results
+            axes[0, idx].scatter(X[:, 0], X[:, 1], c=labels, 
+                               cmap='viridis', s=50, alpha=0.7)
+            axes[0, idx].set_title(f'{metric.capitalize()} Distance')
+            axes[0, idx].grid(True, alpha=0.3)
+            
+            # Plot distance matrix
+            im = axes[1, idx].imshow(dist_matrix, cmap='viridis', aspect='auto')
+            axes[1, idx].set_title(f'{metric.capitalize()} Distance Matrix')
+            axes[1, idx].set_xlabel('Sample')
+            axes[1, idx].set_ylabel('Sample')
+            plt.colorbar(im, ax=axes[1, idx], fraction=0.046)
+        
+        plt.suptitle('Distance Metrics Comparison', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return self.distance_matrices
+    
+    def custom_linkage_function(self, X):
+        """Implement custom linkage criterion"""
+        
+        def weighted_average_linkage(dist_matrix, clusters_i, clusters_j):
+            """
+            Custom weighted average linkage
+            Weight by cluster size
+            """
+            total_weight = len(clusters_i) + len(clusters_j)
+            weight_i = len(clusters_i) / total_weight
+            weight_j = len(clusters_j) / total_weight
+            
+            distances = []
+            for i in clusters_i:
+                for j in clusters_j:
+                    distances.append(dist_matrix[i, j])
+            
+            return weight_i * np.min(distances) + weight_j * np.max(distances)
+        
+        # Manual clustering with custom linkage
+        n_samples = X.shape[0]
+        dist_matrix = pairwise_distances(X)
+        
+        # Initialize clusters
+        clusters = [[i] for i in range(n_samples)]
+        merge_history = []
+        
+        while len(clusters) > 1:
+            min_dist = np.inf
+            merge_i, merge_j = -1, -1
+            
+            # Find clusters to merge
+            for i in range(len(clusters)):
+                for j in range(i + 1, len(clusters)):
+                    dist = weighted_average_linkage(dist_matrix, 
+                                                   clusters[i], 
+                                                   clusters[j])
+                    if dist < min_dist:
+                        min_dist = dist
+                        merge_i, merge_j = i, j
+            
+            # Merge clusters
+            new_cluster = clusters[merge_i] + clusters[merge_j]
+            merge_history.append((merge_i, merge_j, min_dist))
+            
+            # Update clusters
+            clusters = [c for idx, c in enumerate(clusters) 
+                       if idx not in [merge_i, merge_j]]
+            clusters.append(new_cluster)
+        
+        return merge_history
+    
+    def temporal_hierarchical(self, X, time_penalty=0.1):
+        """Hierarchical clustering with temporal constraints"""
+        
+        n_samples = X.shape[0]
+        
+        # Create distance matrix with temporal penalty
+        dist_matrix = pairwise_distances(X)
+        
+        # Add temporal penalty (samples further in time are less similar)
+        for i in range(n_samples):
+            for j in range(n_samples):
+                temporal_distance = abs(i - j) * time_penalty
+                dist_matrix[i, j] += temporal_distance
+        
+        # Perform clustering
+        model = AgglomerativeClustering(n_clusters=3, 
+                                      affinity='precomputed',
+                                      linkage='average')
+        labels = model.fit_predict(dist_matrix)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        
+        # Original clustering
+        model_orig = AgglomerativeClustering(n_clusters=3)
+        labels_orig = model_orig.fit_predict(X)
+        
+        axes[0].scatter(range(n_samples), X[:, 0], c=labels_orig,
+                       cmap='viridis', s=50, alpha=0.7)
+        axes[0].set_xlabel('Time Index')
+        axes[0].set_ylabel('Feature 1')
+        axes[0].set_title('Standard Hierarchical Clustering')
+        axes[0].grid(True, alpha=0.3)
+        
+        # Temporal clustering
+        axes[1].scatter(range(n_samples), X[:, 0], c=labels,
+                       cmap='viridis', s=50, alpha=0.7)
+        axes[1].set_xlabel('Time Index')
+        axes[1].set_ylabel('Feature 1')
+        axes[1].set_title(f'Temporal Hierarchical (penalty={time_penalty})')
+        axes[1].grid(True, alpha=0.3)
+        
+        # Distance matrix
+        im = axes[2].imshow(dist_matrix, cmap='viridis', aspect='auto')
+        axes[2].set_xlabel('Sample')
+        axes[2].set_ylabel('Sample')
+        axes[2].set_title('Temporal Distance Matrix')
+        plt.colorbar(im, ax=axes[2])
+        
+        plt.suptitle('Temporal Hierarchical Clustering', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return labels, dist_matrix
+    
+    def constrained_clustering(self, X, must_link=None, cannot_link=None):
+        """Hierarchical clustering with constraints"""
+        
+        n_samples = X.shape[0]
+        dist_matrix = pairwise_distances(X)
+        
+        # Apply constraints to distance matrix
+        if must_link is not None:
+            for i, j in must_link:
+                dist_matrix[i, j] = 0
+                dist_matrix[j, i] = 0
+        
+        if cannot_link is not None:
+            for i, j in cannot_link:
+                dist_matrix[i, j] = np.inf
+                dist_matrix[j, i] = np.inf
+        
+        # Perform clustering
+        model = AgglomerativeClustering(n_clusters=3,
+                                      affinity='precomputed',
+                                      linkage='average')
+        labels = model.fit_predict(dist_matrix)
+        
+        return labels
+
+# Advanced analysis
+advanced = AdvancedHierarchical()
+
+print("\n" + "="*60)
+print("ADVANCED HIERARCHICAL CLUSTERING")
+print("="*60)
+
+# Compare distance metrics
+print("\nComparing distance metrics...")
+distance_matrices = advanced.compare_distance_metrics(X_blobs)
+
+# Temporal clustering
+print("\nTemporal hierarchical clustering...")
+# Generate time series-like data
+X_temporal = np.cumsum(np.random.randn(100, 2), axis=0)
+labels_temporal, dist_temporal = advanced.temporal_hierarchical(X_temporal)
+
+# Constrained clustering
+print("\nConstrained clustering example...")
+must_link = [(0, 1), (5, 6)]  # These points must be in same cluster
+cannot_link = [(0, 10), (1, 11)]  # These points cannot be in same cluster
+labels_constrained = advanced.constrained_clustering(X_blobs[:20], 
+                                                    must_link, cannot_link)</code></pre>
+
+    <h2>Applications and Use Cases</h2>
+    
+    <h3>Real-world Applications</h3>
+    <pre class="language-python"><code>class HierarchicalApplications:
+    """Real-world applications of hierarchical clustering"""
+    
+    def __init__(self):
+        self.results = {}
+        
+    def customer_segmentation(self, n_customers=200):
+        """Customer segmentation example"""
+        
+        np.random.seed(42)
+        
+        # Generate synthetic customer data
+        # Features: [spending, frequency, recency, loyalty_score]
+        customers = []
+        
+        # High-value customers
+        customers.append(np.random.normal([800, 12, 5, 90], [100, 2, 1, 5], 
+                                        (n_customers//3, 4)))
+        # Regular customers
+        customers.append(np.random.normal([400, 6, 15, 60], [50, 1, 3, 10], 
+                                        (n_customers//3, 4)))
+        # Occasional customers
+        customers.append(np.random.normal([100, 2, 30, 30], [30, 1, 5, 10], 
+                                        (n_customers//3, 4)))
+        
+        X_customers = np.vstack(customers)
+        feature_names = ['Spending', 'Frequency', 'Recency', 'Loyalty']
+        
+        # Standardize features
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X_customers)
+        
+        # Perform clustering
+        model = AgglomerativeClustering(n_clusters=3, linkage='ward')
+        labels = model.fit_predict(X_scaled)
+        
+        # Create customer profiles
+        customer_df = pd.DataFrame(X_customers, columns=feature_names)
+        customer_df['Cluster'] = labels
+        
+        # Analyze clusters
+        cluster_summary = customer_df.groupby('Cluster').agg({
+            'Spending': ['mean', 'std'],
+            'Frequency': ['mean', 'std'],
+            'Recency': ['mean', 'std'],
+            'Loyalty': ['mean', 'std']
+        }).round(2)
+        
+        print("\nCustomer Segment Analysis:")
+        print(cluster_summary)
+        
+        # Visualization
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        
+        # Dendrogram
+        Z = linkage(X_scaled, method='ward')
+        dendrogram(Z, ax=axes[0, 0], truncate_mode='level', p=3)
+        axes[0, 0].set_title('Customer Hierarchy')
+        axes[0, 0].set_xlabel('Customer Index')
+        axes[0, 0].set_ylabel('Distance')
+        
+        # Feature comparisons
+        for idx, feature in enumerate(feature_names[:4]):
+            row = (idx + 1) // 3
+            col = (idx + 1) % 3
+            customer_df.boxplot(column=feature, by='Cluster', ax=axes[row, col])
+            axes[row, col].set_title(f'{feature} by Cluster')
+            axes[row, col].set_xlabel('Cluster')
+            axes[row, col].set_ylabel(feature)
+        
+        # Remove empty subplot
+        fig.delaxes(axes[1, 2])
+        
+        plt.suptitle('Customer Segmentation Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return customer_df, cluster_summary
+    
+    def document_clustering(self, n_documents=100):
+        """Text document clustering example"""
+        
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        
+        # Generate synthetic documents
+        topics = [
+            ['machine', 'learning', 'algorithm', 'data', 'model', 'training'],
+            ['business', 'market', 'sales', 'revenue', 'customer', 'profit'],
+            ['health', 'medical', 'patient', 'treatment', 'disease', 'care']
+        ]
+        
+        documents = []
+        true_labels = []
+        
+        for topic_idx, topic_words in enumerate(topics):
+            for _ in range(n_documents // 3):
+                # Generate document
+                doc = ' '.join(np.random.choice(topic_words, 
+                                              size=np.random.randint(10, 30), 
+                                              replace=True))
+                documents.append(doc)
+                true_labels.append(topic_idx)
+        
+        # TF-IDF vectorization
+        vectorizer = TfidfVectorizer(max_features=50)
+        X_tfidf = vectorizer.fit_transform(documents).toarray()
+        
+        # Hierarchical clustering
+        model = AgglomerativeClustering(n_clusters=3, linkage='ward')
+        labels = model.fit_predict(X_tfidf)
+        
+        # Evaluate clustering
+        from sklearn.metrics import adjusted_rand_score, homogeneity_score
+        
+        ari = adjusted_rand_score(true_labels, labels)
+        homogeneity = homogeneity_score(true_labels, labels)
+        
+        print(f"\nDocument Clustering Performance:")
+        print(f"Adjusted Rand Index: {ari:.3f}")
+        print(f"Homogeneity Score: {homogeneity:.3f}")
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Dendrogram
+        Z = linkage(X_tfidf, method='ward')
+        dendrogram(Z, ax=axes[0], truncate_mode='level', p=4,
+                  color_threshold=0.3*max(Z[:, 2]))
+        axes[0].set_title('Document Hierarchy')
+        axes[0].set_xlabel('Document Index')
+        axes[0].set_ylabel('Distance')
+        
+        # Cluster visualization (using PCA)
+        from sklearn.decomposition import PCA
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X_tfidf)
+        
+        scatter = axes[1].scatter(X_pca[:, 0], X_pca[:, 1], 
+                                 c=labels, cmap='viridis', 
+                                 s=50, alpha=0.7)
+        axes[1].set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.1%})')
+        axes[1].set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.1%})')
+        axes[1].set_title('Document Clusters (PCA projection)')
+        plt.colorbar(scatter, ax=axes[1])
+        
+        plt.suptitle('Document Clustering Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return labels, X_tfidf
+    
+    def gene_expression_clustering(self):
+        """Gene expression clustering example"""
+        
+        # Simulate gene expression data
+        n_genes = 50
+        n_conditions = 8
+        
+        # Different expression patterns
+        patterns = []
+        
+        # Upregulated genes
+        patterns.append(np.tile(np.linspace(0, 2, n_conditions), (15, 1)) + 
+                       np.random.normal(0, 0.2, (15, n_conditions)))
+        
+        # Downregulated genes
+        patterns.append(np.tile(np.linspace(2, 0, n_conditions), (15, 1)) + 
+                       np.random.normal(0, 0.2, (15, n_conditions)))
+        
+        # Cyclic genes
+        x = np.linspace(0, 2*np.pi, n_conditions)
+        patterns.append(np.tile(np.sin(x), (10, 1)) + 
+                       np.random.normal(0, 0.2, (10, n_conditions)))
+        
+        # Constant genes
+        patterns.append(np.random.normal(1, 0.2, (10, n_conditions)))
+        
+        X_genes = np.vstack(patterns)
+        
+        # Create gene names
+        gene_names = [f'Gene_{i:03d}' for i in range(n_genes)]
+        condition_names = [f'C{i}' for i in range(n_conditions)]
+        
+        # Create DataFrame
+        gene_df = pd.DataFrame(X_genes, 
+                              index=gene_names,
+                              columns=condition_names)
+        
+        # Hierarchical clustering with heatmap
+        g = sns.clustermap(gene_df, method='ward', 
+                          cmap='RdBu_r', center=0,
+                          figsize=(10, 12),
+                          row_cluster=True, col_cluster=True,
+                          cbar_kws={'label': 'Expression Level'})
+        
+        g.fig.suptitle('Gene Expression Clustering', y=1.02)
+        
+        # Extract cluster assignments
+        row_dendro = g.dendrogram_row.dendrogram
+        clusters = fcluster(g.dendrogram_row.linkage, 4, criterion='maxclust')
+        
+        print("\nGene Cluster Sizes:")
+        unique, counts = np.unique(clusters, return_counts=True)
+        for cluster, count in zip(unique, counts):
+            print(f"Cluster {cluster}: {count} genes")
+        
+        return gene_df, clusters
+
+# Applications
+apps = HierarchicalApplications()
+
+print("\n" + "="*60)
+print("REAL-WORLD APPLICATIONS")
+print("="*60)
+
+# Customer segmentation
+print("\nCustomer Segmentation:")
+customer_df, cluster_summary = apps.customer_segmentation()
+
+# Document clustering
+print("\nDocument Clustering:")
+doc_labels, doc_features = apps.document_clustering()
+
+# Gene expression clustering
+print("\nGene Expression Clustering:")
+gene_df, gene_clusters = apps.gene_expression_clustering()</code></pre>
+
+    <h2>Best Practices and Guidelines</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("HIERARCHICAL CLUSTERING BEST PRACTICES")
+print("="*60)
+
+best_practices = """
+KEY GUIDELINES:
+
+1. LINKAGE METHOD SELECTION:
+   • Single: Good for elongated clusters, sensitive to noise
+   • Complete: Good for compact clusters, sensitive to outliers  
+   • Average: Balance between single and complete
+   • Ward: Minimizes within-cluster variance, good general purpose
+   
+2. DISTANCE METRIC CHOICE:
+   • Euclidean: Standard for continuous features
+   • Manhattan: Robust to outliers
+   • Cosine: Good for high-dimensional data
+   • Correlation: For finding similar patterns
+   
+3. PREPROCESSING:
+   • Always standardize/normalize features
+   • Handle missing values appropriately
+   • Consider dimensionality reduction for high-D data
+   • Remove or downweight noisy features
+   
+4. DETERMINING NUMBER OF CLUSTERS:
+   • Use dendrogram to visualize hierarchy
+   • Look for large jumps in linkage distances
+   • Use silhouette analysis
+   • Consider domain knowledge
+   
+5. COMPUTATIONAL CONSIDERATIONS:
+   • O(n³) time complexity for most methods
+   • O(n²) space for distance matrix
+   • Consider sampling for large datasets
+   • Use scipy.cluster.hierarchy for efficiency
+   
+6. ADVANTAGES:
+   ✓ No need to specify k upfront
+   ✓ Creates hierarchy of clusters
+   ✓ Deterministic results
+   ✓ Works with any distance metric
+   ✓ Dendrogram provides insights
+   
+7. DISADVANTAGES:
+   ✗ Computationally expensive for large data
+   ✗ Sensitive to noise and outliers
+   ✗ Cannot undo merges (greedy)
+   ✗ Different linkages give different results
+   ✗ Difficult to interpret for large datasets
+"""
+
+print(best_practices)
+
+# Comparison with other clustering methods
+comparison_data = {
+    'Method': ['Hierarchical', 'K-Means', 'DBSCAN', 'Gaussian Mixture'],
+    'Scalability': ['Poor', 'Good', 'Medium', 'Poor'],
+    'Cluster Shape': ['Any', 'Spherical', 'Any', 'Elliptical'],
+    'Need k': ['No*', 'Yes', 'No', 'Yes'],
+    'Outlier Handling': ['Poor', 'Poor', 'Good', 'Medium'],
+    'Interpretability': ['High', 'High', 'Medium', 'Low'],
+    'Deterministic': ['Yes', 'No**', 'Yes', 'No']
+}
+
+comparison_df = pd.DataFrame(comparison_data)
+print("\n" + "="*60)
+print("CLUSTERING METHODS COMPARISON")
+print("="*60)
+print(comparison_df.to_string(index=False))
+print("\n* Need to cut dendrogram to get specific k")
+print("** K-means++ initialization is random")</code></pre>
+
+    <h2>Practice Exercises</h2>
+    
+    <h3>Exercise 1: Implement Divisive Clustering</h3>
+    <p>Create a top-down hierarchical clustering algorithm:</p>
+    <ol>
+        <li>Start with all points in one cluster</li>
+        <li>Recursively split clusters using K-means (k=2)</li>
+        <li>Choose split that maximizes inter-cluster distance</li>
+        <li>Stop when desired number of clusters reached</li>
+        <li>Compare with agglomerative approach</li>
+    </ol>
+
+    <h3>Exercise 2: Dynamic Hierarchical Clustering</h3>
+    <p>Handle streaming data with hierarchical clustering:</p>
+    <ol>
+        <li>Implement incremental agglomerative clustering</li>
+        <li>Update dendrogram with new points</li>
+        <li>Handle concept drift</li>
+        <li>Maintain clustering quality over time</li>
+    </ol>
+
+    <h3>Exercise 3: Multi-view Hierarchical Clustering</h3>
+    <p>Combine multiple data views:</p>
+    <ol>
+        <li>Cluster using different feature sets</li>
+        <li>Combine multiple dendrograms</li>
+        <li>Weighted consensus clustering</li>
+        <li>Evaluate against ground truth</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+        <li>🌳 Hierarchical clustering builds a tree of clusters</li>
+        <li>📊 Dendrograms visualize the complete hierarchy</li>
+        <li>🔗 Linkage methods determine how clusters merge</li>
+        <li>✂️ Cut dendrogram at any level for desired clusters</li>
+        <li>📏 Works with any distance metric</li>
+        <li>⚡ Computationally expensive: O(n³) time</li>
+        <li>🎯 No need to specify k upfront</li>
+        <li>🔒 Deterministic results (no randomness)</li>
+        <li>⚠️ Sensitive to noise and outliers</li>
+        <li>🔄 Cannot undo merges (greedy algorithm)</li>
+    </ul>
+
+    <h2>Further Resources</h2>
+    <ul>
+        <li><a href="https://docs.scipy.org/doc/scipy/reference/cluster.hierarchy.html">SciPy Hierarchical Clustering</a></li>
+        <li><a href="https://scikit-learn.org/stable/modules/clustering.html#hierarchical-clustering">Scikit-learn Hierarchical Clustering</a></li>
+        <li><a href="https://www.cs.princeton.edu/courses/archive/fall08/cos436/Duda/PR_HierCl/HierClus.htm">Hierarchical Clustering Theory</a></li>
+        <li><a href="https://arxiv.org/abs/1908.07569">Modern Hierarchical Clustering Algorithms</a></li>
+        <li><a href="https://www.displayr.com/what-is-dendrogram/">Understanding Dendrograms</a></li>
+    </ul>
+
+    <!-- Navigation at the bottom -->
+    <nav class="lesson-nav" aria-label="Lesson navigation">
+        <a href="ml_kmeans_applications.html" class="prev-lesson" aria-label="Previous lesson">Previous: K-means Applications</a>
+        <a href="index.html" class="home-link" aria-label="Course home">Course Home</a>
+        <a href="ml_dbscan_clustering.html" class="next-lesson" aria-label="Next lesson">Next: DBSCAN Clustering</a>
+    </nav>
+    
+    </main>
+    <script src="js/clipboard.js"></script>
+</body>
+</html>

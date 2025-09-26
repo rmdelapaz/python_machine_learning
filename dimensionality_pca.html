@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Principal Component Analysis (PCA) - Python Data Science</title>
+    <link rel="stylesheet" href="styles/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    <nav class="nav-container">
+        <a href="index.html" class="nav-logo">Python Data Science</a>
+        <div class="nav-links">
+            <a href="numpy_arrays_vs_lists.html">NumPy</a>
+            <a href="pandas_dataframes_series.html">Pandas</a>
+            <a href="matplotlib_line_scatter_bar.html">Matplotlib</a>
+            <a href="ml_sklearn_basics.html" class="active">Machine Learning</a>
+            <a href="statistics_descriptive_part1.html">Statistics</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>📊 Principal Component Analysis: Dimensionality Reduction</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>Principal Component Analysis (PCA) is one of the most fundamental techniques in data science for dimensionality reduction. It transforms high-dimensional data into a lower-dimensional space while preserving as much variance as possible. PCA finds new axes (principal components) that capture the maximum variance in your data, making it invaluable for visualization, noise reduction, and feature extraction.</p>
+        </div>
+
+        <h2>Core Concepts and Mathematics</h2>
+        
+        <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import seaborn as sns
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import load_iris, load_digits, fetch_olivetti_faces
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+
+print("="*60)
+print("PRINCIPAL COMPONENT ANALYSIS FUNDAMENTALS")
+print("="*60)
+
+# Core concepts
+pca_concepts = """
+PCA KEY CONCEPTS:
+
+1. VARIANCE MAXIMIZATION:
+   • Find directions of maximum variance
+   • First PC captures most variance
+   • Each subsequent PC is orthogonal
+
+2. MATHEMATICAL FOUNDATION:
+   • Eigendecomposition of covariance matrix
+   • Eigenvectors = Principal Components
+   • Eigenvalues = Variance explained
+
+3. STEPS:
+   1. Center the data (subtract mean)
+   2. (Optional) Standardize features
+   3. Compute covariance matrix
+   4. Find eigenvectors and eigenvalues
+   5. Sort by eigenvalues (descending)
+   6. Project data onto PCs
+
+4. KEY PROPERTIES:
+   • PCs are uncorrelated
+   • PCs are linear combinations of features
+   • Preserves global structure
+   • Reversible transformation
+
+5. WHEN TO USE:
+   • High-dimensional data
+   • Multicollinearity present
+   • Visualization (2D/3D)
+   • Noise reduction
+   • Feature extraction
+"""
+
+print(pca_concepts)</code></pre>
+
+        <h2>Manual PCA Implementation</h2>
+        
+        <pre class="language-python"><code>class ManualPCA:
+    """Manual implementation of PCA to understand the algorithm"""
+    
+    def __init__(self, n_components=2):
+        self.n_components = n_components
+        self.mean = None
+        self.components = None
+        self.eigenvalues = None
+        
+    def fit(self, X):
+        """Fit the PCA model"""
+        # Step 1: Center the data
+        self.mean = np.mean(X, axis=0)
+        X_centered = X - self.mean
+        
+        # Step 2: Calculate covariance matrix
+        cov_matrix = np.cov(X_centered.T)
+        
+        # Step 3: Calculate eigenvalues and eigenvectors
+        eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
+        
+        # Step 4: Sort eigenvectors by eigenvalues
+        idx = eigenvalues.argsort()[::-1]
+        eigenvalues = eigenvalues[idx]
+        eigenvectors = eigenvectors[:, idx]
+        
+        # Step 5: Store first n_components
+        self.components = eigenvectors[:, :self.n_components]
+        self.eigenvalues = eigenvalues[:self.n_components]
+        
+        return self
+    
+    def transform(self, X):
+        """Project data onto principal components"""
+        X_centered = X - self.mean
+        return X_centered @ self.components
+    
+    def fit_transform(self, X):
+        """Fit and transform in one step"""
+        self.fit(X)
+        return self.transform(X)
+    
+    def inverse_transform(self, X_transformed):
+        """Reconstruct original data from transformed data"""
+        return X_transformed @ self.components.T + self.mean
+    
+    def explained_variance_ratio(self):
+        """Calculate explained variance ratio"""
+        return self.eigenvalues / np.sum(self.eigenvalues)
+
+# Demonstrate manual PCA
+np.random.seed(42)
+
+# Generate sample data
+n_samples = 300
+X = np.random.randn(n_samples, 3)
+X[:, 1] = X[:, 0] * 0.5 + np.random.randn(n_samples) * 0.1
+X[:, 2] = X[:, 0] * 0.3 + X[:, 1] * 0.7 + np.random.randn(n_samples) * 0.2
+
+# Apply manual PCA
+manual_pca = ManualPCA(n_components=2)
+X_manual = manual_pca.fit_transform(X)
+
+# Apply sklearn PCA for comparison
+sklearn_pca = PCA(n_components=2)
+X_sklearn = sklearn_pca.fit_transform(X)
+
+# Visualization
+fig = plt.figure(figsize=(15, 5))
+
+# Original 3D data
+ax1 = fig.add_subplot(131, projection='3d')
+ax1.scatter(X[:, 0], X[:, 1], X[:, 2], c=np.arange(n_samples), 
+           cmap='viridis', alpha=0.6)
+ax1.set_xlabel('Feature 1')
+ax1.set_ylabel('Feature 2')
+ax1.set_zlabel('Feature 3')
+ax1.set_title('Original 3D Data')
+
+# Manual PCA result
+ax2 = fig.add_subplot(132)
+ax2.scatter(X_manual[:, 0], X_manual[:, 1], c=np.arange(n_samples), 
+           cmap='viridis', alpha=0.6)
+ax2.set_xlabel('PC1')
+ax2.set_ylabel('PC2')
+ax2.set_title('Manual PCA Result')
+ax2.grid(True, alpha=0.3)
+
+# Sklearn PCA result
+ax3 = fig.add_subplot(133)
+ax3.scatter(X_sklearn[:, 0], X_sklearn[:, 1], c=np.arange(n_samples), 
+           cmap='viridis', alpha=0.6)
+ax3.set_xlabel('PC1')
+ax3.set_ylabel('PC2')
+ax3.set_title('Sklearn PCA Result')
+ax3.grid(True, alpha=0.3)
+
+plt.suptitle('Manual vs Sklearn PCA Comparison', fontsize=14, y=1.02)
+plt.tight_layout()
+plt.show()
+
+print("\nManual PCA Results:")
+print(f"Explained variance ratio: {manual_pca.explained_variance_ratio()}")
+print(f"\nSklearn PCA Results:")
+print(f"Explained variance ratio: {sklearn_pca.explained_variance_ratio_}")</code></pre>
+
+        <h2>PCA Visualization and Interpretation</h2>
+        
+        <pre class="language-python"><code>class PCAVisualizer:
+    """Comprehensive PCA visualization tools"""
+    
+    def __init__(self):
+        self.pca = None
+        self.scaler = StandardScaler()
+        
+    def visualize_pca_process(self, X, feature_names=None):
+        """Visualize the PCA transformation process"""
+        
+        # Standardize data
+        X_scaled = self.scaler.fit_transform(X)
+        
+        # Fit PCA
+        self.pca = PCA()
+        X_pca = self.pca.fit_transform(X_scaled)
+        
+        # Create visualizations
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        
+        # 1. Correlation matrix
+        corr_matrix = np.corrcoef(X_scaled.T)
+        sns.heatmap(corr_matrix, annot=True, fmt='.2f', 
+                   cmap='coolwarm', center=0, ax=axes[0, 0])
+        axes[0, 0].set_title('Feature Correlation Matrix')
+        if feature_names:
+            axes[0, 0].set_xticklabels(feature_names, rotation=45)
+            axes[0, 0].set_yticklabels(feature_names, rotation=0)
+        
+        # 2. Scree plot
+        explained_var = self.pca.explained_variance_ratio_
+        cumsum_var = np.cumsum(explained_var)
+        
+        x_pos = np.arange(len(explained_var))
+        axes[0, 1].bar(x_pos, explained_var, alpha=0.6, label='Individual')
+        axes[0, 1].plot(x_pos, cumsum_var, 'ro-', label='Cumulative')
+        axes[0, 1].set_xlabel('Principal Component')
+        axes[0, 1].set_ylabel('Explained Variance Ratio')
+        axes[0, 1].set_title('Scree Plot')
+        axes[0, 1].legend()
+        axes[0, 1].grid(True, alpha=0.3)
+        
+        # Mark 95% variance threshold
+        axes[0, 1].axhline(y=0.95, color='g', linestyle='--', 
+                         label='95% threshold')
+        
+        # 3. First two PCs
+        axes[0, 2].scatter(X_pca[:, 0], X_pca[:, 1], alpha=0.6)
+        axes[0, 2].set_xlabel(f'PC1 ({explained_var[0]:.1%})')
+        axes[0, 2].set_ylabel(f'PC2 ({explained_var[1]:.1%})')
+        axes[0, 2].set_title('First Two Principal Components')
+        axes[0, 2].grid(True, alpha=0.3)
+        
+        # 4. Biplot (if 2D)
+        if X.shape[1] <= 10:  # Only for reasonable number of features
+            self.create_biplot(X_pca, self.pca.components_, 
+                             feature_names, axes[1, 0])
+        else:
+            axes[1, 0].text(0.5, 0.5, 'Too many features for biplot',
+                          ha='center', va='center', fontsize=12)
+            axes[1, 0].set_title('Biplot (skipped)')
+        
+        # 5. Loadings heatmap
+        loadings = self.pca.components_[:5]  # First 5 PCs
+        sns.heatmap(loadings, cmap='coolwarm', center=0, 
+                   ax=axes[1, 1], cbar_kws={'label': 'Loading'})
+        axes[1, 1].set_xlabel('Feature Index')
+        axes[1, 1].set_ylabel('Principal Component')
+        axes[1, 1].set_title('PC Loadings (First 5 PCs)')
+        
+        # 6. Reconstruction error
+        n_components_range = range(1, min(X.shape[1], 20) + 1)
+        reconstruction_errors = []
+        
+        for n in n_components_range:
+            pca_temp = PCA(n_components=n)
+            X_reduced = pca_temp.fit_transform(X_scaled)
+            X_reconstructed = pca_temp.inverse_transform(X_reduced)
+            error = np.mean((X_scaled - X_reconstructed) ** 2)
+            reconstruction_errors.append(error)
+        
+        axes[1, 2].plot(n_components_range, reconstruction_errors, 'o-')
+        axes[1, 2].set_xlabel('Number of Components')
+        axes[1, 2].set_ylabel('Reconstruction Error (MSE)')
+        axes[1, 2].set_title('Reconstruction Error vs Components')
+        axes[1, 2].grid(True, alpha=0.3)
+        
+        plt.suptitle('PCA Analysis Dashboard', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return self.pca
+    
+    def create_biplot(self, X_pca, components, feature_names, ax):
+        """Create a biplot showing samples and feature vectors"""
+        
+        # Plot samples
+        ax.scatter(X_pca[:, 0], X_pca[:, 1], alpha=0.3)
+        
+        # Plot feature vectors
+        for i in range(components.shape[1]):
+            ax.arrow(0, 0, components[0, i]*3, components[1, i]*3,
+                    head_width=0.05, head_length=0.05, fc='red', ec='red')
+            
+            if feature_names:
+                ax.text(components[0, i]*3.2, components[1, i]*3.2, 
+                       feature_names[i], fontsize=9, ha='center')
+            else:
+                ax.text(components[0, i]*3.2, components[1, i]*3.2, 
+                       f'F{i}', fontsize=9, ha='center')
+        
+        ax.set_xlabel('PC1')
+        ax.set_ylabel('PC2')
+        ax.set_title('Biplot')
+        ax.grid(True, alpha=0.3)
+        ax.axhline(y=0, color='k', linestyle='-', linewidth=0.5)
+        ax.axvline(x=0, color='k', linestyle='-', linewidth=0.5)
+    
+    def optimal_components(self, X, threshold=0.95):
+        """Find optimal number of components for given variance threshold"""
+        
+        X_scaled = self.scaler.fit_transform(X)
+        pca = PCA()
+        pca.fit(X_scaled)
+        
+        cumsum_var = np.cumsum(pca.explained_variance_ratio_)
+        n_components = np.argmax(cumsum_var >= threshold) + 1
+        
+        print(f"\nOptimal number of components for {threshold:.0%} variance: {n_components}")
+        print(f"Actual variance explained: {cumsum_var[n_components-1]:.2%}")
+        
+        return n_components
+
+# Load and visualize Iris dataset
+iris = load_iris()
+X_iris = iris.data
+y_iris = iris.target
+feature_names = iris.feature_names
+
+visualizer = PCAVisualizer()
+
+print("\n" + "="*60)
+print("PCA VISUALIZATION AND INTERPRETATION")
+print("="*60)
+
+print("\nAnalyzing Iris dataset...")
+pca_iris = visualizer.visualize_pca_process(X_iris, feature_names)
+
+# Find optimal components
+optimal_n = visualizer.optimal_components(X_iris, threshold=0.95)</code></pre>
+
+        <h2>Advanced PCA Techniques</h2>
+        
+        <pre class="language-python"><code>class AdvancedPCA:
+    """Advanced PCA techniques and variations"""
+    
+    def __init__(self):
+        self.models = {}
+        
+    def incremental_pca(self, X, batch_size=50):
+        """Incremental PCA for large datasets"""
+        from sklearn.decomposition import IncrementalPCA
+        
+        n_components = min(5, X.shape[1])
+        ipca = IncrementalPCA(n_components=n_components, batch_size=batch_size)
+        
+        # Fit in batches
+        n_batches = int(np.ceil(len(X) / batch_size))
+        
+        for batch_idx in range(n_batches):
+            start_idx = batch_idx * batch_size
+            end_idx = min(start_idx + batch_size, len(X))
+            batch = X[start_idx:end_idx]
+            
+            if batch_idx == 0:
+                ipca.partial_fit(batch)
+            else:
+                ipca.partial_fit(batch)
+        
+        # Transform data
+        X_ipca = ipca.transform(X)
+        
+        # Compare with regular PCA
+        pca = PCA(n_components=n_components)
+        X_pca = pca.fit_transform(X)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        axes[0].scatter(X_pca[:, 0], X_pca[:, 1], alpha=0.5, label='Regular PCA')
+        axes[0].set_xlabel('PC1')
+        axes[0].set_ylabel('PC2')
+        axes[0].set_title('Regular PCA')
+        axes[0].grid(True, alpha=0.3)
+        
+        axes[1].scatter(X_ipca[:, 0], X_ipca[:, 1], alpha=0.5, 
+                       label='Incremental PCA', color='orange')
+        axes[1].set_xlabel('PC1')
+        axes[1].set_ylabel('PC2')
+        axes[1].set_title(f'Incremental PCA (batch_size={batch_size})')
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.suptitle('Regular vs Incremental PCA', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return ipca
+    
+    def kernel_pca(self, X, kernel='rbf'):
+        """Kernel PCA for non-linear dimensionality reduction"""
+        from sklearn.decomposition import KernelPCA
+        
+        # Generate non-linear data if X is small
+        if X.shape[0] < 500:
+            # Create swiss roll dataset
+            from sklearn.datasets import make_swiss_roll
+            X_nonlinear, color = make_swiss_roll(n_samples=500, random_state=42)
+            X_nonlinear = X_nonlinear[:, [0, 2]]  # Use 2D projection
+        else:
+            X_nonlinear = X
+            color = np.arange(len(X))
+        
+        # Apply different kernels
+        kernels = ['linear', 'rbf', 'poly', 'sigmoid']
+        
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        axes = axes.ravel()
+        
+        # Original data
+        axes[0].scatter(X_nonlinear[:, 0], X_nonlinear[:, 1], 
+                       c=color, cmap='viridis', alpha=0.6)
+        axes[0].set_title('Original Data')
+        axes[0].grid(True, alpha=0.3)
+        
+        for idx, kernel_type in enumerate(kernels, 1):
+            kpca = KernelPCA(n_components=2, kernel=kernel_type, gamma=0.1)
+            X_kpca = kpca.fit_transform(X_nonlinear)
+            
+            axes[idx].scatter(X_kpca[:, 0], X_kpca[:, 1], 
+                            c=color, cmap='viridis', alpha=0.6)
+            axes[idx].set_title(f'Kernel PCA ({kernel_type})')
+            axes[idx].set_xlabel('Component 1')
+            axes[idx].set_ylabel('Component 2')
+            axes[idx].grid(True, alpha=0.3)
+            
+            self.models[kernel_type] = kpca
+        
+        # Regular PCA for comparison
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X_nonlinear)
+        axes[5].scatter(X_pca[:, 0], X_pca[:, 1], 
+                       c=color, cmap='viridis', alpha=0.6)
+        axes[5].set_title('Regular PCA')
+        axes[5].set_xlabel('PC1')
+        axes[5].set_ylabel('PC2')
+        axes[5].grid(True, alpha=0.3)
+        
+        plt.suptitle('Kernel PCA Comparison', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return self.models
+    
+    def sparse_pca(self, X, alpha=1):
+        """Sparse PCA for interpretable components"""
+        from sklearn.decomposition import SparsePCA
+        
+        # Fit Sparse PCA
+        sparse_pca = SparsePCA(n_components=3, alpha=alpha, random_state=42)
+        X_sparse = sparse_pca.fit_transform(X)
+        
+        # Regular PCA for comparison
+        pca = PCA(n_components=3)
+        X_pca = pca.fit_transform(X)
+        
+        # Visualize component sparsity
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        
+        # Component comparison
+        components_pca = pca.components_[:3]
+        components_sparse = sparse_pca.components_[:3]
+        
+        # PCA components
+        im1 = axes[0, 0].imshow(components_pca, cmap='coolwarm', 
+                               aspect='auto', vmin=-1, vmax=1)
+        axes[0, 0].set_title('Regular PCA Components')
+        axes[0, 0].set_xlabel('Feature Index')
+        axes[0, 0].set_ylabel('Component')
+        plt.colorbar(im1, ax=axes[0, 0])
+        
+        # Sparse PCA components
+        im2 = axes[0, 1].imshow(components_sparse, cmap='coolwarm', 
+                               aspect='auto', vmin=-1, vmax=1)
+        axes[0, 1].set_title(f'Sparse PCA Components (α={alpha})')
+        axes[0, 1].set_xlabel('Feature Index')
+        axes[0, 1].set_ylabel('Component')
+        plt.colorbar(im2, ax=axes[0, 1])
+        
+        # Sparsity comparison
+        sparsity_pca = np.mean(np.abs(components_pca) < 0.01)
+        sparsity_sparse = np.mean(np.abs(components_sparse) < 0.01)
+        
+        axes[1, 0].bar(['Regular PCA', 'Sparse PCA'], 
+                      [sparsity_pca, sparsity_sparse],
+                      color=['blue', 'orange'])
+        axes[1, 0].set_ylabel('Sparsity (% zeros)')
+        axes[1, 0].set_title('Component Sparsity Comparison')
+        axes[1, 0].grid(True, alpha=0.3)
+        
+        # Reconstruction comparison
+        axes[1, 1].scatter(X_pca[:, 0], X_pca[:, 1], 
+                         alpha=0.5, label='Regular PCA')
+        axes[1, 1].scatter(X_sparse[:, 0], X_sparse[:, 1], 
+                         alpha=0.5, label='Sparse PCA')
+        axes[1, 1].set_xlabel('Component 1')
+        axes[1, 1].set_ylabel('Component 2')
+        axes[1, 1].set_title('Transformed Data Comparison')
+        axes[1, 1].legend()
+        axes[1, 1].grid(True, alpha=0.3)
+        
+        plt.suptitle('Sparse PCA Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"\nSparsity Statistics:")
+        print(f"Regular PCA: {sparsity_pca:.1%} sparse")
+        print(f"Sparse PCA:  {sparsity_sparse:.1%} sparse")
+        
+        return sparse_pca
+    
+    def robust_pca(self, X, contamination=0.1):
+        """Robust PCA for data with outliers"""
+        
+        # Add outliers to data
+        n_outliers = int(len(X) * contamination)
+        outlier_indices = np.random.choice(len(X), n_outliers, replace=False)
+        
+        X_contaminated = X.copy()
+        X_contaminated[outlier_indices] += np.random.randn(n_outliers, X.shape[1]) * 5
+        
+        # Regular PCA
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X_contaminated)
+        
+        # Robust PCA using iterative method
+        def robust_pca_simple(X, n_components=2, max_iter=100):
+            """Simple robust PCA using iterative trimming"""
+            best_components = None
+            best_variance = -np.inf
+            
+            for _ in range(max_iter):
+                # Random subset (trimming)
+                subset_idx = np.random.choice(len(X), 
+                                            int(len(X) * 0.8), 
+                                            replace=False)
+                X_subset = X[subset_idx]
+                
+                # Fit PCA on subset
+                pca_temp = PCA(n_components=n_components)
+                pca_temp.fit(X_subset)
+                
+                # Evaluate on full data
+                variance = np.sum(pca_temp.explained_variance_ratio_)
+                
+                if variance > best_variance:
+                    best_variance = variance
+                    best_components = pca_temp
+            
+            return best_components
+        
+        # Apply robust PCA
+        robust_pca_model = robust_pca_simple(X_contaminated)
+        X_robust = robust_pca_model.transform(X_contaminated)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        
+        # Original clean data
+        pca_clean = PCA(n_components=2)
+        X_clean_pca = pca_clean.fit_transform(X)
+        axes[0].scatter(X_clean_pca[:, 0], X_clean_pca[:, 1], 
+                       alpha=0.6, c='blue')
+        axes[0].set_title('PCA on Clean Data')
+        axes[0].set_xlabel('PC1')
+        axes[0].set_ylabel('PC2')
+        axes[0].grid(True, alpha=0.3)
+        
+        # Regular PCA on contaminated data
+        colors = ['red' if i in outlier_indices else 'blue' 
+                 for i in range(len(X))]
+        axes[1].scatter(X_pca[:, 0], X_pca[:, 1], 
+                       alpha=0.6, c=colors)
+        axes[1].set_title('Regular PCA (with outliers)')
+        axes[1].set_xlabel('PC1')
+        axes[1].set_ylabel('PC2')
+        axes[1].grid(True, alpha=0.3)
+        
+        # Robust PCA
+        axes[2].scatter(X_robust[:, 0], X_robust[:, 1], 
+                       alpha=0.6, c=colors)
+        axes[2].set_title('Robust PCA')
+        axes[2].set_xlabel('PC1')
+        axes[2].set_ylabel('PC2')
+        axes[2].grid(True, alpha=0.3)
+        
+        plt.suptitle('Robust PCA for Outlier Handling', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return robust_pca_model
+
+# Advanced PCA techniques
+advanced = AdvancedPCA()
+
+print("\n" + "="*60)
+print("ADVANCED PCA TECHNIQUES")
+print("="*60)
+
+# Generate sample data
+X_sample = np.random.randn(500, 10)
+
+print("\n1. Incremental PCA:")
+ipca = advanced.incremental_pca(X_sample)
+
+print("\n2. Kernel PCA:")
+kernel_models = advanced.kernel_pca(X_sample[:200])
+
+print("\n3. Sparse PCA:")
+sparse_model = advanced.sparse_pca(X_sample)
+
+print("\n4. Robust PCA:")
+robust_model = advanced.robust_pca(X_sample)</code></pre>
+
+        <h2>PCA Applications</h2>
+        
+        <pre class="language-python"><code>class PCAApplications:
+    """Real-world applications of PCA"""
+    
+    def __init__(self):
+        self.results = {}
+        
+    def face_recognition(self):
+        """Face recognition using PCA (Eigenfaces)"""
+        
+        # Load face data
+        faces = fetch_olivetti_faces(shuffle=True, random_state=42)
+        X_faces = faces.data
+        y_faces = faces.target
+        
+        n_samples, n_features = X_faces.shape
+        n_components = 150
+        
+        # Apply PCA
+        pca = PCA(n_components=n_components, svd_solver='randomized', 
+                 whiten=True, random_state=42)
+        X_faces_pca = pca.fit_transform(X_faces)
+        
+        # Eigenfaces
+        eigenfaces = pca.components_.reshape((n_components, 64, 64))
+        
+        # Visualization
+        fig, axes = plt.subplots(3, 6, figsize=(15, 8))
+        
+        # Original faces
+        for i in range(6):
+            axes[0, i].imshow(faces.images[i], cmap='gray')
+            axes[0, i].set_title(f'Original {i+1}')
+            axes[0, i].axis('off')
+        
+        # First 6 eigenfaces
+        for i in range(6):
+            axes[1, i].imshow(eigenfaces[i], cmap='gray')
+            axes[1, i].set_title(f'Eigenface {i+1}')
+            axes[1, i].axis('off')
+        
+        # Reconstructed faces
+        X_faces_reconstructed = pca.inverse_transform(X_faces_pca)
+        for i in range(6):
+            axes[2, i].imshow(X_faces_reconstructed[i].reshape(64, 64), 
+                            cmap='gray')
+            axes[2, i].set_title(f'Reconstructed {i+1}')
+            axes[2, i].axis('off')
+        
+        plt.suptitle('Face Recognition with PCA (Eigenfaces)', 
+                    fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        # Classification performance
+        from sklearn.model_selection import train_test_split
+        from sklearn.svm import SVC
+        from sklearn.metrics import classification_report
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_faces_pca, y_faces, test_size=0.25, random_state=42
+        )
+        
+        # Train classifier
+        clf = SVC(kernel='linear', random_state=42)
+        clf.fit(X_train, y_train)
+        
+        # Evaluate
+        accuracy = clf.score(X_test, y_test)
+        
+        print(f"\nFace Recognition Results:")
+        print(f"  Number of components: {n_components}")
+        print(f"  Variance explained: {np.sum(pca.explained_variance_ratio_):.2%}")
+        print(f"  Classification accuracy: {accuracy:.2%}")
+        print(f"  Data reduction: {n_features} → {n_components} features")
+        print(f"  Compression ratio: {n_features/n_components:.1f}x")
+        
+        return pca, clf
+    
+    def feature_extraction(self):
+        """Feature extraction for machine learning"""
+        
+        # Load high-dimensional dataset
+        digits = load_digits()
+        X_digits = digits.data
+        y_digits = digits.target
+        
+        print(f"\nOriginal dataset shape: {X_digits.shape}")
+        
+        # Compare performance with different numbers of components
+        n_components_range = [5, 10, 20, 30, 40, 50]
+        
+        results = []
+        
+        for n_comp in n_components_range:
+            # Create pipeline
+            pipe = Pipeline([
+                ('scaler', StandardScaler()),
+                ('pca', PCA(n_components=n_comp)),
+                ('classifier', LogisticRegression(max_iter=1000))
+            ])
+            
+            # Cross-validation
+            scores = cross_val_score(pipe, X_digits, y_digits, 
+                                   cv=5, scoring='accuracy')
+            
+            # Calculate variance explained
+            pca_temp = PCA(n_components=n_comp)
+            pca_temp.fit(StandardScaler().fit_transform(X_digits))
+            variance_explained = np.sum(pca_temp.explained_variance_ratio_)
+            
+            results.append({
+                'n_components': n_comp,
+                'accuracy': np.mean(scores),
+                'std': np.std(scores),
+                'variance_explained': variance_explained
+            })
+        
+        results_df = pd.DataFrame(results)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Accuracy vs components
+        axes[0].errorbar(results_df['n_components'], 
+                        results_df['accuracy'],
+                        yerr=results_df['std'],
+                        marker='o', capsize=5, capthick=2)
+        axes[0].set_xlabel('Number of Components')
+        axes[0].set_ylabel('Classification Accuracy')
+        axes[0].set_title('Accuracy vs PCA Components')
+        axes[0].grid(True, alpha=0.3)
+        
+        # Variance explained
+        axes[1].plot(results_df['n_components'], 
+                    results_df['variance_explained'], 
+                    'o-', color='orange')
+        axes[1].set_xlabel('Number of Components')
+        axes[1].set_ylabel('Variance Explained')
+        axes[1].set_title('Variance Explained vs Components')
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.suptitle('PCA for Feature Extraction', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        print("\nFeature Extraction Results:")
+        print(results_df.to_string(index=False))
+        
+        return results_df
+    
+    def noise_reduction(self):
+        """Noise reduction using PCA"""
+        
+        # Create noisy image
+        from sklearn.datasets import load_sample_image
+        
+        # Create synthetic noisy data
+        np.random.seed(42)
+        
+        # Generate clean signal
+        t = np.linspace(0, 4*np.pi, 100)
+        clean_signal = np.column_stack([
+            np.sin(t),
+            np.cos(t),
+            np.sin(2*t),
+            np.cos(2*t),
+            np.sin(3*t)
+        ])
+        
+        # Add noise
+        noise_level = 0.5
+        noise = np.random.randn(*clean_signal.shape) * noise_level
+        noisy_signal = clean_signal + noise
+        
+        # Apply PCA for denoising
+        pca = PCA(n_components=3)  # Keep only main components
+        denoised_pca = pca.fit_transform(noisy_signal)
+        denoised_signal = pca.inverse_transform(denoised_pca)
+        
+        # Calculate SNR improvement
+        noise_original = noisy_signal - clean_signal
+        noise_denoised = denoised_signal - clean_signal
+        
+        snr_original = 10 * np.log10(np.var(clean_signal) / np.var(noise_original))
+        snr_denoised = 10 * np.log10(np.var(clean_signal) / np.var(noise_denoised))
+        
+        # Visualization
+        fig, axes = plt.subplots(3, 2, figsize=(12, 12))
+        
+        # Plot first 3 dimensions
+        for i in range(3):
+            # Time series
+            axes[i, 0].plot(t, clean_signal[:, i], 'g-', 
+                          label='Clean', linewidth=2, alpha=0.7)
+            axes[i, 0].plot(t, noisy_signal[:, i], 'r-', 
+                          label='Noisy', alpha=0.5, linewidth=0.5)
+            axes[i, 0].plot(t, denoised_signal[:, i], 'b-', 
+                          label='Denoised', linewidth=1.5, alpha=0.8)
+            axes[i, 0].set_xlabel('Time')
+            axes[i, 0].set_ylabel(f'Signal {i+1}')
+            axes[i, 0].legend()
+            axes[i, 0].grid(True, alpha=0.3)
+            
+            # Frequency domain
+            from scipy.fft import fft, fftfreq
+            
+            freq = fftfreq(len(t), t[1] - t[0])
+            fft_clean = np.abs(fft(clean_signal[:, i]))
+            fft_noisy = np.abs(fft(noisy_signal[:, i]))
+            fft_denoised = np.abs(fft(denoised_signal[:, i]))
+            
+            axes[i, 1].plot(freq[:50], fft_clean[:50], 'g-', 
+                          label='Clean', linewidth=2, alpha=0.7)
+            axes[i, 1].plot(freq[:50], fft_noisy[:50], 'r-', 
+                          label='Noisy', alpha=0.5, linewidth=0.5)
+            axes[i, 1].plot(freq[:50], fft_denoised[:50], 'b-', 
+                          label='Denoised', linewidth=1.5, alpha=0.8)
+            axes[i, 1].set_xlabel('Frequency')
+            axes[i, 1].set_ylabel('Amplitude')
+            axes[i, 1].set_title(f'Frequency Domain - Signal {i+1}')
+            axes[i, 1].legend()
+            axes[i, 1].grid(True, alpha=0.3)
+        
+        plt.suptitle(f'PCA Noise Reduction (SNR: {snr_original:.1f}dB → {snr_denoised:.1f}dB)', 
+                    fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"\nNoise Reduction Results:")
+        print(f"  Original SNR: {snr_original:.2f} dB")
+        print(f"  Denoised SNR: {snr_denoised:.2f} dB")
+        print(f"  SNR Improvement: {snr_denoised - snr_original:.2f} dB")
+        print(f"  Variance explained by {pca.n_components_} components: "
+              f"{np.sum(pca.explained_variance_ratio_):.2%}")
+        
+        return pca, denoised_signal
+    
+    def data_visualization(self):
+        """High-dimensional data visualization"""
+        
+        # Load iris for multi-class visualization
+        iris = load_iris()
+        X_iris = iris.data
+        y_iris = iris.target
+        
+        # Standardize
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X_iris)
+        
+        # Apply PCA
+        pca_2d = PCA(n_components=2)
+        X_2d = pca_2d.fit_transform(X_scaled)
+        
+        pca_3d = PCA(n_components=3)
+        X_3d = pca_3d.fit_transform(X_scaled)
+        
+        # Visualization
+        fig = plt.figure(figsize=(15, 5))
+        
+        # 2D visualization
+        ax1 = fig.add_subplot(131)
+        for i, target_name in enumerate(iris.target_names):
+            ax1.scatter(X_2d[y_iris == i, 0], X_2d[y_iris == i, 1],
+                      label=target_name, alpha=0.7, s=50)
+        ax1.set_xlabel(f'PC1 ({pca_2d.explained_variance_ratio_[0]:.1%})')
+        ax1.set_ylabel(f'PC2 ({pca_2d.explained_variance_ratio_[1]:.1%})')
+        ax1.set_title('2D PCA Projection')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        
+        # 3D visualization
+        ax2 = fig.add_subplot(132, projection='3d')
+        for i, target_name in enumerate(iris.target_names):
+            ax2.scatter(X_3d[y_iris == i, 0], 
+                      X_3d[y_iris == i, 1],
+                      X_3d[y_iris == i, 2],
+                      label=target_name, alpha=0.7, s=50)
+        ax2.set_xlabel('PC1')
+        ax2.set_ylabel('PC2')
+        ax2.set_zlabel('PC3')
+        ax2.set_title('3D PCA Projection')
+        ax2.legend()
+        
+        # Explained variance
+        ax3 = fig.add_subplot(133)
+        explained_var = pca_3d.explained_variance_ratio_
+        ax3.bar(range(1, 4), explained_var[:3], alpha=0.7)
+        ax3.set_xlabel('Principal Component')
+        ax3.set_ylabel('Explained Variance Ratio')
+        ax3.set_title('Variance Explained by Each PC')
+        ax3.grid(True, alpha=0.3)
+        
+        # Add cumulative line
+        ax3_twin = ax3.twinx()
+        ax3_twin.plot(range(1, 4), np.cumsum(explained_var[:3]), 
+                     'ro-', label='Cumulative')
+        ax3_twin.set_ylabel('Cumulative Variance')
+        ax3_twin.legend(loc='center right')
+        
+        plt.suptitle('PCA for Data Visualization', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        total_var = np.sum(pca_2d.explained_variance_ratio_)
+        print(f"\nVisualization Results:")
+        print(f"  2D projection captures {total_var:.1%} of variance")
+        print(f"  3D projection captures {np.sum(explained_var[:3]):.1%} of variance")
+        
+        return pca_2d, pca_3d
+
+# Applications
+apps = PCAApplications()
+
+print("\n" + "="*60)
+print("PCA REAL-WORLD APPLICATIONS")
+print("="*60)
+
+print("\n1. Face Recognition (Eigenfaces):")
+print("-" * 30)
+face_pca, face_clf = apps.face_recognition()
+
+print("\n2. Feature Extraction for ML:")
+print("-" * 30)
+extraction_results = apps.feature_extraction()
+
+print("\n3. Noise Reduction:")
+print("-" * 30)
+noise_pca, denoised = apps.noise_reduction()
+
+print("\n4. Data Visualization:")
+print("-" * 30)
+viz_2d, viz_3d = apps.data_visualization()</code></pre>
+
+        <h2>Best Practices and Guidelines</h2>
+        
+        <pre class="language-python"><code>print("\n" + "="*60)
+print("PCA BEST PRACTICES")
+print("="*60)
+
+best_practices = """
+KEY GUIDELINES:
+
+1. DATA PREPROCESSING:
+   • ALWAYS center data (subtract mean)
+   • Standardize if features have different scales
+   • Handle missing values before PCA
+   • Consider log transform for skewed data
+
+2. WHEN TO STANDARDIZE:
+   • Different units (e.g., dollars vs. kilograms)
+   • Vastly different scales
+   • When all features equally important
+   
+3. WHEN NOT TO STANDARDIZE:
+   • Same units and similar scales
+   • When scale carries importance
+   • Signal processing applications
+
+4. CHOOSING COMPONENTS:
+   • Scree plot elbow method
+   • Cumulative variance (70-95% typical)
+   • Cross-validation for supervised tasks
+   • Kaiser criterion (eigenvalue > 1)
+
+5. INTERPRETATION:
+   • Check loadings for feature importance
+   • Create biplots for 2D data
+   • Examine reconstruction error
+   • Validate with domain knowledge
+
+6. ADVANTAGES:
+   ✓ Dimensionality reduction
+   ✓ Noise reduction
+   ✓ Decorrelation
+   ✓ Visualization
+   ✓ Feature extraction
+   ✓ Data compression
+
+7. LIMITATIONS:
+   ✗ Linear transformation only
+   ✗ Assumes Gaussian distribution
+   ✗ Sensitive to outliers
+   ✗ Components lack interpretability
+   ✗ All components are orthogonal
+"""
+
+print(best_practices)
+
+# Common pitfalls
+pitfalls = """
+COMMON PITFALLS TO AVOID:
+
+1. Forgetting to standardize heterogeneous features
+2. Not centering data before PCA
+3. Using too few components (underfitting)
+4. Using too many components (overfitting)
+5. Interpreting PCs as original features
+6. Applying PCA to categorical variables
+7. Not considering non-linear alternatives
+8. Ignoring outliers' influence
+9. Not validating results
+10. Over-interpreting component meanings
+"""
+
+print(pitfalls)
+
+# PCA vs other methods
+comparison_data = {
+    'Method': ['PCA', 'LDA', 'ICA', 't-SNE', 'UMAP', 'Autoencoder'],
+    'Type': ['Linear', 'Linear', 'Linear', 'Non-linear', 'Non-linear', 'Non-linear'],
+    'Supervised': ['No', 'Yes', 'No', 'No', 'No', 'No'],
+    'Global': ['Yes', 'Yes', 'Yes', 'No', 'Yes', 'Yes'],
+    'Speed': ['Fast', 'Fast', 'Medium', 'Slow', 'Medium', 'Slow'],
+    'Interpretability': ['Medium', 'High', 'Low', 'Low', 'Low', 'Low']
+}
+
+comparison_df = pd.DataFrame(comparison_data)
+print("\nDimensionality Reduction Methods Comparison:")
+print("="*60)
+print(comparison_df.to_string(index=False))</code></pre>
+
+        <h2>Practice Exercises</h2>
+        
+        <div class="exercise-card">
+            <h3>Exercise 1: PCA from Scratch</h3>
+            <p>Implement PCA completely from scratch:</p>
+            <ol>
+                <li>Write covariance matrix calculation</li>
+                <li>Implement eigendecomposition</li>
+                <li>Sort eigenvalues and eigenvectors</li>
+                <li>Project data and reconstruct</li>
+                <li>Compare with sklearn implementation</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 2: Dynamic PCA</h3>
+            <p>Implement PCA for streaming data:</p>
+            <ol>
+                <li>Create online PCA algorithm</li>
+                <li>Update components incrementally</li>
+                <li>Track component drift over time</li>
+                <li>Detect concept drift</li>
+                <li>Visualize evolution</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 3: PCA-based Anomaly Detection</h3>
+            <p>Build anomaly detection system:</p>
+            <ol>
+                <li>Train PCA on normal data</li>
+                <li>Use reconstruction error for anomaly score</li>
+                <li>Set dynamic threshold</li>
+                <li>Compare with other methods</li>
+                <li>Evaluate on real dataset</li>
+            </ol>
+        </div>
+
+        <h2>Summary and Key Takeaways</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 Key Points to Remember</h3>
+            <ul>
+                <li><strong>Linear Transformation:</strong> PCA finds linear combinations of features</li>
+                <li><strong>Variance Focus:</strong> Captures directions of maximum variance</li>
+                <li><strong>Orthogonal Components:</strong> PCs are uncorrelated by design</li>
+                <li><strong>Preprocessing Critical:</strong> Centering required, scaling often needed</li>
+                <li><strong>Interpretability:</strong> Components are mixtures of original features</li>
+                <li><strong>Applications:</strong> Visualization, compression, noise reduction, feature extraction</li>
+                <li><strong>Limitations:</strong> Linear only, sensitive to outliers, assumes Gaussian</li>
+                <li><strong>Alternatives:</strong> Kernel PCA for non-linear, ICA for independence, t-SNE for visualization</li>
+            </ul>
+        </div>
+
+        <div class="navigation">
+            <a href="ml_gaussian_mixture.html" class="nav-button">← Previous: Gaussian Mixture Models</a>
+            <a href="index.html" class="nav-button">Home</a>
+            <a href="dimensionality_tsne.html" class="nav-button">Next: t-SNE →</a>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+    <script>
+        // Additional interactive features
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add line numbers to code blocks
+            const codeBlocks = document.querySelectorAll('pre code');
+            
+            codeBlocks.forEach(block => {
+                if (block.textContent.includes('class')) {
+                    block.classList.add('line-numbers');
+                }
+            });
+            
+            // Smooth scroll for navigation
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+    <script src="js/clipboard.js"></script>
+</body>
+</html>

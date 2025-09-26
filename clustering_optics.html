@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPTICS Clustering - Python Data Science</title>
+    <link rel="stylesheet" href="styles/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    <nav class="nav-container">
+        <a href="index.html" class="nav-logo">Python Data Science</a>
+        <div class="nav-links">
+            <a href="numpy_arrays_vs_lists.html">NumPy</a>
+            <a href="pandas_dataframes_series.html">Pandas</a>
+            <a href="matplotlib_line_scatter_bar.html">Matplotlib</a>
+            <a href="ml_sklearn_basics.html" class="active">Machine Learning</a>
+            <a href="statistics_descriptive_part1.html">Statistics</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>🔍 OPTICS: Ordering Points To Identify Clustering Structure</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>OPTICS (Ordering Points To Identify the Clustering Structure) is an advanced density-based clustering algorithm that extends DBSCAN. It addresses DBSCAN's major limitation of handling varying density clusters by creating an ordering of points and extracting clusters at multiple density levels. Think of it as DBSCAN with a zoom lens!</p>
+        </div>
+
+        <h2>Core Concepts</h2>
+        
+        <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.cluster import OPTICS, DBSCAN
+from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import make_blobs, make_moons, make_circles
+from sklearn.metrics import silhouette_score, adjusted_rand_score
+import warnings
+warnings.filterwarnings('ignore')
+
+print("="*60)
+print("OPTICS CLUSTERING FUNDAMENTALS")
+print("="*60)
+
+# Key concepts
+optics_concepts = """
+OPTICS KEY CONCEPTS:
+
+1. CORE DISTANCE:
+   • Minimum radius to make a point a core point
+   • core_dist(p) = distance to min_samples-th nearest neighbor
+
+2. REACHABILITY DISTANCE:
+   • How "reachable" point q is from p
+   • reach_dist(p,q) = max(core_dist(p), dist(p,q))
+
+3. ORDERING:
+   • Points ordered by reachability distance
+   • Creates reachability plot (dendrogram-like)
+
+4. CLUSTER EXTRACTION:
+   • Xi method: Automatic extraction using steepness
+   • DBSCAN method: Extract at specific epsilon
+
+ADVANTAGES OVER DBSCAN:
+• Handles varying density clusters
+• No need to choose epsilon beforehand
+• Provides hierarchical cluster structure
+• More robust parameter selection
+"""
+
+print(optics_concepts)</code></pre>
+
+        <h2>Basic Implementation</h2>
+        
+        <pre class="language-python"><code># Generate datasets with varying densities
+np.random.seed(42)
+
+# Create multi-density clusters
+def create_varying_density_data():
+    """Create data with clusters of different densities"""
+    # Dense cluster
+    dense = np.random.randn(100, 2) * 0.3
+    
+    # Medium density cluster
+    medium = np.random.randn(150, 2) * 0.7 + [5, 5]
+    
+    # Sparse cluster
+    sparse = np.random.randn(80, 2) * 1.5 + [10, 0]
+    
+    # Combine all clusters
+    X = np.vstack([dense, medium, sparse])
+    
+    # Add some noise points
+    noise = np.random.uniform(-2, 12, (20, 2))
+    X = np.vstack([X, noise])
+    
+    return X
+
+# Create datasets
+X_varying = create_varying_density_data()
+X_moons, y_moons = make_moons(n_samples=300, noise=0.1, random_state=42)
+
+# Standardize features
+scaler = StandardScaler()
+X_varying_scaled = scaler.fit_transform(X_varying)
+X_moons_scaled = scaler.fit_transform(X_moons)
+
+# Compare OPTICS with DBSCAN
+fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+
+# DBSCAN on varying density
+dbscan = DBSCAN(eps=0.3, min_samples=5)
+dbscan_labels = dbscan.fit_predict(X_varying_scaled)
+
+axes[0, 0].scatter(X_varying[:, 0], X_varying[:, 1], 
+                   c=dbscan_labels, cmap='viridis', alpha=0.6, s=30)
+axes[0, 0].set_title('DBSCAN (eps=0.3)')
+axes[0, 0].grid(True, alpha=0.3)
+
+# OPTICS on varying density
+optics = OPTICS(min_samples=5, xi=0.05, min_cluster_size=0.05)
+optics.fit(X_varying_scaled)
+optics_labels = optics.labels_
+
+axes[0, 1].scatter(X_varying[:, 0], X_varying[:, 1], 
+                   c=optics_labels, cmap='viridis', alpha=0.6, s=30)
+axes[0, 1].set_title('OPTICS (xi=0.05)')
+axes[0, 1].grid(True, alpha=0.3)
+
+# Reachability plot
+reachability = optics.reachability_[optics.ordering_]
+axes[0, 2].plot(reachability)
+axes[0, 2].set_ylabel('Reachability Distance')
+axes[0, 2].set_xlabel('Order of Points')
+axes[0, 2].set_title('Reachability Plot')
+axes[0, 2].grid(True, alpha=0.3)
+
+# Apply to moons dataset
+dbscan_moons = DBSCAN(eps=0.3, min_samples=5)
+dbscan_moons_labels = dbscan_moons.fit_predict(X_moons_scaled)
+
+axes[1, 0].scatter(X_moons[:, 0], X_moons[:, 1], 
+                   c=dbscan_moons_labels, cmap='plasma', alpha=0.6, s=30)
+axes[1, 0].set_title('DBSCAN on Moons')
+axes[1, 0].grid(True, alpha=0.3)
+
+optics_moons = OPTICS(min_samples=5, xi=0.05)
+optics_moons.fit(X_moons_scaled)
+optics_moons_labels = optics_moons.labels_
+
+axes[1, 1].scatter(X_moons[:, 0], X_moons[:, 1], 
+                   c=optics_moons_labels, cmap='plasma', alpha=0.6, s=30)
+axes[1, 1].set_title('OPTICS on Moons')
+axes[1, 1].grid(True, alpha=0.3)
+
+# Reachability plot for moons
+reachability_moons = optics_moons.reachability_[optics_moons.ordering_]
+axes[1, 2].plot(reachability_moons)
+axes[1, 2].set_ylabel('Reachability Distance')
+axes[1, 2].set_xlabel('Order of Points')
+axes[1, 2].set_title('Reachability Plot (Moons)')
+axes[1, 2].grid(True, alpha=0.3)
+
+plt.suptitle('OPTICS vs DBSCAN Comparison', fontsize=14, y=1.02)
+plt.tight_layout()
+plt.show()
+
+# Print statistics
+print("\nVarying Density Dataset:")
+print(f"  DBSCAN clusters: {len(set(dbscan_labels)) - (1 if -1 in dbscan_labels else 0)}")
+print(f"  OPTICS clusters: {len(set(optics_labels)) - (1 if -1 in optics_labels else 0)}")
+print(f"  DBSCAN noise points: {list(dbscan_labels).count(-1)}")
+print(f"  OPTICS noise points: {list(optics_labels).count(-1)}")</code></pre>
+
+        <h2>Understanding Reachability Plots</h2>
+        
+        <pre class="language-python"><code>class ReachabilityAnalyzer:
+    """Analyze and interpret OPTICS reachability plots"""
+    
+    def __init__(self):
+        self.optics_model = None
+        self.reachability_plot_data = {}
+        
+    def analyze_reachability(self, X, min_samples_range=[5, 10, 15]):
+        """Analyze reachability for different min_samples values"""
+        
+        fig, axes = plt.subplots(len(min_samples_range), 2, 
+                                figsize=(12, 4*len(min_samples_range)))
+        
+        if len(min_samples_range) == 1:
+            axes = axes.reshape(1, -1)
+        
+        for idx, min_samples in enumerate(min_samples_range):
+            # Fit OPTICS
+            optics = OPTICS(min_samples=min_samples, xi=0.05)
+            optics.fit(X)
+            
+            # Get reachability and ordering
+            reachability = optics.reachability_[optics.ordering_]
+            labels = optics.labels_
+            
+            # Store data
+            self.reachability_plot_data[min_samples] = {
+                'reachability': reachability,
+                'ordering': optics.ordering_,
+                'labels': labels
+            }
+            
+            # Plot reachability with cluster colors
+            colors = ['gray' if l == -1 else plt.cm.viridis(l/max(labels+[0])) 
+                     for l in labels[optics.ordering_]]
+            
+            axes[idx, 0].bar(range(len(reachability)), reachability, 
+                           color=colors, width=1.0)
+            axes[idx, 0].set_ylabel('Reachability Distance')
+            axes[idx, 0].set_xlabel('Order of Points')
+            axes[idx, 0].set_title(f'Reachability Plot (min_samples={min_samples})')
+            axes[idx, 0].grid(True, alpha=0.3)
+            
+            # Identify valleys (clusters)
+            valleys = self.find_valleys(reachability)
+            for valley_start, valley_end in valleys:
+                axes[idx, 0].axvspan(valley_start, valley_end, 
+                                   alpha=0.2, color='red')
+            
+            # Plot clusters
+            axes[idx, 1].scatter(X[:, 0], X[:, 1], c=labels, 
+                              cmap='viridis', alpha=0.6, s=30)
+            axes[idx, 1].set_title(f'Clusters ({len(set(labels))-1} found)')
+            axes[idx, 1].grid(True, alpha=0.3)
+        
+        plt.suptitle('Reachability Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+    def find_valleys(self, reachability, threshold_ratio=0.5):
+        """Find valleys in reachability plot (potential clusters)"""
+        valleys = []
+        median_reach = np.median(reachability[reachability < np.inf])
+        threshold = median_reach * threshold_ratio
+        
+        in_valley = False
+        valley_start = 0
+        
+        for i, reach in enumerate(reachability):
+            if reach < threshold and not in_valley:
+                valley_start = i
+                in_valley = True
+            elif reach >= threshold and in_valley:
+                valleys.append((valley_start, i))
+                in_valley = False
+        
+        if in_valley:
+            valleys.append((valley_start, len(reachability)))
+        
+        return valleys
+    
+    def extract_clusters_at_epsilon(self, X, epsilon_values):
+        """Extract clusters at different epsilon cuts"""
+        
+        # Fit OPTICS once
+        optics = OPTICS(min_samples=5)
+        optics.fit(X)
+        self.optics_model = optics
+        
+        fig, axes = plt.subplots(2, len(epsilon_values), 
+                                figsize=(5*len(epsilon_values), 10))
+        
+        for idx, eps in enumerate(epsilon_values):
+            # Extract DBSCAN-like clustering at specific epsilon
+            labels = self.cluster_optics_dbscan(optics, eps)
+            
+            # Plot reachability with epsilon line
+            reachability = optics.reachability_[optics.ordering_]
+            axes[0, idx].plot(reachability, 'b-', linewidth=0.5)
+            axes[0, idx].axhline(y=eps, color='r', linestyle='--', 
+                              label=f'ε = {eps:.2f}')
+            axes[0, idx].set_ylabel('Reachability')
+            axes[0, idx].set_xlabel('Order')
+            axes[0, idx].set_title(f'Epsilon Cut = {eps:.2f}')
+            axes[0, idx].legend()
+            axes[0, idx].grid(True, alpha=0.3)
+            
+            # Plot clusters
+            axes[1, idx].scatter(X[:, 0], X[:, 1], c=labels, 
+                              cmap='viridis', alpha=0.6, s=30)
+            n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+            axes[1, idx].set_title(f'{n_clusters} Clusters')
+            axes[1, idx].grid(True, alpha=0.3)
+        
+        plt.suptitle('OPTICS Cluster Extraction at Different Epsilons', 
+                    fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+    
+    def cluster_optics_dbscan(self, optics_model, epsilon):
+        """Extract DBSCAN-like clustering from OPTICS at given epsilon"""
+        labels = np.full(len(optics_model.ordering_), -1)
+        
+        reachability = optics_model.reachability_
+        core_distances = optics_model.core_distances_
+        ordering = optics_model.ordering_
+        
+        current_label = 0
+        
+        for i in range(len(ordering)):
+            if reachability[ordering[i]] <= epsilon:
+                if labels[ordering[i]] == -1:
+                    labels[ordering[i]] = current_label
+                    
+                # Check if we should start a new cluster
+                if i > 0 and reachability[ordering[i]] > epsilon:
+                    current_label += 1
+            elif core_distances[ordering[i]] <= epsilon:
+                current_label += 1
+                labels[ordering[i]] = current_label
+        
+        return labels
+
+# Analyze reachability plots
+analyzer = ReachabilityAnalyzer()
+
+print("\n" + "="*60)
+print("REACHABILITY PLOT ANALYSIS")
+print("="*60)
+
+# Analyze with different min_samples
+analyzer.analyze_reachability(X_varying_scaled, min_samples_range=[3, 5, 10])
+
+# Extract clusters at different epsilon values
+print("\nExtracting clusters at different epsilon cuts...")
+analyzer.extract_clusters_at_epsilon(X_varying_scaled, 
+                                    epsilon_values=[0.2, 0.4, 0.6, 0.8])</code></pre>
+
+        <h2>Advanced OPTICS Techniques</h2>
+        
+        <pre class="language-python"><code>class AdvancedOPTICS:
+    """Advanced OPTICS clustering techniques"""
+    
+    def __init__(self):
+        self.models = {}
+        self.results = {}
+        
+    def xi_parameter_tuning(self, X, xi_range=np.arange(0.01, 0.2, 0.02)):
+        """Tune xi parameter for automatic cluster extraction"""
+        
+        scores = []
+        n_clusters_list = []
+        
+        for xi in xi_range:
+            optics = OPTICS(min_samples=5, xi=xi, min_cluster_size=0.05)
+            labels = optics.fit_predict(X)
+            
+            n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+            n_clusters_list.append(n_clusters)
+            
+            # Calculate silhouette score if we have clusters
+            if n_clusters > 1:
+                # Exclude noise points for silhouette calculation
+                mask = labels != -1
+                if np.sum(mask) > 1:
+                    score = silhouette_score(X[mask], labels[mask])
+                else:
+                    score = -1
+            else:
+                score = -1
+            
+            scores.append(score)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        axes[0].plot(xi_range, scores, 'o-', linewidth=2, markersize=6)
+        axes[0].set_xlabel('Xi Parameter')
+        axes[0].set_ylabel('Silhouette Score')
+        axes[0].set_title('Xi Parameter vs Silhouette Score')
+        axes[0].grid(True, alpha=0.3)
+        
+        # Mark best xi
+        best_idx = np.argmax(scores)
+        best_xi = xi_range[best_idx]
+        axes[0].axvline(x=best_xi, color='r', linestyle='--', 
+                       label=f'Best Xi = {best_xi:.3f}')
+        axes[0].legend()
+        
+        axes[1].plot(xi_range, n_clusters_list, 'o-', linewidth=2, markersize=6)
+        axes[1].set_xlabel('Xi Parameter')
+        axes[1].set_ylabel('Number of Clusters')
+        axes[1].set_title('Xi Parameter vs Number of Clusters')
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.suptitle('Xi Parameter Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"Best Xi: {best_xi:.3f} (Silhouette: {scores[best_idx]:.3f})")
+        print(f"Number of clusters at best Xi: {n_clusters_list[best_idx]}")
+        
+        return best_xi, scores, n_clusters_list
+    
+    def hierarchical_extraction(self, X, min_samples=5):
+        """Extract hierarchical cluster structure from OPTICS"""
+        
+        optics = OPTICS(min_samples=min_samples, metric='euclidean')
+        optics.fit(X)
+        
+        # Get reachability plot
+        reachability = optics.reachability_[optics.ordering_]
+        
+        # Find significant valleys at different scales
+        cluster_hierarchy = {}
+        thresholds = np.percentile(reachability[reachability < np.inf], 
+                                  [10, 25, 50, 75, 90])
+        
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        axes = axes.ravel()
+        
+        for idx, threshold in enumerate(thresholds[:5]):
+            # Extract clusters at this threshold
+            labels = np.full(len(X), -1)
+            cluster_id = 0
+            
+            for i in range(len(optics.ordering_)):
+                if reachability[i] <= threshold:
+                    if labels[optics.ordering_[i]] == -1:
+                        labels[optics.ordering_[i]] = cluster_id
+                else:
+                    if cluster_id in labels:
+                        cluster_id += 1
+            
+            cluster_hierarchy[f'Level_{idx+1}'] = labels
+            
+            # Visualize
+            axes[idx].scatter(X[:, 0], X[:, 1], c=labels, 
+                           cmap='viridis', alpha=0.6, s=30)
+            n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+            axes[idx].set_title(f'Level {idx+1}: {n_clusters} clusters\n(threshold={threshold:.2f})')
+            axes[idx].grid(True, alpha=0.3)
+        
+        # Show reachability plot with thresholds
+        axes[5].plot(reachability, 'b-', linewidth=0.5)
+        for i, threshold in enumerate(thresholds):
+            axes[5].axhline(y=threshold, linestyle='--', alpha=0.5, 
+                          label=f'Level {i+1}')
+        axes[5].set_xlabel('Order of Points')
+        axes[5].set_ylabel('Reachability Distance')
+        axes[5].set_title('Hierarchical Thresholds')
+        axes[5].legend(fontsize=8)
+        axes[5].grid(True, alpha=0.3)
+        
+        plt.suptitle('Hierarchical Cluster Extraction', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return cluster_hierarchy
+    
+    def compare_with_other_algorithms(self, X):
+        """Compare OPTICS with other density-based methods"""
+        
+        from sklearn.cluster import MeanShift, estimate_bandwidth
+        from sklearn.mixture import GaussianMixture
+        
+        algorithms = {
+            'OPTICS': OPTICS(min_samples=5, xi=0.05),
+            'DBSCAN': DBSCAN(eps=0.3, min_samples=5),
+            'MeanShift': MeanShift(bandwidth=estimate_bandwidth(X, quantile=0.2)),
+            'GMM': GaussianMixture(n_components=3, random_state=42)
+        }
+        
+        fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+        
+        for idx, (name, algorithm) in enumerate(algorithms.items()):
+            # Fit and predict
+            if name == 'GMM':
+                algorithm.fit(X)
+                labels = algorithm.predict(X)
+            else:
+                labels = algorithm.fit_predict(X)
+            
+            # Store results
+            self.models[name] = algorithm
+            self.results[name] = labels
+            
+            # Visualize clusters
+            axes[0, idx].scatter(X[:, 0], X[:, 1], c=labels, 
+                              cmap='viridis', alpha=0.6, s=30)
+            n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+            axes[0, idx].set_title(f'{name}\n{n_clusters} clusters')
+            axes[0, idx].grid(True, alpha=0.3)
+            
+            # Calculate metrics
+            n_noise = list(labels).count(-1) if -1 in labels else 0
+            
+            if len(set(labels)) > 1:
+                mask = labels != -1
+                if np.sum(mask) > 1:
+                    silhouette = silhouette_score(X[mask], labels[mask])
+                else:
+                    silhouette = -1
+            else:
+                silhouette = -1
+            
+            # Display metrics
+            metrics_text = f"Noise: {n_noise}\nSilhouette: {silhouette:.3f}"
+            axes[1, idx].text(0.5, 0.5, metrics_text, 
+                           ha='center', va='center', fontsize=12)
+            axes[1, idx].set_xlim(0, 1)
+            axes[1, idx].set_ylim(0, 1)
+            axes[1, idx].axis('off')
+            axes[1, idx].set_title('Metrics')
+        
+        plt.suptitle('Algorithm Comparison', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return self.results
+    
+    def streaming_optics(self, X_initial, X_stream, batch_size=10):
+        """Incremental OPTICS for streaming data"""
+        
+        # Initial OPTICS model
+        optics = OPTICS(min_samples=5, xi=0.05)
+        all_data = X_initial.copy()
+        labels_history = []
+        
+        # Process stream in batches
+        n_batches = len(X_stream) // batch_size
+        
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        
+        for batch_idx in range(min(3, n_batches)):
+            # Add new batch
+            start_idx = batch_idx * batch_size
+            end_idx = start_idx + batch_size
+            new_batch = X_stream[start_idx:end_idx]
+            all_data = np.vstack([all_data, new_batch])
+            
+            # Refit OPTICS
+            labels = optics.fit_predict(all_data)
+            labels_history.append(labels)
+            
+            # Visualize
+            row = batch_idx // 3
+            col = batch_idx % 3
+            
+            axes[row, col].scatter(all_data[:len(X_initial), 0], 
+                                 all_data[:len(X_initial), 1],
+                                 c=labels[:len(X_initial)], 
+                                 cmap='viridis', alpha=0.5, s=20)
+            axes[row, col].scatter(all_data[len(X_initial):, 0], 
+                                 all_data[len(X_initial):, 1],
+                                 c=labels[len(X_initial):], 
+                                 cmap='viridis', marker='^', s=50)
+            axes[row, col].set_title(f'Batch {batch_idx+1}')
+            axes[row, col].grid(True, alpha=0.3)
+        
+        # Show reachability evolution
+        axes[1, 0].set_title('Reachability Evolution')
+        for i, labels in enumerate(labels_history[:3]):
+            reachability = optics.reachability_[optics.ordering_]
+            axes[1, i].plot(reachability, alpha=0.7, label=f'Batch {i+1}')
+            axes[1, i].set_xlabel('Order')
+            axes[1, i].set_ylabel('Reachability')
+            axes[1, i].grid(True, alpha=0.3)
+        
+        plt.suptitle('Streaming OPTICS', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return labels_history
+
+# Advanced OPTICS analysis
+advanced = AdvancedOPTICS()
+
+print("\n" + "="*60)
+print("ADVANCED OPTICS TECHNIQUES")
+print("="*60)
+
+# Xi parameter tuning
+print("\nTuning Xi parameter...")
+best_xi, xi_scores, xi_clusters = advanced.xi_parameter_tuning(X_varying_scaled)
+
+# Hierarchical extraction
+print("\nExtracting hierarchical structure...")
+hierarchy = advanced.hierarchical_extraction(X_varying_scaled)
+
+# Algorithm comparison
+print("\nComparing with other algorithms...")
+comparison_results = advanced.compare_with_other_algorithms(X_varying_scaled)
+
+# Streaming OPTICS demo
+print("\nDemonstrating streaming OPTICS...")
+X_stream = np.random.randn(30, 2) * 0.5 + [3, 3]
+stream_history = advanced.streaming_optics(X_varying_scaled[:100], X_stream)</code></pre>
+
+        <h2>Real-World Applications</h2>
+        
+        <pre class="language-python"><code>class OPTICSApplications:
+    """Real-world applications of OPTICS clustering"""
+    
+    def __init__(self):
+        self.results = {}
+        
+    def network_traffic_analysis(self, n_samples=1000):
+        """Network anomaly detection with varying traffic patterns"""
+        
+        np.random.seed(42)
+        
+        # Generate network traffic data with varying patterns
+        traffic_data = []
+        labels_true = []
+        
+        # Normal traffic (varying intensity throughout day)
+        for hour in range(24):
+            intensity = 1 + 0.5 * np.sin(2 * np.pi * hour / 24)
+            n_points = int(50 * intensity)
+            
+            traffic = np.random.normal(
+                [100 * intensity, 50 * intensity],  # packet_rate, bandwidth
+                [20, 10],
+                (n_points, 2)
+            )
+            traffic_data.append(traffic)
+            labels_true.extend([0] * n_points)  # Normal
+        
+        # DDoS attack (high density burst)
+        ddos = np.random.normal([500, 200], [30, 20], (50, 2))
+        traffic_data.append(ddos)
+        labels_true.extend([1] * 50)  # Attack
+        
+        # Port scan (scattered pattern)
+        port_scan = np.random.uniform([0, 0], [200, 100], (30, 2))
+        traffic_data.append(port_scan)
+        labels_true.extend([2] * 30)  # Port scan
+        
+        X_traffic = np.vstack(traffic_data)
+        X_scaled = StandardScaler().fit_transform(X_traffic)
+        
+        # Apply OPTICS
+        optics = OPTICS(min_samples=10, xi=0.05, min_cluster_size=0.02)
+        optics_labels = optics.fit_predict(X_scaled)
+        
+        # Compare with DBSCAN
+        dbscan = DBSCAN(eps=0.3, min_samples=10)
+        dbscan_labels = dbscan.fit_predict(X_scaled)
+        
+        # Visualization
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        
+        # True labels
+        axes[0, 0].scatter(X_traffic[:, 0], X_traffic[:, 1], 
+                         c=labels_true, cmap='viridis', alpha=0.5, s=10)
+        axes[0, 0].set_xlabel('Packet Rate')
+        axes[0, 0].set_ylabel('Bandwidth')
+        axes[0, 0].set_title('True Traffic Patterns')
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # DBSCAN results
+        axes[0, 1].scatter(X_traffic[:, 0], X_traffic[:, 1], 
+                         c=dbscan_labels, cmap='viridis', alpha=0.5, s=10)
+        axes[0, 1].set_xlabel('Packet Rate')
+        axes[0, 1].set_ylabel('Bandwidth')
+        axes[0, 1].set_title(f'DBSCAN ({len(set(dbscan_labels))-1} clusters)')
+        axes[0, 1].grid(True, alpha=0.3)
+        
+        # OPTICS results
+        axes[0, 2].scatter(X_traffic[:, 0], X_traffic[:, 1], 
+                         c=optics_labels, cmap='viridis', alpha=0.5, s=10)
+        axes[0, 2].set_xlabel('Packet Rate')
+        axes[0, 2].set_ylabel('Bandwidth')
+        axes[0, 2].set_title(f'OPTICS ({len(set(optics_labels))-1} clusters)')
+        axes[0, 2].grid(True, alpha=0.3)
+        
+        # Reachability plot
+        reachability = optics.reachability_[optics.ordering_]
+        axes[1, 0].plot(reachability, linewidth=0.5)
+        axes[1, 0].set_xlabel('Order of Points')
+        axes[1, 0].set_ylabel('Reachability Distance')
+        axes[1, 0].set_title('Reachability Plot')
+        axes[1, 0].grid(True, alpha=0.3)
+        
+        # Time series view
+        time_indices = np.arange(len(X_traffic))
+        axes[1, 1].scatter(time_indices, X_traffic[:, 0], 
+                         c=optics_labels, cmap='viridis', alpha=0.5, s=10)
+        axes[1, 1].set_xlabel('Time Index')
+        axes[1, 1].set_ylabel('Packet Rate')
+        axes[1, 1].set_title('Traffic Over Time (OPTICS colored)')
+        axes[1, 1].grid(True, alpha=0.3)
+        
+        # Anomaly scores
+        anomaly_mask = optics_labels == -1
+        axes[1, 2].hist(reachability[reachability < np.inf], bins=50, alpha=0.7)
+        axes[1, 2].set_xlabel('Reachability Distance')
+        axes[1, 2].set_ylabel('Frequency')
+        axes[1, 2].set_title('Reachability Distribution')
+        axes[1, 2].axvline(x=np.percentile(reachability[reachability < np.inf], 95),
+                         color='r', linestyle='--', label='95th percentile')
+        axes[1, 2].legend()
+        axes[1, 2].grid(True, alpha=0.3)
+        
+        plt.suptitle('Network Traffic Analysis with OPTICS', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        # Calculate metrics
+        from sklearn.metrics import adjusted_rand_score
+        
+        ari_dbscan = adjusted_rand_score(labels_true, dbscan_labels)
+        ari_optics = adjusted_rand_score(labels_true, optics_labels)
+        
+        print("\nNetwork Traffic Analysis Results:")
+        print(f"DBSCAN ARI: {ari_dbscan:.3f}")
+        print(f"OPTICS ARI: {ari_optics:.3f}")
+        print(f"Anomalies detected: {np.sum(anomaly_mask)} points")
+        
+        return optics_labels, reachability
+    
+    def spatial_data_clustering(self):
+        """Geographical clustering with varying density regions"""
+        
+        np.random.seed(42)
+        
+        # Simulate city data with varying densities
+        cities_data = []
+        
+        # Dense urban core
+        urban_core = np.random.multivariate_normal(
+            [40.7128, -74.0060],  # NYC coordinates
+            [[0.001, 0], [0, 0.001]], 
+            200
+        )
+        cities_data.append(urban_core)
+        
+        # Suburban areas (medium density)
+        suburban = np.random.multivariate_normal(
+            [40.7128, -74.0060],
+            [[0.01, 0], [0, 0.01]], 
+            150
+        )
+        cities_data.append(suburban)
+        
+        # Rural areas (sparse)
+        rural = np.random.uniform(
+            [40.5, -74.3],
+            [41.0, -73.7],
+            (80, 2)
+        )
+        cities_data.append(rural)
+        
+        X_spatial = np.vstack(cities_data)
+        
+        # Apply OPTICS with haversine metric for geographical data
+        optics = OPTICS(min_samples=5, max_eps=0.1, xi=0.05)
+        labels = optics.fit_predict(np.radians(X_spatial))
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Geographical plot
+        scatter = axes[0].scatter(X_spatial[:, 1], X_spatial[:, 0], 
+                                c=labels, cmap='viridis', alpha=0.6, s=20)
+        axes[0].set_xlabel('Longitude')
+        axes[0].set_ylabel('Latitude')
+        axes[0].set_title('Spatial Clustering with OPTICS')
+        axes[0].grid(True, alpha=0.3)
+        plt.colorbar(scatter, ax=axes[0])
+        
+        # Density map
+        from scipy.stats import gaussian_kde
+        
+        # Remove noise points for KDE
+        clean_data = X_spatial[labels != -1]
+        if len(clean_data) > 0:
+            kde = gaussian_kde(clean_data.T)
+            
+            # Create grid
+            x_min, x_max = X_spatial[:, 1].min(), X_spatial[:, 1].max()
+            y_min, y_max = X_spatial[:, 0].min(), X_spatial[:, 0].max()
+            xx, yy = np.meshgrid(np.linspace(x_min, x_max, 100),
+                                np.linspace(y_min, y_max, 100))
+            
+            # Evaluate KDE
+            positions = np.vstack([xx.ravel(), yy.ravel()])
+            density = kde(positions).reshape(xx.shape)
+            
+            # Plot density
+            contour = axes[1].contourf(xx, yy, density, levels=10, cmap='viridis')
+            axes[1].scatter(X_spatial[:, 1], X_spatial[:, 0], 
+                          c='red', alpha=0.1, s=5)
+            axes[1].set_xlabel('Longitude')
+            axes[1].set_ylabel('Latitude')
+            axes[1].set_title('Density Estimation')
+            axes[1].grid(True, alpha=0.3)
+            plt.colorbar(contour, ax=axes[1])
+        
+        plt.suptitle('Spatial Data Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+        n_noise = list(labels).count(-1)
+        
+        print(f"\nSpatial Clustering Results:")
+        print(f"Clusters found: {n_clusters}")
+        print(f"Noise points: {n_noise}")
+        
+        return labels
+    
+    def time_series_segmentation(self):
+        """Segment time series with changing patterns"""
+        
+        np.random.seed(42)
+        
+        # Generate time series with different regimes
+        t = np.linspace(0, 100, 1000)
+        
+        # Different patterns
+        series = np.zeros_like(t)
+        series[0:200] = 2 * np.sin(0.1 * t[0:200]) + np.random.normal(0, 0.1, 200)
+        series[200:500] = 5 + 0.05 * t[200:500] + np.random.normal(0, 0.2, 300)
+        series[500:700] = 10 * np.exp(-0.01 * (t[500:700] - 50)) + np.random.normal(0, 0.3, 200)
+        series[700:] = 3 * np.cos(0.2 * t[700:]) + np.random.normal(0, 0.15, 300)
+        
+        # Create features from time series (sliding windows)
+        window_size = 20
+        features = []
+        
+        for i in range(len(series) - window_size):
+            window = series[i:i+window_size]
+            # Extract features: mean, std, trend
+            mean = np.mean(window)
+            std = np.std(window)
+            trend = np.polyfit(range(window_size), window, 1)[0]
+            features.append([mean, std, trend])
+        
+        X_features = np.array(features)
+        X_scaled = StandardScaler().fit_transform(X_features)
+        
+        # Apply OPTICS
+        optics = OPTICS(min_samples=20, xi=0.05)
+        labels = optics.fit_predict(X_scaled)
+        
+        # Visualization
+        fig, axes = plt.subplots(3, 1, figsize=(12, 10))
+        
+        # Original time series
+        axes[0].plot(t, series, 'b-', linewidth=0.5)
+        axes[0].set_xlabel('Time')
+        axes[0].set_ylabel('Value')
+        axes[0].set_title('Original Time Series')
+        axes[0].grid(True, alpha=0.3)
+        
+        # Segmented time series
+        time_points = t[window_size//2:-window_size//2]
+        scatter = axes[1].scatter(time_points, series[window_size//2:-window_size//2],
+                                c=labels, cmap='viridis', alpha=0.6, s=1)
+        axes[1].set_xlabel('Time')
+        axes[1].set_ylabel('Value')
+        axes[1].set_title('OPTICS Segmentation')
+        axes[1].grid(True, alpha=0.3)
+        plt.colorbar(scatter, ax=axes[1])
+        
+        # Reachability plot
+        reachability = optics.reachability_[optics.ordering_]
+        axes[2].plot(reachability, linewidth=0.5)
+        axes[2].set_xlabel('Order of Points')
+        axes[2].set_ylabel('Reachability Distance')
+        axes[2].set_title('Reachability Plot')
+        axes[2].grid(True, alpha=0.3)
+        
+        plt.suptitle('Time Series Segmentation with OPTICS', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        # Analyze segments
+        n_segments = len(set(labels)) - (1 if -1 in labels else 0)
+        print(f"\nTime Series Segmentation Results:")
+        print(f"Number of segments: {n_segments}")
+        
+        for segment_id in set(labels):
+            if segment_id != -1:
+                segment_indices = np.where(labels == segment_id)[0]
+                print(f"Segment {segment_id}: {len(segment_indices)} points")
+        
+        return labels, X_features
+
+# Run applications
+apps = OPTICSApplications()
+
+print("\n" + "="*60)
+print("OPTICS REAL-WORLD APPLICATIONS")
+print("="*60)
+
+# Network traffic analysis
+print("\n1. Network Traffic Analysis:")
+print("-" * 30)
+traffic_labels, traffic_reach = apps.network_traffic_analysis()
+
+# Spatial clustering
+print("\n2. Spatial Data Clustering:")
+print("-" * 30)
+spatial_labels = apps.spatial_data_clustering()
+
+# Time series segmentation
+print("\n3. Time Series Segmentation:")
+print("-" * 30)
+ts_labels, ts_features = apps.time_series_segmentation()</code></pre>
+
+        <h2>Best Practices and Guidelines</h2>
+        
+        <pre class="language-python"><code>print("\n" + "="*60)
+print("OPTICS BEST PRACTICES")
+print("="*60)
+
+best_practices = """
+KEY GUIDELINES:
+
+1. PARAMETER SELECTION:
+   • min_samples: Similar to DBSCAN (2*dimensions minimum)
+   • max_eps: Set to maximum expected cluster distance
+   • xi: Steepness parameter (0.01-0.1 typical)
+   • min_cluster_size: Fraction of dataset (0.01-0.1)
+
+2. WHEN TO USE OPTICS:
+   ✓ Varying density clusters expected
+   ✓ Unknown optimal epsilon value
+   ✓ Need hierarchical cluster structure
+   ✓ Exploratory data analysis
+   ✓ Single parameter tuning preferred
+
+3. ADVANTAGES OVER DBSCAN:
+   • Handles varying densities
+   • Less sensitive to parameter selection
+   • Provides cluster hierarchy
+   • Single scan of database
+   • Reachability plot insights
+
+4. PREPROCESSING:
+   • Always standardize features
+   • Consider dimensionality reduction
+   • Handle missing values
+   • Remove highly correlated features
+
+5. INTERPRETING REACHABILITY PLOTS:
+   • Valleys = clusters
+   • Valley depth = cluster density
+   • Valley width = cluster size
+   • Peaks = cluster boundaries
+   • High values = noise/outliers
+
+6. COMPUTATIONAL COMPLEXITY:
+   • Time: O(n²) worst case
+   • Space: O(n)
+   • Use spatial indexing for speedup
+   • Consider sampling for large datasets
+"""
+
+print(best_practices)
+
+# Algorithm comparison table
+comparison_data = {
+    'Aspect': ['Varying Density', 'Parameter Sensitivity', 'Hierarchical Info', 
+               'Noise Handling', 'Complexity', 'Deterministic'],
+    'OPTICS': ['Excellent', 'Low', 'Yes', 'Good', 'O(n²)', 'Yes'],
+    'DBSCAN': ['Poor', 'High', 'No', 'Good', 'O(n log n)*', 'Yes'],
+    'K-means': ['Poor', 'Medium', 'No', 'Poor', 'O(nkt)', 'No'],
+    'Hierarchical': ['Good', 'Low', 'Yes', 'Poor', 'O(n³)', 'Yes']
+}
+
+comparison_df = pd.DataFrame(comparison_data)
+print("\nClustering Algorithm Comparison:")
+print("="*60)
+print(comparison_df.to_string(index=False))
+print("\n* With spatial indexing")
+
+# Implementation checklist
+checklist = """
+IMPLEMENTATION CHECKLIST:
+□ Data cleaned and preprocessed
+□ Features standardized
+□ Choose appropriate min_samples (≥ 2*dimensions)
+□ Set max_eps if known (optional)
+□ Select xi parameter (start with 0.05)
+□ Analyze reachability plot
+□ Extract clusters at multiple levels
+□ Validate with domain knowledge
+□ Compare with DBSCAN results
+□ Document cluster characteristics
+"""
+
+print(checklist)</code></pre>
+
+        <h2>Practice Exercises</h2>
+        
+        <div class="exercise-card">
+            <h3>Exercise 1: Automatic Xi Selection</h3>
+            <p>Implement automatic xi parameter selection:</p>
+            <ol>
+                <li>Generate synthetic data with known clusters</li>
+                <li>Test xi values from 0.01 to 0.5</li>
+                <li>Use multiple metrics (silhouette, Davies-Bouldin)</li>
+                <li>Find optimal xi automatically</li>
+                <li>Validate on different datasets</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 2: OPTICS Visualization Tool</h3>
+            <p>Create an interactive OPTICS analysis tool:</p>
+            <ol>
+                <li>Build interactive reachability plot</li>
+                <li>Allow dynamic epsilon cutting</li>
+                <li>Show cluster evolution</li>
+                <li>Export cluster assignments</li>
+                <li>Compare with other algorithms</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 3: Multi-scale Analysis</h3>
+            <p>Perform multi-scale cluster analysis:</p>
+            <ol>
+                <li>Extract clusters at 5 different scales</li>
+                <li>Build cluster hierarchy tree</li>
+                <li>Identify stable clusters across scales</li>
+                <li>Merge similar clusters</li>
+                <li>Create cluster stability score</li>
+            </ol>
+        </div>
+
+        <h2>Summary and Key Takeaways</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 Key Points to Remember</h3>
+            <ul>
+                <li><strong>Hierarchical Density:</strong> OPTICS reveals cluster structure at all density levels</li>
+                <li><strong>Reachability Plots:</strong> Visual representation of cluster hierarchy</li>
+                <li><strong>Varying Densities:</strong> Superior to DBSCAN for clusters with different densities</li>
+                <li><strong>Parameter Robustness:</strong> Less sensitive to parameter selection than DBSCAN</li>
+                <li><strong>Automatic Extraction:</strong> Xi method automatically finds clusters</li>
+                <li><strong>Exploratory Tool:</strong> Excellent for understanding data structure</li>
+            </ul>
+        </div>
+
+        <div class="navigation">
+            <a href="ml_dbscan.html" class="nav-button">← Previous: DBSCAN Clustering</a>
+            <a href="index.html" class="nav-button">Home</a>
+            <a href="ml_gaussian_mixture.html" class="nav-button">Next: Gaussian Mixture Models →</a>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+    <script>
+        // Additional interactive features for OPTICS lesson
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add line numbers to code blocks
+            const codeBlocks = document.querySelectorAll('pre code');
+            
+            codeBlocks.forEach(block => {
+                if (block.textContent.includes('class')) {
+                    block.classList.add('line-numbers');
+                }
+            });
+            
+            // Smooth scroll for navigation
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+    <script src="js/clipboard.js"></script>
+</body>
+</html>

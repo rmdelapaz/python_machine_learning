@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Master Random Forests in Python. Learn ensemble methods, bagging, feature importance, and hyperparameter tuning with practical examples.">
+    <title>Random Forests - Python Data Science Path</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script src="js/course-enhancements.js" defer></script>
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    
+    <main id="main-content">
+    <header role="banner">
+        <h1>Random Forests</h1>
+        <div class="reading-time" aria-label="Estimated reading time"></div>
+    </header>
+    
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="index.html">Home</a>
+        <span class="separator">›</span>
+        <a href="#">Machine Learning Module</a>
+        <span class="separator">›</span>
+        <a href="#">Supervised Learning</a>
+        <span class="separator">›</span>
+        <span class="current">Random Forests</span>
+    </nav>
+
+    <h2>The Power of Ensemble Learning! 🌲🌲🌲</h2>
+    
+    <blockquote>
+        <p>Random Forests combine the wisdom of crowds with the power of decision trees. By building hundreds of trees and letting them vote, Random Forests achieve remarkable accuracy while maintaining robustness against overfitting. Master this versatile algorithm that excels at both classification and regression tasks.</p>
+    </blockquote>
+
+    <h2>Random Forest Architecture</h2>
+    
+    <div class="mermaid">
+    graph TD
+        A[Random Forest] --> B[Bootstrap Sampling]
+        A --> C[Random Feature Selection]
+        A --> D[Multiple Trees]
+        
+        B --> E[Sample 1]
+        B --> F[Sample 2]
+        B --> G[Sample n]
+        
+        C --> H[Features Subset 1]
+        C --> I[Features Subset 2]
+        C --> J[Features Subset m]
+        
+        D --> K[Tree 1]
+        D --> L[Tree 2]
+        D --> M[Tree n]
+        
+        K --> N[Predictions]
+        L --> N
+        M --> N
+        
+        N --> O[Voting/Averaging]
+        O --> P[Final Prediction]
+        
+        style A fill:#f9f,stroke:#333,stroke-width:2px
+        style O fill:#bbf,stroke:#333,stroke-width:2px
+        style P fill:#9f9,stroke:#333,stroke-width:2px
+    </div>
+
+    <h2>Understanding Random Forests</h2>
+    
+    <h3>Core Concepts and Implementation</h3>
+    <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.metrics import (accuracy_score, confusion_matrix, classification_report,
+                           mean_squared_error, r2_score, mean_absolute_error)
+from sklearn.datasets import make_classification, make_regression, load_iris, load_wine
+from sklearn.preprocessing import StandardScaler
+from sklearn.inspection import permutation_importance
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+
+# Generate classification data
+X_class, y_class = make_classification(
+    n_samples=1000, 
+    n_features=20,
+    n_informative=15,
+    n_redundant=5,
+    n_classes=3,
+    random_state=42
+)
+
+# Generate regression data
+X_reg, y_reg = make_regression(
+    n_samples=1000,
+    n_features=20,
+    n_informative=15,
+    noise=0.1,
+    random_state=42
+)
+
+class RandomForestAnalyzer:
+    """Comprehensive Random Forest Analysis Tool"""
+    
+    def __init__(self, task='classification'):
+        self.task = task
+        self.model = None
+        self.bootstrap_samples = []
+        self.oob_scores = []
+        
+    def manual_bagging_demo(self, X, y, n_estimators=5):
+        """
+        Demonstrate bagging concept manually
+        """
+        n_samples = X.shape[0]
+        predictions = []
+        
+        print("Manual Bagging Demonstration")
+        print("="*50)
+        
+        for i in range(n_estimators):
+            # Bootstrap sampling
+            indices = np.random.choice(n_samples, n_samples, replace=True)
+            X_bootstrap = X[indices]
+            y_bootstrap = y[indices]
+            
+            # Track out-of-bag samples
+            oob_indices = np.setdiff1d(np.arange(n_samples), indices)
+            
+            # Train simple decision tree
+            tree = DecisionTreeClassifier(max_depth=3, random_state=i)
+            tree.fit(X_bootstrap, y_bootstrap)
+            
+            # Store predictions
+            predictions.append(tree.predict(X))
+            
+            # Calculate unique samples ratio
+            unique_ratio = len(np.unique(indices)) / n_samples
+            
+            print(f"Tree {i+1}:")
+            print(f"  Unique samples: {len(np.unique(indices))}/{n_samples} ({unique_ratio:.1%})")
+            print(f"  OOB samples: {len(oob_indices)}")
+            
+            self.bootstrap_samples.append(indices)
+        
+        # Ensemble prediction (majority voting)
+        predictions = np.array(predictions)
+        ensemble_pred = np.apply_along_axis(
+            lambda x: np.bincount(x).argmax(), 0, predictions
+        )
+        
+        return ensemble_pred, predictions
+    
+    def fit_random_forest(self, X_train, y_train, X_test, y_test, **kwargs):
+        """Fit Random Forest with analysis"""
+        
+        if self.task == 'classification':
+            self.model = RandomForestClassifier(
+                n_estimators=kwargs.get('n_estimators', 100),
+                max_depth=kwargs.get('max_depth', None),
+                min_samples_split=kwargs.get('min_samples_split', 2),
+                min_samples_leaf=kwargs.get('min_samples_leaf', 1),
+                max_features=kwargs.get('max_features', 'sqrt'),
+                bootstrap=kwargs.get('bootstrap', True),
+                oob_score=kwargs.get('oob_score', True),
+                random_state=42,
+                n_jobs=-1
+            )
+        else:
+            self.model = RandomForestRegressor(
+                n_estimators=kwargs.get('n_estimators', 100),
+                max_depth=kwargs.get('max_depth', None),
+                min_samples_split=kwargs.get('min_samples_split', 2),
+                min_samples_leaf=kwargs.get('min_samples_leaf', 1),
+                max_features=kwargs.get('max_features', 'sqrt'),
+                bootstrap=kwargs.get('bootstrap', True),
+                oob_score=kwargs.get('oob_score', True),
+                random_state=42,
+                n_jobs=-1
+            )
+        
+        # Fit model
+        self.model.fit(X_train, y_train)
+        
+        # Predictions
+        self.y_train_pred = self.model.predict(X_train)
+        self.y_test_pred = self.model.predict(X_test)
+        
+        # Store data for analysis
+        self.X_train = X_train
+        self.X_test = X_test
+        self.y_train = y_train
+        self.y_test = y_test
+        
+        return self
+    
+    def analyze_tree_diversity(self):
+        """Analyze diversity among trees in the forest"""
+        
+        if not hasattr(self.model, 'estimators_'):
+            print("Model not fitted yet!")
+            return
+        
+        n_trees = len(self.model.estimators_)
+        n_samples = min(100, len(self.X_test))  # Use subset for efficiency
+        X_subset = self.X_test[:n_samples]
+        
+        # Get predictions from each tree
+        tree_predictions = np.array([
+            tree.predict(X_subset) for tree in self.model.estimators_
+        ])
+        
+        # Calculate pairwise agreement between trees
+        agreement_matrix = np.zeros((n_trees, n_trees))
+        for i in range(n_trees):
+            for j in range(n_trees):
+                agreement = np.mean(tree_predictions[i] == tree_predictions[j])
+                agreement_matrix[i, j] = agreement
+        
+        # Visualize
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Agreement heatmap
+        sns.heatmap(agreement_matrix[:20, :20], cmap='coolwarm', 
+                   vmin=0, vmax=1, center=0.5,
+                   ax=axes[0], cbar_kws={'label': 'Agreement'})
+        axes[0].set_title('Tree Agreement Matrix (First 20 Trees)')
+        axes[0].set_xlabel('Tree Index')
+        axes[0].set_ylabel('Tree Index')
+        
+        # Agreement distribution
+        upper_triangle = agreement_matrix[np.triu_indices(n_trees, k=1)]
+        axes[1].hist(upper_triangle, bins=30, edgecolor='black', alpha=0.7)
+        axes[1].axvline(x=upper_triangle.mean(), color='red', 
+                       linestyle='--', label=f'Mean: {upper_triangle.mean():.3f}')
+        axes[1].set_xlabel('Pairwise Agreement')
+        axes[1].set_ylabel('Frequency')
+        axes[1].set_title('Distribution of Tree Agreement')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.suptitle('Tree Diversity Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return agreement_matrix
+    
+    def feature_importance_analysis(self):
+        """Comprehensive feature importance analysis"""
+        
+        if not self.model:
+            print("Model not fitted yet!")
+            return
+        
+        # Get feature importances
+        importances = self.model.feature_importances_
+        feature_names = [f'Feature_{i}' for i in range(len(importances))]
+        
+        # Calculate standard deviation across trees
+        std = np.std([tree.feature_importances_ 
+                     for tree in self.model.estimators_], axis=0)
+        
+        # Create DataFrame
+        importance_df = pd.DataFrame({
+            'Feature': feature_names,
+            'Importance': importances,
+            'Std': std
+        }).sort_values('Importance', ascending=False)
+        
+        # Permutation importance for comparison
+        perm_importance = permutation_importance(
+            self.model, self.X_test, self.y_test,
+            n_repeats=10, random_state=42, n_jobs=-1
+        )
+        
+        importance_df['Permutation_Importance'] = perm_importance.importances_mean
+        importance_df['Perm_Std'] = perm_importance.importances_std
+        
+        # Visualization
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        
+        # 1. MDI Feature Importance
+        top_n = 10
+        top_features = importance_df.head(top_n)
+        
+        axes[0, 0].barh(range(top_n), top_features['Importance'].values)
+        axes[0, 0].set_yticks(range(top_n))
+        axes[0, 0].set_yticklabels(top_features['Feature'].values)
+        axes[0, 0].set_xlabel('Mean Decrease in Impurity')
+        axes[0, 0].set_title('Top 10 Features (MDI)')
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # Add error bars
+        axes[0, 0].barh(range(top_n), top_features['Importance'].values,
+                       xerr=top_features['Std'].values, alpha=0.7)
+        
+        # 2. Permutation Importance
+        axes[0, 1].barh(range(top_n), top_features['Permutation_Importance'].values)
+        axes[0, 1].set_yticks(range(top_n))
+        axes[0, 1].set_yticklabels(top_features['Feature'].values)
+        axes[0, 1].set_xlabel('Permutation Importance')
+        axes[0, 1].set_title('Top 10 Features (Permutation)')
+        axes[0, 1].grid(True, alpha=0.3)
+        
+        # 3. Importance Comparison
+        axes[1, 0].scatter(importance_df['Importance'], 
+                          importance_df['Permutation_Importance'], alpha=0.6)
+        axes[1, 0].set_xlabel('MDI Importance')
+        axes[1, 0].set_ylabel('Permutation Importance')
+        axes[1, 0].set_title('MDI vs Permutation Importance')
+        axes[1, 0].grid(True, alpha=0.3)
+        
+        # Add diagonal line
+        max_val = max(importance_df['Importance'].max(), 
+                     importance_df['Permutation_Importance'].max())
+        axes[1, 0].plot([0, max_val], [0, max_val], 'r--', alpha=0.5)
+        
+        # 4. Cumulative Importance
+        cumsum = np.cumsum(importance_df['Importance'].values)
+        axes[1, 1].plot(range(len(cumsum)), cumsum / cumsum[-1], 'b-', linewidth=2)
+        axes[1, 1].axhline(y=0.8, color='r', linestyle='--', 
+                          label='80% variance explained')
+        axes[1, 1].set_xlabel('Number of Features')
+        axes[1, 1].set_ylabel('Cumulative Importance')
+        axes[1, 1].set_title('Cumulative Feature Importance')
+        axes[1, 1].legend()
+        axes[1, 1].grid(True, alpha=0.3)
+        
+        # Find number of features for 80% importance
+        n_features_80 = np.argmax(cumsum / cumsum[-1] >= 0.8) + 1
+        axes[1, 1].axvline(x=n_features_80, color='g', linestyle='--',
+                          label=f'{n_features_80} features for 80%')
+        axes[1, 1].legend()
+        
+        plt.suptitle('Feature Importance Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return importance_df
+    
+    def convergence_analysis(self):
+        """Analyze model convergence with number of trees"""
+        
+        if not self.model:
+            print("Model not fitted yet!")
+            return
+        
+        # Calculate scores for increasing number of estimators
+        n_estimators_range = range(1, len(self.model.estimators_) + 1, 5)
+        train_scores = []
+        test_scores = []
+        oob_scores = []
+        
+        for n in n_estimators_range:
+            # Use first n trees
+            subset_predictions_train = np.array([
+                self.model.estimators_[i].predict(self.X_train)
+                for i in range(n)
+            ])
+            subset_predictions_test = np.array([
+                self.model.estimators_[i].predict(self.X_test)
+                for i in range(n)
+            ])
+            
+            # Aggregate predictions
+            if self.task == 'classification':
+                ensemble_train = np.apply_along_axis(
+                    lambda x: np.bincount(x.astype(int)).argmax(), 
+                    0, subset_predictions_train
+                )
+                ensemble_test = np.apply_along_axis(
+                    lambda x: np.bincount(x.astype(int)).argmax(), 
+                    0, subset_predictions_test
+                )
+                train_score = accuracy_score(self.y_train, ensemble_train)
+                test_score = accuracy_score(self.y_test, ensemble_test)
+            else:
+                ensemble_train = np.mean(subset_predictions_train, axis=0)
+                ensemble_test = np.mean(subset_predictions_test, axis=0)
+                train_score = r2_score(self.y_train, ensemble_train)
+                test_score = r2_score(self.y_test, ensemble_test)
+            
+            train_scores.append(train_score)
+            test_scores.append(test_score)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Score convergence
+        axes[0].plot(n_estimators_range, train_scores, label='Train', alpha=0.7)
+        axes[0].plot(n_estimators_range, test_scores, label='Test', alpha=0.7)
+        if hasattr(self.model, 'oob_score_'):
+            axes[0].axhline(y=self.model.oob_score_, color='g', 
+                           linestyle='--', label=f'OOB Score: {self.model.oob_score_:.3f}')
+        axes[0].set_xlabel('Number of Trees')
+        axes[0].set_ylabel('Score')
+        axes[0].set_title('Model Convergence')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        
+        # Score stability (variance reduction)
+        window = 10
+        if len(test_scores) > window:
+            rolling_mean = pd.Series(test_scores).rolling(window).mean()
+            rolling_std = pd.Series(test_scores).rolling(window).std()
+            
+            axes[1].plot(n_estimators_range, test_scores, alpha=0.3, label='Test Score')
+            axes[1].plot(n_estimators_range, rolling_mean, 'b-', 
+                        label=f'Rolling Mean (window={window})')
+            axes[1].fill_between(n_estimators_range,
+                                rolling_mean - rolling_std,
+                                rolling_mean + rolling_std,
+                                alpha=0.2, label='±1 Std Dev')
+            axes[1].set_xlabel('Number of Trees')
+            axes[1].set_ylabel('Test Score')
+            axes[1].set_title('Score Stability')
+            axes[1].legend()
+            axes[1].grid(True, alpha=0.3)
+        
+        plt.suptitle('Convergence Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return train_scores, test_scores
+
+# Initialize analyzer
+print("="*60)
+print("RANDOM FOREST FUNDAMENTALS")
+print("="*60)
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(
+    X_class, y_class, test_size=0.3, stratify=y_class, random_state=42
+)
+
+# Manual bagging demonstration
+rf_analyzer = RandomForestAnalyzer(task='classification')
+ensemble_pred, individual_preds = rf_analyzer.manual_bagging_demo(
+    X_train[:100], y_train[:100], n_estimators=5
+)
+
+print(f"\nEnsemble Accuracy: {accuracy_score(y_train[:100], ensemble_pred):.3f}")
+
+# Fit full Random Forest
+rf_analyzer.fit_random_forest(
+    X_train, y_train, X_test, y_test,
+    n_estimators=100,
+    max_depth=10,
+    min_samples_split=5,
+    max_features='sqrt'
+)
+
+# Model performance
+print("\n" + "="*60)
+print("MODEL PERFORMANCE")
+print("="*60)
+print(f"Train Accuracy: {accuracy_score(y_train, rf_analyzer.y_train_pred):.4f}")
+print(f"Test Accuracy: {accuracy_score(y_test, rf_analyzer.y_test_pred):.4f}")
+if hasattr(rf_analyzer.model, 'oob_score_'):
+    print(f"OOB Score: {rf_analyzer.model.oob_score_:.4f}")
+
+print("\nClassification Report:")
+print(classification_report(y_test, rf_analyzer.y_test_pred))
+
+# Analyze tree diversity
+agreement_matrix = rf_analyzer.analyze_tree_diversity()
+
+# Feature importance
+importance_df = rf_analyzer.feature_importance_analysis()
+print("\nTop 5 Most Important Features:")
+print(importance_df[['Feature', 'Importance', 'Permutation_Importance']].head())
+
+# Convergence analysis
+train_scores, test_scores = rf_analyzer.convergence_analysis()</code></pre>
+
+    <h2>Random Forest vs Single Decision Tree</h2>
+    
+    <h3>Comparing Performance and Robustness</h3>
+    <pre class="language-python"><code>class ForestVsTreeComparison:
+    """Compare Random Forest with Single Decision Tree"""
+    
+    def __init__(self):
+        self.models = {}
+        self.results = {}
+        
+    def compare_models(self, X_train, y_train, X_test, y_test):
+        """Compare different tree-based models"""
+        
+        # Single Decision Tree
+        self.models['Single Tree'] = DecisionTreeClassifier(
+            max_depth=10, random_state=42
+        )
+        
+        # Random Forest
+        self.models['Random Forest'] = RandomForestClassifier(
+            n_estimators=100, max_depth=10, random_state=42, n_jobs=-1
+        )
+        
+        # Extremely Randomized Trees
+        from sklearn.ensemble import ExtraTreesClassifier
+        self.models['Extra Trees'] = ExtraTreesClassifier(
+            n_estimators=100, max_depth=10, random_state=42, n_jobs=-1
+        )
+        
+        # Fit and evaluate all models
+        for name, model in self.models.items():
+            # Fit
+            model.fit(X_train, y_train)
+            
+            # Predictions
+            y_train_pred = model.predict(X_train)
+            y_test_pred = model.predict(X_test)
+            
+            # Store results
+            self.results[name] = {
+                'train_accuracy': accuracy_score(y_train, y_train_pred),
+                'test_accuracy': accuracy_score(y_test, y_test_pred),
+                'overfitting': accuracy_score(y_train, y_train_pred) - 
+                              accuracy_score(y_test, y_test_pred),
+                'y_test_pred': y_test_pred
+            }
+        
+        return self
+    
+    def visualize_decision_boundaries(self, X, y):
+        """Visualize decision boundaries (for 2D data)"""
+        
+        if X.shape[1] != 2:
+            print("Can only visualize 2D data")
+            return
+        
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        
+        # Create mesh
+        h = 0.02
+        x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
+        y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
+        xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                            np.arange(y_min, y_max, h))
+        
+        for idx, (name, model) in enumerate(self.models.items()):
+            # Predict on mesh
+            Z = model.predict(np.c_[xx.ravel(), yy.ravel()])
+            Z = Z.reshape(xx.shape)
+            
+            # Plot
+            axes[idx].contourf(xx, yy, Z, alpha=0.8, cmap=plt.cm.RdYlBu)
+            axes[idx].scatter(X[:, 0], X[:, 1], c=y, 
+                            cmap=plt.cm.RdYlBu, edgecolor='black', s=30)
+            axes[idx].set_title(f'{name}')
+            axes[idx].set_xlabel('Feature 1')
+            axes[idx].set_ylabel('Feature 2')
+        
+        plt.suptitle('Decision Boundaries Comparison', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+    
+    def noise_robustness_test(self, X, y, noise_levels=[0, 0.1, 0.2, 0.3, 0.4]):
+        """Test robustness to noise"""
+        
+        results = {name: [] for name in self.models.keys()}
+        
+        for noise_level in noise_levels:
+            # Add noise to features
+            X_noisy = X + np.random.normal(0, noise_level, X.shape)
+            
+            # Split data
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_noisy, y, test_size=0.3, random_state=42
+            )
+            
+            # Evaluate each model
+            for name, model in self.models.items():
+                model.fit(X_train, y_train)
+                score = accuracy_score(y_test, model.predict(X_test))
+                results[name].append(score)
+        
+        # Visualization
+        plt.figure(figsize=(10, 6))
+        for name, scores in results.items():
+            plt.plot(noise_levels, scores, marker='o', label=name, linewidth=2)
+        
+        plt.xlabel('Noise Level (Standard Deviation)')
+        plt.ylabel('Test Accuracy')
+        plt.title('Model Robustness to Feature Noise')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.show()
+        
+        return results
+
+# Compare models
+comparison = ForestVsTreeComparison()
+comparison.compare_models(X_train, y_train, X_test, y_test)
+
+print("\n" + "="*60)
+print("MODEL COMPARISON")
+print("="*60)
+
+# Print results
+comparison_df = pd.DataFrame(comparison.results).T
+print(comparison_df.to_string())
+
+# Test noise robustness
+print("\nTesting Noise Robustness...")
+noise_results = comparison.noise_robustness_test(X_class, y_class)
+
+# Create 2D dataset for visualization
+from sklearn.datasets import make_moons
+X_2d, y_2d = make_moons(n_samples=300, noise=0.3, random_state=42)
+
+# Fit models on 2D data
+comparison_2d = ForestVsTreeComparison()
+comparison_2d.compare_models(X_2d, y_2d, X_2d, y_2d)  # Using same data for simplicity
+comparison_2d.visualize_decision_boundaries(X_2d, y_2d)</code></pre>
+
+    <h2>Hyperparameter Tuning</h2>
+    
+    <h3>Optimizing Random Forest Performance</h3>
+    <pre class="language-python"><code>class RandomForestTuner:
+    """Comprehensive hyperparameter tuning for Random Forests"""
+    
+    def __init__(self, task='classification'):
+        self.task = task
+        self.best_model = None
+        self.cv_results = None
+        self.param_importance = {}
+        
+    def grid_search_tuning(self, X_train, y_train):
+        """Perform grid search with cross-validation"""
+        
+        if self.task == 'classification':
+            model = RandomForestClassifier(random_state=42)
+            param_grid = {
+                'n_estimators': [50, 100, 200],
+                'max_depth': [5, 10, 20, None],
+                'min_samples_split': [2, 5, 10],
+                'min_samples_leaf': [1, 2, 4],
+                'max_features': ['sqrt', 'log2', 0.5]
+            }
+        else:
+            model = RandomForestRegressor(random_state=42)
+            param_grid = {
+                'n_estimators': [50, 100, 200],
+                'max_depth': [5, 10, 20, None],
+                'min_samples_split': [2, 5, 10],
+                'min_samples_leaf': [1, 2, 4],
+                'max_features': ['sqrt', 'log2', 0.5]
+            }
+        
+        # Grid search
+        grid_search = GridSearchCV(
+            model, param_grid,
+            cv=5, scoring='accuracy' if self.task == 'classification' else 'r2',
+            n_jobs=-1, verbose=1
+        )
+        
+        grid_search.fit(X_train, y_train)
+        
+        self.best_model = grid_search.best_estimator_
+        self.cv_results = pd.DataFrame(grid_search.cv_results_)
+        
+        return grid_search.best_params_, grid_search.best_score_
+    
+    def parameter_importance_analysis(self, X_train, y_train):
+        """Analyze importance of each hyperparameter"""
+        
+        base_params = {
+            'n_estimators': 100,
+            'max_depth': 10,
+            'min_samples_split': 5,
+            'min_samples_leaf': 2,
+            'max_features': 'sqrt',
+            'random_state': 42
+        }
+        
+        param_ranges = {
+            'n_estimators': [10, 50, 100, 200, 500],
+            'max_depth': [3, 5, 10, 20, None],
+            'min_samples_split': [2, 5, 10, 20],
+            'min_samples_leaf': [1, 2, 4, 8],
+            'max_features': [0.3, 0.5, 'sqrt', 'log2', None]
+        }
+        
+        results = {}
+        
+        for param_name, param_values in param_ranges.items():
+            scores = []
+            
+            for value in param_values:
+                # Update parameter
+                params = base_params.copy()
+                params[param_name] = value
+                
+                # Create and evaluate model
+                if self.task == 'classification':
+                    model = RandomForestClassifier(**params)
+                else:
+                    model = RandomForestRegressor(**params)
+                
+                # Cross-validation score
+                cv_scores = cross_val_score(
+                    model, X_train, y_train, cv=3,
+                    scoring='accuracy' if self.task == 'classification' else 'r2'
+                )
+                scores.append(cv_scores.mean())
+            
+            results[param_name] = {
+                'values': param_values,
+                'scores': scores,
+                'variance': np.var(scores)
+            }
+        
+        self.param_importance = results
+        
+        # Visualization
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        axes = axes.flatten()
+        
+        for idx, (param_name, data) in enumerate(results.items()):
+            if idx < len(axes):
+                # Convert None and string values for plotting
+                x_values = []
+                for v in data['values']:
+                    if v is None:
+                        x_values.append('None')
+                    elif isinstance(v, str):
+                        x_values.append(v)
+                    else:
+                        x_values.append(str(v))
+                
+                axes[idx].plot(x_values, data['scores'], 'o-', linewidth=2, markersize=8)
+                axes[idx].set_xlabel(param_name)
+                axes[idx].set_ylabel('CV Score')
+                axes[idx].set_title(f'{param_name} (var={data["variance"]:.4f})')
+                axes[idx].grid(True, alpha=0.3)
+                axes[idx].tick_params(axis='x', rotation=45)
+        
+        # Remove empty subplot
+        if len(results) < len(axes):
+            fig.delaxes(axes[-1])
+        
+        plt.suptitle('Hyperparameter Sensitivity Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return results
+    
+    def learning_curves(self, X_train, y_train, X_test, y_test):
+        """Generate learning curves"""
+        
+        train_sizes = np.linspace(0.1, 1.0, 10)
+        train_scores = []
+        test_scores = []
+        
+        for train_size in train_sizes:
+            n_samples = int(train_size * len(X_train))
+            
+            # Use subset of data
+            X_subset = X_train[:n_samples]
+            y_subset = y_train[:n_samples]
+            
+            # Train model
+            if self.task == 'classification':
+                model = RandomForestClassifier(n_estimators=100, random_state=42)
+            else:
+                model = RandomForestRegressor(n_estimators=100, random_state=42)
+            
+            model.fit(X_subset, y_subset)
+            
+            # Evaluate
+            train_pred = model.predict(X_subset)
+            test_pred = model.predict(X_test)
+            
+            if self.task == 'classification':
+                train_score = accuracy_score(y_subset, train_pred)
+                test_score = accuracy_score(y_test, test_pred)
+            else:
+                train_score = r2_score(y_subset, train_pred)
+                test_score = r2_score(y_test, test_pred)
+            
+            train_scores.append(train_score)
+            test_scores.append(test_score)
+        
+        # Visualization
+        plt.figure(figsize=(10, 6))
+        plt.plot(train_sizes * len(X_train), train_scores, 
+                'o-', label='Training score', linewidth=2)
+        plt.plot(train_sizes * len(X_train), test_scores, 
+                'o-', label='Test score', linewidth=2)
+        plt.xlabel('Training Set Size')
+        plt.ylabel('Score')
+        plt.title('Learning Curves')
+        plt.legend(loc='best')
+        plt.grid(True, alpha=0.3)
+        plt.show()
+        
+        return train_scores, test_scores
+
+# Hyperparameter tuning
+print("\n" + "="*60)
+print("HYPERPARAMETER TUNING")
+print("="*60)
+
+tuner = RandomForestTuner(task='classification')
+
+# Quick parameter importance analysis
+print("Analyzing parameter importance...")
+param_results = tuner.parameter_importance_analysis(X_train[:500], y_train[:500])
+
+# Grid search (using smaller subset for speed)
+print("\nPerforming grid search...")
+best_params, best_score = tuner.grid_search_tuning(X_train[:500], y_train[:500])
+
+print(f"\nBest Parameters: {best_params}")
+print(f"Best CV Score: {best_score:.4f}")
+
+# Learning curves
+print("\nGenerating learning curves...")
+train_scores, test_scores = tuner.learning_curves(X_train, y_train, X_test, y_test)</code></pre>
+
+    <h2>Best Practices and Guidelines</h2>
+    
+    <pre class="language-python"><code>class RandomForestBestPractices:
+    """Best practices and guidelines for Random Forests"""
+    
+    @staticmethod
+    def parameter_guidelines():
+        """Guidelines for setting Random Forest parameters"""
+        
+        print("\n" + "="*60)
+        print("RANDOM FOREST PARAMETER GUIDELINES")
+        print("="*60)
+        
+        guidelines = {
+            'n_estimators': {
+                'default': 100,
+                'range': '50-500',
+                'tip': 'More trees = better performance but diminishing returns after ~100-200',
+                'computational': 'Linear with n_estimators'
+            },
+            'max_depth': {
+                'default': None,
+                'range': '3-20 or None',
+                'tip': 'None = fully grown trees. Limit for overfitting control',
+                'computational': 'Exponential with depth'
+            },
+            'min_samples_split': {
+                'default': 2,
+                'range': '2-20',
+                'tip': 'Higher values prevent overfitting but may underfit',
+                'computational': 'Reduces tree complexity'
+            },
+            'min_samples_leaf': {
+                'default': 1,
+                'range': '1-10',
+                'tip': 'Minimum samples in leaf nodes. Higher = smoother boundaries',
+                'computational': 'Reduces tree size'
+            },
+            'max_features': {
+                'default': 'sqrt',
+                'range': 'sqrt, log2, 0.3-0.8, None',
+                'tip': 'sqrt for classification, 1/3 for regression. Controls diversity',
+                'computational': 'Reduces features to consider at each split'
+            },
+            'bootstrap': {
+                'default': True,
+                'range': 'True/False',
+                'tip': 'True for bagging. False = use whole dataset (Extra Trees)',
+                'computational': 'No impact'
+            },
+            'oob_score': {
+                'default': False,
+                'range': 'True/False',
+                'tip': 'True to get free validation score. Only with bootstrap=True',
+                'computational': 'Small overhead'
+            },
+            'n_jobs': {
+                'default': 1,
+                'range': '-1 for all cores',
+                'tip': 'Parallelize tree building. -1 uses all CPU cores',
+                'computational': 'Linear speedup with cores'
+            }
+        }
+        
+        for param, info in guidelines.items():
+            print(f"\n{param}:")
+            print(f"  Default: {info['default']}")
+            print(f"  Typical Range: {info['range']}")
+            print(f"  Tip: {info['tip']}")
+            print(f"  Computational Impact: {info['computational']}")
+    
+    @staticmethod
+    def when_to_use_random_forests():
+        """When to use Random Forests"""
+        
+        print("\n" + "="*60)
+        print("WHEN TO USE RANDOM FORESTS")
+        print("="*60)
+        
+        use_cases = {
+            'Ideal For': [
+                'Mixed data types (numerical and categorical)',
+                'Non-linear relationships',
+                'Feature importance is needed',
+                'Robust predictions without much tuning',
+                'Both classification and regression',
+                'Handle missing values (with proper imputation)',
+                'Parallel processing available',
+                'Moderate to large datasets'
+            ],
+            'Advantages': [
+                'No feature scaling required',
+                'Handles non-linearity well',
+                'Robust to outliers',
+                'Low risk of overfitting',
+                'Feature importance built-in',
+                'OOB error estimation',
+                'Can handle thousands of features',
+                'Works well out-of-the-box'
+            ],
+            'Disadvantages': [
+                'Black box model (less interpretable)',
+                'Can be slow for real-time predictions',
+                'Large memory footprint',
+                'Biased toward high-cardinality features',
+                'Cannot extrapolate (predictions bounded by training range)',
+                'May overfit with noisy data',
+                'Difficult to capture linear relationships'
+            ],
+            'Avoid When': [
+                'Need model interpretability',
+                'Very small datasets (<100 samples)',
+                'Linear relationships dominate',
+                'Real-time prediction with strict latency',
+                'Extrapolation is needed',
+                'Memory constraints exist',
+                'Sparse high-dimensional data (use linear models)'
+            ]
+        }
+        
+        for category, items in use_cases.items():
+            print(f"\n{category}:")
+            for item in items:
+                print(f"  • {item}")
+
+# Print best practices
+practices = RandomForestBestPractices()
+practices.parameter_guidelines()
+practices.when_to_use_random_forests()
+
+# Final comparison summary
+print("\n" + "="*60)
+print("RANDOM FOREST VS OTHER ALGORITHMS")
+print("="*60)
+
+comparison_data = {
+    'Algorithm': ['Random Forest', 'Gradient Boosting', 'SVM', 'Neural Network', 'Linear Model'],
+    'Training Speed': ['Medium', 'Slow', 'Slow', 'Slow', 'Fast'],
+    'Prediction Speed': ['Medium', 'Fast', 'Fast', 'Fast', 'Very Fast'],
+    'Accuracy': ['High', 'Very High', 'High', 'Very High', 'Medium'],
+    'Interpretability': ['Medium', 'Low', 'Low', 'Very Low', 'High'],
+    'Tuning Required': ['Low', 'High', 'High', 'Very High', 'Low'],
+    'Handles Non-linearity': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
+    'Feature Scaling': ['No', 'No', 'Yes', 'Yes', 'Yes']
+}
+
+comparison_df = pd.DataFrame(comparison_data)
+print(comparison_df.to_string(index=False))</code></pre>
+
+    <h2>Practice Exercises</h2>
+    
+    <h3>Exercise 1: Custom Random Forest Implementation</h3>
+    <p>Implement a simplified Random Forest from scratch:</p>
+    <ol>
+        <li>Create bootstrap samples</li>
+        <li>Build decision trees with random feature selection</li>
+        <li>Implement voting/averaging for predictions</li>
+        <li>Calculate OOB error</li>
+        <li>Compare with scikit-learn implementation</li>
+    </ol>
+
+    <h3>Exercise 2: Feature Importance Study</h3>
+    <p>Conduct a comprehensive feature importance analysis:</p>
+    <ol>
+        <li>Compare MDI vs permutation importance</li>
+        <li>Implement SHAP values for Random Forest</li>
+        <li>Analyze feature interactions</li>
+        <li>Create feature importance stability analysis</li>
+        <li>Build automated feature selection pipeline</li>
+    </ol>
+
+    <h3>Exercise 3: Ensemble Method Comparison</h3>
+    <p>Compare Random Forest with other ensemble methods:</p>
+    <ol>
+        <li>Implement voting classifier with different base models</li>
+        <li>Compare with AdaBoost and Gradient Boosting</li>
+        <li>Analyze diversity vs accuracy trade-off</li>
+        <li>Create stacking ensemble with Random Forest</li>
+        <li>Benchmark on multiple datasets</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+        <li>🌲 Random Forests combine multiple decision trees through bagging</li>
+        <li>🎲 Bootstrap sampling + random feature selection = diversity</li>
+        <li>📊 Excellent for both classification and regression tasks</li>
+        <li>⚖️ Natural balance between bias and variance</li>
+        <li>🎯 OOB provides free validation without separate test set</li>
+        <li>📈 Feature importance helps with interpretation and selection</li>
+        <li>🚀 Embarrassingly parallel - scales well with cores</li>
+        <li>🛡️ Robust to outliers and noise</li>
+        <li>⚡ No feature scaling required</li>
+        <li>🔍 Cannot extrapolate beyond training data range</li>
+    </ul>
+
+    <h2>Further Resources</h2>
+    <ul>
+        <li><a href="https://www.stat.berkeley.edu/~breiman/RandomForests/">Original Random Forests Paper (Breiman)</a></li>
+        <li><a href="https://scikit-learn.org/stable/modules/ensemble.html#forest">Scikit-learn Ensemble Methods</a></li>
+        <li><a href="https://explained.ai/rf-importance/">Understanding Random Forest Feature Importance</a></li>
+        <li><a href="https://christophm.github.io/interpretable-ml-book/random-forest.html">Interpretable ML - Random Forests</a></li>
+        <li><a href="https://arxiv.org/abs/1407.7502">Understanding Random Forests: From Theory to Practice</a></li>
+        <li><a href="https://www.kaggle.com/learn/intermediate-machine-learning">Kaggle Learn - Random Forests</a></li>
+    </ul>
+
+    <!-- Navigation at the bottom -->
+    <nav class="lesson-nav" aria-label="Lesson navigation">
+        <a href="ml_decision_trees.html" class="prev-lesson" aria-label="Previous lesson">Previous: Decision Trees</a>
+        <a href="index.html" class="home-link" aria-label="Course home">Course Home</a>
+        <a href="ml_support_vector_machines.html" class="next-lesson" aria-label="Next lesson">Next: Support Vector Machines</a>
+    </nav>
+    
+    </main>
+    <script src="js/clipboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RNNs for Sequences - Python Data Science</title>
+    <link rel="stylesheet" href="styles/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    <nav class="nav-container">
+        <a href="index.html" class="nav-logo">Python Data Science</a>
+        <div class="nav-links">
+            <a href="numpy_arrays_vs_lists.html">NumPy</a>
+            <a href="pandas_dataframes_series.html">Pandas</a>
+            <a href="matplotlib_line_scatter_bar.html">Matplotlib</a>
+            <a href="ml_sklearn_basics.html">Machine Learning</a>
+            <a href="deep_learning_basics.html" class="active">Deep Learning</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>🔄 RNNs: Recurrent Neural Networks for Sequential Data</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>Recurrent Neural Networks (RNNs) are designed to process sequential data by maintaining an internal state (memory) that captures information from previous time steps. From vanilla RNNs to advanced architectures like LSTMs and GRUs, these networks excel at tasks involving temporal dependencies: natural language processing, time series forecasting, speech recognition, and music generation. This lesson covers RNN fundamentals, the vanishing gradient problem, LSTM and GRU architectures, bidirectional networks, attention mechanisms, and practical applications.</p>
+        </div>
+
+        <h2>RNN Fundamentals and Theory</h2>
+        
+        <pre class="language-python"><code>import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers, models, optimizers, callbacks
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set random seeds
+np.random.seed(42)
+tf.random.set_seed(42)
+
+print(f"TensorFlow version: {tf.__version__}")
+print(f"GPU Available: {len(tf.config.list_physical_devices('GPU')) > 0}")
+
+print("\n" + "="*60)
+print("RNN FUNDAMENTALS")
+print("="*60)
+
+# Core concepts
+rnn_concepts = """
+RNN KEY CONCEPTS:
+
+1. RECURRENT ARCHITECTURE:
+   • Hidden State: h_t = tanh(W_hh * h_{t-1} + W_xh * x_t + b_h)
+   • Output: y_t = W_hy * h_t + b_y
+   • Shared weights across time steps
+   • Process sequences of variable length
+
+2. TYPES OF RNN PROBLEMS:
+   • One-to-One: Traditional feedforward
+   • One-to-Many: Image captioning
+   • Many-to-One: Sentiment analysis
+   • Many-to-Many: Machine translation
+   • Sequence-to-Sequence: Variable length I/O
+
+3. VANILLA RNN ISSUES:
+   • Vanishing gradients: Signal dies in backprop
+   • Exploding gradients: Gradients become too large
+   • Short-term memory: Forgets long-range dependencies
+   • Training difficulty: Slow convergence
+
+4. LSTM (Long Short-Term Memory):
+   • Cell State: Long-term memory
+   • Gates: Forget, Input, Output
+   • Solves vanishing gradient
+   • Captures long-range dependencies
+
+5. GRU (Gated Recurrent Unit):
+   • Simplified LSTM
+   • Reset and Update gates
+   • Fewer parameters
+   • Often comparable performance
+
+6. BIDIRECTIONAL RNNs:
+   • Process sequence forward and backward
+   • Captures context from both directions
+   • Better for classification tasks
+   • Double the parameters
+
+7. ATTENTION MECHANISM:
+   • Focus on relevant parts
+   • Weighted importance scores
+   • Improves long sequences
+   • Foundation for Transformers
+"""
+
+print(rnn_concepts)</code></pre>
+
+        <h2>Building RNN Models</h2>
+        
+        <pre class="language-python"><code>class RNNModelBuilder:
+    """Build various RNN architectures"""
+    
+    def __init__(self):
+        self.models = {}
+        
+    def build_vanilla_rnn(self, sequence_length, n_features, n_units=50):
+        """Build simple RNN model"""
+        
+        model = keras.Sequential([
+            layers.SimpleRNN(n_units, 
+                           activation='tanh',
+                           return_sequences=True,
+                           input_shape=(sequence_length, n_features)),
+            layers.SimpleRNN(n_units//2, activation='tanh'),
+            layers.Dense(32, activation='relu'),
+            layers.Dropout(0.2),
+            layers.Dense(1)
+        ])
+        
+        return model
+    
+    def build_lstm_model(self, sequence_length, n_features, n_classes=1):
+        """Build LSTM model for sequence processing"""
+        
+        model = keras.Sequential([
+            # First LSTM layer with return_sequences=True
+            layers.LSTM(128, 
+                       return_sequences=True,
+                       input_shape=(sequence_length, n_features)),
+            layers.Dropout(0.2),
+            
+            # Second LSTM layer
+            layers.LSTM(64, return_sequences=True),
+            layers.Dropout(0.2),
+            
+            # Third LSTM layer
+            layers.LSTM(32),
+            layers.Dropout(0.2),
+            
+            # Dense layers
+            layers.Dense(16, activation='relu'),
+            layers.Dropout(0.2),
+            
+            # Output layer
+            layers.Dense(n_classes, 
+                        activation='sigmoid' if n_classes == 1 else 'softmax')
+        ])
+        
+        return model
+    
+    def build_gru_model(self, sequence_length, n_features, n_classes=1):
+        """Build GRU model"""
+        
+        model = keras.Sequential([
+            layers.GRU(128,
+                      return_sequences=True,
+                      input_shape=(sequence_length, n_features)),
+            layers.BatchNormalization(),
+            layers.Dropout(0.2),
+            
+            layers.GRU(64, return_sequences=True),
+            layers.BatchNormalization(),
+            layers.Dropout(0.2),
+            
+            layers.GRU(32),
+            layers.BatchNormalization(),
+            layers.Dropout(0.2),
+            
+            layers.Dense(16, activation='relu'),
+            layers.Dense(n_classes,
+                        activation='sigmoid' if n_classes == 1 else 'softmax')
+        ])
+        
+        return model
+    
+    def build_bidirectional_lstm(self, sequence_length, n_features, n_classes=1):
+        """Build Bidirectional LSTM model"""
+        
+        model = keras.Sequential([
+            # Bidirectional LSTM layers
+            layers.Bidirectional(
+                layers.LSTM(64, return_sequences=True),
+                input_shape=(sequence_length, n_features)
+            ),
+            layers.Dropout(0.2),
+            
+            layers.Bidirectional(layers.LSTM(32)),
+            layers.Dropout(0.2),
+            
+            # Dense layers
+            layers.Dense(32, activation='relu'),
+            layers.Dropout(0.2),
+            layers.Dense(n_classes,
+                        activation='sigmoid' if n_classes == 1 else 'softmax')
+        ])
+        
+        return model
+    
+    def build_encoder_decoder(self, input_vocab_size, output_vocab_size, 
+                            latent_dim=256):
+        """Build encoder-decoder architecture for seq2seq"""
+        
+        # Encoder
+        encoder_inputs = layers.Input(shape=(None,))
+        encoder_embedding = layers.Embedding(input_vocab_size, latent_dim)(encoder_inputs)
+        encoder_lstm = layers.LSTM(latent_dim, return_state=True)
+        _, state_h, state_c = encoder_lstm(encoder_embedding)
+        encoder_states = [state_h, state_c]
+        
+        # Decoder
+        decoder_inputs = layers.Input(shape=(None,))
+        decoder_embedding = layers.Embedding(output_vocab_size, latent_dim)
+        decoder_embedding_output = decoder_embedding(decoder_inputs)
+        decoder_lstm = layers.LSTM(latent_dim, return_sequences=True, 
+                                  return_state=True)
+        decoder_outputs, _, _ = decoder_lstm(decoder_embedding_output,
+                                            initial_state=encoder_states)
+        decoder_dense = layers.Dense(output_vocab_size, activation='softmax')
+        decoder_outputs = decoder_dense(decoder_outputs)
+        
+        # Model
+        model = keras.Model([encoder_inputs, decoder_inputs], decoder_outputs)
+        
+        return model, encoder_inputs, encoder_states, decoder_inputs, \
+               decoder_embedding, decoder_lstm, decoder_dense
+    
+    def compare_architectures(self):
+        """Compare different RNN architectures"""
+        
+        sequence_length = 50
+        n_features = 10
+        
+        # Build models
+        vanilla_rnn = self.build_vanilla_rnn(sequence_length, n_features)
+        lstm_model = self.build_lstm_model(sequence_length, n_features)
+        gru_model = self.build_gru_model(sequence_length, n_features)
+        bidirectional = self.build_bidirectional_lstm(sequence_length, n_features)
+        
+        models = {
+            'Vanilla RNN': vanilla_rnn,
+            'LSTM': lstm_model,
+            'GRU': gru_model,
+            'Bidirectional LSTM': bidirectional
+        }
+        
+        # Compare architectures
+        comparison = []
+        for name, model in models.items():
+            total_params = model.count_params()
+            n_layers = len(model.layers)
+            
+            comparison.append({
+                'Model': name,
+                'Parameters': total_params,
+                'Layers': n_layers
+            })
+        
+        comparison_df = pd.DataFrame(comparison)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Parameters comparison
+        axes[0].bar(comparison_df['Model'], comparison_df['Parameters'], 
+                   color=['coral', 'steelblue', 'lightgreen', 'gold'])
+        axes[0].set_ylabel('Number of Parameters')
+        axes[0].set_title('Model Complexity Comparison')
+        axes[0].tick_params(axis='x', rotation=45)
+        axes[0].grid(True, alpha=0.3, axis='y')
+        
+        # Architecture characteristics
+        characteristics = {
+            'Vanilla RNN': {'Memory': 'Short', 'Training': 'Fast', 'Gradient': 'Unstable'},
+            'LSTM': {'Memory': 'Long', 'Training': 'Slow', 'Gradient': 'Stable'},
+            'GRU': {'Memory': 'Long', 'Training': 'Medium', 'Gradient': 'Stable'},
+            'Bidirectional LSTM': {'Memory': 'Long', 'Training': 'Slowest', 'Gradient': 'Stable'}
+        }
+        
+        # Create characteristics table
+        table_data = []
+        for model_name in comparison_df['Model']:
+            char = characteristics[model_name]
+            table_data.append([model_name, char['Memory'], 
+                             char['Training'], char['Gradient']])
+        
+        table = axes[1].table(cellText=table_data,
+                            colLabels=['Model', 'Memory', 'Training', 'Gradient'],
+                            cellLoc='center',
+                            loc='center')
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1, 1.5)
+        axes[1].axis('off')
+        axes[1].set_title('Model Characteristics')
+        
+        plt.suptitle('RNN Architecture Comparison', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+        
+        return comparison_df
+
+# Build RNN models
+rnn_builder = RNNModelBuilder()
+
+print("\n" + "="*60)
+print("RNN ARCHITECTURES")
+print("="*60)
+
+print("\nComparing RNN architectures:")
+architecture_comparison = rnn_builder.compare_architectures()
+print("\n", architecture_comparison)</code></pre>
+
+        <h2>Time Series Forecasting with RNNs</h2>
+        
+        <pre class="language-python"><code>class TimeSeriesRNN:
+    """Time series forecasting with RNNs"""
+    
+    def __init__(self):
+        self.scalers = {}
+        self.models = {}
+        
+    def create_sequences(self, data, sequence_length, target_column=None):
+        """Create sequences for time series prediction"""
+        
+        X, y = [], []
+        
+        for i in range(len(data) - sequence_length):
+            # Input sequence
+            X.append(data[i:i + sequence_length])
+            
+            # Target (next value or specific column)
+            if target_column is not None:
+                y.append(data[i + sequence_length, target_column])
+            else:
+                y.append(data[i + sequence_length])
+        
+        return np.array(X), np.array(y)
+    
+    def generate_synthetic_timeseries(self, n_points=1000):
+        """Generate synthetic time series data"""
+        
+        time = np.arange(n_points)
+        
+        # Components
+        trend = time * 0.01
+        seasonal = 10 * np.sin(2 * np.pi * time / 50)
+        noise = np.random.normal(0, 2, n_points)
+        
+        # Combine
+        series = trend + seasonal + noise + 50
+        
+        # Add some patterns
+        series[200:250] += 20  # Spike
+        series[600:650] -= 15  # Dip
+        
+        return series
+    
+    def prepare_data(self, series, sequence_length=50, train_split=0.8):
+        """Prepare time series data for training"""
+        
+        # Reshape for scaling
+        series = series.reshape(-1, 1)
+        
+        # Scale data
+        scaler = MinMaxScaler()
+        scaled = scaler.fit_transform(series)
+        
+        # Create sequences
+        X, y = self.create_sequences(scaled, sequence_length)
+        
+        # Split data
+        split_idx = int(len(X) * train_split)
+        X_train, X_test = X[:split_idx], X[split_idx:]
+        y_train, y_test = y[:split_idx], y[split_idx:]
+        
+        return X_train, X_test, y_train, y_test, scaler
+    
+    def build_forecasting_model(self, sequence_length, n_features=1):
+        """Build LSTM model for time series forecasting"""
+        
+        model = keras.Sequential([
+            layers.LSTM(50, return_sequences=True, 
+                       input_shape=(sequence_length, n_features)),
+            layers.Dropout(0.2),
+            layers.LSTM(50, return_sequences=True),
+            layers.Dropout(0.2),
+            layers.LSTM(25),
+            layers.Dropout(0.2),
+            layers.Dense(1)
+        ])
+        
+        model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+        
+        return model
+    
+    def demonstrate_forecasting(self):
+        """Demonstrate time series forecasting"""
+        
+        # Generate data
+        series = self.generate_synthetic_timeseries(1000)
+        
+        # Prepare data
+        sequence_length = 50
+        X_train, X_test, y_train, y_test, scaler = self.prepare_data(
+            series, sequence_length
+        )
+        
+        # Build and train model
+        model = self.build_forecasting_model(sequence_length)
+        
+        # Train
+        history = model.fit(
+            X_train, y_train,
+            epochs=50,
+            batch_size=32,
+            validation_split=0.1,
+            verbose=0
+        )
+        
+        # Predict
+        train_pred = model.predict(X_train, verbose=0)
+        test_pred = model.predict(X_test, verbose=0)
+        
+        # Inverse transform
+        train_pred = scaler.inverse_transform(train_pred)
+        test_pred = scaler.inverse_transform(test_pred)
+        y_train_inv = scaler.inverse_transform(y_train.reshape(-1, 1))
+        y_test_inv = scaler.inverse_transform(y_test.reshape(-1, 1))
+        
+        # Visualization
+        fig, axes = plt.subplots(3, 1, figsize=(14, 10))
+        
+        # Original series
+        axes[0].plot(series, label='Original Series', alpha=0.7)
+        axes[0].set_title('Original Time Series')
+        axes[0].set_xlabel('Time')
+        axes[0].set_ylabel('Value')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        
+        # Training predictions
+        axes[1].plot(y_train_inv, label='Actual', alpha=0.7)
+        axes[1].plot(train_pred, label='Predicted', alpha=0.7)
+        axes[1].set_title('Training Set Predictions')
+        axes[1].set_xlabel('Time')
+        axes[1].set_ylabel('Value')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+        
+        # Test predictions
+        axes[2].plot(y_test_inv, label='Actual', alpha=0.7)
+        axes[2].plot(test_pred, label='Predicted', alpha=0.7)
+        axes[2].set_title('Test Set Predictions')
+        axes[2].set_xlabel('Time')
+        axes[2].set_ylabel('Value')
+        axes[2].legend()
+        axes[2].grid(True, alpha=0.3)
+        
+        plt.suptitle('Time Series Forecasting with LSTM', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+        
+        # Calculate metrics
+        from sklearn.metrics import mean_squared_error, mean_absolute_error
+        
+        train_mse = mean_squared_error(y_train_inv, train_pred)
+        test_mse = mean_squared_error(y_test_inv, test_pred)
+        train_mae = mean_absolute_error(y_train_inv, train_pred)
+        test_mae = mean_absolute_error(y_test_inv, test_pred)
+        
+        print(f"\nForecasting Results:")
+        print(f"  Train MSE: {train_mse:.4f}, MAE: {train_mae:.4f}")
+        print(f"  Test MSE: {test_mse:.4f}, MAE: {test_mae:.4f}")
+        
+        return model, history
+    
+    def multi_step_forecasting(self, model, initial_sequence, n_steps, scaler):
+        """Perform multi-step ahead forecasting"""
+        
+        predictions = []
+        current_sequence = initial_sequence.copy()
+        
+        for _ in range(n_steps):
+            # Predict next step
+            next_pred = model.predict(current_sequence.reshape(1, -1, 1), verbose=0)
+            predictions.append(next_pred[0, 0])
+            
+            # Update sequence
+            current_sequence = np.roll(current_sequence, -1)
+            current_sequence[-1] = next_pred
+        
+        # Inverse transform
+        predictions = scaler.inverse_transform(
+            np.array(predictions).reshape(-1, 1)
+        )
+        
+        return predictions
+
+# Time series forecasting
+ts_rnn = TimeSeriesRNN()
+
+print("\n" + "="*60)
+print("TIME SERIES FORECASTING")
+print("="*60)
+
+print("\nDemonstrating time series forecasting with LSTM:")
+ts_model, ts_history = ts_rnn.demonstrate_forecasting()</code></pre>
+
+        <h2>Text Processing with RNNs</h2>
+        
+        <pre class="language-python"><code>class TextRNN:
+    """Text processing and generation with RNNs"""
+    
+    def __init__(self):
+        self.tokenizer = None
+        self.models = {}
+        
+    def prepare_text_data(self, texts, maxlen=100, max_words=10000):
+        """Prepare text data for RNN processing"""
+        
+        from tensorflow.keras.preprocessing.text import Tokenizer
+        from tensorflow.keras.preprocessing.sequence import pad_sequences
+        
+        # Tokenize
+        self.tokenizer = Tokenizer(num_words=max_words)
+        self.tokenizer.fit_on_texts(texts)
+        
+        # Convert to sequences
+        sequences = self.tokenizer.texts_to_sequences(texts)
+        
+        # Pad sequences
+        padded = pad_sequences(sequences, maxlen=maxlen, padding='post')
+        
+        return padded
+    
+    def build_text_classifier(self, vocab_size, embedding_dim=100, 
+                            maxlen=100, n_classes=1):
+        """Build RNN for text classification"""
+        
+        model = keras.Sequential([
+            layers.Embedding(vocab_size, embedding_dim, input_length=maxlen),
+            layers.LSTM(128, return_sequences=True, dropout=0.2),
+            layers.LSTM(64, dropout=0.2),
+            layers.Dense(32, activation='relu'),
+            layers.Dropout(0.5),
+            layers.Dense(n_classes, 
+                        activation='sigmoid' if n_classes == 1 else 'softmax')
+        ])
+        
+        return model
+    
+    def build_text_generator(self, vocab_size, embedding_dim=100):
+        """Build RNN for text generation"""
+        
+        model = keras.Sequential([
+            layers.Embedding(vocab_size, embedding_dim),
+            layers.LSTM(256, return_sequences=True, dropout=0.2),
+            layers.LSTM(256, return_sequences=True, dropout=0.2),
+            layers.LSTM(128, dropout=0.2),
+            layers.Dense(vocab_size, activation='softmax')
+        ])
+        
+        return model
+    
+    def demonstrate_sentiment_analysis(self):
+        """Demonstrate sentiment analysis with RNN"""
+        
+        # Sample data (simplified)
+        positive_texts = [
+            "This movie is fantastic! I loved every minute.",
+            "Amazing performance by all actors. Highly recommend!",
+            "Best film I've seen this year. Absolutely brilliant!",
+            "Wonderful story with great cinematography.",
+            "I was captivated from start to finish. Excellent!"
+        ] * 20
+        
+        negative_texts = [
+            "Terrible movie. Complete waste of time.",
+            "Boring plot and bad acting. Very disappointed.",
+            "One of the worst films I've ever seen.",
+            "Could not finish watching. Too boring.",
+            "Poor storyline and terrible execution."
+        ] * 20
+        
+        # Combine and create labels
+        texts = positive_texts + negative_texts
+        labels = np.array([1] * len(positive_texts) + [0] * len(negative_texts))
+        
+        # Shuffle
+        indices = np.random.permutation(len(texts))
+        texts = [texts[i] for i in indices]
+        labels = labels[indices]
+        
+        # Prepare data
+        X = self.prepare_text_data(texts, maxlen=50, max_words=1000)
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, labels, test_size=0.2, random_state=42
+        )
+        
+        # Build model
+        vocab_size = 1000
+        model = self.build_text_classifier(vocab_size, maxlen=50)
+        
+        model.compile(optimizer='adam',
+                     loss='binary_crossentropy',
+                     metrics=['accuracy'])
+        
+        # Train
+        history = model.fit(
+            X_train, y_train,
+            epochs=10,
+            batch_size=32,
+            validation_split=0.2,
+            verbose=0
+        )
+        
+        # Evaluate
+        test_loss, test_acc = model.evaluate(X_test, y_test, verbose=0)
+        
+        # Visualize
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+        
+        # Training history
+        axes[0].plot(history.history['loss'], label='Train Loss')
+        axes[0].plot(history.history['val_loss'], label='Val Loss')
+        axes[0].set_xlabel('Epoch')
+        axes[0].set_ylabel('Loss')
+        axes[0].set_title('Training History')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        
+        axes[1].plot(history.history['accuracy'], label='Train Acc')
+        axes[1].plot(history.history['val_accuracy'], label='Val Acc')
+        axes[1].set_xlabel('Epoch')
+        axes[1].set_ylabel('Accuracy')
+        axes[1].set_title(f'Model Performance (Test Acc: {test_acc:.3f})')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.suptitle('Sentiment Analysis with LSTM', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"\nSentiment Analysis Results:")
+        print(f"  Test Loss: {test_loss:.4f}")
+        print(f"  Test Accuracy: {test_acc:.4f}")
+        
+        # Test on new samples
+        test_samples = [
+            "This is absolutely wonderful!",
+            "Terrible experience, very bad.",
+            "Not bad but could be better."
+        ]
+        
+        test_sequences = self.tokenizer.texts_to_sequences(test_samples)
+        test_padded = pad_sequences(test_sequences, maxlen=50, padding='post')
+        predictions = model.predict(test_padded, verbose=0)
+        
+        print("\nSample Predictions:")
+        for text, pred in zip(test_samples, predictions):
+            sentiment = "Positive" if pred[0] > 0.5 else "Negative"
+            print(f"  '{text}' -> {sentiment} ({pred[0]:.3f})")
+        
+        return model
+
+# Text processing
+text_rnn = TextRNN()
+
+print("\n" + "="*60)
+print("TEXT PROCESSING WITH RNNs")
+print("="*60)
+
+print("\nDemonstrating sentiment analysis:")
+sentiment_model = text_rnn.demonstrate_sentiment_analysis()</code></pre>
+
+        <h2>Advanced RNN Techniques</h2>
+        
+        <pre class="language-python"><code>class AdvancedRNNTechniques:
+    """Advanced RNN techniques and architectures"""
+    
+    def __init__(self):
+        self.models = {}
+        
+    def build_attention_model(self, sequence_length, n_features, n_classes=1):
+        """Build RNN with attention mechanism"""
+        
+        # Input
+        inputs = layers.Input(shape=(sequence_length, n_features))
+        
+        # LSTM layers
+        lstm_out = layers.LSTM(128, return_sequences=True)(inputs)
+        lstm_out = layers.LSTM(64, return_sequences=True)(lstm_out)
+        
+        # Attention mechanism
+        attention = layers.Dense(1, activation='tanh')(lstm_out)
+        attention = layers.Flatten()(attention)
+        attention = layers.Activation('softmax')(attention)
+        attention = layers.RepeatVector(64)(attention)
+        attention = layers.Permute([2, 1])(attention)
+        
+        # Apply attention
+        attended_out = layers.Multiply()([lstm_out, attention])
+        attended_out = layers.Lambda(lambda x: tf.reduce_sum(x, axis=1))(attended_out)
+        
+        # Output layers
+        output = layers.Dense(32, activation='relu')(attended_out)
+        output = layers.Dropout(0.5)(output)
+        output = layers.Dense(n_classes,
+                            activation='sigmoid' if n_classes == 1 else 'softmax')(output)
+        
+        model = keras.Model(inputs, output)
+        
+        return model
+    
+    def build_stacked_lstm(self, sequence_length, n_features, n_layers=3):
+        """Build deep stacked LSTM"""
+        
+        model = keras.Sequential()
+        
+        # First layer
+        model.add(layers.LSTM(128, return_sequences=True,
+                             input_shape=(sequence_length, n_features)))
+        model.add(layers.Dropout(0.2))
+        
+        # Middle layers
+        for i in range(n_layers - 2):
+            units = 128 // (2 ** i)
+            model.add(layers.LSTM(units, return_sequences=True))
+            model.add(layers.Dropout(0.2))
+        
+        # Last LSTM layer
+        model.add(layers.LSTM(32))
+        model.add(layers.Dropout(0.2))
+        
+        # Output
+        model.add(layers.Dense(16, activation='relu'))
+        model.add(layers.Dense(1))
+        
+        return model
+    
+    def demonstrate_gradient_problems(self):
+        """Visualize vanishing/exploding gradient problems"""
+        
+        # Create simple RNN to demonstrate gradient flow
+        sequence_length = 100
+        
+        # Vanilla RNN with tanh (prone to vanishing)
+        vanilla_model = keras.Sequential([
+            layers.SimpleRNN(50, return_sequences=True, 
+                           activation='tanh',
+                           input_shape=(sequence_length, 1)),
+            layers.SimpleRNN(50, return_sequences=True, activation='tanh'),
+            layers.SimpleRNN(50, activation='tanh'),
+            layers.Dense(1)
+        ])
+        
+        # LSTM (handles vanishing gradient)
+        lstm_model = keras.Sequential([
+            layers.LSTM(50, return_sequences=True,
+                       input_shape=(sequence_length, 1)),
+            layers.LSTM(50, return_sequences=True),
+            layers.LSTM(50),
+            layers.Dense(1)
+        ])
+        
+        # Generate sample data
+        X = np.random.randn(100, sequence_length, 1)
+        y = np.random.randn(100, 1)
+        
+        # Track gradients during training
+        @tf.function
+        def compute_gradients(model, X_batch, y_batch):
+            with tf.GradientTape() as tape:
+                predictions = model(X_batch, training=True)
+                loss = tf.reduce_mean(tf.square(predictions - y_batch))
+            
+            gradients = tape.gradient(loss, model.trainable_variables)
+            gradient_norms = [tf.norm(g).numpy() for g in gradients if g is not None]
+            return gradient_norms
+        
+        # Compute initial gradients
+        vanilla_grads = compute_gradients(vanilla_model, X[:10], y[:10])
+        lstm_grads = compute_gradients(lstm_model, X[:10], y[:10])
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Gradient norms
+        axes[0].bar(range(len(vanilla_grads)), vanilla_grads, 
+                   alpha=0.7, label='Vanilla RNN')
+        axes[0].set_xlabel('Layer')
+        axes[0].set_ylabel('Gradient Norm')
+        axes[0].set_title('Vanilla RNN Gradients')
+        axes[0].grid(True, alpha=0.3, axis='y')
+        axes[0].set_yscale('log')
+        
+        axes[1].bar(range(len(lstm_grads)), lstm_grads, 
+                   alpha=0.7, label='LSTM', color='green')
+        axes[1].set_xlabel('Layer')
+        axes[1].set_ylabel('Gradient Norm')
+        axes[1].set_title('LSTM Gradients')
+        axes[1].grid(True, alpha=0.3, axis='y')
+        axes[1].set_yscale('log')
+        
+        plt.suptitle('Gradient Flow Comparison', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+        
+        print("\nGradient Flow Analysis:")
+        print(f"  Vanilla RNN - Min gradient: {min(vanilla_grads):.6f}")
+        print(f"  Vanilla RNN - Max gradient: {max(vanilla_grads):.6f}")
+        print(f"  LSTM - Min gradient: {min(lstm_grads):.6f}")
+        print(f"  LSTM - Max gradient: {max(lstm_grads):.6f}")
+    
+    def stateful_rnn_example(self):
+        """Demonstrate stateful RNN for continuous sequences"""
+        
+        print("\nStateful RNN Example:")
+        print("-" * 40)
+        
+        # Build stateful model
+        batch_size = 32
+        timesteps = 10
+        features = 5
+        
+        model = keras.Sequential([
+            layers.LSTM(32, return_sequences=True, 
+                       stateful=True,
+                       batch_input_shape=(batch_size, timesteps, features)),
+            layers.LSTM(16, stateful=True),
+            layers.Dense(1)
+        ])
+        
+        print("Stateful RNN created")
+        print(f"  Batch size (fixed): {batch_size}")
+        print(f"  Timesteps: {timesteps}")
+        print(f"  Features: {features}")
+        print("\nNote: Stateful RNNs maintain state between batches")
+        print("Useful for: Continuous time series, streaming data")
+        
+        return model
+
+# Advanced techniques
+advanced_rnn = AdvancedRNNTechniques()
+
+print("\n" + "="*60)
+print("ADVANCED RNN TECHNIQUES")
+print("="*60)
+
+print("\nDemonstrating gradient problems:")
+advanced_rnn.demonstrate_gradient_problems()
+
+print("\nStateful RNN example:")
+stateful_model = advanced_rnn.stateful_rnn_example()</code></pre>
+
+        <h2>Sequence-to-Sequence Models</h2>
+        
+        <pre class="language-python"><code>class Seq2SeqModels:
+    """Sequence-to-sequence models for translation, summarization"""
+    
+    def __init__(self):
+        self.models = {}
+        
+    def build_simple_seq2seq(self, input_vocab, output_vocab, latent_dim=256):
+        """Build simple sequence-to-sequence model"""
+        
+        # Encoder
+        encoder_inputs = layers.Input(shape=(None, input_vocab))
+        encoder = layers.LSTM(latent_dim, return_state=True)
+        encoder_outputs, state_h, state_c = encoder(encoder_inputs)
+        encoder_states = [state_h, state_c]
+        
+        # Decoder
+        decoder_inputs = layers.Input(shape=(None, output_vocab))
+        decoder_lstm = layers.LSTM(latent_dim, return_sequences=True, 
+                                  return_state=True)
+        decoder_outputs, _, _ = decoder_lstm(decoder_inputs,
+                                            initial_state=encoder_states)
+        decoder_dense = layers.Dense(output_vocab, activation='softmax')
+        decoder_outputs = decoder_dense(decoder_outputs)
+        
+        # Define the model
+        model = keras.Model([encoder_inputs, decoder_inputs], decoder_outputs)
+        
+        # Encoder model for inference
+        encoder_model = keras.Model(encoder_inputs, encoder_states)
+        
+        # Decoder model for inference
+        decoder_state_input_h = layers.Input(shape=(latent_dim,))
+        decoder_state_input_c = layers.Input(shape=(latent_dim,))
+        decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
+        
+        decoder_outputs, state_h, state_c = decoder_lstm(
+            decoder_inputs, initial_state=decoder_states_inputs
+        )
+        decoder_states = [state_h, state_c]
+        decoder_outputs = decoder_dense(decoder_outputs)
+        
+        decoder_model = keras.Model(
+            [decoder_inputs] + decoder_states_inputs,
+            [decoder_outputs] + decoder_states
+        )
+        
+        return model, encoder_model, decoder_model
+    
+    def demonstrate_seq2seq_architecture(self):
+        """Visualize seq2seq architecture"""
+        
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        # Architecture diagram (simplified visualization)
+        components = {
+            'Encoder Input': (1, 2),
+            'Encoder LSTM': (2.5, 2),
+            'Hidden State': (4, 2.5),
+            'Cell State': (4, 1.5),
+            'Decoder Input': (5.5, 2),
+            'Decoder LSTM': (7, 2),
+            'Output': (8.5, 2)
+        }
+        
+        # Draw components
+        for name, (x, y) in components.items():
+            if 'Input' in name or 'Output' in name:
+                rect = plt.Rectangle((x-0.3, y-0.2), 0.6, 0.4,
+                                    fill=True, facecolor='lightblue',
+                                    edgecolor='black', linewidth=2)
+            elif 'LSTM' in name:
+                rect = plt.Rectangle((x-0.4, y-0.25), 0.8, 0.5,
+                                    fill=True, facecolor='lightgreen',
+                                    edgecolor='black', linewidth=2)
+            else:
+                rect = plt.Circle((x, y), 0.2, fill=True, 
+                                facecolor='yellow', edgecolor='black', linewidth=2)
+            
+            ax.add_patch(rect)
+            ax.text(x, y, name, ha='center', va='center', fontsize=9, weight='bold')
+        
+        # Draw arrows
+        arrows = [
+            ((1.3, 2), (2.1, 2)),      # Input to Encoder
+            ((2.9, 2), (3.8, 2.5)),     # Encoder to Hidden
+            ((2.9, 2), (3.8, 1.5)),     # Encoder to Cell
+            ((4.2, 2.5), (5.2, 2)),     # Hidden to Decoder
+            ((4.2, 1.5), (5.2, 2)),     # Cell to Decoder
+            ((5.8, 2), (6.6, 2)),       # Decoder input
+            ((7.4, 2), (8.2, 2)),       # Decoder to Output
+        ]
+        
+        for start, end in arrows:
+            ax.arrow(start[0], start[1], end[0]-start[0], end[1]-start[1],
+                    head_width=0.1, head_length=0.1, fc='black', ec='black')
+        
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 3)
+        ax.axis('off')
+        ax.set_title('Sequence-to-Sequence Architecture', fontsize=14, weight='bold')
+        
+        plt.tight_layout()
+        plt.show()
+        
+        print("\nSeq2Seq Architecture Components:")
+        print("  1. Encoder: Processes input sequence")
+        print("  2. Hidden/Cell States: Capture context")
+        print("  3. Decoder: Generates output sequence")
+        print("  4. Attention (optional): Focus mechanism")
+
+# Seq2Seq models
+seq2seq = Seq2SeqModels()
+
+print("\n" + "="*60)
+print("SEQUENCE-TO-SEQUENCE MODELS")
+print("="*60)
+
+print("\nVisualizing Seq2Seq architecture:")
+seq2seq.demonstrate_seq2seq_architecture()
+
+# Build example model
+print("\nBuilding Seq2Seq model:")
+seq2seq_model, encoder, decoder = seq2seq.build_simple_seq2seq(100, 100)
+print(f"  Encoder parameters: {encoder.count_params():,}")
+print(f"  Decoder parameters: {decoder.count_params():,}")</code></pre>
+
+        <h2>Best Practices and Tips</h2>
+        
+        <pre class="language-python"><code>print("\n" + "="*60)
+print("RNN BEST PRACTICES")
+print("="*60)
+
+best_practices = """
+KEY GUIDELINES:
+
+1. ARCHITECTURE SELECTION:
+   • Vanilla RNN: Simple sequences, short dependencies
+   • LSTM: Long sequences, complex patterns
+   • GRU: Similar to LSTM, fewer parameters
+   • Bidirectional: When future context matters
+   • Attention: Very long sequences
+
+2. SEQUENCE PREPARATION:
+   • Pad sequences to same length
+   • Use masking for variable lengths
+   • Normalize/scale input data
+   • Consider sequence truncation
+   • Handle missing timesteps
+
+3. TRAINING TIPS:
+   • Start with smaller sequences
+   • Use gradient clipping (1.0 typical)
+   • Monitor gradient norms
+   • Use appropriate batch size
+   • Consider stateful for continuous data
+
+4. REGULARIZATION:
+   • Dropout between layers (0.2-0.5)
+   • Recurrent dropout (0.1-0.3)
+   • L2 regularization on weights
+   • Early stopping
+   • Batch normalization (carefully)
+
+5. OPTIMIZATION:
+   • Adam optimizer (good default)
+   • Learning rate scheduling
+   • Gradient clipping essential
+   • Reduce learning rate on plateau
+   • Warm-up for large models
+
+6. COMMON ISSUES:
+
+   Vanishing Gradients:
+   • Use LSTM/GRU instead of vanilla RNN
+   • Gradient clipping
+   • Proper weight initialization
+   • Residual connections
+   
+   Exploding Gradients:
+   • Gradient clipping (critical)
+   • Lower learning rate
+   • Check weight initialization
+   
+   Overfitting:
+   • More dropout
+   • Simpler architecture
+   • Data augmentation
+   • Regularization
+   
+   Slow Training:
+   • Reduce sequence length
+   • Use GRU instead of LSTM
+   • CuDNNLSTM/CuDNNGRU for GPU
+   • Reduce model size
+
+7. TEXT-SPECIFIC TIPS:
+   • Use pre-trained embeddings
+   • Consider character-level for some tasks
+   • Vocabulary size matters
+   • Handle OOV (out-of-vocabulary) words
+   • Text augmentation (synonyms, noise)
+
+8. TIME SERIES TIPS:
+   • Stationarity important
+   • Consider seasonality
+   • Multiple time scales
+   • Feature engineering crucial
+   • Sliding window validation
+"""
+
+print(best_practices)
+
+# Performance comparison
+comparison_table = """
+RNN VARIANT COMPARISON:
+
+Architecture | Parameters | Speed | Memory | Use Case
+------------|------------|-------|---------|----------
+Vanilla RNN | Low        | Fast  | Short   | Simple sequences
+LSTM        | High       | Slow  | Long    | Complex patterns
+GRU         | Medium     | Medium| Long    | Good compromise
+Bidirect    | 2x         | Slow  | Long    | Classification
+Attention   | High       | Slow  | Long    | Translation
+"""
+
+print(comparison_table)</code></pre>
+
+        <h2>Practice Exercises</h2>
+        
+        <div class="exercise-card">
+            <h3>Exercise 1: Music Generation with RNNs</h3>
+            <p>Build a music generation system:</p>
+            <ol>
+                <li>Process MIDI files into sequences</li>
+                <li>Build LSTM model for note prediction</li>
+                <li>Implement temperature sampling</li>
+                <li>Generate new musical sequences</li>
+                <li>Convert back to playable format</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 2: Named Entity Recognition</h3>
+            <p>Implement NER with bidirectional LSTM:</p>
+            <ol>
+                <li>Prepare IOB tagged dataset</li>
+                <li>Build BiLSTM-CRF model</li>
+                <li>Handle variable length sequences</li>
+                <li>Implement Viterbi decoding</li>
+                <li>Evaluate with entity-level metrics</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 3: Video Action Recognition</h3>
+            <p>Classify actions in video sequences:</p>
+            <ol>
+                <li>Extract frame features with CNN</li>
+                <li>Build LSTM on top of CNN features</li>
+                <li>Handle variable length videos</li>
+                <li>Implement attention pooling</li>
+                <li>Compare with 3D CNN approach</li>
+            </ol>
+        </div>
+
+        <h2>Summary and Key Takeaways</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 Key Points to Remember</h3>
+            <ul>
+                <li><strong>Sequential Memory:</strong> RNNs maintain hidden state across time steps</li>
+                <li><strong>LSTM/GRU:</strong> Solve vanishing gradient with gating mechanisms</li>
+                <li><strong>Bidirectional:</strong> Process sequences in both directions for context</li>
+                <li><strong>Applications:</strong> Time series, NLP, speech, music, video</li>
+                <li><strong>Gradient Clipping:</strong> Essential for stable training</li>
+                <li><strong>Sequence Length:</strong> Longer sequences are harder to train</li>
+                <li><strong>Attention:</strong> Helps focus on relevant parts of long sequences</li>
+                <li><strong>Seq2Seq:</strong> Encoder-decoder for variable length I/O</li>
+            </ul>
+        </div>
+
+        <div class="navigation">
+            <a href="deep_learning_cnn.html" class="nav-button">← Previous: CNNs for Computer Vision</a>
+            <a href="index.html" class="nav-button">Home</a>
+            <a href="deep_learning_transfer.html" class="nav-button">Next: Transfer Learning →</a>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+    <script>
+        // Additional interactive features
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add line numbers to code blocks
+            const codeBlocks = document.querySelectorAll('pre code');
+            
+            codeBlocks.forEach(block => {
+                if (block.textContent.includes('class')) {
+                    block.classList.add('line-numbers');
+                }
+            });
+            
+            // Smooth scroll for navigation
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+    <script src="js/clipboard.js"></script>
+</body>
+</html>

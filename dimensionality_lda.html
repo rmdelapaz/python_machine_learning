@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LDA: Linear Discriminant Analysis - Python Data Science</title>
+    <link rel="stylesheet" href="styles/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    <nav class="nav-container">
+        <a href="index.html" class="nav-logo">Python Data Science</a>
+        <div class="nav-links">
+            <a href="numpy_arrays_vs_lists.html">NumPy</a>
+            <a href="pandas_dataframes_series.html">Pandas</a>
+            <a href="matplotlib_line_scatter_bar.html">Matplotlib</a>
+            <a href="ml_sklearn_basics.html" class="active">Machine Learning</a>
+            <a href="statistics_descriptive_part1.html">Statistics</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>📊 LDA: Supervised Dimensionality Reduction</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>Linear Discriminant Analysis (LDA) is a supervised dimensionality reduction technique that finds linear combinations of features that best separate multiple classes. Unlike PCA which maximizes variance, LDA maximizes the ratio of between-class variance to within-class variance, making it ideal for classification tasks. LDA serves dual purposes: as a dimensionality reduction technique and as a linear classifier.</p>
+        </div>
+
+        <h2>Core Concepts and Theory</h2>
+        
+        <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.datasets import load_iris, load_wine, make_classification
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report
+from scipy import linalg
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+
+print("="*60)
+print("LDA FUNDAMENTALS")
+print("="*60)
+
+# Core concepts
+lda_concepts = """
+LDA KEY CONCEPTS:
+
+1. OBJECTIVE:
+   • Find linear combinations that maximize class separation
+   • Maximize between-class scatter (S_B)
+   • Minimize within-class scatter (S_W)
+   • Optimize: J(w) = (w^T S_B w) / (w^T S_W w)
+
+2. MATHEMATICAL FOUNDATION:
+   • Between-class scatter: S_B = Σ n_i (μ_i - μ)(μ_i - μ)^T
+   • Within-class scatter: S_W = Σ Σ (x - μ_i)(x - μ_i)^T
+   • Solution: Eigenvalue problem S_W^(-1) S_B w = λw
+   • Linear discriminants: Eigenvectors of S_W^(-1) S_B
+
+3. KEY PROPERTIES:
+   • Supervised method (requires labels)
+   • Linear transformation only
+   • Maximum components: min(n_features, n_classes - 1)
+   • Assumes normal distribution per class
+   • Assumes equal covariance matrices
+
+4. LDA vs PCA:
+   • PCA: Unsupervised, maximizes variance
+   • LDA: Supervised, maximizes class separation
+   • PCA: Up to n_features components
+   • LDA: Up to n_classes - 1 components
+
+5. DUAL PURPOSE:
+   • Dimensionality reduction technique
+   • Linear classifier (Bayes optimal for normal distributions)
+
+6. ASSUMPTIONS:
+   • Features are normally distributed
+   • Classes have identical covariance matrices
+   • Features are statistically independent
+   • Large sample size relative to dimensionality
+"""
+
+print(lda_concepts)</code></pre>
+
+        <h2>Basic LDA Implementation</h2>
+        
+        <pre class="language-python"><code>class LDAAnalyzer:
+    """Comprehensive LDA analysis and visualization"""
+    
+    def __init__(self):
+        self.models = {}
+        self.transformations = {}
+        
+    def visualize_lda_concept(self):
+        """Visualize the core concept of LDA"""
+        
+        # Generate 2D data for visualization
+        np.random.seed(42)
+        
+        # Class 1: centered at (-2, 0)
+        class1 = np.random.randn(100, 2) + [-2, 0]
+        # Class 2: centered at (2, 0)
+        class2 = np.random.randn(100, 2) + [2, 0]
+        # Class 3: centered at (0, 3)
+        class3 = np.random.randn(100, 2) + [0, 3]
+        
+        X = np.vstack([class1, class2, class3])
+        y = np.array([0]*100 + [1]*100 + [2]*100)
+        
+        # Fit LDA
+        lda = LinearDiscriminantAnalysis(n_components=2)
+        X_lda = lda.fit_transform(X, y)
+        
+        # Fit PCA for comparison
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        
+        # Original data
+        for i, c in enumerate(['red', 'green', 'blue']):
+            mask = y == i
+            axes[0].scatter(X[mask, 0], X[mask, 1], c=c, alpha=0.6, 
+                          label=f'Class {i+1}')
+        axes[0].set_title('Original Data')
+        axes[0].set_xlabel('Feature 1')
+        axes[0].set_ylabel('Feature 2')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        
+        # PCA projection
+        for i, c in enumerate(['red', 'green', 'blue']):
+            mask = y == i
+            axes[1].scatter(X_pca[mask, 0], X_pca[mask, 1], c=c, alpha=0.6,
+                          label=f'Class {i+1}')
+        axes[1].set_title('PCA Projection (Unsupervised)')
+        axes[1].set_xlabel('PC1')
+        axes[1].set_ylabel('PC2')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+        
+        # LDA projection
+        for i, c in enumerate(['red', 'green', 'blue']):
+            mask = y == i
+            axes[2].scatter(X_lda[mask, 0], X_lda[mask, 1], c=c, alpha=0.6,
+                          label=f'Class {i+1}')
+        axes[2].set_title('LDA Projection (Supervised)')
+        axes[2].set_xlabel('LD1')
+        axes[2].set_ylabel('LD2')
+        axes[2].legend()
+        axes[2].grid(True, alpha=0.3)
+        
+        plt.suptitle('LDA vs PCA: Maximizing Separation vs Variance', 
+                    fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return lda, pca, X, y
+    
+    def explained_variance_analysis(self, X, y):
+        """Analyze explained variance ratio in LDA"""
+        
+        # Fit LDA
+        lda = LinearDiscriminantAnalysis()
+        lda.fit(X, y)
+        
+        # Get eigenvalues (explained variance)
+        eigenvalues = lda.explained_variance_ratio_
+        n_components = len(eigenvalues)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Explained variance ratio
+        axes[0].bar(range(1, n_components+1), eigenvalues, 
+                   color='steelblue', alpha=0.7)
+        axes[0].set_xlabel('Linear Discriminant')
+        axes[0].set_ylabel('Explained Variance Ratio')
+        axes[0].set_title('Explained Variance by Each LD')
+        axes[0].grid(True, alpha=0.3, axis='y')
+        
+        # Add percentage labels
+        for i, v in enumerate(eigenvalues):
+            axes[0].text(i+1, v, f'{v*100:.1f}%', ha='center', va='bottom')
+        
+        # Cumulative explained variance
+        cumulative = np.cumsum(eigenvalues)
+        axes[1].plot(range(1, n_components+1), cumulative, 
+                    marker='o', linewidth=2, markersize=8)
+        axes[1].set_xlabel('Number of Components')
+        axes[1].set_ylabel('Cumulative Explained Variance')
+        axes[1].set_title('Cumulative Explained Variance')
+        axes[1].grid(True, alpha=0.3)
+        axes[1].axhline(y=0.95, color='r', linestyle='--', 
+                       label='95% threshold')
+        axes[1].legend()
+        
+        # Fill area under curve
+        axes[1].fill_between(range(1, n_components+1), 0, cumulative, 
+                            alpha=0.3)
+        
+        plt.suptitle('LDA Explained Variance Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"\nExplained Variance Ratio:")
+        for i, v in enumerate(eigenvalues):
+            print(f"  LD{i+1}: {v:.4f} ({v*100:.2f}%)")
+        print(f"  Total: {sum(eigenvalues):.4f}")
+        
+        return eigenvalues
+    
+    def compare_dimensions(self, X, y):
+        """Compare classification with different numbers of LDA components"""
+        
+        from sklearn.neighbors import KNeighborsClassifier
+        from sklearn.model_selection import cross_val_score
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.3, random_state=42
+        )
+        
+        n_classes = len(np.unique(y))
+        max_components = min(X.shape[1], n_classes - 1)
+        
+        accuracies_train = []
+        accuracies_test = []
+        
+        for n_comp in range(1, max_components + 1):
+            # Apply LDA
+            lda = LinearDiscriminantAnalysis(n_components=n_comp)
+            X_train_lda = lda.fit_transform(X_train, y_train)
+            X_test_lda = lda.transform(X_test)
+            
+            # Train classifier
+            knn = KNeighborsClassifier(n_neighbors=5)
+            knn.fit(X_train_lda, y_train)
+            
+            # Evaluate
+            acc_train = knn.score(X_train_lda, y_train)
+            acc_test = knn.score(X_test_lda, y_test)
+            
+            accuracies_train.append(acc_train)
+            accuracies_test.append(acc_test)
+        
+        # Visualization
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        x = range(1, max_components + 1)
+        ax.plot(x, accuracies_train, 'o-', label='Train', linewidth=2)
+        ax.plot(x, accuracies_test, 's-', label='Test', linewidth=2)
+        
+        ax.set_xlabel('Number of LDA Components')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Classification Performance vs Number of Components')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        # Mark best test accuracy
+        best_idx = np.argmax(accuracies_test)
+        ax.axvline(x=best_idx+1, color='red', linestyle='--', alpha=0.5,
+                  label=f'Best: {best_idx+1} components')
+        
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"\nOptimal number of components: {best_idx+1}")
+        print(f"Best test accuracy: {accuracies_test[best_idx]:.4f}")
+        
+        return accuracies_train, accuracies_test
+
+# Initialize analyzer
+analyzer = LDAAnalyzer()
+
+print("\n" + "="*60)
+print("LDA CONCEPT VISUALIZATION")
+print("="*60)
+
+lda_model, pca_model, X_demo, y_demo = analyzer.visualize_lda_concept()
+
+# Load real dataset
+iris = load_iris()
+X_iris = iris.data
+y_iris = iris.target
+
+# Standardize
+scaler = StandardScaler()
+X_iris_scaled = scaler.fit_transform(X_iris)
+
+print("\n" + "="*60)
+print("EXPLAINED VARIANCE ANALYSIS")
+print("="*60)
+
+eigenvalues = analyzer.explained_variance_analysis(X_iris_scaled, y_iris)
+
+print("\n" + "="*60)
+print("COMPONENT SELECTION")
+print("="*60)
+
+acc_train, acc_test = analyzer.compare_dimensions(X_iris_scaled, y_iris)</code></pre>
+
+        <h2>LDA for Multi-class Classification</h2>
+        
+        <pre class="language-python"><code>class LDAClassification:
+    """LDA as a classifier and for preprocessing"""
+    
+    def __init__(self):
+        self.models = {}
+        self.results = {}
+        
+    def lda_vs_other_classifiers(self, X, y):
+        """Compare LDA classifier with other methods"""
+        
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.svm import SVC
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.naive_bayes import GaussianNB
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.3, random_state=42, stratify=y
+        )
+        
+        # Classifiers to compare
+        classifiers = {
+            'LDA': LinearDiscriminantAnalysis(),
+            'Logistic Regression': LogisticRegression(max_iter=1000),
+            'SVM': SVC(kernel='linear', probability=True),
+            'Random Forest': RandomForestClassifier(n_estimators=100),
+            'Naive Bayes': GaussianNB()
+        }
+        
+        results = {}
+        
+        for name, clf in classifiers.items():
+            # Train
+            clf.fit(X_train, y_train)
+            
+            # Predict
+            y_pred_train = clf.predict(X_train)
+            y_pred_test = clf.predict(X_test)
+            
+            # Store results
+            results[name] = {
+                'train_acc': accuracy_score(y_train, y_pred_train),
+                'test_acc': accuracy_score(y_test, y_pred_test),
+                'model': clf
+            }
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Accuracy comparison
+        names = list(results.keys())
+        train_accs = [results[n]['train_acc'] for n in names]
+        test_accs = [results[n]['test_acc'] for n in names]
+        
+        x = np.arange(len(names))
+        width = 0.35
+        
+        bars1 = axes[0].bar(x - width/2, train_accs, width, label='Train',
+                           color='skyblue', alpha=0.8)
+        bars2 = axes[0].bar(x + width/2, test_accs, width, label='Test',
+                           color='orange', alpha=0.8)
+        
+        axes[0].set_xlabel('Classifier')
+        axes[0].set_ylabel('Accuracy')
+        axes[0].set_title('Classifier Performance Comparison')
+        axes[0].set_xticks(x)
+        axes[0].set_xticklabels(names, rotation=45, ha='right')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3, axis='y')
+        
+        # Add value labels on bars
+        for bars in [bars1, bars2]:
+            for bar in bars:
+                height = bar.get_height()
+                axes[0].text(bar.get_x() + bar.get_width()/2., height,
+                           f'{height:.3f}', ha='center', va='bottom', fontsize=9)
+        
+        # Decision boundaries (2D projection for visualization)
+        lda_viz = LinearDiscriminantAnalysis(n_components=2)
+        X_2d = lda_viz.fit_transform(X, y)
+        
+        # Plot decision boundary for LDA
+        h = 0.02  # Step size in mesh
+        x_min, x_max = X_2d[:, 0].min() - 1, X_2d[:, 0].max() + 1
+        y_min, y_max = X_2d[:, 1].min() - 1, X_2d[:, 1].max() + 1
+        xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                            np.arange(y_min, y_max, h))
+        
+        # Train LDA on 2D data
+        lda_2d = LinearDiscriminantAnalysis()
+        lda_2d.fit(X_2d, y)
+        Z = lda_2d.predict(np.c_[xx.ravel(), yy.ravel()])
+        Z = Z.reshape(xx.shape)
+        
+        axes[1].contourf(xx, yy, Z, alpha=0.3, cmap='viridis')
+        scatter = axes[1].scatter(X_2d[:, 0], X_2d[:, 1], c=y, 
+                                 cmap='viridis', edgecolor='black', 
+                                 linewidth=0.5, alpha=0.7)
+        axes[1].set_xlabel('LD1')
+        axes[1].set_ylabel('LD2')
+        axes[1].set_title('LDA Decision Boundaries')
+        plt.colorbar(scatter, ax=axes[1])
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.suptitle('LDA as a Classifier', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return results
+    
+    def lda_with_regularization(self, X, y):
+        """Compare different LDA solvers and regularization"""
+        
+        # Different LDA configurations
+        configs = {
+            'Standard LDA': LinearDiscriminantAnalysis(solver='svd'),
+            'LDA with shrinkage (auto)': LinearDiscriminantAnalysis(
+                solver='lsqr', shrinkage='auto'
+            ),
+            'LDA with shrinkage (0.5)': LinearDiscriminantAnalysis(
+                solver='lsqr', shrinkage=0.5
+            ),
+            'QDA': LinearDiscriminantAnalysis(solver='svd')  # Placeholder
+        }
+        
+        # For QDA comparison
+        from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+        configs['QDA'] = QuadraticDiscriminantAnalysis()
+        
+        # Cross-validation scores
+        from sklearn.model_selection import cross_val_score
+        
+        cv_scores = {}
+        
+        for name, model in configs.items():
+            scores = cross_val_score(model, X, y, cv=5)
+            cv_scores[name] = scores
+            print(f"{name}: {scores.mean():.4f} (+/- {scores.std()*2:.4f})")
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Box plot of CV scores
+        axes[0].boxplot(cv_scores.values(), labels=cv_scores.keys())
+        axes[0].set_ylabel('Accuracy')
+        axes[0].set_title('Cross-Validation Scores')
+        axes[0].grid(True, alpha=0.3, axis='y')
+        axes[0].set_xticklabels(cv_scores.keys(), rotation=45, ha='right')
+        
+        # Mean and std comparison
+        means = [scores.mean() for scores in cv_scores.values()]
+        stds = [scores.std() for scores in cv_scores.values()]
+        names = list(cv_scores.keys())
+        
+        x = np.arange(len(names))
+        axes[1].bar(x, means, yerr=stds, capsize=5, color='steelblue', alpha=0.7)
+        axes[1].set_ylabel('Mean Accuracy')
+        axes[1].set_title('Mean CV Accuracy with Standard Deviation')
+        axes[1].set_xticks(x)
+        axes[1].set_xticklabels(names, rotation=45, ha='right')
+        axes[1].grid(True, alpha=0.3, axis='y')
+        
+        # Add value labels
+        for i, (mean, std) in enumerate(zip(means, stds)):
+            axes[1].text(i, mean + std, f'{mean:.3f}', ha='center', va='bottom')
+        
+        plt.suptitle('LDA Regularization and Solver Comparison', 
+                    fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return cv_scores
+    
+    def lda_feature_importance(self, X, y, feature_names=None):
+        """Analyze feature importance in LDA"""
+        
+        # Fit LDA
+        lda = LinearDiscriminantAnalysis()
+        lda.fit(X, y)
+        
+        # Get coefficients (for binary classification) or scalings
+        n_classes = len(np.unique(y))
+        
+        if n_classes == 2:
+            # Binary case: use coef_
+            coef = lda.coef_[0]
+            importance = np.abs(coef)
+        else:
+            # Multi-class: use scalings (eigenvectors)
+            # Take the absolute mean across components
+            importance = np.abs(lda.scalings_).mean(axis=1)
+        
+        # Sort features by importance
+        indices = np.argsort(importance)[::-1]
+        
+        if feature_names is None:
+            feature_names = [f'Feature {i}' for i in range(X.shape[1])]
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Bar plot of feature importance
+        n_display = min(20, len(importance))
+        axes[0].bar(range(n_display), importance[indices[:n_display]],
+                   color='steelblue', alpha=0.7)
+        axes[0].set_xlabel('Feature Index')
+        axes[0].set_ylabel('Importance')
+        axes[0].set_title(f'Top {n_display} Feature Importances')
+        axes[0].set_xticks(range(n_display))
+        axes[0].set_xticklabels([feature_names[i] for i in indices[:n_display]],
+                               rotation=45, ha='right')
+        axes[0].grid(True, alpha=0.3, axis='y')
+        
+        # Cumulative importance
+        cumsum_importance = np.cumsum(importance[indices]) / importance.sum()
+        axes[1].plot(range(len(importance)), cumsum_importance, 
+                    marker='o', markersize=4)
+        axes[1].set_xlabel('Number of Features')
+        axes[1].set_ylabel('Cumulative Importance')
+        axes[1].set_title('Cumulative Feature Importance')
+        axes[1].axhline(y=0.95, color='r', linestyle='--', 
+                       label='95% threshold')
+        axes[1].grid(True, alpha=0.3)
+        axes[1].legend()
+        
+        # Find number of features for 95% importance
+        n_features_95 = np.argmax(cumsum_importance >= 0.95) + 1
+        axes[1].axvline(x=n_features_95, color='g', linestyle='--', 
+                       label=f'{n_features_95} features')
+        
+        plt.suptitle('Feature Importance in LDA', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"\nTop 10 Most Important Features:")
+        for i in range(min(10, len(importance))):
+            idx = indices[i]
+            print(f"  {i+1}. {feature_names[idx]}: {importance[idx]:.4f}")
+        
+        print(f"\nFeatures needed for 95% importance: {n_features_95}")
+        
+        return importance, indices
+
+# Classification analysis
+classifier = LDAClassification()
+
+# Load wine dataset for multi-class classification
+wine = load_wine()
+X_wine = wine.data
+y_wine = wine.target
+
+# Standardize
+scaler = StandardScaler()
+X_wine_scaled = scaler.fit_transform(X_wine)
+
+print("\n" + "="*60)
+print("LDA VS OTHER CLASSIFIERS")
+print("="*60)
+
+results = classifier.lda_vs_other_classifiers(X_wine_scaled, y_wine)
+
+print("\n" + "="*60)
+print("LDA REGULARIZATION")
+print("="*60)
+
+cv_scores = classifier.lda_with_regularization(X_wine_scaled, y_wine)
+
+print("\n" + "="*60)
+print("FEATURE IMPORTANCE")
+print("="*60)
+
+importance, indices = classifier.lda_feature_importance(
+    X_wine_scaled, y_wine, wine.feature_names
+)</code></pre>
+
+        <h2>Advanced LDA Applications</h2>
+        
+        <pre class="language-python"><code>class AdvancedLDA:
+    """Advanced LDA techniques and applications"""
+    
+    def __init__(self):
+        self.models = {}
+        
+    def face_recognition_example(self):
+        """Demonstrate LDA for face recognition (Fisherfaces)"""
+        
+        from sklearn.datasets import fetch_olivetti_faces
+        from sklearn.model_selection import train_test_split
+        
+        # Load face dataset
+        print("Loading face dataset...")
+        faces = fetch_olivetti_faces(shuffle=True, random_state=42)
+        X_faces = faces.data
+        y_faces = faces.target
+        
+        # Only use first 20 people for visualization
+        mask = y_faces < 20
+        X_faces = X_faces[mask]
+        y_faces = y_faces[mask]
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_faces, y_faces, test_size=0.25, random_state=42
+        )
+        
+        # Apply PCA first (common in face recognition)
+        print("Applying PCA for initial reduction...")
+        pca = PCA(n_components=100, whiten=True)
+        X_train_pca = pca.fit_transform(X_train)
+        X_test_pca = pca.transform(X_test)
+        
+        # Apply LDA (Fisherfaces)
+        print("Applying LDA (Fisherfaces)...")
+        lda = LinearDiscriminantAnalysis()
+        X_train_lda = lda.fit_transform(X_train_pca, y_train)
+        X_test_lda = lda.transform(X_test_pca)
+        
+        # Classification
+        from sklearn.neighbors import KNeighborsClassifier
+        
+        # Using PCA only
+        knn_pca = KNeighborsClassifier(n_neighbors=3)
+        knn_pca.fit(X_train_pca, y_train)
+        acc_pca = knn_pca.score(X_test_pca, y_test)
+        
+        # Using PCA + LDA
+        knn_lda = KNeighborsClassifier(n_neighbors=3)
+        knn_lda.fit(X_train_lda, y_train)
+        acc_lda = knn_lda.score(X_test_lda, y_test)
+        
+        # Visualization
+        fig, axes = plt.subplots(2, 3, figsize=(14, 10))
+        
+        # Show example faces
+        for i in range(3):
+            axes[0, i].imshow(X_train[i].reshape(64, 64), cmap='gray')
+            axes[0, i].set_title(f'Person {y_train[i]}')
+            axes[0, i].axis('off')
+        
+        # Show Fisherfaces (LDA components)
+        for i in range(3):
+            # Get the i-th discriminant after PCA transformation
+            fisherface = pca.inverse_transform(lda.scalings_[:, i])
+            axes[1, i].imshow(fisherface.reshape(64, 64), cmap='gray')
+            axes[1, i].set_title(f'Fisherface {i+1}')
+            axes[1, i].axis('off')
+        
+        plt.suptitle(f'Face Recognition with LDA\nPCA: {acc_pca:.2f}, '
+                    f'PCA+LDA: {acc_lda:.2f}', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"\nFace Recognition Results:")
+        print(f"  PCA only accuracy: {acc_pca:.3f}")
+        print(f"  PCA + LDA accuracy: {acc_lda:.3f}")
+        print(f"  Improvement: {(acc_lda - acc_pca)*100:.1f}%")
+        
+        return lda, pca
+    
+    def text_classification_lda(self):
+        """LDA for text classification"""
+        
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        
+        # Sample text data
+        documents = [
+            # Technology
+            "Machine learning algorithms process big data",
+            "Artificial intelligence revolutionizes computing",
+            "Deep neural networks require GPU processing",
+            "Cloud computing enables scalable solutions",
+            "Quantum computing breaks encryption methods",
+            
+            # Sports
+            "Football teams compete for championship titles",
+            "Basketball players train for Olympic games",
+            "Tennis matches require endurance and skill",
+            "Marathon runners prepare with daily training",
+            "Swimming competitions test speed and technique",
+            
+            # Science
+            "DNA sequences reveal evolutionary relationships",
+            "Chemical reactions produce new compounds",
+            "Quantum physics explains particle behavior",
+            "Climate change affects global temperatures",
+            "Astronomy discovers distant galaxies"
+        ]
+        
+        labels = [0] * 5 + [1] * 5 + [2] * 5  # Tech, Sports, Science
+        label_names = ['Technology', 'Sports', 'Science']
+        
+        # Vectorize text
+        vectorizer = TfidfVectorizer(max_features=50)
+        X_text = vectorizer.fit_transform(documents).toarray()
+        
+        # Apply LDA
+        lda = LinearDiscriminantAnalysis(n_components=2)
+        X_lda = lda.fit_transform(X_text, labels)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # LDA projection
+        colors = ['red', 'blue', 'green']
+        for i in range(3):
+            mask = np.array(labels) == i
+            axes[0].scatter(X_lda[mask, 0], X_lda[mask, 1],
+                          c=colors[i], label=label_names[i],
+                          s=100, alpha=0.7)
+        
+        # Add text annotations
+        for i, doc in enumerate(documents):
+            axes[0].annotate(f'{i+1}', xy=(X_lda[i, 0], X_lda[i, 1]),
+                           ha='center', va='center', fontsize=8)
+        
+        axes[0].set_xlabel('LD1')
+        axes[0].set_ylabel('LD2')
+        axes[0].set_title('Text Classification with LDA')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        
+        # Feature importance (top words)
+        importance = np.abs(lda.coef_).mean(axis=0)
+        top_indices = np.argsort(importance)[-10:][::-1]
+        feature_names = vectorizer.get_feature_names_out()
+        top_words = [feature_names[i] for i in top_indices]
+        top_scores = importance[top_indices]
+        
+        axes[1].barh(range(10), top_scores, color='steelblue', alpha=0.7)
+        axes[1].set_yticks(range(10))
+        axes[1].set_yticklabels(top_words)
+        axes[1].set_xlabel('Importance')
+        axes[1].set_title('Top 10 Discriminative Words')
+        axes[1].grid(True, alpha=0.3, axis='x')
+        
+        plt.suptitle('LDA for Text Classification', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        print("\nTop discriminative words:")
+        for word, score in zip(top_words, top_scores):
+            print(f"  {word}: {score:.3f}")
+        
+        return lda, X_lda
+    
+    def incremental_lda(self, X, y, batch_size=50):
+        """Demonstrate incremental/online LDA"""
+        
+        from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+        
+        # Note: sklearn's LDA doesn't support incremental learning natively
+        # This is a demonstration of the concept
+        
+        n_samples = len(X)
+        n_batches = n_samples // batch_size
+        
+        accuracies = []
+        
+        # Initialize with first batch
+        lda = LinearDiscriminantAnalysis()
+        X_batch = X[:batch_size]
+        y_batch = y[:batch_size]
+        lda.fit(X_batch, y_batch)
+        
+        # Process subsequent batches
+        for i in range(1, n_batches):
+            start_idx = i * batch_size
+            end_idx = min(start_idx + batch_size, n_samples)
+            
+            X_batch = X[start_idx:end_idx]
+            y_batch = y[start_idx:end_idx]
+            
+            # In practice, you would update the model incrementally
+            # Here we retrain on all data seen so far
+            X_seen = X[:end_idx]
+            y_seen = y[:end_idx]
+            lda.fit(X_seen, y_seen)
+            
+            # Evaluate on test batch
+            if i < n_batches - 1:
+                X_test = X[end_idx:end_idx+batch_size]
+                y_test = y[end_idx:end_idx+batch_size]
+                acc = lda.score(X_test, y_test)
+                accuracies.append(acc)
+        
+        # Visualization
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        ax.plot(range(1, len(accuracies)+1), accuracies, 
+               marker='o', linewidth=2)
+        ax.set_xlabel('Batch Number')
+        ax.set_ylabel('Accuracy on Next Batch')
+        ax.set_title('Incremental LDA Performance')
+        ax.grid(True, alpha=0.3)
+        
+        # Add trend line
+        z = np.polyfit(range(len(accuracies)), accuracies, 1)
+        p = np.poly1d(z)
+        ax.plot(range(len(accuracies)), p(range(len(accuracies))), 
+               "r--", alpha=0.5, label='Trend')
+        ax.legend()
+        
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"\nIncremental LDA Results:")
+        print(f"  Initial accuracy: {accuracies[0]:.3f}")
+        print(f"  Final accuracy: {accuracies[-1]:.3f}")
+        print(f"  Average accuracy: {np.mean(accuracies):.3f}")
+        
+        return lda, accuracies
+
+# Advanced applications
+advanced = AdvancedLDA()
+
+print("\n" + "="*60)
+print("FACE RECOGNITION WITH LDA")
+print("="*60)
+
+lda_faces, pca_faces = advanced.face_recognition_example()
+
+print("\n" + "="*60)
+print("TEXT CLASSIFICATION")
+print("="*60)
+
+lda_text, X_text_lda = advanced.text_classification_lda()
+
+print("\n" + "="*60)
+print("INCREMENTAL LDA")
+print("="*60)
+
+# Generate larger dataset for incremental learning
+X_incremental, y_incremental = make_classification(
+    n_samples=500, n_features=20, n_informative=15,
+    n_redundant=5, n_classes=3, random_state=42
+)
+
+lda_incremental, accuracies = advanced.incremental_lda(
+    X_incremental, y_incremental
+)</code></pre>
+
+        <h2>Best Practices and Guidelines</h2>
+        
+        <pre class="language-python"><code>print("\n" + "="*60)
+print("LDA BEST PRACTICES")
+print("="*60)
+
+best_practices = """
+KEY GUIDELINES:
+
+1. DATA PREPROCESSING:
+   • Standardize features (important!)
+   • Handle missing values
+   • Check for multicollinearity
+   • Ensure sufficient samples per class
+
+2. ASSUMPTIONS CHECK:
+   • Normal distribution: Use Q-Q plots
+   • Equal covariance: Box's M test
+   • Linear separability: Visualize data
+   • Sample size: At least 20n per class (n = features)
+
+3. WHEN TO USE LDA:
+   ✓ Supervised dimensionality reduction
+   ✓ Multi-class classification
+   ✓ Feature extraction before classification
+   ✓ Face/pattern recognition
+   ✓ When classes are well-separated
+
+4. WHEN NOT TO USE LDA:
+   ✗ Non-linear relationships
+   ✗ Severely imbalanced classes
+   ✗ High-dimensional sparse data
+   ✗ Assumptions severely violated
+   ✗ Need more than (n_classes - 1) components
+
+5. PARAMETER TUNING:
+   • solver: 'svd' for most cases, 'lsqr' for regularization
+   • shrinkage: 'auto' or tune between 0-1
+   • n_components: Usually (n_classes - 1) or less
+   • priors: Adjust for imbalanced classes
+
+6. ADVANTAGES:
+   • Simple and interpretable
+   • No hyperparameters to tune (mostly)
+   • Works well for well-separated classes
+   • Can be used as classifier
+   • Computationally efficient
+
+7. LIMITATIONS:
+   • Linear boundaries only
+   • Maximum (n_classes - 1) components
+   • Sensitive to outliers
+   • Assumes Gaussian distributions
+   • Not suitable for complex patterns
+"""
+
+print(best_practices)
+
+# Comparison with other methods
+comparison_data = {
+    'Method': ['LDA', 'PCA', 't-SNE', 'UMAP', 'QDA'],
+    'Type': ['Linear', 'Linear', 'Non-linear', 'Non-linear', 'Quadratic'],
+    'Supervised': ['Yes', 'No', 'No', 'Optional', 'Yes'],
+    'Max Components': ['c-1', 'n', '2-3', 'Any', 'N/A'],
+    'New Data': ['Yes', 'Yes', 'No', 'Yes', 'Yes'],
+    'Speed': ['Fast', 'Fast', 'Slow', 'Medium', 'Fast']
+}
+
+comparison_df = pd.DataFrame(comparison_data)
+print("\nDimensionality Reduction Methods Comparison:")
+print("="*60)
+print(comparison_df.to_string(index=False))
+print("\n(c = number of classes, n = number of features)")
+
+# Implementation checklist
+checklist = """
+LDA IMPLEMENTATION CHECKLIST:
+□ Check class distribution (balanced?)
+□ Standardize/normalize features
+□ Verify assumptions (normality, equal covariance)
+□ Choose appropriate solver
+□ Consider regularization for high dimensions
+□ Set n_components (max is n_classes - 1)
+□ Split data properly (stratified for imbalanced)
+□ Evaluate with appropriate metrics
+□ Compare with PCA (unsupervised baseline)
+□ Visualize projected data
+□ Analyze feature contributions
+□ Cross-validate for stability
+"""
+
+print(checklist)
+
+# Common pitfalls
+pitfalls = """
+COMMON PITFALLS TO AVOID:
+
+1. Using LDA with too few samples per class
+   → Need at least 20 * n_features per class
+
+2. Ignoring assumption violations
+   → Check normality and covariance assumptions
+
+3. Using more components than (n_classes - 1)
+   → LDA is limited by number of classes
+
+4. Not standardizing features
+   → LDA is sensitive to scale
+
+5. Using LDA for non-linear problems
+   → Consider kernel LDA or non-linear methods
+
+6. Ignoring class imbalance
+   → Adjust priors or use class weights
+
+7. Not comparing with unsupervised methods
+   → Always benchmark against PCA
+"""
+
+print(pitfalls)</code></pre>
+
+        <h2>Practice Exercises</h2>
+        
+        <div class="exercise-card">
+            <h3>Exercise 1: Multi-class Medical Diagnosis</h3>
+            <p>Implement LDA for disease classification:</p>
+            <ol>
+                <li>Load medical dataset with multiple disease classes</li>
+                <li>Check and validate LDA assumptions</li>
+                <li>Apply LDA with appropriate regularization</li>
+                <li>Compare with QDA and other classifiers</li>
+                <li>Visualize decision boundaries and interpret results</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 2: Kernel LDA Implementation</h3>
+            <p>Extend LDA for non-linear problems:</p>
+            <ol>
+                <li>Implement kernel LDA from scratch</li>
+                <li>Compare different kernel functions</li>
+                <li>Apply to spiral or moon datasets</li>
+                <li>Visualize non-linear decision boundaries</li>
+                <li>Compare with standard LDA and SVM</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 3: Real-time LDA System</h3>
+            <p>Build an online LDA classification system:</p>
+            <ol>
+                <li>Implement incremental LDA algorithm</li>
+                <li>Handle streaming data updates</li>
+                <li>Monitor and adapt to concept drift</li>
+                <li>Create dashboard for real-time monitoring</li>
+                <li>Compare with batch LDA performance</li>
+            </ol>
+        </div>
+
+        <h2>Summary and Key Takeaways</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 Key Points to Remember</h3>
+            <ul>
+                <li><strong>Supervised Method:</strong> LDA requires class labels unlike PCA</li>
+                <li><strong>Maximizes Separation:</strong> Finds projections that maximize between-class variance</li>
+                <li><strong>Limited Components:</strong> Maximum of (n_classes - 1) discriminants</li>
+                <li><strong>Dual Purpose:</strong> Works as both dimensionality reduction and classifier</li>
+                <li><strong>Linear Only:</strong> Assumes linear separability (use QDA for quadratic)</li>
+                <li><strong>Assumptions Matter:</strong> Requires normal distributions and equal covariances</li>
+                <li><strong>Fast and Interpretable:</strong> Computationally efficient with clear interpretation</li>
+                <li><strong>Feature Importance:</strong> Provides direct feature contribution analysis</li>
+            </ul>
+        </div>
+
+        <div class="navigation">
+            <a href="dimensionality_umap.html" class="nav-button">← Previous: UMAP</a>
+            <a href="index.html" class="nav-button">Home</a>
+            <a href="dimensionality_feature_selection.html" class="nav-button">Next: Feature Selection →</a>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+    <script>
+        // Additional interactive features
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add line numbers to code blocks
+            const codeBlocks = document.querySelectorAll('pre code');
+            
+            codeBlocks.forEach(block => {
+                if (block.textContent.includes('class')) {
+                    block.classList.add('line-numbers');
+                }
+            });
+            
+            // Smooth scroll for navigation
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+    <script src="js/clipboard.js"></script>
+</body>
+</html>

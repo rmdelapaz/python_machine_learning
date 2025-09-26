@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>t-SNE: t-Distributed Stochastic Neighbor Embedding - Python Data Science</title>
+    <link rel="stylesheet" href="styles/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    <nav class="nav-container">
+        <a href="index.html" class="nav-logo">Python Data Science</a>
+        <div class="nav-links">
+            <a href="numpy_arrays_vs_lists.html">NumPy</a>
+            <a href="pandas_dataframes_series.html">Pandas</a>
+            <a href="matplotlib_line_scatter_bar.html">Matplotlib</a>
+            <a href="ml_sklearn_basics.html" class="active">Machine Learning</a>
+            <a href="statistics_descriptive_part1.html">Statistics</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>🌐 t-SNE: Visualizing High-Dimensional Data</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>t-SNE (t-Distributed Stochastic Neighbor Embedding) is a powerful non-linear dimensionality reduction technique particularly well-suited for visualizing high-dimensional data. Unlike PCA which preserves global structure, t-SNE excels at preserving local neighborhoods, making it ideal for exploring clusters and patterns in complex datasets. It's become the go-to method for visualizing everything from word embeddings to single-cell RNA sequences.</p>
+        </div>
+
+        <h2>Core Concepts and Theory</h2>
+        
+        <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import load_digits, load_iris, fetch_openml
+from sklearn.metrics import pairwise_distances
+from scipy.spatial.distance import pdist, squareform
+import time
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+
+print("="*60)
+print("t-SNE FUNDAMENTALS")
+print("="*60)
+
+# Core concepts
+tsne_concepts = """
+t-SNE KEY CONCEPTS:
+
+1. ALGORITHM OVERVIEW:
+   • Maps high-dimensional points to low dimensions (usually 2D)
+   • Preserves local structure (nearby points stay nearby)
+   • Non-linear transformation
+   • Probabilistic approach
+
+2. HOW IT WORKS:
+   Step 1: Calculate pairwise similarities in high-D space (Gaussian)
+   Step 2: Calculate pairwise similarities in low-D space (t-distribution)
+   Step 3: Minimize KL divergence between distributions
+   Step 4: Use gradient descent to optimize
+
+3. KEY PARAMETERS:
+   • perplexity: Balance between local and global aspects (5-50)
+   • learning_rate: Step size for gradient descent (10-1000)
+   • n_iter: Number of iterations (250-5000)
+   • metric: Distance metric for high-D space
+
+4. PERPLEXITY:
+   • Roughly the number of neighbors considered
+   • Low values: Focus on local structure
+   • High values: More global structure
+   • Rule of thumb: 5-50, dataset_size/100
+
+5. ADVANTAGES:
+   • Excellent for visualization
+   • Reveals clusters and patterns
+   • Handles non-linear relationships
+   • Works well with many data types
+
+6. LIMITATIONS:
+   • Computational complexity O(n²)
+   • Non-deterministic (random initialization)
+   • Cannot transform new points
+   • Hyperparameter sensitive
+   • Preserves neighborhoods, not distances
+"""
+
+print(tsne_concepts)</code></pre>
+
+        <h2>Basic t-SNE Implementation and Visualization</h2>
+        
+        <pre class="language-python"><code>class TSNEVisualizer:
+    """Comprehensive t-SNE visualization and analysis"""
+    
+    def __init__(self):
+        self.embeddings = {}
+        self.models = {}
+        
+    def compare_perplexities(self, X, y=None, perplexities=[5, 30, 50, 100]):
+        """Compare t-SNE with different perplexity values"""
+        
+        fig, axes = plt.subplots(2, len(perplexities)//2, figsize=(12, 10))
+        axes = axes.ravel()
+        
+        for idx, perp in enumerate(perplexities):
+            print(f"Running t-SNE with perplexity={perp}...")
+            
+            # Run t-SNE
+            tsne = TSNE(n_components=2, perplexity=perp, 
+                       random_state=42, n_iter=1000)
+            X_embedded = tsne.fit_transform(X)
+            
+            # Store results
+            self.embeddings[f'perp_{perp}'] = X_embedded
+            self.models[f'perp_{perp}'] = tsne
+            
+            # Plot
+            if y is not None:
+                scatter = axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
+                                          c=y, cmap='viridis', alpha=0.6, s=30)
+                plt.colorbar(scatter, ax=axes[idx])
+            else:
+                axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
+                                alpha=0.6, s=30)
+            
+            axes[idx].set_title(f'Perplexity = {perp}')
+            axes[idx].set_xlabel('t-SNE 1')
+            axes[idx].set_ylabel('t-SNE 2')
+            axes[idx].grid(True, alpha=0.3)
+            
+            # Add KL divergence if available
+            kl_div = tsne.kl_divergence_
+            axes[idx].text(0.02, 0.98, f'KL div: {kl_div:.2f}',
+                         transform=axes[idx].transAxes,
+                         fontsize=9, verticalalignment='top',
+                         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        plt.suptitle('t-SNE: Effect of Perplexity Parameter', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        return self.embeddings
+    
+    def compare_learning_rates(self, X, y=None, learning_rates=[10, 50, 200, 1000]):
+        """Compare different learning rates"""
+        
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        axes = axes.ravel()
+        
+        for idx, lr in enumerate(learning_rates):
+            print(f"Running t-SNE with learning_rate={lr}...")
+            
+            # Run t-SNE
+            tsne = TSNE(n_components=2, learning_rate=lr,
+                       perplexity=30, random_state=42, n_iter=1000)
+            X_embedded = tsne.fit_transform(X)
+            
+            # Plot
+            if y is not None:
+                axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
+                                c=y, cmap='viridis', alpha=0.6, s=30)
+            else:
+                axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
+                                alpha=0.6, s=30)
+            
+            axes[idx].set_title(f'Learning Rate = {lr}')
+            axes[idx].set_xlabel('t-SNE 1')
+            axes[idx].set_ylabel('t-SNE 2')
+            axes[idx].grid(True, alpha=0.3)
+            
+            # Add KL divergence
+            kl_div = tsne.kl_divergence_
+            axes[idx].text(0.02, 0.98, f'KL div: {kl_div:.2f}',
+                         transform=axes[idx].transAxes,
+                         fontsize=9, verticalalignment='top',
+                         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        plt.suptitle('t-SNE: Effect of Learning Rate', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+    
+    def visualize_convergence(self, X, y=None, n_iter_steps=[250, 500, 1000, 5000]):
+        """Visualize t-SNE convergence over iterations"""
+        
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        axes = axes.ravel()
+        
+        for idx, n_iter in enumerate(n_iter_steps):
+            print(f"Running t-SNE with n_iter={n_iter}...")
+            
+            # Run t-SNE
+            tsne = TSNE(n_components=2, n_iter=n_iter,
+                       perplexity=30, random_state=42)
+            X_embedded = tsne.fit_transform(X)
+            
+            # Plot
+            if y is not None:
+                axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
+                                c=y, cmap='viridis', alpha=0.6, s=30)
+            else:
+                axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
+                                alpha=0.6, s=30)
+            
+            axes[idx].set_title(f'Iterations = {n_iter}')
+            axes[idx].set_xlabel('t-SNE 1')
+            axes[idx].set_ylabel('t-SNE 2')
+            axes[idx].grid(True, alpha=0.3)
+            
+            # Add KL divergence
+            kl_div = tsne.kl_divergence_
+            axes[idx].text(0.02, 0.98, f'KL div: {kl_div:.2f}',
+                         transform=axes[idx].transAxes,
+                         fontsize=9, verticalalignment='top',
+                         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        plt.suptitle('t-SNE: Convergence Over Iterations', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+    
+    def stability_analysis(self, X, y=None, n_runs=5):
+        """Analyze stability across multiple runs"""
+        
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        axes = axes.ravel()
+        
+        embeddings = []
+        
+        for run in range(n_runs):
+            print(f"Run {run+1}/{n_runs}...")
+            
+            # Run t-SNE with different random state
+            tsne = TSNE(n_components=2, perplexity=30,
+                       random_state=run*42, n_iter=1000)
+            X_embedded = tsne.fit_transform(X)
+            embeddings.append(X_embedded)
+            
+            if run < 5:  # Plot first 5 runs
+                if y is not None:
+                    axes[run].scatter(X_embedded[:, 0], X_embedded[:, 1],
+                                    c=y, cmap='viridis', alpha=0.6, s=30)
+                else:
+                    axes[run].scatter(X_embedded[:, 0], X_embedded[:, 1],
+                                    alpha=0.6, s=30)
+                
+                axes[run].set_title(f'Run {run+1}')
+                axes[run].set_xlabel('t-SNE 1')
+                axes[run].set_ylabel('t-SNE 2')
+                axes[run].grid(True, alpha=0.3)
+        
+        # Calculate pairwise correlations between embeddings
+        correlations = []
+        for i in range(n_runs):
+            for j in range(i+1, n_runs):
+                # Calculate correlation between flattened embeddings
+                corr = np.corrcoef(embeddings[i].flatten(), 
+                                  embeddings[j].flatten())[0, 1]
+                correlations.append(abs(corr))
+        
+        # Plot correlation distribution
+        axes[-1].hist(correlations, bins=20, edgecolor='black', alpha=0.7)
+        axes[-1].set_xlabel('Absolute Correlation')
+        axes[-1].set_ylabel('Frequency')
+        axes[-1].set_title(f'Stability: Mean Corr = {np.mean(correlations):.3f}')
+        axes[-1].grid(True, alpha=0.3)
+        
+        plt.suptitle('t-SNE Stability Analysis', fontsize=14, y=1.02)
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"\nStability Metrics:")
+        print(f"  Mean correlation: {np.mean(correlations):.3f}")
+        print(f"  Std correlation: {np.std(correlations):.3f}")
+        
+        return embeddings
+
+# Load sample data
+digits = load_digits()
+X_digits = digits.data
+y_digits = digits.target
+
+# Sample for faster computation
+sample_idx = np.random.choice(len(X_digits), 500, replace=False)
+X_sample = X_digits[sample_idx]
+y_sample = y_digits[sample_idx]
+
+# Initialize visualizer
+viz = TSNEVisualizer()
+
+print("\n" + "="*60)
+print("t-SNE PARAMETER EXPLORATION")
+print("="*60)
+
+# Compare perplexities
+print("\nComparing different perplexity values...")
+perp_embeddings = viz.compare_perplexities(X_sample, y_sample)
+
+# Compare learning rates
+print("\nComparing different learning rates...")
+viz.compare_learning_rates(X_sample, y_sample)
+
+# Visualize convergence
+print("\nVisualizing convergence...")
+viz.visualize_convergence(X_sample, y_sample)
+
+# Stability analysis
+print("\nAnalyzing stability...")
+stability_embeddings = viz.stability_analysis(X_sample[:200], y_sample[:200])</code></pre>
+
+        <h2>Practice Exercises</h2>
+        
+        <div class="exercise-card">
+            <h3>Exercise 1: Interactive t-SNE Explorer</h3>
+            <p>Build an interactive t-SNE visualization tool:</p>
+            <ol>
+                <li>Create slider widgets for parameters</li>
+                <li>Real-time parameter updates</li>
+                <li>Show KL divergence convergence</li>
+                <li>Compare multiple perplexities side-by-side</li>
+                <li>Export results and parameters</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 2: t-SNE Quality Metrics</h3>
+            <p>Develop metrics to evaluate t-SNE quality:</p>
+            <ol>
+                <li>Implement neighborhood preservation metric</li>
+                <li>Calculate trustworthiness and continuity</li>
+                <li>Measure cluster separation</li>
+                <li>Compare with other DR methods</li>
+                <li>Create quality report</li>
+            </ol>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 3: Parametric t-SNE</h3>
+            <p>Implement parametric t-SNE using neural networks:</p>
+            <ol>
+                <li>Build neural network architecture</li>
+                <li>Implement t-SNE loss function</li>
+                <li>Train on sample dataset</li>
+                <li>Apply to new data points</li>
+                <li>Compare with standard t-SNE</li>
+            </ol>
+        </div>
+
+        <h2>Summary and Key Takeaways</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 Key Points to Remember</h3>
+            <ul>
+                <li><strong>Local Structure:</strong> t-SNE preserves local neighborhoods, not global structure</li>
+                <li><strong>Non-linear:</strong> Can capture complex, non-linear relationships</li>
+                <li><strong>Visualization Tool:</strong> Primarily for exploration, not for ML pipelines</li>
+                <li><strong>Parameter Sensitive:</strong> Perplexity greatly affects results</li>
+                <li><strong>Non-deterministic:</strong> Different runs produce different results</li>
+                <li><strong>No Transform:</strong> Cannot apply to new data points</li>
+                <li><strong>Computational Cost:</strong> O(n²) complexity, slow for large datasets</li>
+                <li><strong>Interpretation Care:</strong> Distances and densities can be misleading</li>
+            </ul>
+        </div>
+
+        <div class="navigation">
+            <a href="dimensionality_pca.html" class="nav-button">← Previous: PCA</a>
+            <a href="index.html" class="nav-button">Home</a>
+            <a href="dimensionality_umap.html" class="nav-button">Next: UMAP →</a>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+    <script>
+        // Additional interactive features
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add line numbers to code blocks
+            const codeBlocks = document.querySelectorAll('pre code');
+            
+            codeBlocks.forEach(block => {
+                if (block.textContent.includes('class')) {
+                    block.classList.add('line-numbers');
+                }
+            });
+            
+            // Smooth scroll for navigation
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+    <script src="js/clipboard.js"></script>
+</body>
+</html>
