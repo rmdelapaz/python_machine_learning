@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Complete case study on building a fraud detection system using machine learning - from data exploration to deployment.">
+    <title>Fraud Detection Case Study - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+
+    <nav>
+        <a href="index.html" class="logo">Python Machine Learning</a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="index.html#case_studies">Case Studies</a>
+        </div>
+    </nav>
+    
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="index.html#case_studies">Case Studies</a></li>
+            <li aria-current="page">Fraud Detection</li>
+        </ul>
+    </nav>
+
+    <main id="main-content">
+    <div class="container">
+        <h1>💳 Case Study: Credit Card Fraud Detection System</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>This comprehensive case study walks through building a complete fraud detection system for credit card transactions. We'll cover the entire pipeline from data exploration and preprocessing to model development, evaluation, and deployment considerations. The focus is on handling class imbalance, feature engineering, model selection, and creating a production-ready system with real-time scoring capabilities.</p>
+        </div>
+
+        <h2>Fraud Detection Pipeline Overview</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            A[Transaction Data] --> B[Data Exploration]
+            B --> C[Feature Engineering]
+            C --> D[Handle Imbalance]
+            
+            D --> E[Model Selection]
+            E --> F[Train Models]
+            
+            F --> G[Evaluation]
+            G --> H{Performance OK?}
+            
+            H -->|No| I[Tune/Adjust]
+            I --> E
+            
+            H -->|Yes| J[Deployment]
+            J --> K[Real-time Scoring]
+            K --> L[Monitor & Update]
+            
+            L --> M[Feedback Loop]
+            M --> C
+            
+            style A fill:#e3f2fd
+            style J fill:#c8e6c9
+            style K fill:#fff9c4
+            style L fill:#ffccbc
+        </div>
+
+        <h2>Business Context</h2>
+        
+        <div class="mermaid">
+        graph LR
+            A[Transaction] --> B{Risk Score}
+            
+            B -->|Low Risk| C[Approve]
+            B -->|Medium Risk| D[Additional Verification]
+            B -->|High Risk| E[Block & Alert]
+            
+            C --> F[Complete Transaction]
+            D --> G[2FA/Call Customer]
+            E --> H[Fraud Investigation]
+            
+            G -->|Verified| F
+            G -->|Suspicious| H
+            
+            style C fill:#c8e6c9
+            style D fill:#fff9c4
+            style E fill:#ffccbc
+        </div>
+
+        <h2>Setting Up the Environment</h2>
+        
+        <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime, timedelta
+import warnings
+warnings.filterwarnings('ignore')
+
+# ML Libraries
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+from sklearn.preprocessing import StandardScaler, RobustScaler
+from sklearn.metrics import (
+    classification_report, confusion_matrix, roc_auc_score,
+    roc_curve, precision_recall_curve, average_precision_score,
+    f1_score, precision_score, recall_score
+)
+
+# Imbalanced learning
+from imblearn.over_sampling import SMOTE, ADASYN
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.combine import SMOTETomek
+
+# Models
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, IsolationForest
+from sklearn.neural_network import MLPClassifier
+import xgboost as xgb
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+np.random.seed(42)
+
+print("Credit Card Fraud Detection System")
+print("=" * 50)</code></pre>
+
+        <h2>Data Generation and Exploration</h2>
+        
+        <pre class="language-python"><code>class FraudDataGenerator:
+    """
+    Generate synthetic fraud detection dataset
+    """
+    
+    def __init__(self, n_transactions=10000, fraud_rate=0.02):
+        self.n_transactions = n_transactions
+        self.fraud_rate = fraud_rate
+        self.data = None
+        
+    def generate_dataset(self):
+        """
+        Generate synthetic credit card transaction data
+        """
+        np.random.seed(42)
+        
+        n_frauds = int(self.n_transactions * self.fraud_rate)
+        n_normal = self.n_transactions - n_frauds
+        
+        # Generate normal transactions
+        normal_data = {
+            'amount': np.random.lognormal(3.0, 1.5, n_normal),
+            'days_since_last': np.random.exponential(2, n_normal),
+            'hour_of_day': np.random.normal(14, 4, n_normal) % 24,
+            'merchant_risk_score': np.random.beta(2, 5, n_normal),
+            'customer_age': np.random.normal(40, 12, n_normal),
+            'num_transactions_today': np.random.poisson(3, n_normal),
+            'location_risk': np.random.beta(2, 8, n_normal),
+            'online_transaction': np.random.choice([0, 1], n_normal, p=[0.6, 0.4]),
+            'weekend': np.random.choice([0, 1], n_normal, p=[0.7, 0.3]),
+            'is_fraud': np.zeros(n_normal, dtype=int)
+        }
+        
+        # Generate fraudulent transactions (different patterns)
+        fraud_data = {
+            'amount': np.concatenate([
+                np.random.lognormal(5.0, 2.0, n_frauds//2),  # Large amounts
+                np.random.uniform(1, 50, n_frauds//2)  # Small test amounts
+            ]),
+            'days_since_last': np.random.exponential(0.5, n_frauds),  # Rapid succession
+            'hour_of_day': np.random.choice([3, 4, 5, 22, 23], n_frauds),  # Odd hours
+            'merchant_risk_score': np.random.beta(5, 2, n_frauds),  # High risk merchants
+            'customer_age': np.random.uniform(18, 70, n_frauds),
+            'num_transactions_today': np.random.poisson(10, n_frauds),  # Many transactions
+            'location_risk': np.random.beta(5, 3, n_frauds),  # Risky locations
+            'online_transaction': np.random.choice([0, 1], n_frauds, p=[0.2, 0.8]),
+            'weekend': np.random.choice([0, 1], n_frauds, p=[0.4, 0.6]),
+            'is_fraud': np.ones(n_frauds, dtype=int)
+        }
+        
+        # Combine data
+        data = pd.DataFrame({
+            key: np.concatenate([normal_data[key], fraud_data[key]])
+            for key in normal_data.keys()
+        })
+        
+        # Shuffle
+        data = data.sample(frac=1, random_state=42).reset_index(drop=True)
+        
+        # Add derived features
+        data['amount_log'] = np.log1p(data['amount'])
+        data['high_amount'] = (data['amount'] > data['amount'].quantile(0.95)).astype(int)
+        data['night_transaction'] = ((data['hour_of_day'] < 6) | (data['hour_of_day'] > 22)).astype(int)
+        data['risk_score'] = (
+            data['merchant_risk_score'] * 0.3 +
+            data['location_risk'] * 0.3 +
+            (data['night_transaction'] * 0.2) +
+            (data['high_amount'] * 0.2)
+        )
+        
+        self.data = data
+        return data
+    
+    def explore_data(self):
+        """
+        Explore the dataset
+        """
+        print("\n" + "=" * 50)
+        print("DATA EXPLORATION")
+        print("=" * 50)
+        
+        # Basic info
+        print(f"\nDataset shape: {self.data.shape}")
+        print(f"Features: {list(self.data.columns)}")
+        print(f"\nClass distribution:")
+        print(self.data['is_fraud'].value_counts())
+        print(f"Fraud rate: {self.data['is_fraud'].mean():.2%}")
+        
+        # Statistical summary
+        print("\nStatistical Summary:")
+        print(self.data.describe())
+        
+        # Visualizations
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        
+        # 1. Amount distribution
+        axes[0, 0].hist([
+            self.data[self.data['is_fraud'] == 0]['amount'],
+            self.data[self.data['is_fraud'] == 1]['amount']
+        ], bins=50, label=['Normal', 'Fraud'], alpha=0.7)
+        axes[0, 0].set_xlabel('Transaction Amount')
+        axes[0, 0].set_ylabel('Frequency')
+        axes[0, 0].set_title('Amount Distribution by Class')
+        axes[0, 0].legend()
+        axes[0, 0].set_xlim(0, 1000)
+        
+        # 2. Hour of day
+        axes[0, 1].hist([
+            self.data[self.data['is_fraud'] == 0]['hour_of_day'],
+            self.data[self.data['is_fraud'] == 1]['hour_of_day']
+        ], bins=24, label=['Normal', 'Fraud'], alpha=0.7)
+        axes[0, 1].set_xlabel('Hour of Day')
+        axes[0, 1].set_ylabel('Frequency')
+        axes[0, 1].set_title('Transaction Time Distribution')
+        axes[0, 1].legend()
+        
+        # 3. Risk score distribution
+        axes[0, 2].hist([
+            self.data[self.data['is_fraud'] == 0]['risk_score'],
+            self.data[self.data['is_fraud'] == 1]['risk_score']
+        ], bins=30, label=['Normal', 'Fraud'], alpha=0.7)
+        axes[0, 2].set_xlabel('Risk Score')
+        axes[0, 2].set_ylabel('Frequency')
+        axes[0, 2].set_title('Risk Score Distribution')
+        axes[0, 2].legend()
+        
+        # 4. Correlation heatmap
+        corr_matrix = self.data.select_dtypes(include=[np.number]).corr()
+        sns.heatmap(corr_matrix, annot=False, cmap='coolwarm', center=0,
+                   ax=axes[1, 0])
+        axes[1, 0].set_title('Feature Correlation Matrix')
+        
+        # 5. Merchant risk vs location risk
+        for fraud in [0, 1]:
+            subset = self.data[self.data['is_fraud'] == fraud]
+            axes[1, 1].scatter(subset['merchant_risk_score'], 
+                             subset['location_risk'],
+                             alpha=0.5, label=f'Fraud={fraud}', s=20)
+        axes[1, 1].set_xlabel('Merchant Risk Score')
+        axes[1, 1].set_ylabel('Location Risk')
+        axes[1, 1].set_title('Risk Scores Scatter')
+        axes[1, 1].legend()
+        
+        # 6. Transactions per day
+        axes[1, 2].hist([
+            self.data[self.data['is_fraud'] == 0]['num_transactions_today'],
+            self.data[self.data['is_fraud'] == 1]['num_transactions_today']
+        ], bins=20, label=['Normal', 'Fraud'], alpha=0.7)
+        axes[1, 2].set_xlabel('Number of Transactions Today')
+        axes[1, 2].set_ylabel('Frequency')
+        axes[1, 2].set_title('Daily Transaction Count')
+        axes[1, 2].legend()
+        
+        plt.suptitle('Fraud Detection Data Exploration', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+# Generate and explore data
+generator = FraudDataGenerator(n_transactions=10000, fraud_rate=0.02)
+data = generator.generate_dataset()
+generator.explore_data()</code></pre>
+
+        <h2>Feature Engineering</h2>
+        
+        <pre class="language-python"><code>class FeatureEngineer:
+    """
+    Feature engineering for fraud detection
+    """
+    
+    def __init__(self, data):
+        self.data = data.copy()
+        
+    def create_velocity_features(self):
+        """
+        Create velocity-based features
+        """
+        # Transaction velocity features
+        self.data['transactions_per_hour'] = (
+            self.data['num_transactions_today'] / 
+            (self.data['hour_of_day'] + 1)
+        )
+        
+        # Amount velocity
+        self.data['amount_velocity'] = (
+            self.data['amount'] / 
+            (self.data['days_since_last'] + 1)
+        )
+        
+        return self
+    
+    def create_interaction_features(self):
+        """
+        Create interaction features
+        """
+        # Risk interactions
+        self.data['total_risk'] = (
+            self.data['merchant_risk_score'] * 
+            self.data['location_risk']
+        )
+        
+        # Time-amount interaction
+        self.data['night_high_amount'] = (
+            self.data['night_transaction'] * 
+            self.data['high_amount']
+        )
+        
+        # Online risk
+        self.data['online_risk'] = (
+            self.data['online_transaction'] * 
+            self.data['location_risk']
+        )
+        
+        return self
+    
+    def create_statistical_features(self):
+        """
+        Create statistical aggregation features
+        """
+        # Z-score for amount
+        self.data['amount_zscore'] = (
+            (self.data['amount'] - self.data['amount'].mean()) / 
+            self.data['amount'].std()
+        )
+        
+        # Percentile ranks
+        self.data['amount_percentile'] = self.data['amount'].rank(pct=True)
+        
+        # Binned features
+        self.data['amount_bin'] = pd.qcut(
+            self.data['amount'], 
+            q=5, 
+            labels=['very_low', 'low', 'medium', 'high', 'very_high']
+        )
+        
+        # One-hot encode bins
+        amount_dummies = pd.get_dummies(self.data['amount_bin'], prefix='amount')
+        self.data = pd.concat([self.data, amount_dummies], axis=1)
+        self.data.drop('amount_bin', axis=1, inplace=True)
+        
+        return self
+    
+    def create_anomaly_scores(self):
+        """
+        Create anomaly-based features using unsupervised methods
+        """
+        # Select numerical features
+        feature_cols = [
+            'amount', 'days_since_last', 'hour_of_day',
+            'merchant_risk_score', 'location_risk',
+            'num_transactions_today'
+        ]
+        
+        X = self.data[feature_cols].values
+        
+        # Isolation Forest anomaly score
+        iso_forest = IsolationForest(
+            contamination=0.02,
+            random_state=42
+        )
+        self.data['isolation_score'] = iso_forest.decision_function(X)
+        
+        return self
+    
+    def get_engineered_data(self):
+        """
+        Get the engineered dataset
+        """
+        return self.data
+    
+    def get_feature_importance(self, X, y):
+        """
+        Calculate feature importance
+        """
+        # Train a Random Forest to get feature importance
+        rf = RandomForestClassifier(n_estimators=100, random_state=42)
+        rf.fit(X, y)
+        
+        # Get importance scores
+        importance = pd.DataFrame({
+            'feature': X.columns,
+            'importance': rf.feature_importances_
+        }).sort_values('importance', ascending=False)
+        
+        # Visualize
+        plt.figure(figsize=(10, 8))
+        top_features = importance.head(15)
+        plt.barh(range(len(top_features)), top_features['importance'])
+        plt.yticks(range(len(top_features)), top_features['feature'])
+        plt.xlabel('Importance Score')
+        plt.title('Top 15 Feature Importances')
+        plt.gca().invert_yaxis()
+        plt.tight_layout()
+        plt.show()
+        
+        return importance
+
+# Apply feature engineering
+print("\n" + "=" * 50)
+print("FEATURE ENGINEERING")
+print("=" * 50)
+
+engineer = FeatureEngineer(data)
+engineer.create_velocity_features()
+engineer.create_interaction_features()
+engineer.create_statistical_features()
+engineer.create_anomaly_scores()
+
+engineered_data = engineer.get_engineered_data()
+print(f"Original features: {len(data.columns)}")
+print(f"After feature engineering: {len(engineered_data.columns)}")
+
+# Prepare data for modeling
+feature_cols = [col for col in engineered_data.columns 
+                if col not in ['is_fraud']]
+X = engineered_data[feature_cols]
+y = engineered_data['is_fraud']
+
+# Get feature importance
+importance = engineer.get_feature_importance(X, y)</code></pre>
+
+        <h2>Handling Class Imbalance</h2>
+        
+        <div class="mermaid">
+        graph TD
+            A[Imbalanced Data<br/>2% Fraud] --> B{Strategy}
+            
+            B --> C[Resampling]
+            C --> C1[SMOTE]
+            C --> C2[ADASYN]
+            C --> C3[Random Undersampling]
+            
+            B --> D[Algorithm Level]
+            D --> D1[Class Weights]
+            D --> D2[Threshold Tuning]
+            
+            B --> E[Ensemble]
+            E --> E1[BalancedRandomForest]
+            E --> E2[EasyEnsemble]
+            
+            style A fill:#ffccbc
+            style C fill:#e3f2fd
+            style D fill:#fff9c4
+            style E fill:#e8f5e9
+        </div>
+
+        <pre class="language-python"><code>class ImbalanceHandler:
+    """
+    Handle class imbalance in fraud detection
+    """
+    
+    def __init__(self, X, y):
+        self.X = X
+        self.y = y
+        self.strategies = {}
+        
+    def apply_sampling_strategies(self):
+        """
+        Apply different sampling strategies
+        """
+        print("\n" + "=" * 50)
+        print("HANDLING CLASS IMBALANCE")
+        print("=" * 50)
+        
+        # Original distribution
+        print(f"\nOriginal distribution:")
+        print(f"Class 0: {sum(self.y == 0)}")
+        print(f"Class 1: {sum(self.y == 1)}")
+        print(f"Ratio: {sum(self.y == 1) / len(self.y):.2%}")
+        
+        # 1. SMOTE
+        smote = SMOTE(random_state=42)
+        X_smote, y_smote = smote.fit_resample(self.X, self.y)
+        self.strategies['SMOTE'] = (X_smote, y_smote)
+        print(f"\nAfter SMOTE: {len(y_smote)} samples, "
+              f"{sum(y_smote == 1) / len(y_smote):.2%} fraud")
+        
+        # 2. ADASYN
+        adasyn = ADASYN(random_state=42)
+        X_adasyn, y_adasyn = adasyn.fit_resample(self.X, self.y)
+        self.strategies['ADASYN'] = (X_adasyn, y_adasyn)
+        print(f"After ADASYN: {len(y_adasyn)} samples, "
+              f"{sum(y_adasyn == 1) / len(y_adasyn):.2%} fraud")
+        
+        # 3. Random Undersampling
+        rus = RandomUnderSampler(random_state=42)
+        X_rus, y_rus = rus.fit_resample(self.X, self.y)
+        self.strategies['Undersampling'] = (X_rus, y_rus)
+        print(f"After Undersampling: {len(y_rus)} samples, "
+              f"{sum(y_rus == 1) / len(y_rus):.2%} fraud")
+        
+        # 4. SMOTE + Tomek Links
+        smote_tomek = SMOTETomek(random_state=42)
+        X_st, y_st = smote_tomek.fit_resample(self.X, self.y)
+        self.strategies['SMOTE+Tomek'] = (X_st, y_st)
+        print(f"After SMOTE+Tomek: {len(y_st)} samples, "
+              f"{sum(y_st == 1) / len(y_st):.2%} fraud")
+        
+        return self.strategies
+    
+    def compare_strategies(self):
+        """
+        Compare different balancing strategies
+        """
+        from sklearn.model_selection import cross_val_score
+        
+        results = []
+        
+        # Test each strategy
+        for strategy_name, (X_balanced, y_balanced) in self.strategies.items():
+            # Use logistic regression as base model
+            model = LogisticRegression(random_state=42, max_iter=1000)
+            
+            # Cross-validation
+            scores = cross_val_score(
+                model, X_balanced, y_balanced,
+                cv=5, scoring='f1'
+            )
+            
+            results.append({
+                'Strategy': strategy_name,
+                'F1 Score': scores.mean(),
+                'Std Dev': scores.std(),
+                'Samples': len(y_balanced)
+            })
+        
+        results_df = pd.DataFrame(results)
+        
+        # Visualize
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # F1 scores
+        axes[0].bar(results_df['Strategy'], results_df['F1 Score'])
+        axes[0].set_xlabel('Strategy')
+        axes[0].set_ylabel('F1 Score')
+        axes[0].set_title('Performance by Balancing Strategy')
+        axes[0].tick_params(axis='x', rotation=45)
+        
+        # Sample sizes
+        axes[1].bar(results_df['Strategy'], results_df['Samples'])
+        axes[1].set_xlabel('Strategy')
+        axes[1].set_ylabel('Number of Samples')
+        axes[1].set_title('Dataset Size by Strategy')
+        axes[1].tick_params(axis='x', rotation=45)
+        
+        plt.tight_layout()
+        plt.show()
+        
+        return results_df
+
+# Handle imbalance
+imbalance_handler = ImbalanceHandler(X, y)
+strategies = imbalance_handler.apply_sampling_strategies()
+comparison_results = imbalance_handler.compare_strategies()
+
+print("\n" + "=" * 50)
+print("STRATEGY COMPARISON")
+print("=" * 50)
+print(comparison_results)</code></pre>
+
+        <h2>Model Development and Evaluation</h2>
+        
+        <pre class="language-python"><code>class FraudDetectionModels:
+    """
+    Train and evaluate fraud detection models
+    """
+    
+    def __init__(self, X, y):
+        # Split data
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
+            X, y, test_size=0.3, random_state=42, stratify=y
+        )
+        
+        # Scale features
+        self.scaler = RobustScaler()
+        self.X_train_scaled = self.scaler.fit_transform(self.X_train)
+        self.X_test_scaled = self.scaler.transform(self.X_test)
+        
+        self.models = {}
+        self.results = {}
+        
+    def train_models(self):
+        """
+        Train multiple models
+        """
+        print("\n" + "=" * 50)
+        print("MODEL TRAINING")
+        print("=" * 50)
+        
+        # Define models
+        models = {
+            'Logistic Regression': LogisticRegression(
+                class_weight='balanced',
+                random_state=42,
+                max_iter=1000
+            ),
+            'Decision Tree': DecisionTreeClassifier(
+                class_weight='balanced',
+                max_depth=10,
+                random_state=42
+            ),
+            'Random Forest': RandomForestClassifier(
+                n_estimators=100,
+                class_weight='balanced',
+                random_state=42
+            ),
+            'XGBoost': xgb.XGBClassifier(
+                scale_pos_weight=len(self.y_train[self.y_train==0]) / 
+                                len(self.y_train[self.y_train==1]),
+                random_state=42
+            ),
+            'Neural Network': MLPClassifier(
+                hidden_layer_sizes=(100, 50),
+                random_state=42,
+                max_iter=500
+            )
+        }
+        
+        # Train each model
+        for name, model in models.items():
+            print(f"\nTraining {name}...")
+            
+            # Train
+            model.fit(self.X_train_scaled, self.y_train)
+            
+            # Store model
+            self.models[name] = model
+            
+            # Predictions
+            y_pred = model.predict(self.X_test_scaled)
+            y_proba = model.predict_proba(self.X_test_scaled)[:, 1]
+            
+            # Calculate metrics
+            self.results[name] = {
+                'y_pred': y_pred,
+                'y_proba': y_proba,
+                'precision': precision_score(self.y_test, y_pred),
+                'recall': recall_score(self.y_test, y_pred),
+                'f1': f1_score(self.y_test, y_pred),
+                'auc': roc_auc_score(self.y_test, y_proba)
+            }
+            
+            print(f"  Precision: {self.results[name]['precision']:.3f}")
+            print(f"  Recall: {self.results[name]['recall']:.3f}")
+            print(f"  F1-Score: {self.results[name]['f1']:.3f}")
+            print(f"  AUC-ROC: {self.results[name]['auc']:.3f}")
+    
+    def plot_evaluation_metrics(self):
+        """
+        Comprehensive model evaluation visualization
+        """
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        
+        # 1. ROC Curves
+        for name, result in self.results.items():
+            fpr, tpr, _ = roc_curve(self.y_test, result['y_proba'])
+            axes[0, 0].plot(fpr, tpr, label=f"{name} (AUC={result['auc']:.3f})")
+        
+        axes[0, 0].plot([0, 1], [0, 1], 'k--')
+        axes[0, 0].set_xlabel('False Positive Rate')
+        axes[0, 0].set_ylabel('True Positive Rate')
+        axes[0, 0].set_title('ROC Curves')
+        axes[0, 0].legend(fontsize=8)
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # 2. Precision-Recall Curves
+        for name, result in self.results.items():
+            precision, recall, _ = precision_recall_curve(self.y_test, result['y_proba'])
+            axes[0, 1].plot(recall, precision, label=name)
+        
+        axes[0, 1].set_xlabel('Recall')
+        axes[0, 1].set_ylabel('Precision')
+        axes[0, 1].set_title('Precision-Recall Curves')
+        axes[0, 1].legend(fontsize=8)
+        axes[0, 1].grid(True, alpha=0.3)
+        
+        # 3. Metrics Comparison
+        metrics_df = pd.DataFrame({
+            name: {
+                'Precision': result['precision'],
+                'Recall': result['recall'],
+                'F1-Score': result['f1']
+            }
+            for name, result in self.results.items()
+        }).T
+        
+        metrics_df.plot(kind='bar', ax=axes[0, 2])
+        axes[0, 2].set_title('Metrics Comparison')
+        axes[0, 2].set_ylabel('Score')
+        axes[0, 2].tick_params(axis='x', rotation=45)
+        axes[0, 2].legend(fontsize=8)
+        axes[0, 2].grid(True, alpha=0.3)
+        
+        # 4-6. Confusion Matrices for top 3 models
+        top_models = sorted(self.results.items(), 
+                          key=lambda x: x[1]['f1'], 
+                          reverse=True)[:3]
+        
+        for idx, (name, result) in enumerate(top_models):
+            cm = confusion_matrix(self.y_test, result['y_pred'])
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                       ax=axes[1, idx])
+            axes[1, idx].set_title(f'{name}\nConfusion Matrix')
+            axes[1, idx].set_xlabel('Predicted')
+            axes[1, idx].set_ylabel('Actual')
+        
+        plt.suptitle('Model Evaluation Results', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+    
+    def threshold_optimization(self, model_name='Random Forest'):
+        """
+        Optimize decision threshold for business objectives
+        """
+        print("\n" + "=" * 50)
+        print("THRESHOLD OPTIMIZATION")
+        print("=" * 50)
+        
+        y_proba = self.results[model_name]['y_proba']
+        
+        thresholds = np.arange(0.1, 0.9, 0.05)
+        metrics = []
+        
+        for threshold in thresholds:
+            y_pred = (y_proba >= threshold).astype(int)
+            
+            precision = precision_score(self.y_test, y_pred, zero_division=0)
+            recall = recall_score(self.y_test, y_pred)
+            f1 = f1_score(self.y_test, y_pred)
+            
+            # Calculate business metrics
+            cm = confusion_matrix(self.y_test, y_pred)
+            tn, fp, fn, tp = cm.ravel()
+            
+            # Cost calculation (example)
+            fraud_loss_prevented = tp * 100  # $100 per fraud caught
+            false_positive_cost = fp * 5     # $5 per false alarm
+            fraud_loss_missed = fn * 100     # $100 per fraud missed
+            
+            net_benefit = fraud_loss_prevented - false_positive_cost - fraud_loss_missed
+            
+            metrics.append({
+                'threshold': threshold,
+                'precision': precision,
+                'recall': recall,
+                'f1': f1,
+                'net_benefit': net_benefit
+            })
+        
+        metrics_df = pd.DataFrame(metrics)
+        
+        # Visualize
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Metrics vs threshold
+        axes[0].plot(metrics_df['threshold'], metrics_df['precision'], label='Precision')
+        axes[0].plot(metrics_df['threshold'], metrics_df['recall'], label='Recall')
+        axes[0].plot(metrics_df['threshold'], metrics_df['f1'], label='F1-Score')
+        axes[0].set_xlabel('Threshold')
+        axes[0].set_ylabel('Score')
+        axes[0].set_title('Metrics vs Decision Threshold')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        
+        # Business impact
+        axes[1].plot(metrics_df['threshold'], metrics_df['net_benefit'], 
+                    color='green', linewidth=2)
+        axes[1].set_xlabel('Threshold')
+        axes[1].set_ylabel('Net Benefit ($)')
+        axes[1].set_title('Business Impact vs Threshold')
+        axes[1].grid(True, alpha=0.3)
+        
+        # Mark optimal threshold
+        optimal_idx = metrics_df['net_benefit'].idxmax()
+        optimal_threshold = metrics_df.loc[optimal_idx, 'threshold']
+        axes[1].axvline(x=optimal_threshold, color='red', linestyle='--',
+                       label=f'Optimal: {optimal_threshold:.2f}')
+        axes[1].legend()
+        
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"Optimal threshold: {optimal_threshold:.2f}")
+        print(f"At this threshold:")
+        print(f"  Precision: {metrics_df.loc[optimal_idx, 'precision']:.3f}")
+        print(f"  Recall: {metrics_df.loc[optimal_idx, 'recall']:.3f}")
+        print(f"  F1-Score: {metrics_df.loc[optimal_idx, 'f1']:.3f}")
+        print(f"  Net Benefit: ${metrics_df.loc[optimal_idx, 'net_benefit']:.2f}")
+        
+        return optimal_threshold
+
+# Train and evaluate models
+fraud_models = FraudDetectionModels(X, y)
+fraud_models.train_models()
+fraud_models.plot_evaluation_metrics()
+
+# Optimize threshold
+optimal_threshold = fraud_models.threshold_optimization()</code></pre>
+
+        <h2>Production Deployment Considerations</h2>
+        
+        <pre class="language-python"><code>class ProductionSystem:
+    """
+    Production-ready fraud detection system
+    """
+    
+    def __init__(self, model, scaler, threshold=0.5):
+        self.model = model
+        self.scaler = scaler
+        self.threshold = threshold
+        self.monitoring_data = []
+        
+    def preprocess_transaction(self, transaction_data):
+        """
+        Preprocess incoming transaction
+        """
+        # Apply feature engineering
+        # (In production, this would match training pipeline exactly)
+        processed = transaction_data.copy()
+        
+        # Add derived features
+        processed['amount_log'] = np.log1p(processed['amount'])
+        processed['high_amount'] = (processed['amount'] > 500).astype(int)
+        # ... add other engineered features
+        
+        return processed
+    
+    def score_transaction(self, transaction):
+        """
+        Score a single transaction in real-time
+        """
+        start_time = datetime.now()
+        
+        try:
+            # Preprocess
+            processed = self.preprocess_transaction(transaction)
+            
+            # Scale features
+            scaled = self.scaler.transform(processed.values.reshape(1, -1))
+            
+            # Get probability
+            fraud_probability = self.model.predict_proba(scaled)[0, 1]
+            
+            # Make decision
+            is_fraud = fraud_probability >= self.threshold
+            
+            # Calculate latency
+            latency = (datetime.now() - start_time).total_seconds() * 1000
+            
+            # Log for monitoring
+            self.monitoring_data.append({
+                'timestamp': datetime.now(),
+                'probability': fraud_probability,
+                'prediction': is_fraud,
+                'latency_ms': latency
+            })
+            
+            return {
+                'transaction_id': transaction.get('id', 'unknown'),
+                'fraud_probability': float(fraud_probability),
+                'is_fraud': bool(is_fraud),
+                'risk_level': self.get_risk_level(fraud_probability),
+                'recommended_action': self.get_recommended_action(fraud_probability),
+                'latency_ms': latency
+            }
+            
+        except Exception as e:
+            return {
+                'error': str(e),
+                'transaction_id': transaction.get('id', 'unknown')
+            }
+    
+    def get_risk_level(self, probability):
+        """
+        Categorize risk level
+        """
+        if probability < 0.3:
+            return 'LOW'
+        elif probability < 0.7:
+            return 'MEDIUM'
+        else:
+            return 'HIGH'
+    
+    def get_recommended_action(self, probability):
+        """
+        Recommend action based on risk
+        """
+        if probability < 0.3:
+            return 'APPROVE'
+        elif probability < 0.7:
+            return 'REVIEW'
+        else:
+            return 'BLOCK'
+    
+    def get_monitoring_stats(self):
+        """
+        Get system monitoring statistics
+        """
+        if not self.monitoring_data:
+            return {}
+        
+        df = pd.DataFrame(self.monitoring_data)
+        
+        stats = {
+            'total_transactions': len(df),
+            'fraud_rate': df['prediction'].mean(),
+            'avg_latency_ms': df['latency_ms'].mean(),
+            'p95_latency_ms': df['latency_ms'].quantile(0.95),
+            'last_updated': df['timestamp'].max()
+        }
+        
+        return stats
+
+# Production system demo
+print("\n" + "=" * 50)
+print("PRODUCTION SYSTEM SIMULATION")
+print("=" * 50)
+
+# Use best model (Random Forest in this case)
+best_model = fraud_models.models['Random Forest']
+production_system = ProductionSystem(
+    model=best_model,
+    scaler=fraud_models.scaler,
+    threshold=optimal_threshold
+)
+
+# Simulate real-time scoring
+print("\nSimulating real-time transaction scoring...")
+sample_transactions = X_test.head(5)
+
+for idx, transaction in sample_transactions.iterrows():
+    result = production_system.score_transaction(transaction)
+    print(f"\nTransaction {idx}:")
+    print(f"  Risk Level: {result['risk_level']}")
+    print(f"  Fraud Probability: {result['fraud_probability']:.3f}")
+    print(f"  Recommended Action: {result['recommended_action']}")
+    print(f"  Latency: {result['latency_ms']:.2f} ms")
+
+# System monitoring
+stats = production_system.get_monitoring_stats()
+print("\n" + "=" * 50)
+print("SYSTEM MONITORING")
+print("=" * 50)
+for key, value in stats.items():
+    print(f"{key}: {value}")</code></pre>
+
+        <h2>Key Takeaways and Best Practices</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 Fraud Detection Best Practices</h3>
+            <ul>
+                <li><strong>Feature Engineering:</strong> Domain knowledge is crucial - work with fraud experts</li>
+                <li><strong>Class Imbalance:</strong> Use appropriate techniques (SMOTE, class weights, custom metrics)</li>
+                <li><strong>Evaluation Metrics:</strong> Focus on precision-recall rather than accuracy</li>
+                <li><strong>Threshold Tuning:</strong> Optimize for business objectives, not just ML metrics</li>
+                <li><strong>Real-time Requirements:</strong> Balance model complexity with latency constraints</li>
+                <li><strong>Monitoring:</strong> Track both model performance and business metrics</li>
+                <li><strong>Feedback Loop:</strong> Continuously update models with new fraud patterns</li>
+                <li><strong>Explainability:</strong> Be able to explain why transactions are flagged</li>
+                <li><strong>Cost-Benefit Analysis:</strong> Consider false positive costs vs fraud losses</li>
+                <li><strong>Ensemble Methods:</strong> Combine multiple models for robustness</li>
+            </ul>
+        </div>
+
+        <h2>Summary</h2>
+        
+        <div class="summary-box">
+            <h3>✅ Case Study Completed</h3>
+            <ul>
+                <li>Built complete fraud detection pipeline from data to deployment</li>
+                <li>Handled severe class imbalance with multiple techniques</li>
+                <li>Engineered domain-specific features for better detection</li>
+                <li>Compared multiple models and evaluation strategies</li>
+                <li>Optimized decision threshold for business objectives</li>
+                <li>Created production-ready scoring system</li>
+                <li>Implemented monitoring and feedback mechanisms</li>
+            </ul>
+        </div>
+    </div>
+
+    <nav class="lesson-nav" aria-label="Lesson Navigation">
+        <a href="advanced_ensemble_comparison.html" class="prev-lesson">← Previous</a>
+        <a href="index.html" class="home-link">🏠 Home</a>
+        <a href="case_study_churn.html" class="next-lesson">Next →</a>
+    </nav>
+    </main>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#f0f0f0',
+                primaryTextColor: '#333',
+                primaryBorderColor: '#667eea',
+                lineColor: '#667eea',
+                secondaryColor: '#e0e7ff',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
+</body>
+</html>

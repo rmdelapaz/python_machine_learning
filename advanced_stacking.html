@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Learn about Stacking (Stacked Generalization) - combining multiple models with a meta-learner for superior performance.">
+    <title>Stacking Methods - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+
+    <nav>
+        <a href="index.html" class="logo">Python Machine Learning</a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="index.html#advanced">Advanced Topics</a>
+        </div>
+    </nav>
+    
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="index.html#advanced">Advanced Topics</a></li>
+            <li aria-current="page">Stacking Methods</li>
+        </ul>
+    </nav>
+
+    <main id="main-content">
+    <div class="container">
+        <h1>📚 Stacking: Meta-Learning for Ensemble Success</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>Stacking (Stacked Generalization) is an advanced ensemble technique that combines multiple base models using a meta-learner. Unlike voting or averaging, stacking learns the optimal way to combine predictions from diverse models. This approach can capture complex patterns and relationships that individual models might miss, often achieving superior performance in competitions and real-world applications.</p>
+        </div>
+
+        <h2>Stacking Architecture</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            A[Training Data] --> B[Split for CV]
+            
+            B --> C[Fold 1]
+            B --> D[Fold 2]
+            B --> E[Fold K]
+            
+            C --> F[Base Model 1]
+            C --> G[Base Model 2]
+            C --> H[Base Model 3]
+            
+            F --> I[Predictions 1]
+            G --> J[Predictions 2]
+            H --> K[Predictions 3]
+            
+            I --> L[Meta Features]
+            J --> L
+            K --> L
+            
+            L --> M[Meta-Learner]
+            
+            M --> N[Final Model]
+            
+            O[New Data] --> P[Trained Base Models]
+            P --> Q[Base Predictions]
+            Q --> R[Trained Meta-Learner]
+            R --> S[Final Prediction]
+            
+            style A fill:#e3f2fd
+            style L fill:#fff9c4
+            style M fill:#f3e5f5
+            style N fill:#c8e6c9
+            style S fill:#c8e6c9
+        </div>
+
+        <h2>Stacking vs Other Ensemble Methods</h2>
+        
+        <div class="mermaid">
+        graph LR
+            subgraph "Voting"
+                V1[Model 1] --> VA[Average/Vote]
+                V2[Model 2] --> VA
+                V3[Model 3] --> VA
+                VA --> VF[Fixed Combination]
+            end
+            
+            subgraph "Stacking"
+                S1[Model 1] --> SM[Meta-Learner]
+                S2[Model 2] --> SM
+                S3[Model 3] --> SM
+                SM --> SF[Learned Combination]
+            end
+            
+            style VF fill:#ffccbc
+            style SF fill:#c8e6c9
+        </div>
+
+        <h2>Setting Up Environment</h2>
+        
+        <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.datasets import make_classification, make_regression, load_breast_cancer
+from sklearn.model_selection import train_test_split, KFold, cross_val_score
+from sklearn.preprocessing import StandardScaler
+
+# Base models
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import GaussianNB
+
+# Stacking
+from sklearn.ensemble import StackingClassifier, StackingRegressor
+
+# Metrics
+from sklearn.metrics import accuracy_score, roc_auc_score, mean_squared_error
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+np.random.seed(42)
+
+print("Stacking Ensemble Methods")
+print("=" * 50)</code></pre>
+
+        <h2>Implementing Stacking from Scratch</h2>
+        
+        <pre class="language-python"><code>class StackingFromScratch:
+    """
+    Stacking implementation from scratch with cross-validation
+    """
+    
+    def __init__(self, base_models, meta_model, cv_folds=5, use_probas=True):
+        """
+        Initialize stacking ensemble
+        
+        Parameters:
+        -----------
+        base_models : list of tuples
+            List of (name, model) tuples for base models
+        meta_model : estimator
+            Meta-learner model
+        cv_folds : int
+            Number of cross-validation folds
+        use_probas : bool
+            Use probability predictions for classification
+        """
+        self.base_models = base_models
+        self.meta_model = meta_model
+        self.cv_folds = cv_folds
+        self.use_probas = use_probas
+        self.trained_base_models = []
+        self.meta_features_train = None
+        
+    def _get_meta_features(self, X, y=None, training=True):
+        """
+        Generate meta-features from base models
+        """
+        n_samples = X.shape[0]
+        n_models = len(self.base_models)
+        
+        if training:
+            # Use cross-validation to generate out-of-fold predictions
+            kfold = KFold(n_splits=self.cv_folds, shuffle=True, random_state=42)
+            
+            # Initialize meta-features array
+            if self.use_probas and hasattr(self.base_models[0][1], 'predict_proba'):
+                # For binary classification with probabilities
+                meta_features = np.zeros((n_samples, n_models * 2))
+            else:
+                meta_features = np.zeros((n_samples, n_models))
+            
+            # Generate out-of-fold predictions for each base model
+            for model_idx, (name, model) in enumerate(self.base_models):
+                model_oof_pred = np.zeros(n_samples)
+                
+                if self.use_probas and hasattr(model, 'predict_proba'):
+                    model_oof_pred = np.zeros((n_samples, 2))
+                
+                # Cross-validation loop
+                for fold_idx, (train_idx, val_idx) in enumerate(kfold.split(X)):
+                    X_fold_train, X_fold_val = X[train_idx], X[val_idx]
+                    y_fold_train = y[train_idx]
+                    
+                    # Clone and train model on fold
+                    fold_model = model.__class__(**model.get_params())
+                    fold_model.fit(X_fold_train, y_fold_train)
+                    
+                    # Generate predictions for validation fold
+                    if self.use_probas and hasattr(model, 'predict_proba'):
+                        model_oof_pred[val_idx] = fold_model.predict_proba(X_fold_val)
+                    else:
+                        model_oof_pred[val_idx] = fold_model.predict(X_fold_val)
+                
+                # Store out-of-fold predictions as meta-features
+                if self.use_probas and hasattr(model, 'predict_proba'):
+                    meta_features[:, model_idx*2:(model_idx+1)*2] = model_oof_pred
+                else:
+                    meta_features[:, model_idx] = model_oof_pred
+                
+                # Train model on full training data for later use
+                full_model = model.__class__(**model.get_params())
+                full_model.fit(X, y)
+                self.trained_base_models.append((name, full_model))
+                
+                print(f"  Base model {name} trained (CV)")
+            
+        else:
+            # Generate predictions using trained models
+            if self.use_probas and hasattr(self.trained_base_models[0][1], 'predict_proba'):
+                meta_features = np.zeros((n_samples, len(self.trained_base_models) * 2))
+            else:
+                meta_features = np.zeros((n_samples, len(self.trained_base_models)))
+            
+            for model_idx, (name, model) in enumerate(self.trained_base_models):
+                if self.use_probas and hasattr(model, 'predict_proba'):
+                    pred = model.predict_proba(X)
+                    meta_features[:, model_idx*2:(model_idx+1)*2] = pred
+                else:
+                    meta_features[:, model_idx] = model.predict(X)
+        
+        return meta_features
+    
+    def fit(self, X, y):
+        """
+        Train the stacking ensemble
+        """
+        print("Training base models with cross-validation...")
+        
+        # Generate meta-features through cross-validation
+        self.meta_features_train = self._get_meta_features(X, y, training=True)
+        
+        print("Training meta-learner...")
+        # Train meta-model on meta-features
+        self.meta_model.fit(self.meta_features_train, y)
+        
+        print("Stacking ensemble trained successfully!")
+        
+        return self
+    
+    def predict(self, X):
+        """
+        Make predictions with stacking ensemble
+        """
+        # Generate meta-features from base models
+        meta_features = self._get_meta_features(X, training=False)
+        
+        # Make final prediction with meta-model
+        return self.meta_model.predict(meta_features)
+    
+    def predict_proba(self, X):
+        """
+        Predict probabilities (for classification)
+        """
+        if not hasattr(self.meta_model, 'predict_proba'):
+            raise AttributeError("Meta-model doesn't support probability prediction")
+        
+        meta_features = self._get_meta_features(X, training=False)
+        return self.meta_model.predict_proba(meta_features)
+
+# Demonstrate custom stacking
+print("\n" + "=" * 50)
+print("CUSTOM STACKING IMPLEMENTATION")
+print("=" * 50)
+
+# Generate data
+X, y = make_classification(n_samples=1000, n_features=20, n_informative=15,
+                          n_redundant=5, random_state=42)
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Define base models
+base_models = [
+    ('rf', RandomForestClassifier(n_estimators=50, random_state=42)),
+    ('svc', SVC(probability=True, random_state=42)),
+    ('nb', GaussianNB())
+]
+
+# Define meta-model
+meta_model = LogisticRegression(random_state=42)
+
+# Create and train stacking ensemble
+stacking = StackingFromScratch(base_models, meta_model, cv_folds=5, use_probas=True)
+stacking.fit(X_train, y_train)
+
+# Make predictions
+y_pred = stacking.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+
+print(f"\nStacking Ensemble Accuracy: {accuracy:.4f}")
+
+# Compare with individual models
+print("\nIndividual Model Performance:")
+for name, model in base_models:
+    model.fit(X_train, y_train)
+    individual_accuracy = model.score(X_test, y_test)
+    print(f"  {name}: {individual_accuracy:.4f}")
+    
+print(f"\nImprovement over best base model: {accuracy - max([model.score(X_test, y_test) for _, model in base_models]):.4f}")</code></pre>
+
+        <h2>Scikit-learn Stacking Implementation</h2>
+        
+        <pre class="language-python"><code>def sklearn_stacking_demo():
+    """
+    Demonstrate stacking with scikit-learn
+    """
+    # Load dataset
+    data = load_breast_cancer()
+    X, y = data.data, data.target
+    
+    # Split and scale data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    # Define base estimators
+    base_estimators = [
+        ('rf', RandomForestClassifier(n_estimators=100, random_state=42)),
+        ('svc', SVC(kernel='linear', probability=True, random_state=42)),
+        ('gb', GradientBoostingClassifier(n_estimators=100, random_state=42)),
+        ('knn', KNeighborsClassifier(n_neighbors=5))
+    ]
+    
+    # Create stacking classifier
+    stacking_clf = StackingClassifier(
+        estimators=base_estimators,
+        final_estimator=LogisticRegression(random_state=42),
+        cv=5,  # Use 5-fold CV to train meta-learner
+        stack_method='predict_proba',  # Use probabilities as meta-features
+        n_jobs=-1
+    )
+    
+    print("\n" + "=" * 50)
+    print("SCIKIT-LEARN STACKING")
+    print("=" * 50)
+    print("Training stacking ensemble...")
+    
+    # Train stacking ensemble
+    stacking_clf.fit(X_train_scaled, y_train)
+    
+    # Evaluate all models
+    models = {
+        'Random Forest': base_estimators[0][1],
+        'SVC': base_estimators[1][1],
+        'Gradient Boosting': base_estimators[2][1],
+        'KNN': base_estimators[3][1],
+        'Stacking': stacking_clf
+    }
+    
+    results = {}
+    
+    for name, model in models.items():
+        if name != 'Stacking':
+            model.fit(X_train_scaled, y_train)
+        
+        # Predictions
+        y_pred = model.predict(X_test_scaled)
+        y_proba = model.predict_proba(X_test_scaled)[:, 1]
+        
+        # Metrics
+        accuracy = accuracy_score(y_test, y_pred)
+        auc_score = roc_auc_score(y_test, y_proba)
+        
+        results[name] = {
+            'accuracy': accuracy,
+            'auc': auc_score
+        }
+        
+        print(f"\n{name}:")
+        print(f"  Accuracy: {accuracy:.4f}")
+        print(f"  AUC-ROC: {auc_score:.4f}")
+    
+    # Visualize results
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # Accuracy comparison
+    names = list(results.keys())
+    accuracies = [results[name]['accuracy'] for name in names]
+    colors = ['blue', 'green', 'orange', 'red', 'purple']
+    
+    axes[0].bar(names, accuracies, color=colors)
+    axes[0].set_ylabel('Accuracy')
+    axes[0].set_title('Model Accuracy Comparison')
+    axes[0].set_ylim([min(accuracies) * 0.95, max(accuracies) * 1.02])
+    axes[0].tick_params(axis='x', rotation=45)
+    axes[0].grid(True, alpha=0.3)
+    
+    # AUC comparison
+    aucs = [results[name]['auc'] for name in names]
+    axes[1].bar(names, aucs, color=colors)
+    axes[1].set_ylabel('AUC-ROC')
+    axes[1].set_title('Model AUC-ROC Comparison')
+    axes[1].set_ylim([min(aucs) * 0.95, max(aucs) * 1.02])
+    axes[1].tick_params(axis='x', rotation=45)
+    axes[1].grid(True, alpha=0.3)
+    
+    plt.suptitle('Stacking vs Individual Models', fontsize=14)
+    plt.tight_layout()
+    plt.show()
+    
+    return results
+
+# Run scikit-learn stacking demo
+sklearn_results = sklearn_stacking_demo()</code></pre>
+
+        <h2>Advanced Stacking Strategies</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            subgraph "Level 0: Base Models"
+                A1[Random Forest]
+                A2[XGBoost]
+                A3[Neural Network]
+                A4[SVM]
+            end
+            
+            subgraph "Level 1: First Meta-Layer"
+                B1[Linear Model]
+                B2[Tree Model]
+            end
+            
+            subgraph "Level 2: Final Meta-Layer"
+                C[Final Predictor]
+            end
+            
+            A1 --> B1
+            A1 --> B2
+            A2 --> B1
+            A2 --> B2
+            A3 --> B1
+            A3 --> B2
+            A4 --> B1
+            A4 --> B2
+            
+            B1 --> C
+            B2 --> C
+            
+            style A1 fill:#e3f2fd
+            style A2 fill:#e3f2fd
+            style A3 fill:#e3f2fd
+            style A4 fill:#e3f2fd
+            style B1 fill:#fff9c4
+            style B2 fill:#fff9c4
+            style C fill:#c8e6c9
+        </div>
+
+        <pre class="language-python"><code>class AdvancedStacking:
+    """
+    Advanced stacking strategies
+    """
+    
+    def __init__(self):
+        self.models = {}
+        
+    def multi_level_stacking(self, X_train, X_test, y_train, y_test):
+        """
+        Implement multi-level stacking
+        """
+        print("\n" + "=" * 50)
+        print("MULTI-LEVEL STACKING")
+        print("=" * 50)
+        
+        # Level 0: Diverse base models
+        level0_models = [
+            ('rf', RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)),
+            ('gb', GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, random_state=42)),
+            ('svc', SVC(kernel='rbf', probability=True, random_state=42)),
+            ('knn', KNeighborsClassifier(n_neighbors=7))
+        ]
+        
+        # Train level 0 models and get predictions
+        level0_train_preds = []
+        level0_test_preds = []
+        
+        print("Training Level 0 models...")
+        for name, model in level0_models:
+            # Use cross-validation for training predictions
+            kfold = KFold(n_splits=5, shuffle=True, random_state=42)
+            oof_preds = np.zeros((len(X_train), 2))
+            
+            for fold_idx, (train_idx, val_idx) in enumerate(kfold.split(X_train)):
+                X_fold_train, X_fold_val = X_train[train_idx], X_train[val_idx]
+                y_fold_train = y_train[train_idx]
+                
+                model.fit(X_fold_train, y_fold_train)
+                oof_preds[val_idx] = model.predict_proba(X_fold_val)
+            
+            # Train on full data for test predictions
+            model.fit(X_train, y_train)
+            test_preds = model.predict_proba(X_test)
+            
+            level0_train_preds.append(oof_preds)
+            level0_test_preds.append(test_preds)
+            
+            print(f"  {name} trained")
+        
+        # Combine level 0 predictions
+        X_level1_train = np.hstack(level0_train_preds)
+        X_level1_test = np.hstack(level0_test_preds)
+        
+        # Level 1: Meta-models
+        print("\nTraining Level 1 models...")
+        level1_models = [
+            ('meta_lr', LogisticRegression(random_state=42)),
+            ('meta_rf', RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42))
+        ]
+        
+        level1_train_preds = []
+        level1_test_preds = []
+        
+        for name, model in level1_models:
+            # Train on level 0 predictions
+            model.fit(X_level1_train, y_train)
+            
+            # Get predictions
+            train_pred = model.predict_proba(X_level1_train)[:, 1].reshape(-1, 1)
+            test_pred = model.predict_proba(X_level1_test)[:, 1].reshape(-1, 1)
+            
+            level1_train_preds.append(train_pred)
+            level1_test_preds.append(test_pred)
+            
+            print(f"  {name} trained")
+        
+        # Level 2: Final meta-learner
+        print("\nTraining Level 2 (final) model...")
+        X_level2_train = np.hstack(level1_train_preds)
+        X_level2_test = np.hstack(level1_test_preds)
+        
+        final_model = LogisticRegression(random_state=42)
+        final_model.fit(X_level2_train, y_train)
+        
+        # Final predictions
+        final_pred = final_model.predict(X_level2_test)
+        final_accuracy = accuracy_score(y_test, final_pred)
+        
+        print(f"\nMulti-level Stacking Accuracy: {final_accuracy:.4f}")
+        
+        return final_accuracy
+    
+    def blending_vs_stacking(self, X, y):
+        """
+        Compare blending and stacking approaches
+        """
+        print("\n" + "=" * 50)
+        print("BLENDING VS STACKING")
+        print("=" * 50)
+        
+        # Split data: train, blend/validation, test
+        X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        X_train, X_blend, y_train, y_blend = train_test_split(X_temp, y_temp, test_size=0.25, random_state=42)
+        
+        # Base models
+        base_models = [
+            RandomForestClassifier(n_estimators=100, random_state=42),
+            GradientBoostingClassifier(n_estimators=100, random_state=42),
+            SVC(probability=True, random_state=42)
+        ]
+        
+        # --- BLENDING ---
+        print("\nBlending Approach:")
+        print("  Using holdout validation set for meta-features")
+        
+        # Train base models on training set
+        blend_train_preds = []
+        blend_test_preds = []
+        
+        for i, model in enumerate(base_models):
+            model.fit(X_train, y_train)
+            
+            # Predictions on blend set (for training meta-model)
+            blend_pred = model.predict_proba(X_blend)[:, 1].reshape(-1, 1)
+            blend_train_preds.append(blend_pred)
+            
+            # Predictions on test set
+            test_pred = model.predict_proba(X_test)[:, 1].reshape(-1, 1)
+            blend_test_preds.append(test_pred)
+        
+        # Train meta-model on blend set
+        X_blend_meta = np.hstack(blend_train_preds)
+        X_test_blend = np.hstack(blend_test_preds)
+        
+        meta_model_blend = LogisticRegression(random_state=42)
+        meta_model_blend.fit(X_blend_meta, y_blend)
+        
+        blend_pred = meta_model_blend.predict(X_test_blend)
+        blend_accuracy = accuracy_score(y_test, blend_pred)
+        
+        print(f"  Blending Accuracy: {blend_accuracy:.4f}")
+        
+        # --- STACKING ---
+        print("\nStacking Approach:")
+        print("  Using cross-validation for meta-features")
+        
+        # Combine train and blend sets for stacking
+        X_stack_train = np.vstack([X_train, X_blend])
+        y_stack_train = np.hstack([y_train, y_blend])
+        
+        # Create stacking classifier
+        stacking_clf = StackingClassifier(
+            estimators=[
+                ('rf', RandomForestClassifier(n_estimators=100, random_state=42)),
+                ('gb', GradientBoostingClassifier(n_estimators=100, random_state=42)),
+                ('svc', SVC(probability=True, random_state=42))
+            ],
+            final_estimator=LogisticRegression(random_state=42),
+            cv=5
+        )
+        
+        stacking_clf.fit(X_stack_train, y_stack_train)
+        stack_pred = stacking_clf.predict(X_test)
+        stack_accuracy = accuracy_score(y_test, stack_pred)
+        
+        print(f"  Stacking Accuracy: {stack_accuracy:.4f}")
+        
+        # Comparison
+        print("\n" + "-" * 40)
+        print("Comparison:")
+        print(f"  Blending: {blend_accuracy:.4f} (uses {len(X_blend)} samples for meta-training)")
+        print(f"  Stacking: {stack_accuracy:.4f} (uses all {len(X_stack_train)} samples with CV)")
+        print(f"  Difference: {stack_accuracy - blend_accuracy:.4f}")
+        
+        return blend_accuracy, stack_accuracy
+
+# Advanced stacking demonstrations
+advanced = AdvancedStacking()
+
+# Generate data for demonstrations
+X, y = make_classification(n_samples=2000, n_features=20, n_informative=15,
+                          n_redundant=5, random_state=42)
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Scale features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Multi-level stacking
+multi_level_accuracy = advanced.multi_level_stacking(X_train_scaled, X_test_scaled, y_train, y_test)
+
+# Blending vs Stacking
+blend_acc, stack_acc = advanced.blending_vs_stacking(X, y)</code></pre>
+
+        <h2>Feature Engineering for Stacking</h2>
+        
+        <pre class="language-python"><code>class StackingFeatureEngineering:
+    """
+    Advanced feature engineering for stacking
+    """
+    
+    def create_diverse_features(self, X_train, X_test, y_train):
+        """
+        Create diverse meta-features for better stacking
+        """
+        print("\n" + "=" * 50)
+        print("FEATURE ENGINEERING FOR STACKING")
+        print("=" * 50)
+        
+        meta_features_train = []
+        meta_features_test = []
+        
+        # 1. Raw predictions
+        print("\n1. Raw Predictions:")
+        models = [
+            ('RF', RandomForestClassifier(n_estimators=100, random_state=42)),
+            ('GB', GradientBoostingClassifier(n_estimators=100, random_state=42))
+        ]
+        
+        for name, model in models:
+            model.fit(X_train, y_train)
+            train_pred = model.predict_proba(X_train)[:, 1].reshape(-1, 1)
+            test_pred = model.predict_proba(X_test)[:, 1].reshape(-1, 1)
+            meta_features_train.append(train_pred)
+            meta_features_test.append(test_pred)
+            print(f"  {name} predictions added")
+        
+        # 2. Prediction statistics
+        print("\n2. Prediction Statistics:")
+        train_preds = np.hstack(meta_features_train)
+        test_preds = np.hstack(meta_features_test)
+        
+        # Mean, std, max, min of predictions
+        train_stats = np.column_stack([
+            np.mean(train_preds, axis=1),
+            np.std(train_preds, axis=1),
+            np.max(train_preds, axis=1),
+            np.min(train_preds, axis=1)
+        ])
+        
+        test_stats = np.column_stack([
+            np.mean(test_preds, axis=1),
+            np.std(test_preds, axis=1),
+            np.max(test_preds, axis=1),
+            np.min(test_preds, axis=1)
+        ])
+        
+        meta_features_train.append(train_stats)
+        meta_features_test.append(test_stats)
+        print("  Statistics (mean, std, max, min) added")
+        
+        # 3. Prediction disagreement
+        print("\n3. Prediction Disagreement:")
+        train_disagree = np.abs(train_preds[:, 0] - train_preds[:, 1]).reshape(-1, 1)
+        test_disagree = np.abs(test_preds[:, 0] - test_preds[:, 1]).reshape(-1, 1)
+        
+        meta_features_train.append(train_disagree)
+        meta_features_test.append(test_disagree)
+        print("  Disagreement measure added")
+        
+        # 4. Original features (subset)
+        print("\n4. Original Features (top 5):")
+        # Select top features based on RF importance
+        rf = RandomForestClassifier(n_estimators=50, random_state=42)
+        rf.fit(X_train, y_train)
+        top_features_idx = np.argsort(rf.feature_importances_)[-5:]
+        
+        meta_features_train.append(X_train[:, top_features_idx])
+        meta_features_test.append(X_test[:, top_features_idx])
+        print("  Top 5 original features added")
+        
+        # Combine all meta-features
+        X_meta_train = np.hstack(meta_features_train)
+        X_meta_test = np.hstack(meta_features_test)
+        
+        print(f"\nFinal meta-features shape:")
+        print(f"  Train: {X_meta_train.shape}")
+        print(f"  Test: {X_meta_test.shape}")
+        
+        return X_meta_train, X_meta_test
+    
+    def visualize_meta_features(self, X_meta_train, y_train):
+        """
+        Visualize meta-features
+        """
+        # PCA for visualization
+        from sklearn.decomposition import PCA
+        
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X_meta_train)
+        
+        plt.figure(figsize=(10, 6))
+        scatter = plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_train, 
+                            cmap='coolwarm', alpha=0.6, edgecolor='black', linewidth=0.5)
+        plt.colorbar(scatter, label='Class')
+        plt.xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.2%} variance)')
+        plt.ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.2%} variance)')
+        plt.title('Meta-features Visualization (PCA)')
+        plt.grid(True, alpha=0.3)
+        plt.show()
+        
+        print(f"Explained variance: {pca.explained_variance_ratio_.sum():.2%}")
+
+# Feature engineering demonstration
+fe = StackingFeatureEngineering()
+X_meta_train, X_meta_test = fe.create_diverse_features(X_train_scaled, X_test_scaled, y_train)
+fe.visualize_meta_features(X_meta_train, y_train)
+
+# Train meta-learner on engineered features
+print("\n" + "=" * 50)
+print("PERFORMANCE WITH ENGINEERED FEATURES")
+print("=" * 50)
+
+meta_learner = LogisticRegression(random_state=42)
+meta_learner.fit(X_meta_train, y_train)
+y_pred_engineered = meta_learner.predict(X_meta_test)
+engineered_accuracy = accuracy_score(y_test, y_pred_engineered)
+
+print(f"Stacking with engineered features: {engineered_accuracy:.4f}")</code></pre>
+
+        <h2>Best Practices</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 Stacking Best Practices</h3>
+            <ul>
+                <li><strong>Diverse Base Models:</strong> Use different algorithms (tree-based, linear, neural)</li>
+                <li><strong>Cross-Validation:</strong> Always use CV for generating meta-features to avoid overfitting</li>
+                <li><strong>Simple Meta-Learner:</strong> Often linear models work best as meta-learners</li>
+                <li><strong>Feature Selection:</strong> Consider which base model predictions to include</li>
+                <li><strong>Avoid Leakage:</strong> Never use test data in any part of training</li>
+                <li><strong>Computational Cost:</strong> Balance performance gains with training time</li>
+                <li><strong>Model Interpretability:</strong> Stacking reduces interpretability</li>
+                <li><strong>Validation Strategy:</strong> Keep a holdout set for final evaluation</li>
+            </ul>
+        </div>
+
+        <h2>Practice Exercises</h2>
+        
+        <div class="exercise-card">
+            <h3>Exercise 1: Dynamic Stacking</h3>
+            <p>Build an adaptive stacking system:</p>
+            <ul>
+                <li>Automatically select best base models</li>
+                <li>Optimize meta-learner hyperparameters</li>
+                <li>Implement feature selection for meta-features</li>
+                <li>Compare with simple averaging</li>
+            </ul>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 2: Regression Stacking</h3>
+            <p>Implement stacking for regression:</p>
+            <ul>
+                <li>Use different regression models as base</li>
+                <li>Try non-linear meta-learners</li>
+                <li>Implement weighted stacking</li>
+                <li>Analyze prediction intervals</li>
+            </ul>
+        </div>
+
+        <h2>Summary</h2>
+        
+        <div class="summary-box">
+            <h3>✅ You've Learned</h3>
+            <ul>
+                <li>Stacking architecture and how it differs from voting</li>
+                <li>Implementation of stacking from scratch with cross-validation</li>
+                <li>Using scikit-learn's StackingClassifier and StackingRegressor</li>
+                <li>Multi-level stacking for complex problems</li>
+                <li>Blending vs stacking comparison</li>
+                <li>Feature engineering for meta-features</li>
+                <li>Best practices for production stacking systems</li>
+            </ul>
+        </div>
+    </div>
+
+    <nav class="lesson-nav" aria-label="Lesson Navigation">
+        <a href="advanced_bagging.html" class="prev-lesson">← Previous</a>
+        <a href="index.html" class="home-link">🏠 Home</a>
+        <a href="advanced_ensemble_comparison.html" class="next-lesson">Next →</a>
+    </nav>
+    </main>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#f0f0f0',
+                primaryTextColor: '#333',
+                primaryBorderColor: '#667eea',
+                lineColor: '#667eea',
+                secondaryColor: '#e0e7ff',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
+</body>
+</html>

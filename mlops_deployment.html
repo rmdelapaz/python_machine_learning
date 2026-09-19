@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Learn about Model Deployment strategies, serving patterns, and production best practices for machine learning systems.">
+    <title>Model Deployment - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+
+    <nav>
+        <a href="index.html" class="logo">Python Machine Learning</a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="index.html#mlops">MLOps</a>
+        </div>
+    </nav>
+    
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="index.html#mlops">MLOps</a></li>
+            <li aria-current="page">Model Deployment</li>
+        </ul>
+    </nav>
+
+    <main id="main-content">
+    <div class="container">
+        <h1>🚢 Model Deployment: From Development to Production</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>Model deployment is the process of making trained machine learning models available for use in production environments. This involves creating APIs, containerization, scaling strategies, and monitoring systems. This lesson covers different deployment patterns including REST APIs, batch processing, streaming, and edge deployment, along with practical implementations using Flask, FastAPI, Docker, and cloud platforms.</p>
+        </div>
+
+        <h2>Deployment Patterns Overview</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            A[Trained Model] --> B{Deployment Pattern}
+            
+            B --> C[REST API]
+            C --> C1[Synchronous]
+            C --> C2[Request/Response]
+            C --> C3[Low Latency]
+            
+            B --> D[Batch Processing]
+            D --> D1[Scheduled Jobs]
+            D --> D2[Large Volumes]
+            D --> D3[Offline Scoring]
+            
+            B --> E[Streaming]
+            E --> E1[Real-time Events]
+            E --> E2[Continuous Processing]
+            E --> E3[Event-Driven]
+            
+            B --> F[Edge Deployment]
+            F --> F1[On-Device]
+            F --> F2[Low Latency]
+            F --> F3[Offline Capable]
+            
+            C --> G[Use Cases]
+            D --> H[Use Cases]
+            E --> I[Use Cases]
+            F --> J[Use Cases]
+            
+            G --> G1[Web Apps]
+            H --> H1[ETL Pipelines]
+            I --> I1[IoT Sensors]
+            J --> J1[Mobile Apps]
+            
+            style A fill:#e3f2fd
+            style C fill:#c8e6c9
+            style D fill:#fff9c4
+            style E fill:#ffccbc
+            style F fill:#f3e5f5
+        </div>
+
+        <h2>Deployment Architecture</h2>
+        
+        <div class="mermaid">
+        graph LR
+            A[Client] --> B[Load Balancer]
+            B --> C[API Gateway]
+            C --> D[Model Service 1]
+            C --> E[Model Service 2]
+            C --> F[Model Service N]
+            
+            D --> G[Model Cache]
+            E --> G
+            F --> G
+            
+            G --> H[Model Storage]
+            
+            D --> I[Feature Store]
+            E --> I
+            F --> I
+            
+            D --> J[Monitoring]
+            E --> J
+            F --> J
+            
+            J --> K[Metrics DB]
+            J --> L[Alerting]
+            
+            style A fill:#e3f2fd
+            style B fill:#fff3e0
+            style C fill:#f0f4c3
+            style G fill:#e8f5e9
+            style J fill:#ffebee
+        </div>
+
+        <h2>Setting Up Deployment Environment</h2>
+        
+        <pre class="language-python"><code>import os
+import json
+import pickle
+import joblib
+import numpy as np
+import pandas as pd
+from datetime import datetime
+import logging
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Create deployment directories
+deployment_dirs = ['models', 'configs', 'logs', 'tests']
+for dir_name in deployment_dirs:
+    os.makedirs(dir_name, exist_ok=True)
+
+print("Deployment Environment Setup Complete")
+print("=" * 50)</code></pre>
+
+        <h2>REST API Deployment with Flask</h2>
+        
+        <pre class="language-python"><code># flask_app.py
+from flask import Flask, request, jsonify
+import joblib
+import numpy as np
+import pandas as pd
+import traceback
+import logging
+from datetime import datetime
+
+# Initialize Flask app
+app = Flask(__name__)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Global model variable
+MODEL = None
+MODEL_METADATA = {}
+
+class ModelService:
+    """Model service for handling predictions"""
+    
+    def __init__(self, model_path):
+        self.model_path = model_path
+        self.model = None
+        self.metadata = {}
+        self.load_model()
+        
+    def load_model(self):
+        """Load model and metadata"""
+        try:
+            self.model = joblib.load(self.model_path)
+            self.metadata = {
+                'model_path': self.model_path,
+                'loaded_at': datetime.now().isoformat(),
+                'model_type': type(self.model).__name__
+            }
+            logger.info(f"Model loaded successfully from {self.model_path}")
+        except Exception as e:
+            logger.error(f"Error loading model: {str(e)}")
+            raise
+    
+    def predict(self, data):
+        """Make predictions"""
+        try:
+            # Convert to DataFrame if needed
+            if isinstance(data, dict):
+                df = pd.DataFrame([data])
+            elif isinstance(data, list):
+                df = pd.DataFrame(data)
+            else:
+                df = data
+            
+            # Make prediction
+            prediction = self.model.predict(df)
+            
+            # Get prediction probability if available
+            proba = None
+            if hasattr(self.model, 'predict_proba'):
+                proba = self.model.predict_proba(df).tolist()
+            
+            return {
+                'prediction': prediction.tolist(),
+                'probability': proba
+            }
+        except Exception as e:
+            logger.error(f"Prediction error: {str(e)}")
+            raise
+    
+    def get_model_info(self):
+        """Get model information"""
+        return self.metadata
+
+# Initialize model service (example path)
+# In production, load from environment variable or config
+# model_service = ModelService('models/model.pkl')
+
+# Flask Routes
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat()
+    })
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    """Prediction endpoint"""
+    try:
+        # Get data from request
+        data = request.json
+        
+        # Log request
+        logger.info(f"Prediction request received: {len(data)} samples")
+        
+        # Make prediction
+        # result = model_service.predict(data)
+        
+        # For demo, return mock prediction
+        result = {
+            'prediction': [1],
+            'probability': [[0.3, 0.7]],
+            'model_version': '1.0.0',
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        error_msg = f"Prediction error: {str(e)}\n{traceback.format_exc()}"
+        logger.error(error_msg)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/model/info', methods=['GET'])
+def model_info():
+    """Get model information"""
+    try:
+        # info = model_service.get_model_info()
+        info = {
+            'model_type': 'RandomForestClassifier',
+            'version': '1.0.0',
+            'features': ['feature_1', 'feature_2', 'feature_3'],
+            'last_updated': datetime.now().isoformat()
+        }
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Example Flask app code
+print("\n" + "=" * 50)
+print("FLASK API EXAMPLE")
+print("=" * 50)
+print("""
+To run the Flask app:
+1. Save the code to 'app.py'
+2. Install Flask: pip install flask
+3. Run: python app.py
+4. Test: curl -X POST http://localhost:5000/predict -H "Content-Type: application/json" -d '{"feature1": 1.0}'
+""")</code></pre>
+
+        <h2>FastAPI Deployment (Modern Alternative)</h2>
+        
+        <pre class="language-python"><code># fastapi_app.py
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+import joblib
+import numpy as np
+import pandas as pd
+from datetime import datetime
+import logging
+
+# Create FastAPI app
+app = FastAPI(
+    title="ML Model API",
+    description="Production ML model serving with FastAPI",
+    version="1.0.0"
+)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Pydantic models for request/response validation
+class PredictionRequest(BaseModel):
+    """Request model for predictions"""
+    features: List[float]
+    feature_names: Optional[List[str]] = None
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "features": [5.1, 3.5, 1.4, 0.2],
+                "feature_names": ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+            }
+        }
+
+class PredictionResponse(BaseModel):
+    """Response model for predictions"""
+    prediction: List[int]
+    probability: Optional[List[List[float]]]
+    model_version: str
+    timestamp: str
+
+class ModelInfo(BaseModel):
+    """Model information response"""
+    model_type: str
+    version: str
+    features: List[str]
+    performance_metrics: dict
+    last_updated: str
+
+# API Endpoints
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "message": "ML Model API",
+        "version": "1.0.0",
+        "endpoints": ["/docs", "/health", "/predict", "/model/info"]
+    }
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/predict", response_model=PredictionResponse)
+async def predict(request: PredictionRequest):
+    """
+    Make predictions with the model
+    """
+    try:
+        # Prepare data
+        features = np.array(request.features).reshape(1, -1)
+        
+        # Make prediction (mock for demo)
+        prediction = [1]
+        probability = [[0.3, 0.7]]
+        
+        return PredictionResponse(
+            prediction=prediction,
+            probability=probability,
+            model_version="1.0.0",
+            timestamp=datetime.now().isoformat()
+        )
+    
+    except Exception as e:
+        logger.error(f"Prediction error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/model/info", response_model=ModelInfo)
+async def get_model_info():
+    """
+    Get model information and metadata
+    """
+    return ModelInfo(
+        model_type="RandomForestClassifier",
+        version="1.0.0",
+        features=["feature_1", "feature_2", "feature_3", "feature_4"],
+        performance_metrics={
+            "accuracy": 0.95,
+            "precision": 0.94,
+            "recall": 0.96,
+            "f1_score": 0.95
+        },
+        last_updated=datetime.now().isoformat()
+    )
+
+@app.post("/batch_predict")
+async def batch_predict(requests: List[PredictionRequest]):
+    """
+    Batch prediction endpoint
+    """
+    results = []
+    for req in requests:
+        result = await predict(req)
+        results.append(result)
+    return results
+
+print("\n" + "=" * 50)
+print("FASTAPI DEPLOYMENT EXAMPLE")
+print("=" * 50)
+print("""
+FastAPI advantages:
+1. Automatic API documentation (Swagger UI)
+2. Type validation with Pydantic
+3. Async support for better performance
+4. Modern Python features
+
+To run:
+1. Install: pip install fastapi uvicorn
+2. Run: uvicorn app:app --reload
+3. View docs: http://localhost:8000/docs
+""")</code></pre>
+
+        <h2>Docker Containerization</h2>
+        
+        <pre class="language-docker"><code># Dockerfile
+FROM python:3.9-slim
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY app.py .
+COPY models/ ./models/
+COPY configs/ ./configs/
+
+# Create non-root user for security
+RUN useradd -m -u 1000 mluser && chown -R mluser:mluser /app
+USER mluser
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+
+# Run application
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+</code></pre>
+
+        <pre class="language-yaml"><code># docker-compose.yml
+version: '3.8'
+
+services:
+  model-api:
+    build: .
+    container_name: ml-model-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=/app/models/model.pkl
+      - LOG_LEVEL=INFO
+      - MAX_BATCH_SIZE=100
+    volumes:
+      - ./models:/app/models:ro
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+  nginx:
+    image: nginx:alpine
+    container_name: ml-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - model-api
+    restart: unless-stopped
+  
+  prometheus:
+    image: prom/prometheus
+    container_name: ml-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+
+print("\n" + "=" * 50)
+print("DOCKER DEPLOYMENT")
+print("=" * 50)
+print("""
+Docker commands:
+1. Build image: docker build -t ml-model:latest .
+2. Run container: docker run -p 8000:8000 ml-model:latest
+3. Docker Compose: docker-compose up -d
+4. View logs: docker logs ml-model-api
+5. Stop: docker-compose down
+""")</code></pre>
+
+        <h2>Model Serving Patterns</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            subgraph "Online Serving"
+                A[REST API] --> A1[Single Prediction]
+                B[gRPC] --> B1[Low Latency]
+                C[WebSocket] --> C1[Real-time Stream]
+            end
+            
+            subgraph "Batch Serving"
+                D[Scheduled Jobs] --> D1[Daily Predictions]
+                E[Event Triggered] --> E1[File Upload]
+            end
+            
+            subgraph "Hybrid"
+                F[Cache Layer] --> F1[Pre-computed + Real-time]
+                G[Async Queue] --> G1[Process in Background]
+            end
+            
+            style A fill:#c8e6c9
+            style D fill:#fff9c4
+            style F fill:#e1f5fe
+        </div>
+
+        <pre class="language-python"><code>class ModelServer:
+    """
+    Advanced model serving with caching and monitoring
+    """
+    
+    def __init__(self, model_path, cache_size=1000):
+        self.model = joblib.load(model_path)
+        self.cache = {}
+        self.cache_size = cache_size
+        self.metrics = {
+            'total_predictions': 0,
+            'cache_hits': 0,
+            'cache_misses': 0,
+            'avg_latency': 0,
+            'errors': 0
+        }
+        
+    def _get_cache_key(self, features):
+        """Generate cache key from features"""
+        return hash(tuple(features.flatten()))
+    
+    def predict_with_cache(self, features):
+        """Predict with caching"""
+        import time
+        
+        start_time = time.time()
+        cache_key = self._get_cache_key(features)
+        
+        # Check cache
+        if cache_key in self.cache:
+            self.metrics['cache_hits'] += 1
+            logger.info("Cache hit")
+            return self.cache[cache_key]
+        
+        # Make prediction
+        try:
+            prediction = self.model.predict(features)
+            
+            # Update cache (FIFO if full)
+            if len(self.cache) >= self.cache_size:
+                # Remove oldest entry
+                oldest = next(iter(self.cache))
+                del self.cache[oldest]
+            
+            self.cache[cache_key] = prediction
+            self.metrics['cache_misses'] += 1
+            
+            # Update metrics
+            latency = time.time() - start_time
+            self.metrics['total_predictions'] += 1
+            self.metrics['avg_latency'] = (
+                (self.metrics['avg_latency'] * (self.metrics['total_predictions'] - 1) + latency) 
+                / self.metrics['total_predictions']
+            )
+            
+            return prediction
+            
+        except Exception as e:
+            self.metrics['errors'] += 1
+            logger.error(f"Prediction error: {str(e)}")
+            raise
+    
+    def get_metrics(self):
+        """Get server metrics"""
+        cache_hit_rate = (
+            self.metrics['cache_hits'] / 
+            max(self.metrics['cache_hits'] + self.metrics['cache_misses'], 1)
+        )
+        
+        return {
+            **self.metrics,
+            'cache_hit_rate': cache_hit_rate,
+            'cache_size': len(self.cache)
+        }
+    
+    def clear_cache(self):
+        """Clear prediction cache"""
+        self.cache.clear()
+        logger.info("Cache cleared")
+
+# Batch processing
+class BatchProcessor:
+    """
+    Batch processing for offline scoring
+    """
+    
+    def __init__(self, model_path, batch_size=1000):
+        self.model = joblib.load(model_path)
+        self.batch_size = batch_size
+        
+    def process_file(self, input_file, output_file):
+        """Process predictions from file"""
+        # Read data
+        data = pd.read_csv(input_file)
+        
+        # Process in batches
+        predictions = []
+        for i in range(0, len(data), self.batch_size):
+            batch = data.iloc[i:i + self.batch_size]
+            batch_pred = self.model.predict(batch)
+            predictions.extend(batch_pred)
+        
+        # Save results
+        data['prediction'] = predictions
+        data.to_csv(output_file, index=False)
+        
+        logger.info(f"Processed {len(data)} records")
+        return len(data)
+    
+    def process_stream(self, data_generator):
+        """Process streaming data"""
+        for batch in data_generator:
+            predictions = self.model.predict(batch)
+            yield predictions
+
+# Demonstrate serving patterns
+print("\n" + "=" * 50)
+print("MODEL SERVING PATTERNS")
+print("=" * 50)
+
+# Create sample model (mock)
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=100, n_features=4, random_state=42)
+model = RandomForestClassifier(n_estimators=10, random_state=42)
+model.fit(X, y)
+
+# Save model
+joblib.dump(model, 'models/demo_model.pkl')
+
+# Test server with caching
+server = ModelServer('models/demo_model.pkl', cache_size=10)
+
+# Make predictions
+test_features = X[:5]
+for i, features in enumerate(test_features):
+    pred = server.predict_with_cache(features.reshape(1, -1))
+    print(f"Prediction {i+1}: {pred[0]}")
+
+# Make same predictions again (should hit cache)
+print("\nRepeating predictions (should hit cache):")
+for i, features in enumerate(test_features[:3]):
+    pred = server.predict_with_cache(features.reshape(1, -1))
+    print(f"Cached prediction {i+1}: {pred[0]}")
+
+# Show metrics
+print("\nServer Metrics:")
+metrics = server.get_metrics()
+for key, value in metrics.items():
+    print(f"  {key}: {value}")</code></pre>
+
+        <h2>Load Testing and Performance</h2>
+        
+        <pre class="language-python"><code># load_test.py
+import asyncio
+import aiohttp
+import time
+import statistics
+from typing import List
+
+class LoadTester:
+    """
+    Load testing for deployed models
+    """
+    
+    def __init__(self, base_url="http://localhost:8000"):
+        self.base_url = base_url
+        self.results = []
+        
+    async def make_request(self, session, data):
+        """Make single async request"""
+        start_time = time.time()
+        try:
+            async with session.post(
+                f"{self.base_url}/predict",
+                json=data
+            ) as response:
+                result = await response.json()
+                latency = time.time() - start_time
+                return {
+                    'status': response.status,
+                    'latency': latency,
+                    'success': response.status == 200
+                }
+        except Exception as e:
+            return {
+                'status': 0,
+                'latency': time.time() - start_time,
+                'success': False,
+                'error': str(e)
+            }
+    
+    async def run_load_test(self, num_requests=100, concurrent=10):
+        """Run load test with concurrent requests"""
+        print(f"\nRunning load test: {num_requests} requests, {concurrent} concurrent")
+        
+        # Prepare test data
+        test_data = {'features': [1.0, 2.0, 3.0, 4.0]}
+        
+        # Create semaphore for concurrency control
+        semaphore = asyncio.Semaphore(concurrent)
+        
+        async def bounded_request(session):
+            async with semaphore:
+                return await self.make_request(session, test_data)
+        
+        # Run requests
+        async with aiohttp.ClientSession() as session:
+            start_time = time.time()
+            tasks = [bounded_request(session) for _ in range(num_requests)]
+            self.results = await asyncio.gather(*tasks)
+            total_time = time.time() - start_time
+        
+        # Calculate statistics
+        successful = [r for r in self.results if r['success']]
+        latencies = [r['latency'] for r in successful]
+        
+        stats = {
+            'total_requests': num_requests,
+            'successful_requests': len(successful),
+            'failed_requests': num_requests - len(successful),
+            'success_rate': len(successful) / num_requests * 100,
+            'total_time': total_time,
+            'requests_per_second': num_requests / total_time,
+            'avg_latency': statistics.mean(latencies) if latencies else 0,
+            'min_latency': min(latencies) if latencies else 0,
+            'max_latency': max(latencies) if latencies else 0,
+            'p50_latency': statistics.median(latencies) if latencies else 0,
+            'p95_latency': statistics.quantiles(latencies, n=20)[18] if len(latencies) > 20 else 0,
+            'p99_latency': statistics.quantiles(latencies, n=100)[98] if len(latencies) > 100 else 0
+        }
+        
+        return stats
+    
+    def print_results(self, stats):
+        """Print load test results"""
+        print("\n" + "=" * 50)
+        print("LOAD TEST RESULTS")
+        print("=" * 50)
+        print(f"Total Requests: {stats['total_requests']}")
+        print(f"Successful: {stats['successful_requests']} ({stats['success_rate']:.1f}%)")
+        print(f"Failed: {stats['failed_requests']}")
+        print(f"Total Time: {stats['total_time']:.2f}s")
+        print(f"Requests/Second: {stats['requests_per_second']:.1f}")
+        print("\nLatency Statistics (seconds):")
+        print(f"  Average: {stats['avg_latency']:.3f}")
+        print(f"  Min: {stats['min_latency']:.3f}")
+        print(f"  Max: {stats['max_latency']:.3f}")
+        print(f"  P50: {stats['p50_latency']:.3f}")
+        print(f"  P95: {stats['p95_latency']:.3f}")
+        print(f"  P99: {stats['p99_latency']:.3f}")
+
+# Example load test
+print("\n" + "=" * 50)
+print("LOAD TESTING EXAMPLE")
+print("=" * 50)
+print("""
+To run load test:
+1. Start your model API server
+2. Run the load test:
+
+import asyncio
+tester = LoadTester()
+stats = asyncio.run(tester.run_load_test(num_requests=1000, concurrent=50))
+tester.print_results(stats)
+""")</code></pre>
+
+        <h2>Production Deployment Checklist</h2>
+        
+        <div class="summary-box">
+            <h3>✅ Deployment Checklist</h3>
+            <ul>
+                <li><strong>Model:</strong> Versioned, tested, documented</li>
+                <li><strong>API:</strong> RESTful endpoints, input validation, error handling</li>
+                <li><strong>Container:</strong> Docker image, health checks, resource limits</li>
+                <li><strong>Security:</strong> Authentication, HTTPS, input sanitization</li>
+                <li><strong>Monitoring:</strong> Metrics, logging, alerting</li>
+                <li><strong>Scaling:</strong> Load balancer, auto-scaling, caching</li>
+                <li><strong>Testing:</strong> Unit tests, integration tests, load tests</li>
+                <li><strong>Documentation:</strong> API docs, deployment guide, runbook</li>
+                <li><strong>Rollback:</strong> Version control, quick rollback strategy</li>
+                <li><strong>Compliance:</strong> Data privacy, audit logs, regulations</li>
+            </ul>
+        </div>
+
+        <h2>Best Practices</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 Deployment Best Practices</h3>
+            <ul>
+                <li><strong>Blue-Green Deployment:</strong> Zero-downtime deployments</li>
+                <li><strong>Canary Releases:</strong> Gradual rollout to subset of users</li>
+                <li><strong>Feature Flags:</strong> Enable/disable features without deployment</li>
+                <li><strong>Circuit Breakers:</strong> Prevent cascade failures</li>
+                <li><strong>Rate Limiting:</strong> Protect against abuse</li>
+                <li><strong>Request Validation:</strong> Validate all inputs</li>
+                <li><strong>Async Processing:</strong> Use queues for heavy computations</li>
+                <li><strong>Model Warm-up:</strong> Pre-load models before serving</li>
+                <li><strong>Graceful Shutdown:</strong> Handle in-flight requests</li>
+                <li><strong>Observability:</strong> Structured logging, distributed tracing</li>
+            </ul>
+        </div>
+
+        <h2>Practice Exercises</h2>
+        
+        <div class="exercise-card">
+            <h3>Exercise 1: Build Production API</h3>
+            <p>Create a production-ready model API:</p>
+            <ul>
+                <li>Implement FastAPI with proper validation</li>
+                <li>Add authentication and rate limiting</li>
+                <li>Implement caching layer</li>
+                <li>Add comprehensive logging</li>
+                <li>Create Docker container</li>
+            </ul>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 2: Deploy to Cloud</h3>
+            <p>Deploy model to cloud platform:</p>
+            <ul>
+                <li>Choose cloud provider (AWS/GCP/Azure)</li>
+                <li>Set up container registry</li>
+                <li>Configure auto-scaling</li>
+                <li>Implement monitoring dashboard</li>
+                <li>Set up CI/CD pipeline</li>
+            </ul>
+        </div>
+
+        <h2>Summary</h2>
+        
+        <div class="summary-box">
+            <h3>✅ You've Learned</h3>
+            <ul>
+                <li>Different deployment patterns and when to use them</li>
+                <li>Building REST APIs with Flask and FastAPI</li>
+                <li>Docker containerization for ML models</li>
+                <li>Model serving with caching and optimization</li>
+                <li>Load testing and performance monitoring</li>
+                <li>Production deployment best practices</li>
+                <li>Security and scaling considerations</li>
+            </ul>
+        </div>
+    </div>
+
+    <nav class="lesson-nav" aria-label="Lesson Navigation">
+        <a href="mlops_intro.html" class="prev-lesson">← Previous</a>
+        <a href="index.html" class="home-link">🏠 Home</a>
+        <a href="mlops_monitoring.html" class="next-lesson">Next →</a>
+    </nav>
+    </main>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#f0f0f0',
+                primaryTextColor: '#333',
+                primaryBorderColor: '#667eea',
+                lineColor: '#667eea',
+                secondaryColor: '#e0e7ff',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
+</body>
+</html>

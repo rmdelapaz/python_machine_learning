@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Complete case study on building a customer churn prediction system using machine learning - from data analysis to deployment.">
+    <title>Customer Churn Case Study - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+
+    <nav>
+        <a href="index.html" class="logo">Python Machine Learning</a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="index.html#case_studies">Case Studies</a>
+        </div>
+    </nav>
+    
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="index.html#case_studies">Case Studies</a></li>
+            <li aria-current="page">Customer Churn</li>
+        </ul>
+    </nav>
+
+    <main id="main-content">
+    <div class="container">
+        <h1>📊 Case Study: Customer Churn Prediction System</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>Customer churn prediction is crucial for businesses to identify customers likely to cancel their service or subscription. This comprehensive case study walks through building an end-to-end churn prediction system for a telecommunications company, covering exploratory data analysis, feature engineering, model development, interpretation, and deployment strategies. We'll focus on actionable insights and business value creation.</p>
+        </div>
+
+        <h2>Business Context and Pipeline</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            A[Customer Data] --> B[Data Integration]
+            B --> C[Feature Engineering]
+            C --> D[Exploratory Analysis]
+            
+            D --> E[Model Development]
+            E --> F[Model Selection]
+            F --> G[Hyperparameter Tuning]
+            
+            G --> H[Model Interpretation]
+            H --> I[Business Insights]
+            
+            I --> J[Deployment]
+            J --> K[Monitoring]
+            
+            K --> L[Intervention Strategy]
+            L --> M[Retention Campaign]
+            
+            M --> N[Feedback Loop]
+            N --> C
+            
+            style A fill:#e3f2fd
+            style J fill:#c8e6c9
+            style L fill:#fff9c4
+            style M fill:#ffccbc
+        </div>
+
+        <h2>Churn Prediction Framework</h2>
+        
+        <div class="mermaid">
+        graph LR
+            A[Customer] --> B{Risk Score}
+            
+            B -->|Low Risk<br/>0-30%| C[Regular Engagement]
+            B -->|Medium Risk<br/>30-70%| D[Proactive Outreach]
+            B -->|High Risk<br/>70-100%| E[Retention Offer]
+            
+            C --> F[Monitor]
+            D --> G[Personalized Campaign]
+            E --> H[Special Discount]
+            
+            G --> I[Save Customer]
+            H --> I
+            
+            style B fill:#fff9c4
+            style C fill:#c8e6c9
+            style D fill:#fff3e0
+            style E fill:#ffccbc
+        </div>
+
+        <h2>Setting Up the Environment</h2>
+        
+        <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime, timedelta
+import warnings
+warnings.filterwarnings('ignore')
+
+# ML Libraries
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    roc_auc_score, roc_curve, confusion_matrix, classification_report
+)
+
+# Models
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.svm import SVC
+import xgboost as xgb
+import lightgbm as lgb
+
+# Feature selection and interpretation
+from sklearn.feature_selection import SelectKBest, chi2, mutual_info_classif
+import shap
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+np.random.seed(42)
+
+print("Customer Churn Prediction System")
+print("=" * 60)</code></pre>
+
+        <h2>Data Generation and Exploration</h2>
+        
+        <pre class="language-python"><code>class ChurnDataGenerator:
+    """
+    Generate realistic telecom customer churn dataset
+    """
+    
+    def __init__(self, n_customers=5000):
+        self.n_customers = n_customers
+        self.data = None
+        
+    def generate_dataset(self):
+        """
+        Generate synthetic customer churn data
+        """
+        np.random.seed(42)
+        
+        # Customer demographics
+        data = {
+            'customer_id': range(1, self.n_customers + 1),
+            'tenure': np.random.exponential(scale=24, size=self.n_customers),  # months
+            'age': np.random.normal(45, 15, self.n_customers).clip(18, 80),
+            'gender': np.random.choice(['Male', 'Female'], self.n_customers),
+            'senior_citizen': np.random.choice([0, 1], self.n_customers, p=[0.84, 0.16]),
+            'partner': np.random.choice(['Yes', 'No'], self.n_customers, p=[0.48, 0.52]),
+            'dependents': np.random.choice(['Yes', 'No'], self.n_customers, p=[0.30, 0.70])
+        }
+        
+        # Services
+        data['phone_service'] = np.random.choice(['Yes', 'No'], self.n_customers, p=[0.90, 0.10])
+        data['multiple_lines'] = np.where(
+            data['phone_service'] == 'Yes',
+            np.random.choice(['Yes', 'No', 'No phone service'], self.n_customers, p=[0.42, 0.48, 0.10]),
+            'No phone service'
+        )
+        
+        data['internet_service'] = np.random.choice(
+            ['DSL', 'Fiber optic', 'No'], 
+            self.n_customers, 
+            p=[0.34, 0.44, 0.22]
+        )
+        
+        # Online services (only for internet customers)
+        has_internet = np.array(data['internet_service']) != 'No'
+        
+        for service in ['online_security', 'online_backup', 'device_protection',
+                       'tech_support', 'streaming_tv', 'streaming_movies']:
+            data[service] = np.where(
+                has_internet,
+                np.random.choice(['Yes', 'No'], self.n_customers, p=[0.4, 0.6]),
+                'No internet service'
+            )
+        
+        # Contract and billing
+        data['contract'] = np.random.choice(
+            ['Month-to-month', 'One year', 'Two year'],
+            self.n_customers,
+            p=[0.55, 0.21, 0.24]
+        )
+        
+        data['paperless_billing'] = np.random.choice(['Yes', 'No'], self.n_customers, p=[0.59, 0.41])
+        
+        data['payment_method'] = np.random.choice(
+            ['Electronic check', 'Mailed check', 'Bank transfer', 'Credit card'],
+            self.n_customers,
+            p=[0.34, 0.23, 0.22, 0.21]
+        )
+        
+        # Charges
+        base_monthly = np.random.uniform(20, 50, self.n_customers)
+        
+        # Add charges for services
+        service_charges = (
+            (np.array(data['multiple_lines']) == 'Yes') * 10 +
+            (np.array(data['internet_service']) == 'Fiber optic') * 30 +
+            (np.array(data['internet_service']) == 'DSL') * 20 +
+            (np.array(data['online_security']) == 'Yes') * 5 +
+            (np.array(data['online_backup']) == 'Yes') * 5 +
+            (np.array(data['device_protection']) == 'Yes') * 5 +
+            (np.array(data['tech_support']) == 'Yes') * 5 +
+            (np.array(data['streaming_tv']) == 'Yes') * 10 +
+            (np.array(data['streaming_movies']) == 'Yes') * 10
+        )
+        
+        data['monthly_charges'] = base_monthly + service_charges
+        data['total_charges'] = data['monthly_charges'] * np.maximum(data['tenure'], 1)
+        
+        # Generate churn based on various factors
+        churn_probability = (
+            0.1 +  # Base probability
+            0.3 * (np.array(data['contract']) == 'Month-to-month') +
+            0.2 * (np.array(data['payment_method']) == 'Electronic check') +
+            0.15 * (data['tenure'] < 12) +
+            0.1 * (data['monthly_charges'] > 70) +
+            0.1 * (np.array(data['internet_service']) == 'Fiber optic') +
+            0.05 * (np.array(data['senior_citizen']) == 1) -
+            0.2 * (np.array(data['contract']) == 'Two year') -
+            0.1 * (data['tenure'] > 48) -
+            0.05 * (np.array(data['tech_support']) == 'Yes') -
+            0.05 * (np.array(data['online_security']) == 'Yes')
+        )
+        
+        # Ensure probability is between 0 and 1
+        churn_probability = np.clip(churn_probability, 0, 1)
+        
+        # Generate churn
+        data['churn'] = np.random.binomial(1, churn_probability)
+        
+        # Create DataFrame
+        self.data = pd.DataFrame(data)
+        
+        # Convert numeric columns
+        self.data['tenure'] = self.data['tenure'].round().astype(int)
+        self.data['age'] = self.data['age'].round().astype(int)
+        
+        return self.data
+    
+    def explore_data(self):
+        """
+        Comprehensive data exploration
+        """
+        print("\n" + "=" * 60)
+        print("DATA EXPLORATION")
+        print("=" * 60)
+        
+        # Basic statistics
+        print(f"\nDataset shape: {self.data.shape}")
+        print(f"Features: {list(self.data.columns)}")
+        
+        # Churn distribution
+        churn_dist = self.data['churn'].value_counts()
+        churn_rate = self.data['churn'].mean()
+        
+        print(f"\nChurn Distribution:")
+        print(f"  No Churn: {churn_dist[0]} ({churn_dist[0]/len(self.data):.1%})")
+        print(f"  Churn: {churn_dist[1]} ({churn_dist[1]/len(self.data):.1%})")
+        
+        # Missing values
+        print(f"\nMissing values: {self.data.isnull().sum().sum()}")
+        
+        # Visualizations
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        
+        # 1. Churn rate by tenure
+        tenure_bins = [0, 12, 24, 48, 100]
+        tenure_labels = ['0-1 yr', '1-2 yrs', '2-4 yrs', '4+ yrs']
+        self.data['tenure_group'] = pd.cut(self.data['tenure'], bins=tenure_bins, labels=tenure_labels)
+        
+        churn_by_tenure = self.data.groupby('tenure_group')['churn'].mean()
+        axes[0, 0].bar(tenure_labels, churn_by_tenure)
+        axes[0, 0].set_xlabel('Tenure')
+        axes[0, 0].set_ylabel('Churn Rate')
+        axes[0, 0].set_title('Churn Rate by Tenure')
+        axes[0, 0].set_ylim(0, 0.5)
+        
+        # 2. Churn by contract type
+        churn_by_contract = self.data.groupby('contract')['churn'].mean()
+        axes[0, 1].bar(churn_by_contract.index, churn_by_contract.values)
+        axes[0, 1].set_xlabel('Contract Type')
+        axes[0, 1].set_ylabel('Churn Rate')
+        axes[0, 1].set_title('Churn Rate by Contract Type')
+        axes[0, 1].tick_params(axis='x', rotation=45)
+        axes[0, 1].set_ylim(0, 0.5)
+        
+        # 3. Monthly charges distribution
+        axes[0, 2].hist([
+            self.data[self.data['churn'] == 0]['monthly_charges'],
+            self.data[self.data['churn'] == 1]['monthly_charges']
+        ], bins=30, label=['No Churn', 'Churn'], alpha=0.7)
+        axes[0, 2].set_xlabel('Monthly Charges ($)')
+        axes[0, 2].set_ylabel('Count')
+        axes[0, 2].set_title('Monthly Charges Distribution')
+        axes[0, 2].legend()
+        
+        # 4. Services impact
+        services = ['online_security', 'tech_support', 'online_backup', 
+                   'device_protection', 'streaming_tv', 'streaming_movies']
+        service_impact = []
+        for service in services:
+            has_service = self.data[self.data[service] == 'Yes']['churn'].mean()
+            no_service = self.data[self.data[service] == 'No']['churn'].mean()
+            service_impact.append(has_service - no_service)
+        
+        axes[1, 0].barh(services, service_impact)
+        axes[1, 0].set_xlabel('Churn Rate Difference')
+        axes[1, 0].set_title('Service Impact on Churn')
+        axes[1, 0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
+        
+        # 5. Payment method
+        churn_by_payment = self.data.groupby('payment_method')['churn'].mean()
+        axes[1, 1].bar(range(len(churn_by_payment)), churn_by_payment.values)
+        axes[1, 1].set_xticks(range(len(churn_by_payment)))
+        axes[1, 1].set_xticklabels(churn_by_payment.index, rotation=45, ha='right')
+        axes[1, 1].set_ylabel('Churn Rate')
+        axes[1, 1].set_title('Churn Rate by Payment Method')
+        axes[1, 1].set_ylim(0, 0.5)
+        
+        # 6. Correlation heatmap (numeric features)
+        numeric_cols = ['tenure', 'age', 'monthly_charges', 'total_charges', 'churn']
+        corr_matrix = self.data[numeric_cols].corr()
+        sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', 
+                   center=0, ax=axes[1, 2])
+        axes[1, 2].set_title('Feature Correlation')
+        
+        plt.suptitle('Customer Churn Data Analysis', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+# Generate and explore data
+generator = ChurnDataGenerator(n_customers=5000)
+data = generator.generate_dataset()
+generator.explore_data()</code></pre>
+
+        <h2>Feature Engineering and Preprocessing</h2>
+        
+        <pre class="language-python"><code>class ChurnFeatureEngineering:
+    """
+    Feature engineering for churn prediction
+    """
+    
+    def __init__(self, data):
+        self.data = data.copy()
+        self.encoders = {}
+        
+    def create_features(self):
+        """
+        Create engineered features
+        """
+        print("\n" + "=" * 60)
+        print("FEATURE ENGINEERING")
+        print("=" * 60)
+        
+        # 1. Customer lifetime value proxy
+        self.data['avg_monthly_spend'] = (
+            self.data['total_charges'] / 
+            np.maximum(self.data['tenure'], 1)
+        )
+        
+        # 2. Service count
+        service_cols = ['phone_service', 'multiple_lines', 'online_security',
+                       'online_backup', 'device_protection', 'tech_support',
+                       'streaming_tv', 'streaming_movies']
+        
+        self.data['num_services'] = (
+            self.data[service_cols].apply(
+                lambda x: sum(x == 'Yes'), axis=1
+            )
+        )
+        
+        # 3. Has premium services
+        premium_services = ['streaming_tv', 'streaming_movies', 'online_security']
+        self.data['has_premium'] = (
+            self.data[premium_services].apply(
+                lambda x: any(x == 'Yes'), axis=1
+            ).astype(int)
+        )
+        
+        # 4. Contract commitment score
+        contract_scores = {
+            'Month-to-month': 0,
+            'One year': 1,
+            'Two year': 2
+        }
+        self.data['contract_score'] = self.data['contract'].map(contract_scores)
+        
+        # 5. Payment risk score
+        payment_risk = {
+            'Electronic check': 2,
+            'Mailed check': 1,
+            'Bank transfer': 0,
+            'Credit card': 0
+        }
+        self.data['payment_risk'] = self.data['payment_method'].map(payment_risk)
+        
+        # 6. Tenure groups
+        self.data['is_new_customer'] = (self.data['tenure'] <= 6).astype(int)
+        self.data['is_loyal_customer'] = (self.data['tenure'] >= 48).astype(int)
+        
+        # 7. High value customer
+        self.data['high_value'] = (
+            self.data['monthly_charges'] > self.data['monthly_charges'].quantile(0.75)
+        ).astype(int)
+        
+        # 8. Age groups
+        self.data['age_group'] = pd.cut(
+            self.data['age'],
+            bins=[0, 30, 50, 65, 100],
+            labels=['Young', 'Middle-aged', 'Senior', 'Elderly']
+        )
+        
+        print("New features created:")
+        new_features = [
+            'avg_monthly_spend', 'num_services', 'has_premium',
+            'contract_score', 'payment_risk', 'is_new_customer',
+            'is_loyal_customer', 'high_value', 'age_group'
+        ]
+        for feature in new_features:
+            print(f"  • {feature}")
+        
+        return self.data
+    
+    def encode_categorical(self):
+        """
+        Encode categorical variables
+        """
+        print("\nEncoding categorical variables...")
+        
+        # Binary encoding for Yes/No
+        binary_cols = ['gender', 'partner', 'dependents', 'phone_service', 
+                      'paperless_billing']
+        
+        for col in binary_cols:
+            if col in self.data.columns:
+                le = LabelEncoder()
+                self.data[col + '_encoded'] = le.fit_transform(self.data[col])
+                self.encoders[col] = le
+        
+        # One-hot encoding for multi-class
+        categorical_cols = ['internet_service', 'contract', 'payment_method', 'age_group']
+        
+        for col in categorical_cols:
+            if col in self.data.columns:
+                dummies = pd.get_dummies(self.data[col], prefix=col, drop_first=True)
+                self.data = pd.concat([self.data, dummies], axis=1)
+        
+        # Handle service columns
+        service_cols = ['multiple_lines', 'online_security', 'online_backup',
+                       'device_protection', 'tech_support', 'streaming_tv', 
+                       'streaming_movies']
+        
+        for col in service_cols:
+            if col in self.data.columns:
+                # Map to numeric (Yes=1, No=0, No service=-1)
+                self.data[col + '_encoded'] = self.data[col].map({
+                    'Yes': 1,
+                    'No': 0,
+                    'No phone service': -1,
+                    'No internet service': -1
+                })
+        
+        return self.data
+    
+    def prepare_for_modeling(self):
+        """
+        Prepare final dataset for modeling
+        """
+        print("\nPreparing dataset for modeling...")
+        
+        # Select features for modeling
+        feature_cols = [col for col in self.data.columns 
+                       if col not in ['customer_id', 'churn', 'gender', 'partner',
+                                     'dependents', 'phone_service', 'multiple_lines',
+                                     'internet_service', 'online_security', 'online_backup',
+                                     'device_protection', 'tech_support', 'streaming_tv',
+                                     'streaming_movies', 'contract', 'paperless_billing',
+                                     'payment_method', 'tenure_group', 'age_group']]
+        
+        X = self.data[feature_cols]
+        y = self.data['churn']
+        
+        print(f"Final dataset shape: {X.shape}")
+        print(f"Features selected: {len(feature_cols)}")
+        
+        return X, y
+
+# Apply feature engineering
+engineer = ChurnFeatureEngineering(data)
+data_engineered = engineer.create_features()
+data_encoded = engineer.encode_categorical()
+X, y = engineer.prepare_for_modeling()
+
+print(f"\nTarget distribution:")
+print(f"  No Churn: {sum(y == 0)} ({sum(y == 0)/len(y):.1%})")
+print(f"  Churn: {sum(y == 1)} ({sum(y == 1)/len(y):.1%})")</code></pre>
+
+        <h2>Model Development and Evaluation</h2>
+        
+        <pre class="language-python"><code>class ChurnModelDevelopment:
+    """
+    Develop and evaluate churn prediction models
+    """
+    
+    def __init__(self, X, y):
+        # Split data
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
+        )
+        
+        # Scale features
+        self.scaler = StandardScaler()
+        self.X_train_scaled = self.scaler.fit_transform(self.X_train)
+        self.X_test_scaled = self.scaler.transform(self.X_test)
+        
+        self.models = {}
+        self.results = {}
+        
+    def train_models(self):
+        """
+        Train multiple models
+        """
+        print("\n" + "=" * 60)
+        print("MODEL TRAINING")
+        print("=" * 60)
+        
+        # Define models
+        models = {
+            'Logistic Regression': LogisticRegression(
+                random_state=42,
+                max_iter=1000
+            ),
+            'Decision Tree': DecisionTreeClassifier(
+                max_depth=5,
+                min_samples_split=20,
+                random_state=42
+            ),
+            'Random Forest': RandomForestClassifier(
+                n_estimators=100,
+                max_depth=10,
+                random_state=42
+            ),
+            'Gradient Boosting': GradientBoostingClassifier(
+                n_estimators=100,
+                learning_rate=0.1,
+                max_depth=5,
+                random_state=42
+            ),
+            'XGBoost': xgb.XGBClassifier(
+                n_estimators=100,
+                learning_rate=0.1,
+                max_depth=5,
+                random_state=42,
+                eval_metric='logloss'
+            )
+        }
+        
+        # Train and evaluate each model
+        for name, model in models.items():
+            print(f"\nTraining {name}...")
+            
+            # Train
+            model.fit(self.X_train_scaled, self.y_train)
+            
+            # Store model
+            self.models[name] = model
+            
+            # Predictions
+            y_pred = model.predict(self.X_test_scaled)
+            y_proba = model.predict_proba(self.X_test_scaled)[:, 1]
+            
+            # Calculate metrics
+            self.results[name] = {
+                'accuracy': accuracy_score(self.y_test, y_pred),
+                'precision': precision_score(self.y_test, y_pred),
+                'recall': recall_score(self.y_test, y_pred),
+                'f1': f1_score(self.y_test, y_pred),
+                'auc': roc_auc_score(self.y_test, y_proba),
+                'y_pred': y_pred,
+                'y_proba': y_proba
+            }
+            
+            # Cross-validation
+            cv_scores = cross_val_score(model, self.X_train_scaled, self.y_train, 
+                                       cv=5, scoring='roc_auc')
+            self.results[name]['cv_mean'] = cv_scores.mean()
+            self.results[name]['cv_std'] = cv_scores.std()
+            
+            print(f"  Accuracy: {self.results[name]['accuracy']:.3f}")
+            print(f"  Precision: {self.results[name]['precision']:.3f}")
+            print(f"  Recall: {self.results[name]['recall']:.3f}")
+            print(f"  F1-Score: {self.results[name]['f1']:.3f}")
+            print(f"  AUC-ROC: {self.results[name]['auc']:.3f}")
+            print(f"  CV AUC: {self.results[name]['cv_mean']:.3f} ± {self.results[name]['cv_std']:.3f}")
+    
+    def visualize_results(self):
+        """
+        Comprehensive visualization of model results
+        """
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        
+        # 1. ROC Curves
+        for name, result in self.results.items():
+            fpr, tpr, _ = roc_curve(self.y_test, result['y_proba'])
+            axes[0, 0].plot(fpr, tpr, label=f"{name} (AUC={result['auc']:.3f})")
+        
+        axes[0, 0].plot([0, 1], [0, 1], 'k--')
+        axes[0, 0].set_xlabel('False Positive Rate')
+        axes[0, 0].set_ylabel('True Positive Rate')
+        axes[0, 0].set_title('ROC Curves')
+        axes[0, 0].legend(fontsize=8)
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # 2. Metric Comparison
+        metrics = ['accuracy', 'precision', 'recall', 'f1']
+        model_names = list(self.results.keys())
+        x = np.arange(len(metrics))
+        width = 0.15
+        
+        for i, name in enumerate(model_names):
+            values = [self.results[name][metric] for metric in metrics]
+            axes[0, 1].bar(x + i * width, values, width, label=name)
+        
+        axes[0, 1].set_xlabel('Metrics')
+        axes[0, 1].set_xticks(x + width * (len(model_names) - 1) / 2)
+        axes[0, 1].set_xticklabels(metrics)
+        axes[0, 1].set_ylabel('Score')
+        axes[0, 1].set_title('Model Performance Comparison')
+        axes[0, 1].legend(fontsize=8)
+        axes[0, 1].set_ylim(0, 1)
+        axes[0, 1].grid(True, alpha=0.3, axis='y')
+        
+        # 3. Cross-validation scores
+        cv_means = [self.results[name]['cv_mean'] for name in model_names]
+        cv_stds = [self.results[name]['cv_std'] for name in model_names]
+        
+        axes[0, 2].bar(model_names, cv_means, yerr=cv_stds, capsize=5)
+        axes[0, 2].set_xlabel('Model')
+        axes[0, 2].set_ylabel('CV AUC Score')
+        axes[0, 2].set_title('Cross-Validation Performance')
+        axes[0, 2].tick_params(axis='x', rotation=45)
+        axes[0, 2].grid(True, alpha=0.3, axis='y')
+        
+        # 4-6. Confusion matrices for top 3 models
+        top_models = sorted(self.results.items(), 
+                          key=lambda x: x[1]['auc'], 
+                          reverse=True)[:3]
+        
+        for idx, (name, result) in enumerate(top_models):
+            cm = confusion_matrix(self.y_test, result['y_pred'])
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                       ax=axes[1, idx])
+            axes[1, idx].set_title(f'{name}\nConfusion Matrix')
+            axes[1, idx].set_xlabel('Predicted')
+            axes[1, idx].set_ylabel('Actual')
+        
+        plt.suptitle('Model Evaluation Results', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+    
+    def feature_importance_analysis(self):
+        """
+        Analyze feature importance
+        """
+        print("\n" + "=" * 60)
+        print("FEATURE IMPORTANCE ANALYSIS")
+        print("=" * 60)
+        
+        # Get best model (XGBoost)
+        best_model = self.models['XGBoost']
+        
+        # Feature importance
+        importance = best_model.feature_importances_
+        feature_names = self.X_train.columns
+        
+        # Sort by importance
+        indices = np.argsort(importance)[::-1][:15]
+        
+        # Plot
+        plt.figure(figsize=(10, 6))
+        plt.barh(range(len(indices)), importance[indices])
+        plt.yticks(range(len(indices)), [feature_names[i] for i in indices])
+        plt.xlabel('Feature Importance')
+        plt.title('Top 15 Most Important Features (XGBoost)')
+        plt.gca().invert_yaxis()
+        plt.tight_layout()
+        plt.show()
+        
+        # Print top features
+        print("\nTop 10 features:")
+        for i in range(10):
+            idx = indices[i]
+            print(f"  {i+1}. {feature_names[idx]}: {importance[idx]:.4f}")
+
+# Train and evaluate models
+model_dev = ChurnModelDevelopment(X, y)
+model_dev.train_models()
+model_dev.visualize_results()
+model_dev.feature_importance_analysis()</code></pre>
+
+        <h2>Model Interpretation and Business Insights</h2>
+        
+        <pre class="language-python"><code>class ChurnInsights:
+    """
+    Extract business insights from churn model
+    """
+    
+    def __init__(self, model, X_test, y_test, scaler):
+        self.model = model
+        self.X_test = X_test
+        self.y_test = y_test
+        self.scaler = scaler
+        
+    def customer_segments(self):
+        """
+        Analyze different customer segments
+        """
+        print("\n" + "=" * 60)
+        print("CUSTOMER SEGMENT ANALYSIS")
+        print("=" * 60)
+        
+        # Predict probabilities
+        X_scaled = self.scaler.transform(self.X_test)
+        churn_probs = self.model.predict_proba(X_scaled)[:, 1]
+        
+        # Create risk segments
+        risk_segments = pd.cut(churn_probs, 
+                               bins=[0, 0.3, 0.7, 1.0],
+                               labels=['Low Risk', 'Medium Risk', 'High Risk'])
+        
+        # Analyze segments
+        segment_df = pd.DataFrame({
+            'segment': risk_segments,
+            'churn_prob': churn_probs,
+            'actual_churn': self.y_test.values,
+            'tenure': self.X_test['tenure'].values,
+            'monthly_charges': self.X_test['monthly_charges'].values,
+            'num_services': self.X_test['num_services'].values
+        })
+        
+        # Segment statistics
+        print("\nSegment Distribution:")
+        for segment in ['Low Risk', 'Medium Risk', 'High Risk']:
+            segment_data = segment_df[segment_df['segment'] == segment]
+            actual_churn_rate = segment_data['actual_churn'].mean()
+            avg_prob = segment_data['churn_prob'].mean()
+            count = len(segment_data)
+            
+            print(f"\n{segment}:")
+            print(f"  Count: {count} ({count/len(segment_df):.1%})")
+            print(f"  Avg Predicted Probability: {avg_prob:.3f}")
+            print(f"  Actual Churn Rate: {actual_churn_rate:.3f}")
+            print(f"  Avg Tenure: {segment_data['tenure'].mean():.1f} months")
+            print(f"  Avg Monthly Charges: ${segment_data['monthly_charges'].mean():.2f}")
+        
+        return segment_df
+    
+    def actionable_recommendations(self, segment_df):
+        """
+        Generate actionable business recommendations
+        """
+        print("\n" + "=" * 60)
+        print("ACTIONABLE RECOMMENDATIONS")
+        print("=" * 60)
+        
+        recommendations = {
+            'High Risk': {
+                'strategy': 'Immediate Retention',
+                'actions': [
+                    'Personal call from account manager',
+                    'Offer 20-30% discount for 6 months',
+                    'Free upgrade to premium services',
+                    'Lock-in with annual contract incentive'
+                ],
+                'expected_save_rate': 0.4
+            },
+            'Medium Risk': {
+                'strategy': 'Proactive Engagement',
+                'actions': [
+                    'Email campaign with personalized offers',
+                    'Free tech support consultation',
+                    '10-15% discount for contract upgrade',
+                    'Loyalty rewards program enrollment'
+                ],
+                'expected_save_rate': 0.6
+            },
+            'Low Risk': {
+                'strategy': 'Maintain Satisfaction',
+                'actions': [
+                    'Quarterly satisfaction surveys',
+                    'Early renewal incentives',
+                    'Referral program benefits',
+                    'Regular service updates'
+                ],
+                'expected_save_rate': 0.9
+            }
+        }
+        
+        for risk_level, strategy in recommendations.items():
+            segment_size = len(segment_df[segment_df['segment'] == risk_level])
+            
+            print(f"\n{risk_level} Segment ({segment_size} customers):")
+            print(f"  Strategy: {strategy['strategy']}")
+            print(f"  Actions:")
+            for action in strategy['actions']:
+                print(f"    • {action}")
+            print(f"  Expected Save Rate: {strategy['expected_save_rate']:.0%}")
+        
+        return recommendations
+    
+    def calculate_business_impact(self, segment_df, recommendations):
+        """
+        Calculate potential business impact
+        """
+        print("\n" + "=" * 60)
+        print("BUSINESS IMPACT ANALYSIS")
+        print("=" * 60)
+        
+        # Business assumptions
+        avg_customer_value = 1000  # Annual value
+        intervention_cost = {
+            'High Risk': 150,
+            'Medium Risk': 50,
+            'Low Risk': 10
+        }
+        
+        total_saved = 0
+        total_cost = 0
+        total_roi = 0
+        
+        print("\nROI Analysis by Segment:")
+        for segment in ['High Risk', 'Medium Risk', 'Low Risk']:
+            segment_data = segment_df[segment_df['segment'] == segment]
+            n_customers = len(segment_data)
+            churn_rate = segment_data['actual_churn'].mean()
+            save_rate = recommendations[segment]['expected_save_rate']
+            
+            # Calculate metrics
+            customers_saved = n_customers * churn_rate * save_rate
+            revenue_saved = customers_saved * avg_customer_value
+            cost = n_customers * intervention_cost[segment]
+            roi = (revenue_saved - cost) / cost if cost > 0 else 0
+            
+            total_saved += revenue_saved
+            total_cost += cost
+            
+            print(f"\n{segment}:")
+            print(f"  Customers at risk: {int(n_customers * churn_rate)}")
+            print(f"  Expected saves: {int(customers_saved)}")
+            print(f"  Revenue saved: ${revenue_saved:,.0f}")
+            print(f"  Intervention cost: ${cost:,.0f}")
+            print(f"  ROI: {roi:.1%}")
+        
+        total_roi = (total_saved - total_cost) / total_cost if total_cost > 0 else 0
+        
+        print(f"\nTotal Business Impact:")
+        print(f"  Total revenue saved: ${total_saved:,.0f}")
+        print(f"  Total intervention cost: ${total_cost:,.0f}")
+        print(f"  Net benefit: ${total_saved - total_cost:,.0f}")
+        print(f"  Overall ROI: {total_roi:.1%}")
+
+# Generate insights
+best_model = model_dev.models['XGBoost']
+insights = ChurnInsights(best_model, X_test, y_test, model_dev.scaler)
+
+# Analyze segments
+segment_df = insights.customer_segments()
+
+# Get recommendations
+recommendations = insights.actionable_recommendations(segment_df)
+
+# Calculate business impact
+insights.calculate_business_impact(segment_df, recommendations)</code></pre>
+
+        <h2>Deployment and Monitoring Strategy</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            A[Trained Model] --> B[Model Validation]
+            B --> C[A/B Testing]
+            
+            C --> D[Deployment]
+            D --> E[Batch Scoring]
+            D --> F[Real-time API]
+            
+            E --> G[Daily Predictions]
+            F --> H[On-demand Scoring]
+            
+            G --> I[CRM Integration]
+            H --> I
+            
+            I --> J[Trigger Campaigns]
+            J --> K[Monitor Performance]
+            
+            K --> L{Model Drift?}
+            L -->|Yes| M[Retrain Model]
+            L -->|No| N[Continue]
+            
+            M --> A
+            N --> K
+            
+            style D fill:#c8e6c9
+            style K fill:#fff9c4
+            style M fill:#ffccbc
+        </div>
+
+        <pre class="language-python"><code>class ChurnDeploymentStrategy:
+    """
+    Deployment and monitoring strategy for churn model
+    """
+    
+    @staticmethod
+    def deployment_checklist():
+        """
+        Production deployment checklist
+        """
+        print("\n" + "=" * 60)
+        print("DEPLOYMENT CHECKLIST")
+        print("=" * 60)
+        
+        checklist = {
+            'Model Validation': [
+                'Performance meets business thresholds',
+                'No data leakage confirmed',
+                'Model bias assessment completed',
+                'Edge cases tested'
+            ],
+            'Technical Requirements': [
+                'Model serialization (pickle/joblib)',
+                'API endpoint created',
+                'Database connections configured',
+                'Monitoring infrastructure ready'
+            ],
+            'Business Integration': [
+                'CRM system integration',
+                'Marketing automation setup',
+                'Customer service alerts configured',
+                'Reporting dashboards created'
+            ],
+            'Monitoring Setup': [
+                'Performance metrics tracking',
+                'Data drift detection',
+                'Prediction logging',
+                'Alerting system configured'
+            ]
+        }
+        
+        for category, items in checklist.items():
+            print(f"\n{category}:")
+            for item in items:
+                print(f"  ☐ {item}")
+    
+    @staticmethod
+    def monitoring_metrics():
+        """
+        Define monitoring metrics
+        """
+        print("\n" + "=" * 60)
+        print("MONITORING METRICS")
+        print("=" * 60)
+        
+        metrics = {
+            'Model Performance': {
+                'Precision': 'Weekly',
+                'Recall': 'Weekly',
+                'F1-Score': 'Weekly',
+                'AUC-ROC': 'Weekly'
+            },
+            'Business Metrics': {
+                'Churn Rate': 'Daily',
+                'Save Rate': 'Weekly',
+                'Campaign ROI': 'Monthly',
+                'Customer Lifetime Value': 'Monthly'
+            },
+            'Data Quality': {
+                'Missing Values': 'Daily',
+                'Feature Distributions': 'Weekly',
+                'Prediction Distribution': 'Daily',
+                'Input Data Volume': 'Daily'
+            },
+            'System Health': {
+                'API Response Time': 'Real-time',
+                'Prediction Latency': 'Real-time',
+                'Error Rate': 'Real-time',
+                'System Uptime': 'Daily'
+            }
+        }
+        
+        for category, metric_dict in metrics.items():
+            print(f"\n{category}:")
+            for metric, frequency in metric_dict.items():
+                print(f"  • {metric}: {frequency}")
+
+# Deployment strategy
+deployment = ChurnDeploymentStrategy()
+deployment.deployment_checklist()
+deployment.monitoring_metrics()</code></pre>
+
+        <h2>Key Takeaways and Best Practices</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 Churn Prediction Best Practices</h3>
+            <ul>
+                <li><strong>Data Quality:</strong> Focus on accurate tenure and payment history data</li>
+                <li><strong>Feature Engineering:</strong> Create business-relevant features (CLV, engagement)</li>
+                <li><strong>Model Selection:</strong> Ensemble methods (XGBoost, Random Forest) typically perform best</li>
+                <li><strong>Evaluation Metrics:</strong> Balance precision and recall based on business costs</li>
+                <li><strong>Segmentation:</strong> Create risk-based customer segments for targeted actions</li>
+                <li><strong>Actionability:</strong> Ensure predictions lead to concrete retention strategies</li>
+                <li><strong>Timing:</strong> Predict churn early enough to intervene effectively</li>
+                <li><strong>Personalization:</strong> Tailor retention offers to customer preferences</li>
+                <li><strong>Monitoring:</strong> Track model performance and business impact continuously</li>
+                <li><strong>Feedback Loop:</strong> Use intervention results to improve the model</li>
+            </ul>
+        </div>
+
+        <h2>Summary</h2>
+        
+        <div class="summary-box">
+            <h3>✅ Case Study Completed</h3>
+            <ul>
+                <li>Built complete churn prediction pipeline from data to deployment</li>
+                <li>Performed comprehensive exploratory data analysis</li>
+                <li>Created business-relevant engineered features</li>
+                <li>Trained and evaluated multiple models</li>
+                <li>Extracted actionable business insights</li>
+                <li>Developed customer segmentation strategy</li>
+                <li>Calculated ROI and business impact</li>
+                <li>Created deployment and monitoring framework</li>
+            </ul>
+        </div>
+    </div>
+
+    <nav class="lesson-nav" aria-label="Lesson Navigation">
+        <a href="future_quantum_ml.html" class="prev-lesson">← Previous</a>
+        <a href="index.html" class="home-link">🏠 Home</a>
+        <a href="index.html" class="next-lesson">Back to Home</a>
+    </nav>
+    </main>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#f0f0f0',
+                primaryTextColor: '#333',
+                primaryBorderColor: '#667eea',
+                lineColor: '#667eea',
+                secondaryColor: '#e0e7ff',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
+</body>
+</html>

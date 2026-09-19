@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Learn about SHAP (SHapley Additive exPlanations) for unified model interpretability based on game theory.">
+    <title>SHAP - Model Interpretability - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+
+    <nav>
+        <a href="index.html" class="logo">Python Machine Learning</a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="index.html#interpretability">Interpretability</a>
+        </div>
+    </nav>
+    
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="index.html#interpretability">Interpretability</a></li>
+            <li aria-current="page">SHAP</li>
+        </ul>
+    </nav>
+
+    <main id="main-content">
+    <div class="container">
+        <h1>🎮 SHAP: Game Theory for Model Interpretability</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>SHAP (SHapley Additive exPlanations) is a unified framework for interpreting model predictions based on game theory. It assigns each feature an importance value for a particular prediction, providing both local and global interpretability. SHAP values represent the contribution of each feature to the difference between the actual prediction and the expected prediction. This method is theoretically grounded, providing consistent and locally accurate explanations.</p>
+        </div>
+
+        <h2>SHAP Framework Overview</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            A[Model Prediction] --> B[SHAP Framework]
+            
+            B --> C[TreeExplainer]
+            C --> C1[Random Forest]
+            C --> C2[XGBoost]
+            C --> C3[LightGBM]
+            
+            B --> D[DeepExplainer]
+            D --> D1[Neural Networks]
+            D --> D2[TensorFlow/PyTorch]
+            
+            B --> E[KernelExplainer]
+            E --> E1[Any Model]
+            E --> E2[Model-agnostic]
+            
+            B --> F[LinearExplainer]
+            F --> F1[Linear Models]
+            F --> F2[Logistic Regression]
+            
+            C --> G[SHAP Values]
+            D --> G
+            E --> G
+            F --> G
+            
+            G --> H[Visualizations]
+            H --> H1[Waterfall]
+            H --> H2[Force Plot]
+            H --> H3[Summary Plot]
+            H --> H4[Dependence Plot]
+            
+            style A fill:#e3f2fd
+            style G fill:#fff9c4
+            style H fill:#c8e6c9
+        </div>
+
+        <h2>Shapley Values Concept</h2>
+        
+        <div class="mermaid">
+        graph LR
+            A[Shapley Values] --> B[Game Theory]
+            B --> C[Players = Features]
+            B --> D[Payout = Prediction]
+            
+            E[Properties] --> F[Efficiency]
+            E --> G[Symmetry]
+            E --> H[Dummy]
+            E --> I[Additivity]
+            
+            F --> J[Sum equals prediction]
+            G --> K[Equal features = Equal values]
+            H --> L[No effect = Zero value]
+            I --> M[Combined games]
+            
+            style A fill:#f0f4c3
+            style E fill:#e3f2fd
+        </div>
+
+        <h2>Setting Up Environment</h2>
+        
+        <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import shap
+from sklearn.datasets import load_boston, load_breast_cancer, load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.linear_model import LogisticRegression, LinearRegression
+import xgboost as xgb
+from sklearn.neural_network import MLPClassifier
+import warnings
+warnings.filterwarnings('ignore')
+
+# Initialize JavaScript for SHAP plots
+shap.initjs()
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+np.random.seed(42)
+
+print("SHAP - SHapley Additive exPlanations")
+print("=" * 60)
+print(f"SHAP version: {shap.__version__}")</code></pre>
+
+        <h2>SHAP for Tree-based Models</h2>
+        
+        <pre class="language-python"><code>class SHAPTreeExplainer:
+    """
+    SHAP explanations for tree-based models
+    """
+    
+    def __init__(self):
+        self.model = None
+        self.explainer = None
+        self.shap_values = None
+        self.X_train = None
+        self.X_test = None
+        
+    def prepare_data(self):
+        """
+        Prepare breast cancer dataset
+        """
+        # Load data
+        data = load_breast_cancer()
+        X = pd.DataFrame(data.data, columns=data.feature_names)
+        y = data.target
+        
+        # Split data
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+        
+        print(f"Data prepared: {len(self.X_train)} training, {len(self.X_test)} test samples")
+        print(f"Features: {len(X.columns)}")
+        
+        return self.X_train, self.X_test, self.y_train, self.y_test
+    
+    def train_model(self, model_type='random_forest'):
+        """
+        Train tree-based model
+        """
+        print(f"\nTraining {model_type} model...")
+        
+        if model_type == 'random_forest':
+            self.model = RandomForestClassifier(
+                n_estimators=100,
+                max_depth=10,
+                random_state=42
+            )
+        elif model_type == 'xgboost':
+            self.model = xgb.XGBClassifier(
+                n_estimators=100,
+                max_depth=5,
+                random_state=42
+            )
+        else:
+            raise ValueError(f"Unknown model type: {model_type}")
+        
+        # Train model
+        self.model.fit(self.X_train, self.y_train)
+        
+        # Evaluate
+        train_score = self.model.score(self.X_train, self.y_train)
+        test_score = self.model.score(self.X_test, self.y_test)
+        
+        print(f"Train accuracy: {train_score:.3f}")
+        print(f"Test accuracy: {test_score:.3f}")
+        
+        return self.model
+    
+    def explain_with_shap(self):
+        """
+        Generate SHAP explanations
+        """
+        print("\nGenerating SHAP explanations...")
+        
+        # Create TreeExplainer
+        self.explainer = shap.TreeExplainer(self.model)
+        
+        # Calculate SHAP values
+        self.shap_values = self.explainer.shap_values(self.X_test)
+        
+        # For binary classification, get values for positive class
+        if len(self.shap_values) == 2:
+            self.shap_values = self.shap_values[1]
+        
+        print(f"SHAP values shape: {self.shap_values.shape}")
+        
+        return self.shap_values
+    
+    def visualize_explanations(self):
+        """
+        Create various SHAP visualizations
+        """
+        print("\nCreating SHAP visualizations...")
+        
+        # 1. Summary plot - feature importance
+        plt.figure(figsize=(10, 6))
+        shap.summary_plot(self.shap_values, self.X_test, plot_type="bar")
+        plt.title("SHAP Feature Importance (mean |SHAP value|)")
+        plt.tight_layout()
+        plt.show()
+        
+        # 2. Summary plot - detailed view
+        plt.figure(figsize=(10, 6))
+        shap.summary_plot(self.shap_values, self.X_test)
+        plt.title("SHAP Summary Plot")
+        plt.tight_layout()
+        plt.show()
+        
+        # 3. Waterfall plot for single prediction
+        instance_idx = 0
+        shap.plots.waterfall(
+            shap.Explanation(
+                values=self.shap_values[instance_idx],
+                base_values=self.explainer.expected_value,
+                data=self.X_test.iloc[instance_idx],
+                feature_names=self.X_test.columns.tolist()
+            )
+        )
+        plt.title(f"SHAP Waterfall Plot - Instance {instance_idx}")
+        plt.tight_layout()
+        plt.show()
+        
+        # 4. Force plot for single prediction
+        shap.force_plot(
+            self.explainer.expected_value,
+            self.shap_values[instance_idx],
+            self.X_test.iloc[instance_idx],
+            matplotlib=True
+        )
+        plt.title(f"SHAP Force Plot - Instance {instance_idx}")
+        plt.tight_layout()
+        plt.show()
+        
+    def dependence_plots(self):
+        """
+        Create SHAP dependence plots
+        """
+        print("\nCreating dependence plots...")
+        
+        # Get top 4 important features
+        feature_importance = np.abs(self.shap_values).mean(axis=0)
+        top_features_idx = np.argsort(feature_importance)[-4:]
+        top_features = self.X_test.columns[top_features_idx]
+        
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        axes = axes.ravel()
+        
+        for idx, feature in enumerate(top_features):
+            shap.dependence_plot(
+                feature, 
+                self.shap_values, 
+                self.X_test,
+                ax=axes[idx],
+                show=False
+            )
+            axes[idx].set_title(f'SHAP Dependence: {feature}')
+        
+        plt.suptitle('SHAP Dependence Plots for Top Features', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+# Demonstrate SHAP for tree models
+print("\n" + "=" * 60)
+print("SHAP FOR TREE-BASED MODELS")
+print("=" * 60)
+
+tree_explainer = SHAPTreeExplainer()
+
+# Prepare data
+X_train, X_test, y_train, y_test = tree_explainer.prepare_data()
+
+# Train Random Forest
+model = tree_explainer.train_model('random_forest')
+
+# Generate SHAP explanations
+shap_values = tree_explainer.explain_with_shap()
+
+# Visualize
+tree_explainer.visualize_explanations()
+tree_explainer.dependence_plots()</code></pre>
+
+        <h2>SHAP for Any Model (KernelExplainer)</h2>
+        
+        <pre class="language-python"><code>class SHAPKernelExplainer:
+    """
+    Model-agnostic SHAP explanations using KernelExplainer
+    """
+    
+    def __init__(self):
+        self.models = {}
+        self.explainers = {}
+        self.shap_values = {}
+        
+    def train_diverse_models(self, X_train, X_test, y_train, y_test):
+        """
+        Train different types of models
+        """
+        print("\n" + "=" * 60)
+        print("TRAINING DIVERSE MODELS")
+        print("=" * 60)
+        
+        # Define models
+        models = {
+            'Logistic Regression': LogisticRegression(max_iter=1000, random_state=42),
+            'Neural Network': MLPClassifier(
+                hidden_layer_sizes=(50, 30),
+                max_iter=500,
+                random_state=42
+            ),
+            'XGBoost': xgb.XGBClassifier(
+                n_estimators=50,
+                max_depth=4,
+                random_state=42
+            )
+        }
+        
+        # Train each model
+        for name, model in models.items():
+            print(f"\nTraining {name}...")
+            model.fit(X_train, y_train)
+            score = model.score(X_test, y_test)
+            print(f"  Test accuracy: {score:.3f}")
+            self.models[name] = model
+        
+        return self.models
+    
+    def explain_with_kernel_shap(self, X_train, X_test, sample_size=100):
+        """
+        Generate SHAP explanations using KernelExplainer
+        """
+        print("\n" + "=" * 60)
+        print("KERNEL SHAP EXPLANATIONS")
+        print("=" * 60)
+        
+        # Use a sample of training data as background
+        background = shap.sample(X_train, sample_size)
+        
+        for name, model in self.models.items():
+            print(f"\nExplaining {name}...")
+            
+            # Create KernelExplainer
+            if hasattr(model, 'predict_proba'):
+                explainer = shap.KernelExplainer(
+                    lambda x: model.predict_proba(x)[:, 1],
+                    background
+                )
+            else:
+                explainer = shap.KernelExplainer(
+                    model.predict,
+                    background
+                )
+            
+            # Calculate SHAP values for a subset of test data
+            test_subset = X_test.iloc[:10]  # Use subset for speed
+            shap_values = explainer.shap_values(test_subset)
+            
+            self.explainers[name] = explainer
+            self.shap_values[name] = shap_values
+            
+            print(f"  SHAP values calculated for {len(test_subset)} instances")
+        
+        return self.shap_values
+    
+    def compare_model_explanations(self, X_test, instance_idx=0):
+        """
+        Compare SHAP explanations across different models
+        """
+        print("\n" + "=" * 60)
+        print("COMPARING MODEL EXPLANATIONS")
+        print("=" * 60)
+        
+        fig, axes = plt.subplots(1, len(self.models), figsize=(15, 5))
+        
+        for idx, (name, shap_vals) in enumerate(self.shap_values.items()):
+            # Get SHAP values for specific instance
+            instance_shap = shap_vals[instance_idx]
+            
+            # Get feature names
+            features = X_test.columns
+            
+            # Sort by importance
+            importance_order = np.argsort(np.abs(instance_shap))[::-1][:10]
+            
+            # Plot
+            y_pos = np.arange(len(importance_order))
+            axes[idx].barh(y_pos, instance_shap[importance_order])
+            axes[idx].set_yticks(y_pos)
+            axes[idx].set_yticklabels([features[i] for i in importance_order], fontsize=8)
+            axes[idx].set_xlabel('SHAP Value')
+            axes[idx].set_title(f'{name}')
+            axes[idx].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
+            
+            # Color bars
+            colors = ['green' if x > 0 else 'red' for x in instance_shap[importance_order]]
+            for i, (bar, color) in enumerate(zip(axes[idx].patches, colors)):
+                bar.set_facecolor(color)
+        
+        plt.suptitle(f'SHAP Values Comparison - Instance {instance_idx}', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+# Demonstrate Kernel SHAP
+kernel_explainer = SHAPKernelExplainer()
+
+# Train diverse models
+models = kernel_explainer.train_diverse_models(X_train, X_test, y_train, y_test)
+
+# Generate explanations
+shap_values_dict = kernel_explainer.explain_with_kernel_shap(X_train, X_test, sample_size=50)
+
+# Compare explanations
+kernel_explainer.compare_model_explanations(X_test, instance_idx=0)</code></pre>
+
+        <h2>Global Interpretability with SHAP</h2>
+        
+        <pre class="language-python"><code>class SHAPGlobalInterpretability:
+    """
+    Global model interpretability using SHAP
+    """
+    
+    def __init__(self, model, X_train, X_test):
+        self.model = model
+        self.X_train = X_train
+        self.X_test = X_test
+        self.explainer = None
+        self.shap_values = None
+        
+    def calculate_global_importance(self):
+        """
+        Calculate global feature importance
+        """
+        print("\n" + "=" * 60)
+        print("GLOBAL FEATURE IMPORTANCE")
+        print("=" * 60)
+        
+        # Create explainer
+        self.explainer = shap.TreeExplainer(self.model)
+        
+        # Calculate SHAP values for all test instances
+        self.shap_values = self.explainer.shap_values(self.X_test)
+        
+        # Handle multi-class output
+        if isinstance(self.shap_values, list):
+            self.shap_values = self.shap_values[1]  # Use positive class for binary
+        
+        # Calculate mean absolute SHAP values
+        mean_abs_shap = np.mean(np.abs(self.shap_values), axis=0)
+        
+        # Create importance dataframe
+        importance_df = pd.DataFrame({
+            'feature': self.X_test.columns,
+            'importance': mean_abs_shap
+        }).sort_values('importance', ascending=False)
+        
+        print("\nTop 10 Most Important Features:")
+        print(importance_df.head(10).to_string(index=False))
+        
+        return importance_df
+    
+    def interaction_effects(self):
+        """
+        Analyze feature interactions using SHAP
+        """
+        print("\n" + "=" * 60)
+        print("FEATURE INTERACTION ANALYSIS")
+        print("=" * 60)
+        
+        # Calculate interaction values
+        shap_interaction = self.explainer.shap_interaction_values(self.X_test.iloc[:50])
+        
+        # Handle multi-class
+        if isinstance(shap_interaction, list):
+            shap_interaction = shap_interaction[1]
+        
+        # Get mean absolute interaction effects
+        mean_interaction = np.abs(shap_interaction).mean(axis=0)
+        
+        # Find top interactions
+        feature_names = self.X_test.columns
+        interactions = []
+        
+        for i in range(len(feature_names)):
+            for j in range(i+1, len(feature_names)):
+                interactions.append({
+                    'feature_1': feature_names[i],
+                    'feature_2': feature_names[j],
+                    'interaction_strength': mean_interaction[i, j]
+                })
+        
+        interaction_df = pd.DataFrame(interactions).sort_values(
+            'interaction_strength', ascending=False
+        )
+        
+        print("\nTop 10 Feature Interactions:")
+        print(interaction_df.head(10).to_string(index=False))
+        
+        # Visualize interaction matrix
+        self.plot_interaction_matrix(mean_interaction, feature_names)
+        
+        return interaction_df
+    
+    def plot_interaction_matrix(self, interaction_matrix, feature_names):
+        """
+        Plot feature interaction heatmap
+        """
+        # Select top features for visualization
+        n_features = min(15, len(feature_names))
+        top_features_idx = np.argsort(interaction_matrix.sum(axis=1))[-n_features:]
+        
+        # Create subset matrix
+        subset_matrix = interaction_matrix[top_features_idx][:, top_features_idx]
+        subset_names = [feature_names[i] for i in top_features_idx]
+        
+        # Plot heatmap
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(
+            subset_matrix,
+            xticklabels=subset_names,
+            yticklabels=subset_names,
+            annot=False,
+            cmap='YlOrRd',
+            cbar_kws={'label': 'Interaction Strength'}
+        )
+        plt.title('SHAP Feature Interaction Matrix')
+        plt.xlabel('Feature')
+        plt.ylabel('Feature')
+        plt.xticks(rotation=45, ha='right')
+        plt.yticks(rotation=0)
+        plt.tight_layout()
+        plt.show()
+    
+    def cohort_analysis(self):
+        """
+        Analyze SHAP values for different cohorts
+        """
+        print("\n" + "=" * 60)
+        print("COHORT ANALYSIS")
+        print("=" * 60)
+        
+        # Get predictions
+        predictions = self.model.predict(self.X_test)
+        
+        # Split into cohorts based on prediction
+        correct_idx = np.where(predictions == self.y_test)[0]
+        incorrect_idx = np.where(predictions != self.y_test)[0]
+        
+        # Calculate mean SHAP values for each cohort
+        correct_shap_mean = np.mean(np.abs(self.shap_values[correct_idx]), axis=0)
+        incorrect_shap_mean = np.mean(np.abs(self.shap_values[incorrect_idx]), axis=0)
+        
+        # Compare cohorts
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Top features for correct predictions
+        top_correct_idx = np.argsort(correct_shap_mean)[-10:]
+        axes[0].barh(range(10), correct_shap_mean[top_correct_idx])
+        axes[0].set_yticks(range(10))
+        axes[0].set_yticklabels([self.X_test.columns[i] for i in top_correct_idx])
+        axes[0].set_xlabel('Mean |SHAP Value|')
+        axes[0].set_title(f'Correct Predictions (n={len(correct_idx)})')
+        
+        # Top features for incorrect predictions
+        top_incorrect_idx = np.argsort(incorrect_shap_mean)[-10:]
+        axes[1].barh(range(10), incorrect_shap_mean[top_incorrect_idx])
+        axes[1].set_yticks(range(10))
+        axes[1].set_yticklabels([self.X_test.columns[i] for i in top_incorrect_idx])
+        axes[1].set_xlabel('Mean |SHAP Value|')
+        axes[1].set_title(f'Incorrect Predictions (n={len(incorrect_idx)})')
+        
+        plt.suptitle('Feature Importance by Prediction Cohort', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+        
+        print(f"Correct predictions: {len(correct_idx)}/{len(predictions)}")
+        print(f"Incorrect predictions: {len(incorrect_idx)}/{len(predictions)}")
+
+# Global interpretability demonstration
+print("\n" + "=" * 60)
+print("GLOBAL INTERPRETABILITY WITH SHAP")
+print("=" * 60)
+
+# Use the Random Forest model from earlier
+global_interpreter = SHAPGlobalInterpretability(model, X_train, X_test)
+
+# Calculate global importance
+importance_df = global_interpreter.calculate_global_importance()
+
+# Analyze interactions
+interaction_df = global_interpreter.interaction_effects()
+
+# Cohort analysis
+global_interpreter.cohort_analysis()</code></pre>
+
+        <h2>SHAP for Time Series and Advanced Applications</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            A[Advanced SHAP] --> B[Time Series]
+            A --> C[Deep Learning]
+            A --> D[NLP]
+            
+            B --> B1[DeepExplainer]
+            B --> B2[GradientExplainer]
+            
+            C --> C1[Layer Attribution]
+            C --> C2[Neuron Importance]
+            
+            D --> D1[Token Attribution]
+            D --> D2[Transformer Models]
+            
+            E[Extensions] --> F[SHAP + LIME]
+            E --> G[Counterfactuals]
+            E --> H[Causal SHAP]
+            
+            style A fill:#e3f2fd
+            style E fill:#fff9c4
+        </div>
+
+        <pre class="language-python"><code>class AdvancedSHAPTechniques:
+    """
+    Advanced SHAP techniques and applications
+    """
+    
+    @staticmethod
+    def shap_for_regression():
+        """
+        SHAP for regression problems
+        """
+        print("\n" + "=" * 60)
+        print("SHAP FOR REGRESSION")
+        print("=" * 60)
+        
+        # Generate regression data
+        from sklearn.datasets import make_regression
+        X, y = make_regression(n_samples=1000, n_features=10, 
+                              n_informative=5, noise=0.1, random_state=42)
+        
+        X = pd.DataFrame(X, columns=[f'feature_{i}' for i in range(10)])
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+        
+        # Train model
+        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model.fit(X_train, y_train)
+        
+        # SHAP explanation
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(X_test)
+        
+        # Visualization
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        
+        # Feature importance
+        shap.summary_plot(shap_values, X_test, plot_type="bar", show=False)
+        plt.sca(axes[0])
+        plt.title('SHAP Feature Importance - Regression')
+        
+        # Dependence plot for top feature
+        top_feature = X_test.columns[np.argmax(np.abs(shap_values).mean(axis=0))]
+        shap.dependence_plot(top_feature, shap_values, X_test, ax=axes[1], show=False)
+        axes[1].set_title(f'SHAP Dependence - {top_feature}')
+        
+        plt.tight_layout()
+        plt.show()
+        
+        print("Regression SHAP analysis complete")
+    
+    @staticmethod
+    def monitoring_shap_drift():
+        """
+        Monitor SHAP value drift over time
+        """
+        print("\n" + "=" * 60)
+        print("SHAP VALUE DRIFT MONITORING")
+        print("=" * 60)
+        
+        # Simulate time periods
+        np.random.seed(42)
+        
+        # Generate data for different time periods
+        periods = ['Month 1', 'Month 2', 'Month 3']
+        drift_data = []
+        
+        for i, period in enumerate(periods):
+            # Simulate slight distribution shift
+            X = np.random.randn(100, 5) + i * 0.2
+            X = pd.DataFrame(X, columns=[f'feat_{j}' for j in range(5)])
+            
+            # Simple model
+            model = RandomForestClassifier(n_estimators=50, random_state=42)
+            y = (X['feat_0'] + X['feat_1'] > 0).astype(int)
+            model.fit(X, y)
+            
+            # Calculate SHAP values
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(X)
+            
+            if isinstance(shap_values, list):
+                shap_values = shap_values[1]
+            
+            # Store mean absolute SHAP values
+            mean_shap = np.mean(np.abs(shap_values), axis=0)
+            drift_data.append({
+                'period': period,
+                'mean_shap': mean_shap
+            })
+        
+        # Visualize drift
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        
+        # Feature importance over time
+        features = [f'feat_{i}' for i in range(5)]
+        x = np.arange(len(features))
+        width = 0.25
+        
+        for i, data in enumerate(drift_data):
+            axes[0].bar(x + i * width, data['mean_shap'], width, 
+                       label=data['period'], alpha=0.8)
+        
+        axes[0].set_xlabel('Feature')
+        axes[0].set_ylabel('Mean |SHAP Value|')
+        axes[0].set_title('Feature Importance Drift Over Time')
+        axes[0].set_xticks(x + width)
+        axes[0].set_xticklabels(features)
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        
+        # Drift magnitude
+        drift_magnitudes = []
+        for i in range(1, len(drift_data)):
+            drift = np.abs(drift_data[i]['mean_shap'] - drift_data[i-1]['mean_shap'])
+            drift_magnitudes.append(drift)
+        
+        for i, drift in enumerate(drift_magnitudes):
+            axes[1].plot(features, drift, marker='o', label=f'{periods[i]} to {periods[i+1]}')
+        
+        axes[1].set_xlabel('Feature')
+        axes[1].set_ylabel('Drift Magnitude')
+        axes[1].set_title('SHAP Value Drift Between Periods')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.suptitle('SHAP-based Drift Detection', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+        
+        print("Drift monitoring can help detect model degradation")
+        print("Large changes in SHAP values indicate distribution shift")
+    
+    @staticmethod
+    def shap_feature_selection(X_train, y_train, threshold=0.01):
+        """
+        Feature selection using SHAP values
+        """
+        print("\n" + "=" * 60)
+        print("SHAP-BASED FEATURE SELECTION")
+        print("=" * 60)
+        
+        # Train initial model
+        model = RandomForestClassifier(n_estimators=100, random_state=42)
+        model.fit(X_train, y_train)
+        
+        # Calculate SHAP values
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(X_train)
+        
+        if isinstance(shap_values, list):
+            shap_values = shap_values[1]
+        
+        # Calculate feature importance
+        feature_importance = np.mean(np.abs(shap_values), axis=0)
+        
+        # Select features above threshold
+        max_importance = np.max(feature_importance)
+        selected_features = feature_importance > (threshold * max_importance)
+        
+        print(f"Original features: {X_train.shape[1]}")
+        print(f"Selected features: {np.sum(selected_features)}")
+        print(f"Removed features: {X_train.shape[1] - np.sum(selected_features)}")
+        
+        # Return selected feature indices
+        selected_idx = np.where(selected_features)[0]
+        selected_names = X_train.columns[selected_idx]
+        
+        print("\nSelected features:")
+        for name, importance in zip(selected_names, feature_importance[selected_idx]):
+            print(f"  {name}: {importance:.4f}")
+        
+        return selected_idx, selected_names
+
+# Demonstrate advanced techniques
+advanced = AdvancedSHAPTechniques()
+
+# Regression example
+advanced.shap_for_regression()
+
+# Drift monitoring
+advanced.monitoring_shap_drift()
+
+# Feature selection
+selected_idx, selected_features = advanced.shap_feature_selection(
+    X_train, y_train, threshold=0.05
+)</code></pre>
+
+        <h2>Best Practices</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 SHAP Best Practices</h3>
+            <ul>
+                <li><strong>Choose Right Explainer:</strong> TreeExplainer for trees, DeepExplainer for neural nets</li>
+                <li><strong>Background Data:</strong> Use representative sample for KernelExplainer</li>
+                <li><strong>Sample Size:</strong> Balance between accuracy and computation time</li>
+                <li><strong>Interaction Effects:</strong> Check for feature interactions in complex models</li>
+                <li><strong>Consistency Checks:</strong> Verify that SHAP values sum to prediction difference</li>
+                <li><strong>Visualization Choice:</strong> Use appropriate plots for your audience</li>
+                <li><strong>Global vs Local:</strong> Combine both for complete understanding</li>
+                <li><strong>Model Comparison:</strong> Use same background data for fair comparison</li>
+                <li><strong>Performance:</strong> Cache SHAP values for large datasets</li>
+                <li><strong>Interpretation:</strong> Consider domain context when interpreting values</li>
+            </ul>
+        </div>
+
+        <h2>Practice Exercises</h2>
+        
+        <div class="exercise-card">
+            <h3>Exercise 1: SHAP for Model Debugging</h3>
+            <p>Use SHAP to debug a poorly performing model:</p>
+            <ul>
+                <li>Identify biased features using SHAP</li>
+                <li>Compare SHAP values for misclassified instances</li>
+                <li>Detect data leakage through unexpected importance</li>
+                <li>Improve model based on insights</li>
+            </ul>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 2: Production SHAP Pipeline</h3>
+            <p>Build a production-ready SHAP explanation system:</p>
+            <ul>
+                <li>Implement efficient SHAP calculation</li>
+                <li>Create API for real-time explanations</li>
+                <li>Build monitoring dashboard with SHAP metrics</li>
+                <li>Set up automated reporting</li>
+            </ul>
+        </div>
+
+        <h2>Summary</h2>
+        
+        <div class="summary-box">
+            <h3>✅ You've Learned</h3>
+            <ul>
+                <li>SHAP theory based on Shapley values from game theory</li>
+                <li>Different SHAP explainers for various model types</li>
+                <li>Creating and interpreting SHAP visualizations</li>
+                <li>Global interpretability through SHAP aggregation</li>
+                <li>Feature interaction analysis</li>
+                <li>Advanced applications including drift detection</li>
+                <li>SHAP-based feature selection</li>
+                <li>Best practices for reliable explanations</li>
+            </ul>
+        </div>
+    </div>
+
+    <nav class="lesson-nav" aria-label="Lesson Navigation">
+        <a href="interpretability_lime.html" class="prev-lesson">← Previous</a>
+        <a href="index.html" class="home-link">🏠 Home</a>
+        <a href="future_automl.html" class="next-lesson">Next →</a>
+    </nav>
+    </main>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#f0f0f0',
+                primaryTextColor: '#333',
+                primaryBorderColor: '#667eea',
+                lineColor: '#667eea',
+                secondaryColor: '#e0e7ff',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Master hyperparameter tuning in machine learning. Learn GridSearchCV, RandomizedSearchCV, and Bayesian optimization for optimal model performance.">
+    <title>Hyperparameter Tuning - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script src="js/course-enhancements.js" defer></script>
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    
+    <main id="main-content">
+    <header role="banner">
+        <h1>Hyperparameter Tuning: Finding the Perfect Model Configuration</h1>
+        <div class="reading-time" aria-label="Estimated reading time"></div>
+    </header>
+    
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="index.html">Home</a>
+        <span class="separator">›</span>
+        <a href="#">Machine Learning Module</a>
+        <span class="separator">›</span>
+        <a href="#">Model Optimization</a>
+        <span class="separator">›</span>
+        <span class="current">Hyperparameter Tuning</span>
+    </nav>
+
+    <h2>The Art and Science of Model Optimization 🎯</h2>
+    
+    <blockquote>
+        <p>The difference between a good model and a great model often lies in the hyperparameters. While a model learns parameters from data, hyperparameters are the knobs we turn to control how the learning happens. Master hyperparameter tuning, and you'll unlock your models' true potential!</p>
+    </blockquote>
+
+    <h2>Understanding Hyperparameters vs Parameters</h2>
+    
+    <div class="mermaid">
+    graph TD
+        A[Machine Learning Model] --> B[Parameters]
+        A --> C[Hyperparameters]
+        
+        B --> D[Learned from Data]
+        B --> E[Weights, Biases]
+        B --> F[Updated during training]
+        
+        C --> G[Set before training]
+        C --> H[Control learning process]
+        C --> I[Need optimization]
+        
+        I --> J[Grid Search]
+        I --> K[Random Search]
+        I --> L[Bayesian Optimization]
+        I --> M[Genetic Algorithms]
+        
+        style A fill:#667eea,color:#fff
+        style C fill:#ff6b6b
+        style B fill:#51cf66
+    </div>
+
+    <pre class="language-python"><code># Understanding the difference
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+
+# Parameters vs Hyperparameters Example
+
+# For Logistic Regression:
+# - Parameters: weights (coefficients) and bias (intercept) - learned from data
+# - Hyperparameters: C (regularization), penalty type, solver, max_iter
+
+# For Random Forest:
+# - Parameters: individual tree structures, split values - learned from data  
+# - Hyperparameters: n_estimators, max_depth, min_samples_split, etc.
+
+# Example: Hyperparameters control HOW the model learns
+rf = RandomForestClassifier(
+    n_estimators=100,      # Hyperparameter: number of trees
+    max_depth=10,          # Hyperparameter: tree depth
+    min_samples_split=5,   # Hyperparameter: minimum samples to split
+    random_state=42
+)
+
+# When we fit, the model learns its parameters
+# rf.fit(X_train, y_train)  # This learns the actual tree structures
+
+# The importance of hyperparameter tuning
+print("""
+Why Hyperparameter Tuning Matters:
+1. Default values are rarely optimal for your specific problem
+2. Can improve model performance by 10-30% or more
+3. Helps prevent overfitting/underfitting
+4. Different datasets require different configurations
+5. Computational resources vs performance trade-off
+""")</code></pre>
+
+    <h2>Method 1: Grid Search - Exhaustive Search</h2>
+    
+    <pre class="language-python"><code>import numpy as np
+import pandas as pd
+from sklearn.model_selection import GridSearchCV, cross_val_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings('ignore')
+
+# Load and prepare data
+data = load_breast_cancer()
+X = data.data
+y = data.target
+
+# Split the data
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+# Scale features (important for SVM)
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+print("Dataset ready:")
+print(f"Training set: {X_train.shape}")
+print(f"Test set: {X_test.shape}")
+
+# 1. GRID SEARCH: Systematic exploration of parameter space
+print("\n" + "="*60)
+print("GRID SEARCH DEMONSTRATION")
+print("="*60)
+
+# Define parameter grid for Random Forest
+param_grid_rf = {
+    'n_estimators': [50, 100, 200],
+    'max_depth': [None, 10, 20, 30],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4],
+    'max_features': ['auto', 'sqrt', 'log2']
+}
+
+# Calculate total combinations
+total_combinations = 1
+for param, values in param_grid_rf.items():
+    total_combinations *= len(values)
+print(f"\nTotal parameter combinations to test: {total_combinations}")
+
+# Create and configure GridSearchCV
+grid_search_rf = GridSearchCV(
+    estimator=RandomForestClassifier(random_state=42),
+    param_grid=param_grid_rf,
+    cv=5,                        # 5-fold cross-validation
+    scoring='accuracy',          # Optimization metric
+    n_jobs=-1,                  # Use all CPU cores
+    verbose=1,                  # Show progress
+    return_train_score=True     # Track training scores
+)
+
+# Perform grid search
+print("\nPerforming Grid Search... (this may take a while)")
+grid_search_rf.fit(X_train, y_train)
+
+# Best parameters and score
+print(f"\nBest parameters found: {grid_search_rf.best_params_}")
+print(f"Best cross-validation score: {grid_search_rf.best_score_:.4f}")
+
+# Evaluate on test set
+best_model = grid_search_rf.best_estimator_
+test_score = best_model.score(X_test, y_test)
+print(f"Test set score: {test_score:.4f}")
+
+# Visualize Grid Search Results
+results_df = pd.DataFrame(grid_search_rf.cv_results_)
+
+# Plot: Impact of each hyperparameter
+fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+axes = axes.flatten()
+
+for idx, param in enumerate(['n_estimators', 'max_depth', 'min_samples_split']):
+    # Get unique values for this parameter
+    param_col = f'param_{param}'
+    if param_col in results_df.columns:
+        param_values = results_df[param_col].unique()
+        mean_scores = []
+        std_scores = []
+        
+        for value in param_values:
+            mask = results_df[param_col] == value
+            mean_scores.append(results_df[mask]['mean_test_score'].mean())
+            std_scores.append(results_df[mask]['std_test_score'].mean())
+        
+        # Handle None values in max_depth
+        if param == 'max_depth':
+            param_values = ['None' if v is None else str(v) for v in param_values]
+        
+        axes[idx].bar(range(len(param_values)), mean_scores, yerr=std_scores, 
+                     capsize=5, alpha=0.7)
+        axes[idx].set_xlabel(param)
+        axes[idx].set_ylabel('Mean CV Score')
+        axes[idx].set_title(f'Impact of {param}')
+        axes[idx].set_xticks(range(len(param_values)))
+        axes[idx].set_xticklabels(param_values, rotation=45)
+
+# Heatmap of top combinations
+top_results = results_df.nlargest(20, 'mean_test_score')
+pivot_table = top_results.pivot_table(
+    values='mean_test_score',
+    index='param_max_depth',
+    columns='param_n_estimators',
+    aggfunc='mean'
+)
+
+axes[3].axis('off')  # Hide unused subplot
+
+# Create heatmap in a larger subplot
+ax_heatmap = plt.subplot2grid((2, 3), (1, 1), colspan=2)
+sns.heatmap(pivot_table, annot=True, fmt='.3f', cmap='YlOrRd', 
+           cbar_kws={'label': 'CV Score'}, ax=ax_heatmap)
+ax_heatmap.set_title('Grid Search Heatmap: max_depth vs n_estimators')
+
+plt.tight_layout()
+plt.show()
+
+# Convergence plot
+fig, ax = plt.subplots(figsize=(10, 6))
+iterations = range(1, len(results_df) + 1)
+best_scores = [results_df.iloc[:i]['mean_test_score'].max() for i in iterations]
+ax.plot(iterations, best_scores, 'b-', linewidth=2)
+ax.set_xlabel('Number of Parameter Combinations Tested')
+ax.set_ylabel('Best CV Score Found')
+ax.set_title('Grid Search Convergence')
+ax.grid(True, alpha=0.3)
+plt.show()
+
+print("\n💡 Grid Search Insights:")
+print("• Pros: Exhaustive, guaranteed to find best combination in grid")
+print("• Cons: Computationally expensive, curse of dimensionality")
+print(f"• Time complexity: O(n^p) where n=values per parameter, p=number of parameters")</code></pre>
+
+    <h2>Method 2: Random Search - Efficient Exploration</h2>
+    
+    <pre class="language-python"><code>from sklearn.model_selection import RandomizedSearchCV
+from scipy.stats import uniform, randint
+
+print("\n" + "="*60)
+print("RANDOM SEARCH DEMONSTRATION")
+print("="*60)
+
+# Define parameter distributions for Random Forest
+param_dist_rf = {
+    'n_estimators': randint(50, 500),           # Integer distribution
+    'max_depth': [None] + list(range(5, 50)),   # Mix of None and integers
+    'min_samples_split': randint(2, 20),        # Integer distribution
+    'min_samples_leaf': randint(1, 10),         # Integer distribution
+    'max_features': ['auto', 'sqrt', 'log2'],   # Categorical
+    'bootstrap': [True, False],                 # Boolean
+    'criterion': ['gini', 'entropy']            # Categorical
+}
+
+# Random search with more iterations
+random_search_rf = RandomizedSearchCV(
+    estimator=RandomForestClassifier(random_state=42),
+    param_distributions=param_dist_rf,
+    n_iter=100,                 # Number of random combinations to try
+    cv=5,                       # 5-fold cross-validation
+    scoring='accuracy',
+    n_jobs=-1,
+    verbose=1,
+    random_state=42,
+    return_train_score=True
+)
+
+# Perform random search
+print("\nPerforming Random Search...")
+random_search_rf.fit(X_train, y_train)
+
+# Results
+print(f"\nBest parameters found: {random_search_rf.best_params_}")
+print(f"Best cross-validation score: {random_search_rf.best_score_:.4f}")
+
+# Compare with test set
+test_score_random = random_search_rf.best_estimator_.score(X_test, y_test)
+print(f"Test set score: {test_score_random:.4f}")
+
+# Compare Grid vs Random Search
+comparison_data = {
+    'Method': ['Grid Search', 'Random Search'],
+    'Combinations Tested': [total_combinations, 100],
+    'Best CV Score': [grid_search_rf.best_score_, random_search_rf.best_score_],
+    'Test Score': [test_score, test_score_random],
+    'Time Efficiency': ['Low', 'High']
+}
+
+comparison_df = pd.DataFrame(comparison_data)
+print("\n📊 Comparison: Grid vs Random Search")
+print(comparison_df.to_string(index=False))
+
+# Visualize Random Search exploration
+random_results_df = pd.DataFrame(random_search_rf.cv_results_)
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+# Scatter plot: n_estimators vs max_depth
+max_depths = [d if d is not None else 0 for d in random_results_df['param_max_depth']]
+scatter = axes[0].scatter(
+    random_results_df['param_n_estimators'],
+    max_depths,
+    c=random_results_df['mean_test_score'],
+    cmap='viridis',
+    alpha=0.6,
+    s=50
+)
+axes[0].set_xlabel('n_estimators')
+axes[0].set_ylabel('max_depth (0 = None)')
+axes[0].set_title('Random Search: Parameter Space Exploration')
+plt.colorbar(scatter, ax=axes[0], label='CV Score')
+
+# Distribution of scores
+axes[1].hist(random_results_df['mean_test_score'], bins=30, edgecolor='black', alpha=0.7)
+axes[1].axvline(random_search_rf.best_score_, color='r', linestyle='--', 
+               label=f'Best: {random_search_rf.best_score_:.4f}')
+axes[1].set_xlabel('CV Score')
+axes[1].set_ylabel('Frequency')
+axes[1].set_title('Distribution of CV Scores')
+axes[1].legend()
+
+# Convergence comparison
+iterations = range(1, min(len(results_df), len(random_results_df)) + 1)
+grid_best = [results_df.iloc[:i]['mean_test_score'].max() for i in iterations]
+random_best = [random_results_df.iloc[:i]['mean_test_score'].max() for i in iterations]
+
+axes[2].plot(iterations, grid_best[:len(iterations)], 'b-', label='Grid Search', linewidth=2)
+axes[2].plot(iterations, random_best[:len(iterations)], 'r-', label='Random Search', linewidth=2)
+axes[2].set_xlabel('Number of Iterations')
+axes[2].set_ylabel('Best Score Found')
+axes[2].set_title('Convergence Comparison')
+axes[2].legend()
+axes[2].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+# Advanced: Random Search for SVM with continuous parameters
+print("\n" + "="*60)
+print("RANDOM SEARCH WITH CONTINUOUS PARAMETERS (SVM)")
+print("="*60)
+
+param_dist_svm = {
+    'C': uniform(0.1, 100),              # Continuous uniform distribution
+    'gamma': uniform(0.0001, 1),         # Continuous uniform distribution
+    'kernel': ['rbf', 'poly', 'sigmoid'], # Categorical
+    'degree': randint(2, 5),             # For poly kernel
+    'coef0': uniform(0, 10)              # For poly and sigmoid
+}
+
+random_search_svm = RandomizedSearchCV(
+    estimator=SVC(random_state=42),
+    param_distributions=param_dist_svm,
+    n_iter=50,
+    cv=5,
+    scoring='accuracy',
+    n_jobs=-1,
+    verbose=0,
+    random_state=42
+)
+
+# Use scaled data for SVM
+random_search_svm.fit(X_train_scaled, y_train)
+
+print(f"Best SVM parameters: {random_search_svm.best_params_}")
+print(f"Best CV score: {random_search_svm.best_score_:.4f}")
+print(f"Test score: {random_search_svm.score(X_test_scaled, y_test):.4f}")</code></pre>
+
+    <h2>Method 3: Bayesian Optimization - Smart Search</h2>
+    
+    <pre class="language-python"><code># Note: Requires installation of scikit-optimize
+# pip install scikit-optimize
+
+# Bayesian Optimization using scikit-optimize
+print("\n" + "="*60)
+print("BAYESIAN OPTIMIZATION (Advanced)")
+print("="*60)
+
+# Simulated Bayesian Optimization (conceptual demonstration)
+# In practice, you would use: from skopt import BayesSearchCV
+
+class BayesianOptimizationDemo:
+    """
+    Demonstration of Bayesian Optimization concepts.
+    Real implementation would use scikit-optimize or optuna.
+    """
+    
+    def __init__(self, param_space, n_calls=50):
+        self.param_space = param_space
+        self.n_calls = n_calls
+        self.history = []
+        
+    def gaussian_process_predict(self, X_observed, y_observed, X_new):
+        """Simplified Gaussian Process prediction"""
+        # This is a conceptual demo - real GP is much more complex
+        if len(X_observed) == 0:
+            return np.random.random(), 1.0
+        
+        # Simple weighted average based on distance
+        distances = np.abs(X_new - np.array(X_observed))
+        weights = np.exp(-distances)
+        weights /= weights.sum()
+        
+        mean = np.sum(weights * y_observed)
+        uncertainty = 1.0 / (len(X_observed) + 1)
+        
+        return mean, uncertainty
+    
+    def acquisition_function(self, mean, std, best_score):
+        """Expected Improvement acquisition function"""
+        # Balance exploration (high std) and exploitation (high mean)
+        z = (mean - best_score) / (std + 1e-10)
+        ei = std * (z * stats.norm.cdf(z) + stats.norm.pdf(z))
+        return ei
+    
+    def optimize(self, objective_func):
+        """Main optimization loop"""
+        X_observed = []
+        y_observed = []
+        best_score = -np.inf
+        
+        for i in range(self.n_calls):
+            if i < 5:  # Initial random exploration
+                x_next = np.random.uniform(self.param_space[0], self.param_space[1])
+            else:
+                # Use acquisition function to select next point
+                x_candidates = np.linspace(self.param_space[0], self.param_space[1], 100)
+                acquisition_values = []
+                
+                for x in x_candidates:
+                    mean, std = self.gaussian_process_predict(X_observed, y_observed, x)
+                    acq_value = self.acquisition_function(mean, std, best_score)
+                    acquisition_values.append(acq_value)
+                
+                x_next = x_candidates[np.argmax(acquisition_values)]
+            
+            # Evaluate objective
+            y_next = objective_func(x_next)
+            
+            # Update observations
+            X_observed.append(x_next)
+            y_observed.append(y_next)
+            
+            if y_next > best_score:
+                best_score = y_next
+            
+            self.history.append({
+                'iteration': i,
+                'x': x_next,
+                'y': y_next,
+                'best': best_score
+            })
+        
+        return self.history
+
+# Demonstrate on a simple function
+def objective_function(x):
+    """Example objective: finding optimal regularization parameter"""
+    # Simulating model performance as function of hyperparameter
+    return -(x - 3.7)**2 + 10 + np.random.normal(0, 0.1)
+
+# Run Bayesian Optimization demo
+bayes_demo = BayesianOptimizationDemo(param_space=[0, 10], n_calls=30)
+history = bayes_demo.optimize(objective_function)
+
+# Visualize Bayesian Optimization process
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Plot 1: Optimization trajectory
+history_df = pd.DataFrame(history)
+axes[0].scatter(history_df['x'], history_df['y'], c=history_df['iteration'], 
+               cmap='viridis', s=50, alpha=0.6)
+axes[0].plot(history_df['x'], history_df['y'], 'k-', alpha=0.2)
+axes[0].set_xlabel('Hyperparameter Value')
+axes[0].set_ylabel('Objective Function Value')
+axes[0].set_title('Bayesian Optimization: Exploration Pattern')
+axes[0].grid(True, alpha=0.3)
+
+# Add colorbar
+sm = plt.cm.ScalarMappable(cmap='viridis', norm=plt.Normalize(vmin=0, vmax=30))
+sm.set_array([])
+cbar = plt.colorbar(sm, ax=axes[0])
+cbar.set_label('Iteration')
+
+# Plot 2: Convergence
+axes[1].plot(history_df['iteration'], history_df['best'], 'b-', linewidth=2)
+axes[1].set_xlabel('Iteration')
+axes[1].set_ylabel('Best Score Found')
+axes[1].set_title('Bayesian Optimization: Convergence')
+axes[1].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+print("\n🧠 Bayesian Optimization Concepts:")
+print("""
+1. Surrogate Model: Uses Gaussian Process to model objective function
+2. Acquisition Function: Balances exploration vs exploitation
+3. Sequential Design: Each iteration uses all previous information
+4. Efficiency: Often finds optimum in 10x fewer iterations than random search
+5. Best for: Expensive objective functions (deep learning, large datasets)
+""")</code></pre>
+
+    <h2>Advanced Techniques and Best Practices</h2>
+    
+    <pre class="language-python"><code># Advanced hyperparameter tuning strategies
+
+print("\n" + "="*60)
+print("ADVANCED TECHNIQUES")
+print("="*60)
+
+# 1. Successive Halving / Hyperband
+print("\n1. SUCCESSIVE HALVING")
+print("-" * 40)
+
+class SuccessiveHalving:
+    """
+    Early stopping of poor performing configurations.
+    Allocates more resources to promising candidates.
+    """
+    
+    def __init__(self, n_configs=64, min_resource=1, max_resource=100):
+        self.n_configs = n_configs
+        self.min_resource = min_resource
+        self.max_resource = max_resource
+        
+    def run(self, configurations, evaluate_func):
+        """Run successive halving"""
+        n = len(configurations)
+        r = self.min_resource
+        
+        # Successive halving rounds
+        while n > 1:
+            # Evaluate all configurations with r resources
+            scores = []
+            for config in configurations[:n]:
+                score = evaluate_func(config, resources=r)
+                scores.append((score, config))
+            
+            # Keep top half
+            scores.sort(reverse=True)
+            n = n // 2
+            configurations = [config for _, config in scores[:n]]
+            
+            # Double resources
+            r = min(r * 2, self.max_resource)
+            
+            print(f"Round: {n} configurations remaining, {r} resources each")
+        
+        return configurations[0] if configurations else None
+
+# 2. Multi-fidelity Optimization
+print("\n2. MULTI-FIDELITY OPTIMIZATION")
+print("-" * 40)
+
+def multi_fidelity_optimization(param_space, budget):
+    """
+    Use cheap approximations (small data, fewer epochs) for initial search,
+    then refine with full resources.
+    """
+    
+    strategies = [
+        {"data_fraction": 0.1, "epochs": 5, "n_iter": 100},    # Cheap
+        {"data_fraction": 0.3, "epochs": 20, "n_iter": 20},    # Medium
+        {"data_fraction": 1.0, "epochs": 100, "n_iter": 5},    # Expensive
+    ]
+    
+    best_params = None
+    
+    for level, strategy in enumerate(strategies):
+        print(f"Level {level + 1}: {strategy}")
+        
+        # Narrow search space based on previous level
+        if best_params:
+            # Reduce search space around best params
+            param_space = narrow_search_space(param_space, best_params)
+        
+        # Run search at this fidelity level
+        # best_params = search_at_fidelity(param_space, strategy)
+    
+    return best_params
+
+# 3. Ensemble of Searches
+print("\n3. ENSEMBLE APPROACH")
+print("-" * 40)
+
+def ensemble_hyperparameter_search(X, y, model_class):
+    """
+    Combine multiple search strategies and vote on best parameters.
+    """
+    
+    searches = []
+    
+    # Strategy 1: Coarse grid search
+    coarse_grid = {
+        'n_estimators': [50, 100, 200],
+        'max_depth': [5, 10, None]
+    }
+    grid_search = GridSearchCV(model_class(), coarse_grid, cv=3)
+    grid_search.fit(X, y)
+    searches.append(('Grid', grid_search.best_params_, grid_search.best_score_))
+    
+    # Strategy 2: Random search
+    random_dist = {
+        'n_estimators': randint(50, 300),
+        'max_depth': [5, 10, 20, 30, None]
+    }
+    random_search = RandomizedSearchCV(model_class(), random_dist, n_iter=20, cv=3)
+    random_search.fit(X, y)
+    searches.append(('Random', random_search.best_params_, random_search.best_score_))
+    
+    # Strategy 3: Domain knowledge based
+    expert_params = {
+        'n_estimators': 150,
+        'max_depth': 15
+    }
+    expert_model = model_class(**expert_params)
+    expert_score = cross_val_score(expert_model, X, y, cv=3).mean()
+    searches.append(('Expert', expert_params, expert_score))
+    
+    # Select best
+    best_search = max(searches, key=lambda x: x[2])
+    
+    print("Search Results:")
+    for name, params, score in searches:
+        print(f"  {name:10} Score: {score:.4f} Params: {params}")
+    print(f"\nBest: {best_search[0]} with score {best_search[2]:.4f}")
+    
+    return best_search[1]
+
+# Demonstrate ensemble approach
+ensemble_params = ensemble_hyperparameter_search(
+    X_train[:1000], y_train[:1000], RandomForestClassifier
+)
+
+# 4. Learning Curves for Hyperparameter Selection
+print("\n4. LEARNING CURVES ANALYSIS")
+print("-" * 40)
+
+from sklearn.model_selection import learning_curve
+
+def plot_learning_curves_for_hyperparams(X, y, param_sets):
+    """
+    Compare learning curves for different hyperparameter settings
+    to detect overfitting/underfitting.
+    """
+    
+    fig, axes = plt.subplots(1, len(param_sets), figsize=(15, 5))
+    
+    for idx, (name, params) in enumerate(param_sets.items()):
+        model = RandomForestClassifier(**params, random_state=42)
+        
+        train_sizes, train_scores, val_scores = learning_curve(
+            model, X, y, cv=5,
+            train_sizes=np.linspace(0.1, 1.0, 10),
+            scoring='accuracy',
+            n_jobs=-1
+        )
+        
+        # Plot
+        ax = axes[idx] if len(param_sets) > 1 else axes
+        ax.plot(train_sizes, train_scores.mean(axis=1), 'o-', label='Training score')
+        ax.plot(train_sizes, val_scores.mean(axis=1), 'o-', label='Validation score')
+        ax.fill_between(train_sizes, 
+                        train_scores.mean(axis=1) - train_scores.std(axis=1),
+                        train_scores.mean(axis=1) + train_scores.std(axis=1), 
+                        alpha=0.1)
+        ax.fill_between(train_sizes,
+                        val_scores.mean(axis=1) - val_scores.std(axis=1),
+                        val_scores.mean(axis=1) + val_scores.std(axis=1),
+                        alpha=0.1)
+        
+        ax.set_xlabel('Training Set Size')
+        ax.set_ylabel('Accuracy')
+        ax.set_title(f'{name}')
+        ax.legend(loc='best')
+        ax.grid(True, alpha=0.3)
+        
+        # Detect overfitting/underfitting
+        gap = train_scores.mean() - val_scores.mean()
+        if gap > 0.05:
+            ax.text(0.5, 0.2, 'Overfitting Detected!', 
+                   transform=ax.transAxes, color='red', fontweight='bold')
+        elif val_scores.mean() < 0.8:
+            ax.text(0.5, 0.2, 'Underfitting Detected!', 
+                   transform=ax.transAxes, color='orange', fontweight='bold')
+    
+    plt.tight_layout()
+    plt.show()
+
+# Example hyperparameter sets
+param_sets = {
+    'Underfitting': {'n_estimators': 10, 'max_depth': 2},
+    'Good Fit': {'n_estimators': 100, 'max_depth': 10},
+    'Overfitting': {'n_estimators': 500, 'max_depth': None}
+}
+
+plot_learning_curves_for_hyperparams(X_train[:2000], y_train[:2000], param_sets)</code></pre>
+
+    <h2>Hyperparameter Tuning Best Practices</h2>
+    
+    <pre class="language-python"><code># Best practices and tips for hyperparameter tuning
+
+print("\n" + "="*60)
+print("HYPERPARAMETER TUNING BEST PRACTICES")
+print("="*60)
+
+# 1. Create a hyperparameter tuning pipeline
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import SelectKBest, f_classif
+
+# Complete pipeline with preprocessing and model
+pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('feature_selection', SelectKBest(f_classif)),
+    ('classifier', RandomForestClassifier(random_state=42))
+])
+
+# Hyperparameters for entire pipeline
+param_grid_pipeline = {
+    'feature_selection__k': [10, 15, 20, 'all'],  # Number of features
+    'classifier__n_estimators': [50, 100, 200],
+    'classifier__max_depth': [5, 10, None],
+    'classifier__min_samples_split': [2, 5, 10]
+}
+
+# Grid search on pipeline
+grid_search_pipeline = GridSearchCV(
+    pipeline,
+    param_grid_pipeline,
+    cv=5,
+    scoring='accuracy',
+    n_jobs=-1,
+    verbose=0
+)
+
+# Fit pipeline
+grid_search_pipeline.fit(X_train, y_train)
+
+print("Pipeline Hyperparameter Tuning:")
+print(f"Best parameters: {grid_search_pipeline.best_params_}")
+print(f"Best CV score: {grid_search_pipeline.best_score_:.4f}")
+print(f"Test score: {grid_search_pipeline.score(X_test, y_test):.4f}")
+
+# 2. Custom scoring functions
+from sklearn.metrics import make_scorer, f1_score
+
+def custom_scorer(y_true, y_pred):
+    """
+    Custom scoring function that balances multiple metrics
+    """
+    f1 = f1_score(y_true, y_pred, average='weighted')
+    accuracy = np.mean(y_true == y_pred)
+    
+    # Weighted combination
+    return 0.7 * f1 + 0.3 * accuracy
+
+# Create scorer
+custom_scoring = make_scorer(custom_scorer)
+
+# 3. Nested Cross-Validation for unbiased evaluation
+from sklearn.model_selection import cross_val_score
+
+def nested_cv_evaluation(X, y, param_grid, model_class, cv_outer=5, cv_inner=3):
+    """
+    Nested CV: Outer loop for evaluation, inner loop for hyperparameter tuning
+    """
+    
+    outer_scores = []
+    
+    # Outer CV
+    from sklearn.model_selection import StratifiedKFold
+    outer_cv = StratifiedKFold(n_splits=cv_outer, shuffle=True, random_state=42)
+    
+    for fold, (train_idx, test_idx) in enumerate(outer_cv.split(X, y)):
+        X_train_fold = X[train_idx]
+        y_train_fold = y[train_idx]
+        X_test_fold = X[test_idx]
+        y_test_fold = y[test_idx]
+        
+        # Inner CV for hyperparameter tuning
+        inner_search = GridSearchCV(
+            model_class(),
+            param_grid,
+            cv=cv_inner,
+            scoring='accuracy',
+            n_jobs=-1,
+            verbose=0
+        )
+        
+        inner_search.fit(X_train_fold, y_train_fold)
+        
+        # Evaluate on outer fold
+        score = inner_search.score(X_test_fold, y_test_fold)
+        outer_scores.append(score)
+        
+        print(f"Fold {fold + 1}: Best params: {inner_search.best_params_}, Score: {score:.4f}")
+    
+    print(f"\nNested CV Score: {np.mean(outer_scores):.4f} (+/- {np.std(outer_scores):.4f})")
+    return outer_scores
+
+# Demonstrate nested CV
+simple_param_grid = {
+    'n_estimators': [50, 100],
+    'max_depth': [5, 10, None]
+}
+
+print("\n" + "="*60)
+print("NESTED CROSS-VALIDATION")
+print("="*60)
+
+nested_scores = nested_cv_evaluation(
+    X_train[:1000], y_train[:1000],  # Use subset for speed
+    simple_param_grid,
+    RandomForestClassifier,
+    cv_outer=3, cv_inner=3
+)
+
+# 4. Hyperparameter Importance Analysis
+def analyze_hyperparameter_importance(cv_results):
+    """
+    Analyze which hyperparameters have the most impact on performance
+    """
+    
+    results_df = pd.DataFrame(cv_results)
+    
+    # Calculate variance in scores for each hyperparameter
+    param_importance = {}
+    
+    for param in [col for col in results_df.columns if col.startswith('param_')]:
+        if param != 'param_random_state':
+            param_name = param.replace('param_', '')
+            
+            # Group by this parameter and calculate variance
+            grouped = results_df.groupby(param)['mean_test_score']
+            variance = grouped.mean().var()
+            
+            param_importance[param_name] = variance
+    
+    # Sort by importance
+    importance_df = pd.DataFrame.from_dict(param_importance, orient='index', columns=['Importance'])
+    importance_df = importance_df.sort_values('Importance', ascending=False)
+    
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+    importance_df.plot(kind='barh', ax=ax)
+    ax.set_xlabel('Variance in Performance')
+    ax.set_title('Hyperparameter Importance')
+    plt.tight_layout()
+    plt.show()
+    
+    return importance_df
+
+# Analyze importance from grid search
+print("\n" + "="*60)
+print("HYPERPARAMETER IMPORTANCE ANALYSIS")
+print("="*60)
+
+importance = analyze_hyperparameter_importance(grid_search_rf.cv_results_)
+print("\nHyperparameter Importance (by variance):")
+print(importance)
+
+# 5. Save and load best models
+import joblib
+
+# Save the best model and its hyperparameters
+best_model_data = {
+    'model': grid_search_rf.best_estimator_,
+    'params': grid_search_rf.best_params_,
+    'cv_score': grid_search_rf.best_score_,
+    'test_score': test_score,
+    'feature_names': data.feature_names
+}
+
+# joblib.dump(best_model_data, 'best_model_tuned.pkl')
+print("\n✅ Best model saved with hyperparameters")
+
+# Summary of best practices
+print("\n" + "="*60)
+print("🎯 HYPERPARAMETER TUNING CHECKLIST")
+print("="*60)
+
+checklist = """
+□ Start with Random Search for initial exploration
+□ Use Grid Search for fine-tuning around best parameters
+□ Consider Bayesian Optimization for expensive models
+□ Always use cross-validation (nested CV for final evaluation)
+□ Monitor for overfitting with validation curves
+□ Use pipelines to tune preprocessing and model together
+□ Save computational time with:
+  - Successive halving / early stopping
+  - Multi-fidelity optimization
+  - Parallel processing (n_jobs=-1)
+□ Document best parameters and scores
+□ Consider domain knowledge in parameter ranges
+□ Use appropriate scoring metrics for your problem
+□ Perform importance analysis to focus future tuning
+"""
+
+print(checklist)</code></pre>
+
+    <h2>Common Hyperparameters by Algorithm</h2>
+    
+    <pre class="language-python"><code># Quick reference for common algorithms
+
+hyperparameter_guide = {
+    'Random Forest': {
+        'n_estimators': 'Number of trees (100-1000)',
+        'max_depth': 'Maximum tree depth (None, 10-50)',
+        'min_samples_split': 'Minimum samples to split node (2-20)',
+        'min_samples_leaf': 'Minimum samples in leaf (1-10)',
+        'max_features': 'Features to consider at split (auto, sqrt, log2)',
+        'bootstrap': 'Whether to bootstrap samples (True/False)'
+    },
+    
+    'SVM': {
+        'C': 'Regularization parameter (0.001-1000)',
+        'kernel': 'Kernel type (linear, rbf, poly, sigmoid)',
+        'gamma': 'Kernel coefficient (scale, auto, 0.0001-10)',
+        'degree': 'Polynomial degree (2-5)',
+        'coef0': 'Independent term (0-10)'
+    },
+    
+    'Neural Network': {
+        'hidden_layer_sizes': 'Number and size of hidden layers',
+        'activation': 'Activation function (relu, tanh, logistic)',
+        'learning_rate': 'Learning rate (constant, invscaling, adaptive)',
+        'learning_rate_init': 'Initial learning rate (0.0001-1)',
+        'alpha': 'L2 regularization (0.0001-1)',
+        'batch_size': 'Mini-batch size (16-512)',
+        'max_iter': 'Maximum iterations (100-2000)'
+    },
+    
+    'XGBoost': {
+        'n_estimators': 'Number of boosting rounds (100-1000)',
+        'max_depth': 'Maximum tree depth (3-10)',
+        'learning_rate': 'Boosting learning rate (0.01-0.3)',
+        'subsample': 'Subsample ratio (0.5-1.0)',
+        'colsample_bytree': 'Column subsample ratio (0.5-1.0)',
+        'gamma': 'Minimum loss reduction (0-5)',
+        'reg_alpha': 'L1 regularization (0-10)',
+        'reg_lambda': 'L2 regularization (0-10)'
+    },
+    
+    'Logistic Regression': {
+        'C': 'Inverse regularization strength (0.001-1000)',
+        'penalty': 'Regularization type (l1, l2, elasticnet, none)',
+        'solver': 'Optimization algorithm (liblinear, lbfgs, sag, saga)',
+        'max_iter': 'Maximum iterations (100-1000)',
+        'l1_ratio': 'ElasticNet mixing parameter (0-1)'
+    }
+}
+
+# Display as formatted table
+for algorithm, params in hyperparameter_guide.items():
+    print(f"\n{'='*60}")
+    print(f"{algorithm} Hyperparameters")
+    print('='*60)
+    for param, description in params.items():
+        print(f"  • {param:25} : {description}")
+
+print("\n💡 Pro Tip: Start with default values, then tune the most important ones first!")</code></pre>
+
+    <h2>Practice Exercises</h2>
+    
+    <h3>Exercise 1: Complete Hyperparameter Tuning Pipeline</h3>
+    <p>Build a complete pipeline that:</p>
+    <ol>
+        <li>Loads a dataset of your choice</li>
+        <li>Performs initial Random Search to identify promising ranges</li>
+        <li>Refines with Grid Search around best parameters</li>
+        <li>Validates with nested cross-validation</li>
+        <li>Compares multiple algorithms with their optimal hyperparameters</li>
+    </ol>
+
+    <h3>Exercise 2: Custom Search Strategy</h3>
+    <p>Implement a custom search strategy that:</p>
+    <ol>
+        <li>Uses domain knowledge to set initial parameter ranges</li>
+        <li>Adaptively narrows the search space based on results</li>
+        <li>Implements early stopping for poor configurations</li>
+        <li>Combines multiple scoring metrics</li>
+    </ol>
+
+    <h3>Exercise 3: Hyperparameter Analysis Dashboard</h3>
+    <p>Create an analysis dashboard that:</p>
+    <ol>
+        <li>Visualizes the impact of each hyperparameter</li>
+        <li>Shows learning curves for different configurations</li>
+        <li>Identifies signs of overfitting/underfitting</li>
+        <li>Recommends next parameters to try</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+        <li>🎯 Hyperparameter tuning can improve model performance by 10-30% or more</li>
+        <li>🔍 Grid Search is exhaustive but expensive; use for fine-tuning</li>
+        <li>🎲 Random Search is often more efficient than Grid Search</li>
+        <li>🧠 Bayesian Optimization is best for expensive models</li>
+        <li>⚡ Use multi-fidelity approaches to save computation time</li>
+        <li>📊 Always use cross-validation to avoid overfitting to validation set</li>
+        <li>🔄 Nested CV provides unbiased performance estimates</li>
+        <li>📈 Monitor learning curves to detect overfitting</li>
+        <li>💾 Save best parameters and models for reproducibility</li>
+        <li>🎨 Consider domain knowledge when setting parameter ranges</li>
+    </ul>
+
+    <h2>Summary</h2>
+    <p>Hyperparameter tuning is both an art and a science. While automated methods like Grid Search and Bayesian Optimization are powerful, combining them with domain knowledge and careful analysis yields the best results. Remember that the goal isn't always the absolute best performance, but finding a good balance between model performance, training time, and generalization ability.</p>
+
+    <!-- Navigation -->
+    <nav class="lesson-nav" aria-label="Lesson navigation">
+        <a href="evaluation_model_selection.html" class="prev-lesson">Previous: Model Selection</a>
+        <a href="index.html" class="home-link">Course Home</a>
+        <a href="pipelines_composite.html" class="next-lesson">Next: Pipelines & Composite Estimators</a>
+    </nav>
+    
+    <script src="js/clipboard.js"></script>
+    </main>
+</body>
+</html>

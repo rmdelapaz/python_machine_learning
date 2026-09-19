@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Master advanced ensemble methods in machine learning. Learn voting, stacking, blending, and build powerful ensemble systems for superior performance.">
+    <title>Advanced Ensemble Methods - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script src="js/course-enhancements.js" defer></script>
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    
+    <main id="main-content">
+    <header role="banner">
+        <h1>Advanced Ensemble Methods: The Power of Many</h1>
+        <div class="reading-time" aria-label="Estimated reading time"></div>
+    </header>
+    
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="index.html">Home</a>
+        <span class="separator">›</span>
+        <a href="#">Machine Learning Module</a>
+        <span class="separator">›</span>
+        <a href="#">Advanced Techniques</a>
+        <span class="separator">›</span>
+        <span class="current">Advanced Ensemble Methods</span>
+    </nav>
+
+    <h2>Ensemble Learning: When One Model Isn't Enough 🎭</h2>
+    
+    <blockquote>
+        <p>"In diversity there is strength." This principle lies at the heart of ensemble methods. By combining multiple models that make different errors, we create a collective intelligence that outperforms any individual model. From Kaggle competitions to production systems, ensembles are the secret weapon of top data scientists.</p>
+    </blockquote>
+
+    <h2>The Mathematics of Ensemble Learning</h2>
+    
+    <div class="mermaid">
+    graph TD
+        A[Ensemble Methods] --> B[Bagging]
+        A --> C[Boosting]
+        A --> D[Stacking]
+        A --> E[Blending]
+        
+        B --> F[Random Forest]
+        B --> G[Extra Trees]
+        B --> H[Bagging Classifier]
+        
+        C --> I[AdaBoost]
+        C --> J[Gradient Boosting]
+        C --> K[XGBoost/LightGBM]
+        
+        D --> L[Meta-Learning]
+        D --> M[Multi-Level Stacking]
+        
+        E --> N[Weighted Average]
+        E --> O[Dynamic Blending]
+        
+        style A fill:#667eea,color:#fff
+        style B fill:#51cf66
+        style C fill:#ff6b6b
+        style D fill:#4ecdc4
+        style E fill:#ffd93d
+    </div>
+
+    <pre class="language-python"><code># Understanding the Theory Behind Ensembles
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split, cross_val_score, KFold
+from sklearn.datasets import make_classification, make_regression
+from sklearn.metrics import accuracy_score, mean_squared_error
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+
+print("="*60)
+print("THE MATHEMATICS OF ENSEMBLE LEARNING")
+print("="*60)
+
+# Demonstration: Why Ensembles Work
+np.random.seed(42)
+
+# Create a challenging dataset
+X, y = make_classification(
+    n_samples=1000,
+    n_features=20,
+    n_informative=15,
+    n_redundant=5,
+    n_clusters_per_class=2,
+    flip_y=0.1,  # Add noise
+    random_state=42
+)
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Simulate multiple weak learners with different errors
+n_models = 100
+predictions = []
+
+for i in range(n_models):
+    # Each model has 65% accuracy (weak learner)
+    # But makes different mistakes
+    np.random.seed(i)
+    
+    # Simulate predictions with controlled accuracy
+    correct_mask = np.random.random(len(y_test)) < 0.65
+    model_pred = y_test.copy()
+    model_pred[~correct_mask] = 1 - model_pred[~correct_mask]  # Flip incorrect predictions
+    predictions.append(model_pred)
+
+predictions = np.array(predictions)
+
+# Individual model performance
+individual_accuracies = [accuracy_score(y_test, pred) for pred in predictions]
+print(f"Individual Model Performance:")
+print(f"  Mean accuracy: {np.mean(individual_accuracies):.3f}")
+print(f"  Std deviation: {np.std(individual_accuracies):.3f}")
+
+# Ensemble by majority voting
+ensemble_pred = (predictions.mean(axis=0) > 0.5).astype(int)
+ensemble_accuracy = accuracy_score(y_test, ensemble_pred)
+print(f"\nEnsemble Performance (Majority Vote):")
+print(f"  Accuracy: {ensemble_accuracy:.3f}")
+print(f"  Improvement: +{(ensemble_accuracy - np.mean(individual_accuracies)):.3f}")
+
+# Visualize the power of ensembling
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+# Plot 1: Accuracy vs number of models
+ensemble_scores = []
+for n in range(1, n_models + 1):
+    partial_ensemble = (predictions[:n].mean(axis=0) > 0.5).astype(int)
+    ensemble_scores.append(accuracy_score(y_test, partial_ensemble))
+
+axes[0].plot(range(1, n_models + 1), ensemble_scores, 'b-', linewidth=2)
+axes[0].axhline(np.mean(individual_accuracies), color='r', linestyle='--', 
+                label='Mean Individual Accuracy')
+axes[0].set_xlabel('Number of Models in Ensemble')
+axes[0].set_ylabel('Accuracy')
+axes[0].set_title('Ensemble Performance vs Number of Models')
+axes[0].legend()
+axes[0].grid(True, alpha=0.3)
+
+# Plot 2: Error correlation
+correlation_matrix = np.corrcoef(predictions)
+sns.heatmap(correlation_matrix[:10, :10], cmap='coolwarm', center=0, 
+            ax=axes[1], cbar_kws={'label': 'Correlation'})
+axes[1].set_title('Error Correlation Between Models (First 10)')
+
+plt.tight_layout()
+plt.show()
+
+print("\n💡 Key Insight:")
+print("Even though individual models are weak (65% accuracy),")
+print("the ensemble achieves much higher accuracy because models")
+print("make different errors (low correlation).")</code></pre>
+
+    <h2>Advanced Voting Methods</h2>
+    
+    <pre class="language-python"><code>from sklearn.ensemble import VotingClassifier, VotingRegressor
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.svm import SVC, SVR
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
+
+print("\n" + "="*60)
+print("ADVANCED VOTING METHODS")
+print("="*60)
+
+# 1. HARD VS SOFT VOTING
+print("\n1. Hard vs Soft Voting Comparison")
+print("-" * 40)
+
+# Create diverse base models
+base_models = [
+    ('lr', LogisticRegression(random_state=42)),
+    ('svc', SVC(probability=True, random_state=42)),  # Need probability=True for soft voting
+    ('nb', GaussianNB()),
+    ('rf', RandomForestClassifier(n_estimators=50, random_state=42))
+]
+
+# Hard voting (majority vote)
+hard_voting = VotingClassifier(estimators=base_models, voting='hard')
+hard_voting.fit(X_train, y_train)
+hard_score = hard_voting.score(X_test, y_test)
+
+# Soft voting (average probabilities)
+soft_voting = VotingClassifier(estimators=base_models, voting='soft')
+soft_voting.fit(X_train, y_train)
+soft_score = soft_voting.score(X_test, y_test)
+
+print(f"Hard Voting Accuracy: {hard_score:.3f}")
+print(f"Soft Voting Accuracy: {soft_score:.3f}")
+
+# Individual model scores
+print("\nIndividual Model Performance:")
+for name, model in base_models:
+    model.fit(X_train, y_train)
+    score = model.score(X_test, y_test)
+    print(f"  {name}: {score:.3f}")
+
+# 2. WEIGHTED VOTING
+print("\n2. Weighted Voting")
+print("-" * 40)
+
+# Calculate weights based on cross-validation performance
+from sklearn.model_selection import cross_val_score
+
+weights = []
+for name, model in base_models:
+    cv_scores = cross_val_score(model, X_train, y_train, cv=5)
+    weight = cv_scores.mean()
+    weights.append(weight)
+    print(f"{name} weight (CV score): {weight:.3f}")
+
+# Normalize weights
+weights = np.array(weights)
+weights = weights / weights.sum()
+print(f"\nNormalized weights: {weights}")
+
+# Weighted voting
+weighted_voting = VotingClassifier(
+    estimators=base_models,
+    voting='soft',
+    weights=weights
+)
+weighted_voting.fit(X_train, y_train)
+weighted_score = weighted_voting.score(X_test, y_test)
+
+print(f"\nWeighted Voting Accuracy: {weighted_score:.3f}")
+print(f"Improvement over uniform soft voting: +{(weighted_score - soft_score):.3f}")
+
+# 3. DYNAMIC VOTING (Custom Implementation)
+print("\n3. Dynamic Voting (Confidence-Based)")
+print("-" * 40)
+
+class DynamicVotingClassifier:
+    """
+    Dynamic voting based on prediction confidence.
+    Models with higher confidence get more weight.
+    """
+    
+    def __init__(self, estimators):
+        self.estimators = estimators
+        self.fitted_estimators_ = []
+        
+    def fit(self, X, y):
+        """Fit all base estimators"""
+        self.fitted_estimators_ = []
+        
+        for name, estimator in self.estimators:
+            fitted_est = estimator.fit(X, y)
+            self.fitted_estimators_.append((name, fitted_est))
+        
+        return self
+    
+    def predict_proba(self, X):
+        """Predict with dynamic weights based on confidence"""
+        probas = []
+        weights = []
+        
+        for name, estimator in self.fitted_estimators_:
+            proba = estimator.predict_proba(X)
+            
+            # Calculate confidence (max probability per sample)
+            confidence = np.max(proba, axis=1)
+            
+            probas.append(proba)
+            weights.append(confidence)
+        
+        # Stack and weight predictions
+        probas = np.array(probas)
+        weights = np.array(weights)
+        
+        # Normalize weights per sample
+        weights = weights / weights.sum(axis=0)
+        
+        # Weighted average
+        weighted_proba = np.zeros_like(probas[0])
+        for i, proba in enumerate(probas):
+            weighted_proba += proba * weights[i].reshape(-1, 1)
+        
+        return weighted_proba
+    
+    def predict(self, X):
+        """Predict class labels"""
+        probas = self.predict_proba(X)
+        return np.argmax(probas, axis=1)
+    
+    def score(self, X, y):
+        """Calculate accuracy"""
+        return accuracy_score(y, self.predict(X))
+
+# Test dynamic voting
+dynamic_voting = DynamicVotingClassifier(base_models)
+dynamic_voting.fit(X_train, y_train)
+dynamic_score = dynamic_voting.score(X_test, y_test)
+
+print(f"Dynamic Voting Accuracy: {dynamic_score:.3f}")
+
+# Compare all voting methods
+voting_comparison = pd.DataFrame({
+    'Method': ['Hard Voting', 'Soft Voting', 'Weighted Voting', 'Dynamic Voting'],
+    'Accuracy': [hard_score, soft_score, weighted_score, dynamic_score]
+})
+print("\n" + voting_comparison.to_string(index=False))</code></pre>
+
+    <h2>Advanced Stacking Techniques</h2>
+    
+    <pre class="language-python"><code>from sklearn.ensemble import StackingClassifier, StackingRegressor
+from sklearn.linear_model import LogisticRegression, RidgeCV
+from sklearn.model_selection import StratifiedKFold
+
+print("\n" + "="*60)
+print("ADVANCED STACKING TECHNIQUES")
+print("="*60)
+
+# 1. MULTI-LEVEL STACKING
+print("\n1. Multi-Level Stacking")
+print("-" * 40)
+
+# Level 0: Base models
+level_0_models = [
+    ('rf', RandomForestClassifier(n_estimators=100, random_state=42)),
+    ('gb', GradientBoostingClassifier(n_estimators=100, random_state=42)),
+    ('svc', SVC(probability=True, random_state=42))
+]
+
+# Level 1: Stacking on base predictions
+level_1_models = [
+    ('stack1', StackingClassifier(
+        estimators=level_0_models,
+        final_estimator=LogisticRegression(),
+        cv=5
+    ))
+]
+
+# Level 2: Final stacking
+multi_level_stacker = StackingClassifier(
+    estimators=level_1_models + [('knn', KNeighborsClassifier())],
+    final_estimator=LogisticRegression(),
+    cv=3
+)
+
+print("Multi-Level Stacking Structure:")
+print("  Level 0: RF, GB, SVC")
+print("  Level 1: Stacking(Level 0) + KNN")
+print("  Level 2: LogisticRegression(Level 1)")
+
+# Train (using smaller dataset for speed)
+X_small = X_train[:500]
+y_small = y_train[:500]
+
+multi_level_stacker.fit(X_small, y_small)
+multi_level_score = multi_level_stacker.score(X_test, y_test)
+print(f"\nMulti-Level Stacking Accuracy: {multi_level_score:.3f}")
+
+# 2. STACKING WITH FEATURE ENGINEERING
+print("\n2. Stacking with Feature Engineering")
+print("-" * 40)
+
+class FeatureStackingClassifier:
+    """
+    Stacking that includes original features along with predictions
+    """
+    
+    def __init__(self, base_estimators, meta_estimator, use_probas=True, 
+                 use_features=True, cv=5):
+        self.base_estimators = base_estimators
+        self.meta_estimator = meta_estimator
+        self.use_probas = use_probas
+        self.use_features = use_features
+        self.cv = cv
+        
+    def fit(self, X, y):
+        """Fit the stacking classifier"""
+        self.fitted_base_ = []
+        kfold = StratifiedKFold(n_splits=self.cv, shuffle=True, random_state=42)
+        
+        # Prepare meta features
+        if self.use_probas:
+            # For probability predictions
+            n_classes = len(np.unique(y))
+            meta_features = np.zeros((X.shape[0], len(self.base_estimators) * n_classes))
+        else:
+            meta_features = np.zeros((X.shape[0], len(self.base_estimators)))
+        
+        # Generate out-of-fold predictions
+        for i, (name, estimator) in enumerate(self.base_estimators):
+            oof_preds = np.zeros((X.shape[0], n_classes)) if self.use_probas else np.zeros(X.shape[0])
+            
+            for train_idx, val_idx in kfold.split(X, y):
+                X_fold_train, X_fold_val = X[train_idx], X[val_idx]
+                y_fold_train = y[train_idx]
+                
+                # Fit on fold
+                est_fold = estimator.__class__(**estimator.get_params())
+                est_fold.fit(X_fold_train, y_fold_train)
+                
+                # Predict on validation fold
+                if self.use_probas:
+                    oof_preds[val_idx] = est_fold.predict_proba(X_fold_val)
+                else:
+                    oof_preds[val_idx] = est_fold.predict(X_fold_val)
+            
+            # Store predictions
+            if self.use_probas:
+                meta_features[:, i*n_classes:(i+1)*n_classes] = oof_preds
+            else:
+                meta_features[:, i] = oof_preds
+            
+            # Fit on full training set
+            fitted_est = estimator.fit(X, y)
+            self.fitted_base_.append((name, fitted_est))
+        
+        # Combine with original features if requested
+        if self.use_features:
+            self.meta_features_ = np.hstack([X, meta_features])
+        else:
+            self.meta_features_ = meta_features
+        
+        # Fit meta estimator
+        self.meta_estimator.fit(self.meta_features_, y)
+        
+        return self
+    
+    def predict(self, X):
+        """Make predictions"""
+        # Generate base predictions
+        if self.use_probas:
+            base_preds = []
+            for name, estimator in self.fitted_base_:
+                base_preds.append(estimator.predict_proba(X))
+            base_preds = np.hstack(base_preds)
+        else:
+            base_preds = np.column_stack([
+                est.predict(X) for _, est in self.fitted_base_
+            ])
+        
+        # Combine with features if needed
+        if self.use_features:
+            meta_features = np.hstack([X, base_preds])
+        else:
+            meta_features = base_preds
+        
+        return self.meta_estimator.predict(meta_features)
+    
+    def score(self, X, y):
+        return accuracy_score(y, self.predict(X))
+
+# Test feature stacking
+feature_stacker = FeatureStackingClassifier(
+    base_estimators=[
+        ('rf', RandomForestClassifier(n_estimators=50, random_state=42)),
+        ('gb', GradientBoostingClassifier(n_estimators=50, random_state=42))
+    ],
+    meta_estimator=LogisticRegression(),
+    use_features=True
+)
+
+feature_stacker.fit(X_small, y_small)
+feature_stacking_score = feature_stacker.score(X_test, y_test)
+
+print(f"Feature Stacking Accuracy: {feature_stacking_score:.3f}")
+
+# 3. BLENDING
+print("\n3. Blending (Holdout Stacking)")
+print("-" * 40)
+
+class BlendingClassifier:
+    """
+    Blending uses a holdout validation set instead of cross-validation
+    """
+    
+    def __init__(self, base_estimators, meta_estimator, blend_size=0.2):
+        self.base_estimators = base_estimators
+        self.meta_estimator = meta_estimator
+        self.blend_size = blend_size
+        
+    def fit(self, X, y):
+        # Split into blend and train
+        from sklearn.model_selection import train_test_split
+        X_blend, X_train, y_blend, y_train = train_test_split(
+            X, y, test_size=1-self.blend_size, random_state=42, stratify=y
+        )
+        
+        # Train base models on train set
+        self.fitted_base_ = []
+        blend_features = []
+        
+        for name, estimator in self.base_estimators:
+            # Fit on training portion
+            fitted_est = estimator.fit(X_train, y_train)
+            self.fitted_base_.append((name, fitted_est))
+            
+            # Predict on blend portion
+            if hasattr(estimator, 'predict_proba'):
+                blend_pred = estimator.predict_proba(X_blend)
+            else:
+                blend_pred = estimator.predict(X_blend).reshape(-1, 1)
+            
+            blend_features.append(blend_pred)
+        
+        # Stack blend predictions
+        if blend_features[0].ndim == 2:
+            blend_features = np.hstack(blend_features)
+        else:
+            blend_features = np.column_stack(blend_features)
+        
+        # Train meta model on blend predictions
+        self.meta_estimator.fit(blend_features, y_blend)
+        
+        return self
+    
+    def predict(self, X):
+        # Get base predictions
+        base_preds = []
+        
+        for name, estimator in self.fitted_base_:
+            if hasattr(estimator, 'predict_proba'):
+                pred = estimator.predict_proba(X)
+            else:
+                pred = estimator.predict(X).reshape(-1, 1)
+            base_preds.append(pred)
+        
+        # Stack predictions
+        if base_preds[0].ndim == 2:
+            meta_features = np.hstack(base_preds)
+        else:
+            meta_features = np.column_stack(base_preds)
+        
+        return self.meta_estimator.predict(meta_features)
+    
+    def score(self, X, y):
+        return accuracy_score(y, self.predict(X))
+
+# Test blending
+blender = BlendingClassifier(
+    base_estimators=[
+        ('rf', RandomForestClassifier(n_estimators=50, random_state=42)),
+        ('gb', GradientBoostingClassifier(n_estimators=50, random_state=42)),
+        ('svc', SVC(probability=True, random_state=42))
+    ],
+    meta_estimator=LogisticRegression(),
+    blend_size=0.2
+)
+
+blender.fit(X_train, y_train)
+blending_score = blender.score(X_test, y_test)
+
+print(f"Blending Accuracy: {blending_score:.3f}")
+
+# Compare stacking methods
+stacking_comparison = pd.DataFrame({
+    'Method': ['Multi-Level Stacking', 'Feature Stacking', 'Blending'],
+    'Accuracy': [multi_level_score, feature_stacking_score, blending_score]
+})
+print("\n" + stacking_comparison.to_string(index=False))</code></pre>
+
+    <h2>Advanced Boosting Strategies</h2>
+    
+    <pre class="language-python"><code>from sklearn.ensemble import AdaBoostClassifier, GradientBoostingClassifier
+import xgboost as xgb
+import lightgbm as lgb
+
+print("\n" + "="*60)
+print("ADVANCED BOOSTING STRATEGIES")
+print("="*60)
+
+# 1. CUSTOM BOOSTING WITH SAMPLE WEIGHTS
+print("\n1. Custom Adaptive Boosting")
+print("-" * 40)
+
+class CustomAdaBoost:
+    """
+    Custom implementation of AdaBoost to understand the algorithm
+    """
+    
+    def __init__(self, base_estimator, n_estimators=50):
+        self.base_estimator = base_estimator
+        self.n_estimators = n_estimators
+        self.estimators_ = []
+        self.estimator_weights_ = []
+        
+    def fit(self, X, y):
+        n_samples = X.shape[0]
+        
+        # Initialize weights uniformly
+        sample_weights = np.ones(n_samples) / n_samples
+        
+        for i in range(self.n_estimators):
+            # Train base estimator with current weights
+            estimator = self.base_estimator.__class__(**self.base_estimator.get_params())
+            estimator.fit(X, y, sample_weight=sample_weights)
+            
+            # Make predictions
+            y_pred = estimator.predict(X)
+            
+            # Calculate weighted error
+            incorrect = y_pred != y
+            error = np.sum(sample_weights[incorrect]) / np.sum(sample_weights)
+            
+            # Calculate estimator weight (alpha)
+            if error >= 0.5:
+                # Stop if error is too high
+                if i == 0:
+                    self.estimators_.append(estimator)
+                    self.estimator_weights_.append(1.0)
+                break
+            
+            alpha = 0.5 * np.log((1 - error) / error)
+            
+            # Update sample weights
+            sample_weights *= np.exp(-alpha * y * (2 * y_pred - 1))
+            sample_weights /= np.sum(sample_weights)
+            
+            # Store estimator and weight
+            self.estimators_.append(estimator)
+            self.estimator_weights_.append(alpha)
+            
+            if i % 10 == 0:
+                print(f"  Iteration {i}: Error = {error:.3f}, Alpha = {alpha:.3f}")
+        
+        return self
+    
+    def predict(self, X):
+        # Weighted majority vote
+        predictions = np.zeros(X.shape[0])
+        
+        for estimator, weight in zip(self.estimators_, self.estimator_weights_):
+            predictions += weight * (2 * estimator.predict(X) - 1)
+        
+        return (predictions > 0).astype(int)
+    
+    def score(self, X, y):
+        return accuracy_score(y, self.predict(X))
+
+# Test custom AdaBoost
+from sklearn.tree import DecisionTreeClassifier
+
+custom_ada = CustomAdaBoost(
+    base_estimator=DecisionTreeClassifier(max_depth=1),
+    n_estimators=50
+)
+custom_ada.fit(X_train, y_train)
+custom_score = custom_ada.score(X_test, y_test)
+
+print(f"\nCustom AdaBoost Accuracy: {custom_score:.3f}")
+
+# Compare with sklearn AdaBoost
+sklearn_ada = AdaBoostClassifier(n_estimators=50, random_state=42)
+sklearn_ada.fit(X_train, y_train)
+sklearn_score = sklearn_ada.score(X_test, y_test)
+
+print(f"Sklearn AdaBoost Accuracy: {sklearn_score:.3f}")
+
+# 2. GRADIENT BOOSTING VARIATIONS
+print("\n2. Gradient Boosting Variations")
+print("-" * 40)
+
+# Standard Gradient Boosting
+gb_standard = GradientBoostingClassifier(
+    n_estimators=100,
+    learning_rate=0.1,
+    max_depth=3,
+    random_state=42
+)
+
+# Stochastic Gradient Boosting (with subsampling)
+gb_stochastic = GradientBoostingClassifier(
+    n_estimators=100,
+    learning_rate=0.1,
+    max_depth=3,
+    subsample=0.8,  # Use 80% of samples
+    max_features='sqrt',  # Use sqrt(n_features) at each split
+    random_state=42
+)
+
+# Histogram-based Gradient Boosting (faster)
+from sklearn.ensemble import HistGradientBoostingClassifier
+gb_hist = HistGradientBoostingClassifier(
+    max_iter=100,
+    learning_rate=0.1,
+    max_depth=3,
+    random_state=42
+)
+
+# Compare different GB variations
+gb_models = {
+    'Standard GB': gb_standard,
+    'Stochastic GB': gb_stochastic,
+    'Histogram GB': gb_hist
+}
+
+gb_results = {}
+for name, model in gb_models.items():
+    import time
+    start_time = time.time()
+    model.fit(X_train, y_train)
+    train_time = time.time() - start_time
+    
+    score = model.score(X_test, y_test)
+    gb_results[name] = {'accuracy': score, 'time': train_time}
+    
+    print(f"{name:15} - Accuracy: {score:.3f}, Time: {train_time:.2f}s")
+
+# 3. EXTREME GRADIENT BOOSTING (XGBoost)
+print("\n3. XGBoost Advanced Features")
+print("-" * 40)
+
+# Prepare data for XGBoost
+dtrain = xgb.DMatrix(X_train, label=y_train)
+dtest = xgb.DMatrix(X_test, label=y_test)
+
+# XGBoost with early stopping
+params = {
+    'objective': 'binary:logistic',
+    'max_depth': 3,
+    'learning_rate': 0.1,
+    'n_estimators': 1000,
+    'eval_metric': 'logloss'
+}
+
+# Train with early stopping
+evals = [(dtrain, 'train'), (dtest, 'eval')]
+xgb_model = xgb.train(
+    params,
+    dtrain,
+    num_boost_round=1000,
+    evals=evals,
+    early_stopping_rounds=10,
+    verbose=False
+)
+
+# Get predictions
+xgb_pred = (xgb_model.predict(dtest) > 0.5).astype(int)
+xgb_score = accuracy_score(y_test, xgb_pred)
+
+print(f"XGBoost with Early Stopping:")
+print(f"  Best iteration: {xgb_model.best_iteration}")
+print(f"  Accuracy: {xgb_score:.3f}")
+
+# Feature importance
+importance = xgb_model.get_score(importance_type='gain')
+print(f"  Top 5 important features: {list(importance.keys())[:5]}")
+
+# 4. LIGHTGBM
+print("\n4. LightGBM (Gradient Boosting on Leaves)")
+print("-" * 40)
+
+# Prepare LightGBM dataset
+lgb_train = lgb.Dataset(X_train, y_train)
+lgb_eval = lgb.Dataset(X_test, y_test, reference=lgb_train)
+
+# LightGBM parameters
+lgb_params = {
+    'objective': 'binary',
+    'metric': 'binary_logloss',
+    'num_leaves': 31,
+    'learning_rate': 0.1,
+    'feature_fraction': 0.9,
+    'bagging_fraction': 0.8,
+    'bagging_freq': 5,
+    'verbose': -1
+}
+
+# Train LightGBM
+lgb_model = lgb.train(
+    lgb_params,
+    lgb_train,
+    valid_sets=[lgb_eval],
+    num_boost_round=100,
+    callbacks=[lgb.early_stopping(10), lgb.log_evaluation(0)]
+)
+
+# Predictions
+lgb_pred = (lgb_model.predict(X_test) > 0.5).astype(int)
+lgb_score = accuracy_score(y_test, lgb_pred)
+
+print(f"LightGBM Accuracy: {lgb_score:.3f}")
+print(f"Number of trees: {lgb_model.num_trees()}")</code></pre>
+
+    <h2>Ensemble Selection and Optimization</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("ENSEMBLE SELECTION AND OPTIMIZATION")
+print("="*60)
+
+# 1. GREEDY ENSEMBLE SELECTION
+print("\n1. Greedy Ensemble Selection")
+print("-" * 40)
+
+class GreedyEnsembleSelector:
+    """
+    Greedy algorithm to select best subset of models
+    """
+    
+    def __init__(self, models, metric=accuracy_score, n_best=None):
+        self.models = models
+        self.metric = metric
+        self.n_best = n_best
+        self.selected_models_ = []
+        self.selection_path_ = []
+        
+    def fit(self, X, y):
+        """Select best ensemble greedily"""
+        from sklearn.model_selection import train_test_split
+        
+        # Split for validation
+        X_train, X_val, y_train, y_val = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
+        )
+        
+        # Fit all models
+        fitted_models = []
+        for name, model in self.models:
+            model.fit(X_train, y_train)
+            fitted_models.append((name, model))
+        
+        # Get predictions for all models
+        predictions = {}
+        for name, model in fitted_models:
+            predictions[name] = model.predict(X_val)
+        
+        # Greedy selection
+        available_models = list(predictions.keys())
+        selected = []
+        
+        n_to_select = self.n_best or len(available_models)
+        
+        for i in range(n_to_select):
+            best_score = -np.inf
+            best_model = None
+            
+            for model in available_models:
+                # Try adding this model
+                trial_ensemble = selected + [model]
+                
+                # Ensemble prediction (majority vote)
+                ensemble_pred = np.zeros(len(y_val))
+                for m in trial_ensemble:
+                    ensemble_pred += predictions[m]
+                ensemble_pred = (ensemble_pred > len(trial_ensemble) / 2).astype(int)
+                
+                # Calculate score
+                score = self.metric(y_val, ensemble_pred)
+                
+                if score > best_score:
+                    best_score = score
+                    best_model = model
+            
+            # Add best model if it improves score
+            if best_model and (not selected or best_score > self.selection_path_[-1][1]):
+                selected.append(best_model)
+                available_models.remove(best_model)
+                self.selection_path_.append((best_model, best_score))
+                print(f"  Step {i+1}: Added {best_model}, Score: {best_score:.3f}")
+            else:
+                break
+        
+        # Store selected models
+        self.selected_models_ = [(name, model) for name, model in fitted_models 
+                                 if name in selected]
+        
+        return self
+    
+    def predict(self, X):
+        """Predict using selected ensemble"""
+        predictions = np.zeros(X.shape[0])
+        
+        for name, model in self.selected_models_:
+            predictions += model.predict(X)
+        
+        return (predictions > len(self.selected_models_) / 2).astype(int)
+    
+    def score(self, X, y):
+        return accuracy_score(y, self.predict(X))
+
+# Test greedy selection
+candidate_models = [
+    ('lr', LogisticRegression(random_state=42)),
+    ('svc', SVC(random_state=42)),
+    ('rf', RandomForestClassifier(n_estimators=50, random_state=42)),
+    ('gb', GradientBoostingClassifier(n_estimators=50, random_state=42)),
+    ('nb', GaussianNB()),
+    ('knn', KNeighborsClassifier()),
+    ('dt', DecisionTreeClassifier(max_depth=5, random_state=42))
+]
+
+greedy_selector = GreedyEnsembleSelector(candidate_models, n_best=5)
+greedy_selector.fit(X_train, y_train)
+
+print(f"\nSelected {len(greedy_selector.selected_models_)} models")
+greedy_score = greedy_selector.score(X_test, y_test)
+print(f"Greedy Ensemble Accuracy: {greedy_score:.3f}")
+
+# 2. BAYESIAN OPTIMIZATION FOR ENSEMBLE WEIGHTS
+print("\n2. Bayesian Optimization for Ensemble Weights")
+print("-" * 40)
+
+from scipy.optimize import minimize
+from sklearn.metrics import log_loss
+
+class BayesianEnsembleOptimizer:
+    """
+    Find optimal weights using Bayesian optimization
+    """
+    
+    def __init__(self, models):
+        self.models = models
+        self.weights_ = None
+        
+    def objective(self, weights, X, y, predictions):
+        """Objective function to minimize"""
+        # Normalize weights
+        weights = weights / weights.sum()
+        
+        # Weighted average of predictions
+        ensemble_pred = np.zeros_like(predictions[0])
+        for i, pred in enumerate(predictions):
+            ensemble_pred += weights[i] * pred
+        
+        # Calculate negative log loss (to minimize)
+        return log_loss(y, ensemble_pred)
+    
+    def fit(self, X, y):
+        """Find optimal weights"""
+        from sklearn.model_selection import train_test_split
+        
+        # Split for validation
+        X_train, X_val, y_train, y_val = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
+        )
+        
+        # Fit models and get predictions
+        predictions = []
+        self.fitted_models_ = []
+        
+        for name, model in self.models:
+            model.fit(X_train, y_train)
+            self.fitted_models_.append((name, model))
+            
+            if hasattr(model, 'predict_proba'):
+                pred = model.predict_proba(X_val)[:, 1]
+            else:
+                pred = model.predict(X_val)
+            predictions.append(pred)
+        
+        # Initial weights (uniform)
+        n_models = len(self.models)
+        initial_weights = np.ones(n_models) / n_models
+        
+        # Constraints: weights sum to 1, all non-negative
+        constraints = {'type': 'eq', 'fun': lambda w: w.sum() - 1}
+        bounds = [(0, 1)] * n_models
+        
+        # Optimize
+        result = minimize(
+            self.objective,
+            initial_weights,
+            args=(X_val, y_val, predictions),
+            method='SLSQP',
+            bounds=bounds,
+            constraints=constraints
+        )
+        
+        self.weights_ = result.x / result.x.sum()
+        
+        print("Optimized weights:")
+        for (name, _), weight in zip(self.models, self.weights_):
+            print(f"  {name}: {weight:.3f}")
+        
+        return self
+    
+    def predict_proba(self, X):
+        """Predict probabilities"""
+        predictions = []
+        
+        for name, model in self.fitted_models_:
+            if hasattr(model, 'predict_proba'):
+                pred = model.predict_proba(X)[:, 1]
+            else:
+                pred = model.predict(X)
+            predictions.append(pred)
+        
+        # Weighted average
+        ensemble_pred = np.zeros_like(predictions[0])
+        for i, pred in enumerate(predictions):
+            ensemble_pred += self.weights_[i] * pred
+        
+        return ensemble_pred
+    
+    def predict(self, X):
+        return (self.predict_proba(X) > 0.5).astype(int)
+    
+    def score(self, X, y):
+        return accuracy_score(y, self.predict(X))
+
+# Test Bayesian optimization
+bayesian_optimizer = BayesianEnsembleOptimizer(candidate_models[:4])
+bayesian_optimizer.fit(X_train, y_train)
+bayesian_score = bayesian_optimizer.score(X_test, y_test)
+
+print(f"\nBayesian Optimized Ensemble Accuracy: {bayesian_score:.3f}")</code></pre>
+
+    <h2>Production-Ready Ensemble System</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("PRODUCTION-READY ENSEMBLE SYSTEM")
+print("="*60)
+
+class ProductionEnsemble:
+    """
+    Complete ensemble system for production use
+    """
+    
+    def __init__(self, 
+                 ensemble_type='voting',
+                 base_models=None,
+                 cv_folds=5,
+                 optimize_weights=True,
+                 use_calibration=True,
+                 save_models=True):
+        
+        self.ensemble_type = ensemble_type
+        self.base_models = base_models or self._get_default_models()
+        self.cv_folds = cv_folds
+        self.optimize_weights = optimize_weights
+        self.use_calibration = use_calibration
+        self.save_models = save_models
+        
+        self.fitted_models_ = []
+        self.weights_ = None
+        self.calibrators_ = []
+        self.performance_metrics_ = {}
+        
+    def _get_default_models(self):
+        """Default diverse model set"""
+        return [
+            ('rf', RandomForestClassifier(n_estimators=100, random_state=42)),
+            ('gb', GradientBoostingClassifier(n_estimators=100, random_state=42)),
+            ('lr', LogisticRegression(max_iter=1000, random_state=42)),
+            ('svc', SVC(probability=True, random_state=42))
+        ]
+    
+    def _calibrate_probabilities(self, X, y):
+        """Calibrate probability predictions"""
+        from sklearn.calibration import CalibratedClassifierCV
+        
+        calibrated_models = []
+        
+        for name, model in self.fitted_models_:
+            if hasattr(model, 'predict_proba'):
+                calibrator = CalibratedClassifierCV(
+                    model, method='sigmoid', cv=3
+                )
+                calibrator.fit(X, y)
+                calibrated_models.append((name, calibrator))
+            else:
+                calibrated_models.append((name, model))
+        
+        return calibrated_models
+    
+    def fit(self, X, y):
+        """Fit the production ensemble"""
+        print("Training Production Ensemble...")
+        print("-" * 40)
+        
+        # Step 1: Train base models
+        print("Step 1: Training base models...")
+        for name, model in self.base_models:
+            print(f"  Training {name}...")
+            model.fit(X, y)
+            
+            # Cross-validation score
+            cv_scores = cross_val_score(model, X, y, cv=self.cv_folds)
+            self.performance_metrics_[name] = {
+                'cv_mean': cv_scores.mean(),
+                'cv_std': cv_scores.std()
+            }
+            
+            self.fitted_models_.append((name, model))
+        
+        # Step 2: Calibrate probabilities if requested
+        if self.use_calibration:
+            print("\nStep 2: Calibrating probabilities...")
+            self.fitted_models_ = self._calibrate_probabilities(X, y)
+        
+        # Step 3: Optimize weights if requested
+        if self.optimize_weights:
+            print("\nStep 3: Optimizing ensemble weights...")
+            self._optimize_weights(X, y)
+        else:
+            # Use CV scores as weights
+            scores = [self.performance_metrics_[name]['cv_mean'] 
+                     for name, _ in self.fitted_models_]
+            self.weights_ = np.array(scores) / np.sum(scores)
+        
+        # Step 4: Calculate final metrics
+        self._calculate_final_metrics(X, y)
+        
+        print("\n✅ Ensemble training complete!")
+        
+        return self
+    
+    def _optimize_weights(self, X, y):
+        """Optimize ensemble weights"""
+        # Similar to BayesianEnsembleOptimizer
+        # Implementation omitted for brevity
+        n_models = len(self.fitted_models_)
+        self.weights_ = np.ones(n_models) / n_models
+    
+    def _calculate_final_metrics(self, X, y):
+        """Calculate and store performance metrics"""
+        ensemble_pred = self.predict(X)
+        
+        self.performance_metrics_['ensemble'] = {
+            'accuracy': accuracy_score(y, ensemble_pred),
+            'models_used': len(self.fitted_models_),
+            'weights': self.weights_.tolist()
+        }
+    
+    def predict_proba(self, X):
+        """Predict probabilities"""
+        probas = []
+        
+        for (name, model), weight in zip(self.fitted_models_, self.weights_):
+            if hasattr(model, 'predict_proba'):
+                proba = model.predict_proba(X)[:, 1]
+            else:
+                proba = model.predict(X)
+            
+            probas.append(proba * weight)
+        
+        return np.sum(probas, axis=0)
+    
+    def predict(self, X):
+        """Predict classes"""
+        if self.ensemble_type == 'voting':
+            return (self.predict_proba(X) > 0.5).astype(int)
+        else:
+            # Other ensemble types can be implemented here
+            return (self.predict_proba(X) > 0.5).astype(int)
+    
+    def score(self, X, y):
+        """Calculate accuracy"""
+        return accuracy_score(y, self.predict(X))
+    
+    def get_model_importance(self):
+        """Get importance of each model in ensemble"""
+        importance = pd.DataFrame({
+            'Model': [name for name, _ in self.fitted_models_],
+            'Weight': self.weights_,
+            'CV_Score': [self.performance_metrics_[name]['cv_mean'] 
+                        for name, _ in self.fitted_models_]
+        })
+        return importance.sort_values('Weight', ascending=False)
+    
+    def save(self, filepath):
+        """Save ensemble to disk"""
+        import joblib
+        
+        ensemble_data = {
+            'models': self.fitted_models_,
+            'weights': self.weights_,
+            'metrics': self.performance_metrics_,
+            'config': {
+                'ensemble_type': self.ensemble_type,
+                'cv_folds': self.cv_folds,
+                'use_calibration': self.use_calibration
+            }
+        }
+        
+        joblib.dump(ensemble_data, filepath)
+        print(f"Ensemble saved to {filepath}")
+    
+    @classmethod
+    def load(cls, filepath):
+        """Load ensemble from disk"""
+        import joblib
+        
+        ensemble_data = joblib.load(filepath)
+        
+        # Create new instance
+        ensemble = cls(
+            ensemble_type=ensemble_data['config']['ensemble_type'],
+            cv_folds=ensemble_data['config']['cv_folds'],
+            use_calibration=ensemble_data['config']['use_calibration']
+        )
+        
+        # Restore state
+        ensemble.fitted_models_ = ensemble_data['models']
+        ensemble.weights_ = ensemble_data['weights']
+        ensemble.performance_metrics_ = ensemble_data['metrics']
+        
+        return ensemble
+
+# Test production ensemble
+production_ensemble = ProductionEnsemble(
+    ensemble_type='voting',
+    optimize_weights=False,
+    use_calibration=False  # Set to False for speed
+)
+
+production_ensemble.fit(X_train, y_train)
+
+print("\nModel Importance:")
+print(production_ensemble.get_model_importance())
+
+print(f"\nProduction Ensemble Test Accuracy: {production_ensemble.score(X_test, y_test):.3f}")
+
+# Performance comparison summary
+print("\n" + "="*60)
+print("ENSEMBLE METHODS PERFORMANCE SUMMARY")
+print("="*60)
+
+all_results = {
+    'Hard Voting': hard_score,
+    'Soft Voting': soft_score,
+    'Weighted Voting': weighted_score,
+    'Dynamic Voting': dynamic_score,
+    'Feature Stacking': feature_stacking_score,
+    'Blending': blending_score,
+    'Greedy Selection': greedy_score,
+    'Bayesian Optimized': bayesian_score,
+    'Production Ensemble': production_ensemble.score(X_test, y_test)
+}
+
+results_df = pd.DataFrame.from_dict(all_results, orient='index', columns=['Accuracy'])
+results_df = results_df.sort_values('Accuracy', ascending=False)
+
+print(results_df.to_string())
+print(f"\nBest Method: {results_df.index[0]} with {results_df.iloc[0, 0]:.3f} accuracy")</code></pre>
+
+    <h2>Practice Exercises</h2>
+    
+    <h3>Exercise 1: Custom Ensemble Framework</h3>
+    <p>Build a flexible ensemble framework that:</p>
+    <ol>
+        <li>Supports multiple ensemble strategies (voting, stacking, blending)</li>
+        <li>Automatically selects best base models</li>
+        <li>Optimizes ensemble weights</li>
+        <li>Provides confidence intervals for predictions</li>
+        <li>Handles both classification and regression</li>
+    </ol>
+
+    <h3>Exercise 2: Ensemble Diversity Analysis</h3>
+    <p>Create tools to analyze ensemble diversity:</p>
+    <ol>
+        <li>Calculate pairwise model correlation</li>
+        <li>Measure diversity metrics (Q-statistic, disagreement measure)</li>
+        <li>Visualize model agreement/disagreement patterns</li>
+        <li>Select diverse models for optimal ensemble</li>
+    </ol>
+
+    <h3>Exercise 3: Competition-Grade Ensemble</h3>
+    <p>Build a Kaggle-competition-ready ensemble:</p>
+    <ol>
+        <li>Implement multi-level stacking</li>
+        <li>Use out-of-fold predictions</li>
+        <li>Include feature engineering in the pipeline</li>
+        <li>Implement cross-validation strategy</li>
+        <li>Create submission file generator</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+        <li>🎯 Ensemble methods combine multiple models to achieve better performance</li>
+        <li>🗳️ Voting ensembles: Simple but effective (hard, soft, weighted)</li>
+        <li>📚 Stacking: Use meta-learner to combine base model predictions</li>
+        <li>🔄 Blending: Similar to stacking but uses holdout validation</li>
+        <li>⚡ Boosting: Sequential learning with focus on errors</li>
+        <li>🎨 Diversity is key: Models should make different errors</li>
+        <li>⚖️ Weight optimization can significantly improve performance</li>
+        <li>🏗️ Multi-level stacking can capture complex patterns</li>
+        <li>📊 Greedy selection finds optimal model subset</li>
+        <li>🏭 Production ensembles need calibration and monitoring</li>
+    </ul>
+
+    <h2>Summary</h2>
+    <p>Advanced ensemble methods represent the pinnacle of classical machine learning. By intelligently combining diverse models, we can achieve performance that surpasses any individual algorithm. The techniques covered here—from sophisticated voting schemes to multi-level stacking—are the same methods that win machine learning competitions and power production systems. Remember: the key to successful ensembles is diversity, proper validation, and careful optimization. Master these techniques, and you'll have the tools to tackle the most challenging machine learning problems!</p>
+
+    <!-- Navigation -->
+    <nav class="lesson-nav" aria-label="Lesson navigation">
+        <a href="pipelines_composite.html" class="prev-lesson">Previous: Pipelines & Composite Estimators</a>
+        <a href="index.html" class="home-link">Course Home</a>
+        <a href="model_interpretation.html" class="next-lesson">Next: Model Interpretation & Explainability</a>
+    </nav>
+    
+    <script src="js/clipboard.js"></script>
+    </main>
+</body>
+</html>

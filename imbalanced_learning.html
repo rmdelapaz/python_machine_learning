@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Master techniques for handling imbalanced datasets in machine learning. Learn SMOTE, cost-sensitive learning, and evaluation metrics for imbalanced classification.">
+    <title>Imbalanced Learning - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script src="js/course-enhancements.js" defer></script>
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    
+    <main id="main-content">
+    <header role="banner">
+        <h1>Imbalanced Learning: When Classes Are Not Equal</h1>
+        <div class="reading-time" aria-label="Estimated reading time"></div>
+    </header>
+    
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="index.html">Home</a>
+        <span class="separator">›</span>
+        <a href="#">Machine Learning Module</a>
+        <span class="separator">›</span>
+        <a href="#">Specialized Topics</a>
+        <span class="separator">›</span>
+        <span class="current">Imbalanced Learning</span>
+    </nav>
+
+    <h2>The Challenge of Rare Events ⚖️</h2>
+    
+    <blockquote>
+        <p>"In the real world, the interesting events are often rare: fraud is uncommon, diseases affect a minority, and equipment failures are exceptional. Yet these rare events are often the most important to detect. Imbalanced learning is about finding needles in haystacks—and doing it reliably."</p>
+    </blockquote>
+
+    <h2>Understanding Class Imbalance</h2>
+    
+    <div class="mermaid">
+    graph TD
+        A[Imbalanced Dataset] --> B[Problems]
+        A --> C[Solutions]
+        
+        B --> D[Accuracy Paradox]
+        B --> E[Model Bias]
+        B --> F[Poor Minority Recall]
+        
+        C --> G[Data-Level Methods]
+        C --> H[Algorithm-Level Methods]
+        C --> I[Hybrid Methods]
+        
+        G --> J[Oversampling]
+        G --> K[Undersampling]
+        G --> L[SMOTE]
+        
+        H --> M[Cost-Sensitive]
+        H --> N[Threshold Moving]
+        H --> O[Ensemble Methods]
+        
+        style A fill:#667eea,color:#fff
+        style C fill:#51cf66
+        style B fill:#ff6b6b
+    </div>
+
+    <pre class="language-python"><code># Essential imports for imbalanced learning
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.metrics import (accuracy_score, precision_score, recall_score, 
+                           f1_score, roc_auc_score, precision_recall_curve,
+                           confusion_matrix, classification_report, 
+                           average_precision_score, balanced_accuracy_score)
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set visualization style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+
+print("="*60)
+print("IMBALANCED LEARNING: HANDLING SKEWED DATASETS")
+print("="*60)
+
+# Create imbalanced dataset
+X, y = make_classification(
+    n_samples=10000,
+    n_features=20,
+    n_informative=15,
+    n_redundant=5,
+    n_clusters_per_class=1,
+    weights=[0.99, 0.01],  # 99% majority, 1% minority
+    flip_y=0.01,
+    random_state=42
+)
+
+# Convert to DataFrame for easier handling
+feature_names = [f'feature_{i}' for i in range(X.shape[1])]
+df = pd.DataFrame(X, columns=feature_names)
+df['target'] = y
+
+print(f"Dataset shape: {df.shape}")
+print(f"\nClass distribution:")
+print(df['target'].value_counts())
+print(f"\nClass proportions:")
+print(df['target'].value_counts(normalize=True))
+
+# Calculate imbalance ratio
+imbalance_ratio = df['target'].value_counts()[0] / df['target'].value_counts()[1]
+print(f"\nImbalance ratio: {imbalance_ratio:.1f}:1")
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42, stratify=y
+)
+
+print(f"\nTraining set - Class distribution:")
+print(pd.Series(y_train).value_counts())
+print(f"\nTest set - Class distribution:")
+print(pd.Series(y_test).value_counts())</code></pre>
+
+    <h2>1. The Problem: Why Accuracy Fails</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("1. THE ACCURACY PARADOX")
+print("="*60)
+
+# Train a classifier without handling imbalance
+baseline_model = RandomForestClassifier(random_state=42)
+baseline_model.fit(X_train, y_train)
+
+# Make predictions
+y_pred_baseline = baseline_model.predict(X_test)
+
+# Calculate metrics
+accuracy = accuracy_score(y_test, y_pred_baseline)
+precision = precision_score(y_test, y_pred_baseline, zero_division=0)
+recall = recall_score(y_test, y_pred_baseline)
+f1 = f1_score(y_test, y_pred_baseline)
+balanced_acc = balanced_accuracy_score(y_test, y_pred_baseline)
+
+print("Baseline Model Performance (No Imbalance Handling):")
+print(f"  Accuracy:          {accuracy:.3f}")
+print(f"  Precision:         {precision:.3f}")
+print(f"  Recall:            {recall:.3f}")
+print(f"  F1-Score:          {f1:.3f}")
+print(f"  Balanced Accuracy: {balanced_acc:.3f}")
+
+# Confusion matrix
+cm = confusion_matrix(y_test, y_pred_baseline)
+print(f"\nConfusion Matrix:")
+print(f"  True Negatives:  {cm[0, 0]}")
+print(f"  False Positives: {cm[0, 1]}")
+print(f"  False Negatives: {cm[1, 0]}")
+print(f"  True Positives:  {cm[1, 1]}")
+
+# Demonstrate the dummy classifier problem
+class DummyMajorityClassifier:
+    """Always predicts the majority class"""
+    def fit(self, X, y):
+        self.majority_class = pd.Series(y).value_counts().index[0]
+        return self
+    
+    def predict(self, X):
+        return np.full(X.shape[0], self.majority_class)
+
+dummy = DummyMajorityClassifier()
+dummy.fit(X_train, y_train)
+y_pred_dummy = dummy.predict(X_test)
+
+dummy_accuracy = accuracy_score(y_test, y_pred_dummy)
+print(f"\n🚨 Dummy Classifier (always predicts majority):")
+print(f"  Accuracy: {dummy_accuracy:.3f} - High accuracy but useless!")
+print(f"  Recall:   {recall_score(y_test, y_pred_dummy):.3f} - Misses all minority samples!")
+
+# Visualize the problem
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+# Plot 1: Class distribution
+class_counts = pd.Series(y_train).value_counts()
+axes[0].bar(['Majority (0)', 'Minority (1)'], class_counts.values, color=['blue', 'red'])
+axes[0].set_ylabel('Number of Samples')
+axes[0].set_title('Class Distribution')
+for i, v in enumerate(class_counts.values):
+    axes[0].text(i, v + 50, str(v), ha='center')
+
+# Plot 2: Confusion matrices comparison
+from sklearn.metrics import ConfusionMatrixDisplay
+
+# Baseline model confusion matrix
+disp1 = ConfusionMatrixDisplay(confusion_matrix=cm)
+disp1.plot(ax=axes[1], colorbar=False)
+axes[1].set_title('Baseline Model Confusion Matrix')
+
+# Dummy classifier confusion matrix
+cm_dummy = confusion_matrix(y_test, y_pred_dummy)
+disp2 = ConfusionMatrixDisplay(confusion_matrix=cm_dummy)
+disp2.plot(ax=axes[2], colorbar=False)
+axes[2].set_title('Dummy Classifier Confusion Matrix')
+
+plt.tight_layout()
+plt.show()
+
+print("\n💡 Key Insight: High accuracy doesn't mean good performance on imbalanced data!")</code></pre>
+
+    <h2>2. Data-Level Solutions: Resampling Techniques</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("2. RESAMPLING TECHNIQUES")
+print("="*60)
+
+from imblearn.over_sampling import RandomOverSampler, SMOTE, ADASYN, BorderlineSMOTE
+from imblearn.under_sampling import RandomUnderSampler, TomekLinks, EditedNearestNeighbours
+from imblearn.combine import SMOTEENN, SMOTETomek
+
+# 1. Random Oversampling
+print("\n1. RANDOM OVERSAMPLING")
+print("-" * 40)
+
+ros = RandomOverSampler(random_state=42)
+X_ros, y_ros = ros.fit_resample(X_train, y_train)
+
+print(f"Original training set: {X_train.shape}")
+print(f"After oversampling: {X_ros.shape}")
+print(f"New class distribution:")
+print(pd.Series(y_ros).value_counts())
+
+# Train and evaluate
+model_ros = RandomForestClassifier(random_state=42)
+model_ros.fit(X_ros, y_ros)
+y_pred_ros = model_ros.predict(X_test)
+
+print(f"\nRandom Oversampling Results:")
+print(f"  Recall:    {recall_score(y_test, y_pred_ros):.3f}")
+print(f"  Precision: {precision_score(y_test, y_pred_ros):.3f}")
+print(f"  F1-Score:  {f1_score(y_test, y_pred_ros):.3f}")
+
+# 2. SMOTE (Synthetic Minority Over-sampling Technique)
+print("\n2. SMOTE")
+print("-" * 40)
+
+smote = SMOTE(random_state=42, k_neighbors=5)
+X_smote, y_smote = smote.fit_resample(X_train, y_train)
+
+print(f"After SMOTE: {X_smote.shape}")
+print(f"Class distribution:")
+print(pd.Series(y_smote).value_counts())
+
+# Train and evaluate
+model_smote = RandomForestClassifier(random_state=42)
+model_smote.fit(X_smote, y_smote)
+y_pred_smote = model_smote.predict(X_test)
+
+print(f"\nSMOTE Results:")
+print(f"  Recall:    {recall_score(y_test, y_pred_smote):.3f}")
+print(f"  Precision: {precision_score(y_test, y_pred_smote):.3f}")
+print(f"  F1-Score:  {f1_score(y_test, y_pred_smote):.3f}")
+
+# 3. Borderline SMOTE
+print("\n3. BORDERLINE SMOTE")
+print("-" * 40)
+
+borderline_smote = BorderlineSMOTE(random_state=42)
+X_border, y_border = borderline_smote.fit_resample(X_train, y_train)
+
+model_border = RandomForestClassifier(random_state=42)
+model_border.fit(X_border, y_border)
+y_pred_border = model_border.predict(X_test)
+
+print(f"Borderline SMOTE Results:")
+print(f"  Recall:    {recall_score(y_test, y_pred_border):.3f}")
+print(f"  Precision: {precision_score(y_test, y_pred_border):.3f}")
+print(f"  F1-Score:  {f1_score(y_test, y_pred_border):.3f}")
+
+# 4. Random Undersampling
+print("\n4. RANDOM UNDERSAMPLING")
+print("-" * 40)
+
+rus = RandomUnderSampler(random_state=42)
+X_rus, y_rus = rus.fit_resample(X_train, y_train)
+
+print(f"After undersampling: {X_rus.shape}")
+print(f"Class distribution:")
+print(pd.Series(y_rus).value_counts())
+
+model_rus = RandomForestClassifier(random_state=42)
+model_rus.fit(X_rus, y_rus)
+y_pred_rus = model_rus.predict(X_test)
+
+print(f"\nRandom Undersampling Results:")
+print(f"  Recall:    {recall_score(y_test, y_pred_rus):.3f}")
+print(f"  Precision: {precision_score(y_test, y_pred_rus):.3f}")
+print(f"  F1-Score:  {f1_score(y_test, y_pred_rus):.3f}")
+
+# 5. Combined Methods (SMOTE + Tomek Links)
+print("\n5. COMBINED METHODS (SMOTE + Tomek)")
+print("-" * 40)
+
+smote_tomek = SMOTETomek(random_state=42)
+X_combined, y_combined = smote_tomek.fit_resample(X_train, y_train)
+
+print(f"After SMOTE + Tomek: {X_combined.shape}")
+print(f"Class distribution:")
+print(pd.Series(y_combined).value_counts())
+
+model_combined = RandomForestClassifier(random_state=42)
+model_combined.fit(X_combined, y_combined)
+y_pred_combined = model_combined.predict(X_test)
+
+print(f"\nCombined Method Results:")
+print(f"  Recall:    {recall_score(y_test, y_pred_combined):.3f}")
+print(f"  Precision: {precision_score(y_test, y_pred_combined):.3f}")
+print(f"  F1-Score:  {f1_score(y_test, y_pred_combined):.3f}")
+
+# Visualization of resampling effects
+fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+
+# Create 2D representation using PCA for visualization
+from sklearn.decomposition import PCA
+pca = PCA(n_components=2)
+X_train_2d = pca.fit_transform(X_train)
+
+# Plot original
+axes[0, 0].scatter(X_train_2d[y_train == 0, 0], X_train_2d[y_train == 0, 1], 
+                  alpha=0.5, label='Majority', s=10)
+axes[0, 0].scatter(X_train_2d[y_train == 1, 0], X_train_2d[y_train == 1, 1], 
+                  alpha=0.8, label='Minority', s=20, color='red')
+axes[0, 0].set_title(f'Original (Ratio {imbalance_ratio:.0f}:1)')
+axes[0, 0].legend()
+
+# Plot after random oversampling
+X_ros_2d = pca.transform(X_ros)
+axes[0, 1].scatter(X_ros_2d[y_ros == 0, 0], X_ros_2d[y_ros == 0, 1], 
+                  alpha=0.5, label='Majority', s=10)
+axes[0, 1].scatter(X_ros_2d[y_ros == 1, 0], X_ros_2d[y_ros == 1, 1], 
+                  alpha=0.5, label='Minority', s=10, color='red')
+axes[0, 1].set_title('After Random Oversampling (1:1)')
+axes[0, 1].legend()
+
+# Plot after SMOTE
+X_smote_2d = pca.transform(X_smote)
+axes[0, 2].scatter(X_smote_2d[y_smote == 0, 0], X_smote_2d[y_smote == 0, 1], 
+                  alpha=0.5, label='Majority', s=10)
+axes[0, 2].scatter(X_smote_2d[y_smote == 1, 0], X_smote_2d[y_smote == 1, 1], 
+                  alpha=0.5, label='Minority (Synthetic)', s=10, color='red')
+axes[0, 2].set_title('After SMOTE (1:1)')
+axes[0, 2].legend()
+
+# Plot after undersampling
+X_rus_2d = pca.transform(X_rus)
+axes[1, 0].scatter(X_rus_2d[y_rus == 0, 0], X_rus_2d[y_rus == 0, 1], 
+                  alpha=0.5, label='Majority', s=10)
+axes[1, 0].scatter(X_rus_2d[y_rus == 1, 0], X_rus_2d[y_rus == 1, 1], 
+                  alpha=0.8, label='Minority', s=20, color='red')
+axes[1, 0].set_title('After Random Undersampling (1:1)')
+axes[1, 0].legend()
+
+# Performance comparison
+methods = ['Baseline', 'ROS', 'SMOTE', 'Border', 'RUS', 'Combined']
+recalls = [recall_score(y_test, pred) for pred in 
+          [y_pred_baseline, y_pred_ros, y_pred_smote, y_pred_border, y_pred_rus, y_pred_combined]]
+precisions = [precision_score(y_test, pred, zero_division=0) for pred in 
+             [y_pred_baseline, y_pred_ros, y_pred_smote, y_pred_border, y_pred_rus, y_pred_combined]]
+
+x = np.arange(len(methods))
+width = 0.35
+
+axes[1, 1].bar(x - width/2, recalls, width, label='Recall', color='green')
+axes[1, 1].bar(x + width/2, precisions, width, label='Precision', color='blue')
+axes[1, 1].set_xlabel('Method')
+axes[1, 1].set_ylabel('Score')
+axes[1, 1].set_title('Performance Comparison')
+axes[1, 1].set_xticks(x)
+axes[1, 1].set_xticklabels(methods, rotation=45)
+axes[1, 1].legend()
+axes[1, 1].grid(True, alpha=0.3)
+
+# F1 scores comparison
+f1_scores = [f1_score(y_test, pred) for pred in 
+            [y_pred_baseline, y_pred_ros, y_pred_smote, y_pred_border, y_pred_rus, y_pred_combined]]
+
+axes[1, 2].bar(methods, f1_scores, color='purple')
+axes[1, 2].set_xlabel('Method')
+axes[1, 2].set_ylabel('F1-Score')
+axes[1, 2].set_title('F1-Score Comparison')
+axes[1, 2].set_xticklabels(methods, rotation=45)
+axes[1, 2].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+print("\n💡 SMOTE creates synthetic samples, avoiding exact duplicates!")</code></pre>
+
+    <h2>3. Algorithm-Level Solutions</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("3. ALGORITHM-LEVEL SOLUTIONS")
+print("="*60)
+
+# 1. Class Weight Adjustment
+print("\n1. CLASS WEIGHT ADJUSTMENT")
+print("-" * 40)
+
+# Calculate class weights
+from sklearn.utils.class_weight import compute_class_weight
+
+classes = np.unique(y_train)
+class_weights = compute_class_weight('balanced', classes=classes, y=y_train)
+class_weight_dict = dict(zip(classes, class_weights))
+
+print(f"Computed class weights: {class_weight_dict}")
+
+# Train with class weights
+model_weighted = RandomForestClassifier(class_weight='balanced', random_state=42)
+model_weighted.fit(X_train, y_train)
+y_pred_weighted = model_weighted.predict(X_test)
+
+print(f"\nClass-Weighted Model Results:")
+print(f"  Recall:    {recall_score(y_test, y_pred_weighted):.3f}")
+print(f"  Precision: {precision_score(y_test, y_pred_weighted):.3f}")
+print(f"  F1-Score:  {f1_score(y_test, y_pred_weighted):.3f}")
+
+# 2. Cost-Sensitive Learning
+print("\n2. COST-SENSITIVE LEARNING")
+print("-" * 40)
+
+class CostSensitiveClassifier:
+    """
+    Wrapper for cost-sensitive classification
+    """
+    def __init__(self, base_estimator, false_negative_cost=10, false_positive_cost=1):
+        self.base_estimator = base_estimator
+        self.fn_cost = false_negative_cost
+        self.fp_cost = false_positive_cost
+        
+    def fit(self, X, y):
+        # Calculate sample weights based on costs
+        sample_weights = np.ones(len(y))
+        sample_weights[y == 1] = self.fn_cost  # Higher weight for minority class
+        
+        self.base_estimator.fit(X, y, sample_weight=sample_weights)
+        return self
+    
+    def predict(self, X):
+        # Get probabilities
+        probas = self.base_estimator.predict_proba(X)
+        
+        # Adjust decision threshold based on costs
+        threshold = self.fp_cost / (self.fp_cost + self.fn_cost)
+        return (probas[:, 1] >= threshold).astype(int)
+    
+    def predict_proba(self, X):
+        return self.base_estimator.predict_proba(X)
+
+# Train cost-sensitive classifier
+cost_sensitive = CostSensitiveClassifier(
+    RandomForestClassifier(random_state=42),
+    false_negative_cost=10,  # Missing a positive is 10x worse
+    false_positive_cost=1
+)
+
+cost_sensitive.fit(X_train, y_train)
+y_pred_cost = cost_sensitive.predict(X_test)
+
+print(f"Cost-Sensitive Model Results (FN cost=10, FP cost=1):")
+print(f"  Recall:    {recall_score(y_test, y_pred_cost):.3f}")
+print(f"  Precision: {precision_score(y_test, y_pred_cost):.3f}")
+print(f"  F1-Score:  {f1_score(y_test, y_pred_cost):.3f}")
+
+# 3. Threshold Moving
+print("\n3. THRESHOLD MOVING")
+print("-" * 40)
+
+# Get predicted probabilities
+y_proba = baseline_model.predict_proba(X_test)[:, 1]
+
+# Find optimal threshold
+thresholds = np.arange(0, 1, 0.01)
+f1_scores_thresh = []
+
+for threshold in thresholds:
+    y_pred_thresh = (y_proba >= threshold).astype(int)
+    f1 = f1_score(y_test, y_pred_thresh)
+    f1_scores_thresh.append(f1)
+
+optimal_threshold = thresholds[np.argmax(f1_scores_thresh)]
+print(f"Optimal threshold: {optimal_threshold:.2f}")
+
+# Apply optimal threshold
+y_pred_optimal = (y_proba >= optimal_threshold).astype(int)
+
+print(f"\nThreshold-Adjusted Results:")
+print(f"  Recall:    {recall_score(y_test, y_pred_optimal):.3f}")
+print(f"  Precision: {precision_score(y_test, y_pred_optimal):.3f}")
+print(f"  F1-Score:  {f1_score(y_test, y_pred_optimal):.3f}")
+
+# 4. Ensemble Methods for Imbalanced Data
+print("\n4. ENSEMBLE METHODS")
+print("-" * 40)
+
+from imblearn.ensemble import BalancedRandomForestClassifier, BalancedBaggingClassifier
+
+# Balanced Random Forest
+brf = BalancedRandomForestClassifier(n_estimators=100, random_state=42)
+brf.fit(X_train, y_train)
+y_pred_brf = brf.predict(X_test)
+
+print(f"Balanced Random Forest Results:")
+print(f"  Recall:    {recall_score(y_test, y_pred_brf):.3f}")
+print(f"  Precision: {precision_score(y_test, y_pred_brf):.3f}")
+print(f"  F1-Score:  {f1_score(y_test, y_pred_brf):.3f}")
+
+# Balanced Bagging
+bb = BalancedBaggingClassifier(
+    estimator=DecisionTreeClassifier(),
+    n_estimators=100,
+    random_state=42
+)
+bb.fit(X_train, y_train)
+y_pred_bb = bb.predict(X_test)
+
+print(f"\nBalanced Bagging Results:")
+print(f"  Recall:    {recall_score(y_test, y_pred_bb):.3f}")
+print(f"  Precision: {precision_score(y_test, y_pred_bb):.3f}")
+print(f"  F1-Score:  {f1_score(y_test, y_pred_bb):.3f}")
+
+# Visualizations
+fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+# Plot 1: Threshold optimization
+axes[0, 0].plot(thresholds, f1_scores_thresh, 'b-', linewidth=2)
+axes[0, 0].axvline(x=optimal_threshold, color='r', linestyle='--', 
+                  label=f'Optimal: {optimal_threshold:.2f}')
+axes[0, 0].axvline(x=0.5, color='g', linestyle='--', label='Default: 0.50')
+axes[0, 0].set_xlabel('Threshold')
+axes[0, 0].set_ylabel('F1-Score')
+axes[0, 0].set_title('Threshold Optimization')
+axes[0, 0].legend()
+axes[0, 0].grid(True, alpha=0.3)
+
+# Plot 2: Precision-Recall curve
+from sklearn.metrics import precision_recall_curve, auc
+
+precision_curve, recall_curve, thresholds_pr = precision_recall_curve(y_test, y_proba)
+pr_auc = auc(recall_curve, precision_curve)
+
+axes[0, 1].plot(recall_curve, precision_curve, 'b-', linewidth=2,
+               label=f'PR Curve (AUC = {pr_auc:.3f})')
+axes[0, 1].set_xlabel('Recall')
+axes[0, 1].set_ylabel('Precision')
+axes[0, 1].set_title('Precision-Recall Curve')
+axes[0, 1].legend()
+axes[0, 1].grid(True, alpha=0.3)
+
+# Plot 3: ROC curves comparison
+from sklearn.metrics import roc_curve, roc_auc_score
+
+models_to_compare = {
+    'Baseline': baseline_model,
+    'Class Weighted': model_weighted,
+    'SMOTE': model_smote,
+    'Balanced RF': brf
+}
+
+for name, model in models_to_compare.items():
+    y_proba_model = model.predict_proba(X_test)[:, 1]
+    fpr, tpr, _ = roc_curve(y_test, y_proba_model)
+    auc_score = roc_auc_score(y_test, y_proba_model)
+    axes[1, 0].plot(fpr, tpr, label=f'{name} (AUC={auc_score:.3f})', linewidth=2)
+
+axes[1, 0].plot([0, 1], [0, 1], 'k--', alpha=0.5)
+axes[1, 0].set_xlabel('False Positive Rate')
+axes[1, 0].set_ylabel('True Positive Rate')
+axes[1, 0].set_title('ROC Curves Comparison')
+axes[1, 0].legend()
+axes[1, 0].grid(True, alpha=0.3)
+
+# Plot 4: Algorithm comparison
+algorithm_methods = ['Baseline', 'Weighted', 'Cost-Sensitive', 'Threshold', 'Balanced RF', 'Balanced Bag']
+algorithm_f1 = [
+    f1_score(y_test, y_pred_baseline),
+    f1_score(y_test, y_pred_weighted),
+    f1_score(y_test, y_pred_cost),
+    f1_score(y_test, y_pred_optimal),
+    f1_score(y_test, y_pred_brf),
+    f1_score(y_test, y_pred_bb)
+]
+
+axes[1, 1].bar(algorithm_methods, algorithm_f1, color='teal')
+axes[1, 1].set_xlabel('Method')
+axes[1, 1].set_ylabel('F1-Score')
+axes[1, 1].set_title('Algorithm-Level Methods Comparison')
+axes[1, 1].set_xticklabels(algorithm_methods, rotation=45, ha='right')
+axes[1, 1].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()</code></pre>
+
+    <h2>4. Advanced Techniques and Evaluation</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("4. ADVANCED TECHNIQUES AND PROPER EVALUATION")
+print("="*60)
+
+# 1. Focal Loss (for neural networks)
+print("\n1. FOCAL LOSS CONCEPT")
+print("-" * 40)
+
+def focal_loss(y_true, y_pred, gamma=2.0, alpha=0.25):
+    """
+    Focal loss for addressing class imbalance
+    Focuses learning on hard examples
+    """
+    epsilon = 1e-8
+    y_pred = np.clip(y_pred, epsilon, 1 - epsilon)
+    
+    # Calculate focal loss
+    pt = np.where(y_true == 1, y_pred, 1 - y_pred)
+    focal_weight = (1 - pt) ** gamma
+    
+    # Binary cross entropy
+    ce = -np.where(y_true == 1, np.log(pt), np.log(1 - pt))
+    
+    # Apply focal weight and class weight
+    loss = alpha * focal_weight * ce
+    
+    return np.mean(loss)
+
+# Demonstrate focal loss effect
+y_true_example = np.array([0, 0, 1, 0, 1])
+y_pred_easy = np.array([0.1, 0.2, 0.9, 0.1, 0.8])  # Easy examples
+y_pred_hard = np.array([0.4, 0.45, 0.6, 0.35, 0.55])  # Hard examples
+
+print(f"Focal Loss (Easy examples): {focal_loss(y_true_example, y_pred_easy):.4f}")
+print(f"Focal Loss (Hard examples): {focal_loss(y_true_example, y_pred_hard):.4f}")
+print("→ Focal loss puts more emphasis on hard-to-classify examples")
+
+# 2. Anomaly Detection Approach
+print("\n2. ANOMALY DETECTION APPROACH")
+print("-" * 40)
+
+from sklearn.ensemble import IsolationForest
+from sklearn.svm import OneClassSVM
+
+# Train only on majority class (treat minority as anomalies)
+X_majority = X_train[y_train == 0]
+
+# Isolation Forest
+iso_forest = IsolationForest(contamination=0.01, random_state=42)
+iso_forest.fit(X_majority)
+
+# Predict (-1 for anomalies, 1 for normal)
+y_pred_iso = iso_forest.predict(X_test)
+y_pred_iso_binary = (y_pred_iso == -1).astype(int)  # Convert to 0/1
+
+print(f"Isolation Forest Results:")
+print(f"  Recall:    {recall_score(y_test, y_pred_iso_binary):.3f}")
+print(f"  Precision: {precision_score(y_test, y_pred_iso_binary, zero_division=0):.3f}")
+print(f"  F1-Score:  {f1_score(y_test, y_pred_iso_binary, zero_division=0):.3f}")
+
+# 3. Proper Cross-Validation for Imbalanced Data
+print("\n3. STRATIFIED CROSS-VALIDATION")
+print("-" * 40)
+
+from sklearn.model_selection import StratifiedKFold, cross_validate
+
+# Stratified K-Fold ensures each fold has same class distribution
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+# Compare models with proper CV
+models_cv = {
+    'Baseline': RandomForestClassifier(random_state=42),
+    'Weighted': RandomForestClassifier(class_weight='balanced', random_state=42),
+    'Balanced RF': BalancedRandomForestClassifier(random_state=42)
+}
+
+scoring = {
+    'accuracy': 'accuracy',
+    'precision': 'precision',
+    'recall': 'recall',
+    'f1': 'f1',
+    'roc_auc': 'roc_auc'
+}
+
+cv_results = {}
+for name, model in models_cv.items():
+    print(f"\nCross-validating {name}...")
+    scores = cross_validate(model, X_train, y_train, cv=skf, scoring=scoring)
+    
+    cv_results[name] = {
+        metric: scores[f'test_{metric}'].mean() 
+        for metric in scoring.keys()
+    }
+
+# Display CV results
+cv_df = pd.DataFrame(cv_results).T
+print("\nCross-Validation Results:")
+print(cv_df.round(3))
+
+# 4. Learning Curves for Imbalanced Data
+print("\n4. LEARNING CURVES")
+print("-" * 40)
+
+from sklearn.model_selection import learning_curve
+
+def plot_learning_curves_imbalanced(models, X, y, cv=5):
+    """Plot learning curves for multiple models"""
+    
+    fig, axes = plt.subplots(1, len(models), figsize=(15, 5))
+    if len(models) == 1:
+        axes = [axes]
+    
+    train_sizes = np.linspace(0.1, 1.0, 10)
+    
+    for idx, (name, model) in enumerate(models.items()):
+        train_sizes_abs, train_scores, val_scores = learning_curve(
+            model, X, y, cv=cv, train_sizes=train_sizes,
+            scoring='f1', n_jobs=-1
+        )
+        
+        axes[idx].plot(train_sizes_abs, train_scores.mean(axis=1), 'o-',
+                      label='Training F1', linewidth=2)
+        axes[idx].plot(train_sizes_abs, val_scores.mean(axis=1), 'o-',
+                      label='Validation F1', linewidth=2)
+        
+        axes[idx].fill_between(train_sizes_abs,
+                              train_scores.mean(axis=1) - train_scores.std(axis=1),
+                              train_scores.mean(axis=1) + train_scores.std(axis=1),
+                              alpha=0.2)
+        axes[idx].fill_between(train_sizes_abs,
+                              val_scores.mean(axis=1) - val_scores.std(axis=1),
+                              val_scores.mean(axis=1) + val_scores.std(axis=1),
+                              alpha=0.2)
+        
+        axes[idx].set_xlabel('Training Set Size')
+        axes[idx].set_ylabel('F1-Score')
+        axes[idx].set_title(f'Learning Curve: {name}')
+        axes[idx].legend(loc='best')
+        axes[idx].grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+
+# Plot learning curves
+models_to_plot = {
+    'Baseline': RandomForestClassifier(random_state=42),
+    'Balanced': RandomForestClassifier(class_weight='balanced', random_state=42),
+    'SMOTE + RF': RandomForestClassifier(random_state=42)  # Will use SMOTE in pipeline
+}
+
+# For SMOTE model, create pipeline
+from imblearn.pipeline import Pipeline
+
+models_to_plot['SMOTE + RF'] = Pipeline([
+    ('smote', SMOTE(random_state=42)),
+    ('rf', RandomForestClassifier(random_state=42))
+])
+
+plot_learning_curves_imbalanced(models_to_plot, X_train, y_train, cv=3)</code></pre>
+
+    <h2>5. Evaluation Metrics for Imbalanced Data</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("5. EVALUATION METRICS FOR IMBALANCED DATA")
+print("="*60)
+
+from sklearn.metrics import (cohen_kappa_score, matthews_corrcoef, 
+                           fbeta_score, brier_score_loss)
+
+# Comprehensive evaluation function
+def evaluate_imbalanced_model(y_true, y_pred, y_proba=None):
+    """
+    Calculate comprehensive metrics for imbalanced classification
+    """
+    
+    metrics = {}
+    
+    # Basic metrics
+    metrics['Accuracy'] = accuracy_score(y_true, y_pred)
+    metrics['Balanced Accuracy'] = balanced_accuracy_score(y_true, y_pred)
+    metrics['Precision'] = precision_score(y_true, y_pred, zero_division=0)
+    metrics['Recall'] = recall_score(y_true, y_pred)
+    metrics['Specificity'] = recall_score(y_true, y_pred, pos_label=0)
+    
+    # F-scores
+    metrics['F1-Score'] = f1_score(y_true, y_pred)
+    metrics['F2-Score'] = fbeta_score(y_true, y_pred, beta=2)  # More weight on recall
+    metrics['F0.5-Score'] = fbeta_score(y_true, y_pred, beta=0.5)  # More weight on precision
+    
+    # Advanced metrics
+    metrics['Cohen Kappa'] = cohen_kappa_score(y_true, y_pred)
+    metrics['Matthews Corr'] = matthews_corrcoef(y_true, y_pred)
+    
+    # Probability-based metrics
+    if y_proba is not None:
+        metrics['ROC-AUC'] = roc_auc_score(y_true, y_proba)
+        metrics['PR-AUC'] = average_precision_score(y_true, y_proba)
+        metrics['Brier Score'] = brier_score_loss(y_true, y_proba)
+    
+    # Confusion matrix metrics
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    metrics['True Positives'] = tp
+    metrics['True Negatives'] = tn
+    metrics['False Positives'] = fp
+    metrics['False Negatives'] = fn
+    
+    # Rates
+    metrics['TPR (Sensitivity)'] = tp / (tp + fn) if (tp + fn) > 0 else 0
+    metrics['TNR (Specificity)'] = tn / (tn + fp) if (tn + fp) > 0 else 0
+    metrics['FPR'] = fp / (fp + tn) if (fp + tn) > 0 else 0
+    metrics['FNR'] = fn / (fn + tp) if (fn + tp) > 0 else 0
+    
+    # Geometric mean
+    metrics['G-Mean'] = np.sqrt(metrics['TPR'] * metrics['TNR'])
+    
+    return metrics
+
+# Evaluate all models
+print("COMPREHENSIVE MODEL EVALUATION")
+print("-" * 40)
+
+models_to_evaluate = {
+    'Baseline': (y_pred_baseline, baseline_model.predict_proba(X_test)[:, 1]),
+    'SMOTE': (y_pred_smote, model_smote.predict_proba(X_test)[:, 1]),
+    'Weighted': (y_pred_weighted, model_weighted.predict_proba(X_test)[:, 1]),
+    'Balanced RF': (y_pred_brf, brf.predict_proba(X_test)[:, 1])
+}
+
+evaluation_results = {}
+
+for name, (y_pred, y_proba) in models_to_evaluate.items():
+    evaluation_results[name] = evaluate_imbalanced_model(y_test, y_pred, y_proba)
+
+# Create comparison dataframe
+eval_df = pd.DataFrame(evaluation_results).T
+
+# Display key metrics
+key_metrics = ['Recall', 'Precision', 'F1-Score', 'G-Mean', 'PR-AUC', 'Matthews Corr']
+print("\nKey Metrics Comparison:")
+print(eval_df[key_metrics].round(3))
+
+# Visualize metrics comparison
+fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+axes = axes.flatten()
+
+metrics_to_plot = ['Recall', 'Precision', 'F1-Score', 'G-Mean', 'PR-AUC', 'Matthews Corr']
+
+for idx, metric in enumerate(metrics_to_plot):
+    values = eval_df[metric].values
+    models = eval_df.index
+    
+    bars = axes[idx].bar(models, values, color='steelblue')
+    axes[idx].set_ylabel(metric)
+    axes[idx].set_title(f'{metric} Comparison')
+    axes[idx].set_xticklabels(models, rotation=45)
+    axes[idx].grid(True, alpha=0.3)
+    
+    # Add value labels on bars
+    for bar, val in zip(bars, values):
+        height = bar.get_height()
+        axes[idx].text(bar.get_x() + bar.get_width()/2., height,
+                      f'{val:.3f}', ha='center', va='bottom')
+
+plt.suptitle('Comprehensive Metrics Comparison for Imbalanced Learning', fontsize=14)
+plt.tight_layout()
+plt.show()
+
+# Best model selection based on business needs
+print("\n" + "="*60)
+print("MODEL SELECTION BASED ON BUSINESS NEEDS")
+print("="*60)
+
+print("""
+Choose your model based on your business priorities:
+
+1. **High Recall Priority** (Don't miss positives):
+   - Medical diagnosis, fraud detection
+   - Best: {best_recall} (Recall: {recall:.3f})
+   
+2. **High Precision Priority** (Minimize false alarms):
+   - Expensive interventions, spam filtering
+   - Best: {best_precision} (Precision: {precision:.3f})
+   
+3. **Balanced Performance** (F1-Score):
+   - General classification tasks
+   - Best: {best_f1} (F1: {f1:.3f})
+   
+4. **Probability Ranking** (PR-AUC):
+   - Ranking applications, recommendation systems
+   - Best: {best_prauc} (PR-AUC: {prauc:.3f})
+""".format(
+    best_recall=eval_df['Recall'].idxmax(),
+    recall=eval_df['Recall'].max(),
+    best_precision=eval_df['Precision'].idxmax(),
+    precision=eval_df['Precision'].max(),
+    best_f1=eval_df['F1-Score'].idxmax(),
+    f1=eval_df['F1-Score'].max(),
+    best_prauc=eval_df['PR-AUC'].idxmax(),
+    prauc=eval_df['PR-AUC'].max()
+))</code></pre>
+
+    <h2>6. Production Strategies for Imbalanced Data</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("6. PRODUCTION STRATEGIES")
+print("="*60)
+
+class ImbalancedLearningPipeline:
+    """
+    Complete pipeline for handling imbalanced data in production
+    """
+    
+    def __init__(self, 
+                 sampling_strategy='auto',
+                 sampling_method='smote',
+                 use_class_weight=True,
+                 calibrate_probabilities=True,
+                 threshold_optimization='f1'):
+        
+        self.sampling_strategy = sampling_strategy
+        self.sampling_method = sampling_method
+        self.use_class_weight = use_class_weight
+        self.calibrate_probabilities = calibrate_probabilities
+        self.threshold_optimization = threshold_optimization
+        
+        self.sampler = None
+        self.model = None
+        self.calibrator = None
+        self.optimal_threshold = 0.5
+        
+    def fit(self, X, y):
+        """Fit the complete pipeline"""
+        
+        # Step 1: Apply resampling if specified
+        if self.sampling_method:
+            print(f"Applying {self.sampling_method} resampling...")
+            
+            if self.sampling_method == 'smote':
+                self.sampler = SMOTE(sampling_strategy=self.sampling_strategy)
+            elif self.sampling_method == 'random_over':
+                self.sampler = RandomOverSampler(sampling_strategy=self.sampling_strategy)
+            elif self.sampling_method == 'random_under':
+                self.sampler = RandomUnderSampler(sampling_strategy=self.sampling_strategy)
+            
+            X_resampled, y_resampled = self.sampler.fit_resample(X, y)
+        else:
+            X_resampled, y_resampled = X, y
+        
+        # Step 2: Train model with class weights
+        print("Training model...")
+        if self.use_class_weight:
+            self.model = RandomForestClassifier(class_weight='balanced', random_state=42)
+        else:
+            self.model = RandomForestClassifier(random_state=42)
+        
+        self.model.fit(X_resampled, y_resampled)
+        
+        # Step 3: Calibrate probabilities if specified
+        if self.calibrate_probabilities:
+            print("Calibrating probabilities...")
+            from sklearn.calibration import CalibratedClassifierCV
+            self.calibrator = CalibratedClassifierCV(self.model, cv=3, method='sigmoid')
+            self.calibrator.fit(X, y)  # Use original data for calibration
+        
+        # Step 4: Find optimal threshold
+        print("Optimizing threshold...")
+        self._optimize_threshold(X, y)
+        
+        return self
+    
+    def _optimize_threshold(self, X, y):
+        """Find optimal classification threshold"""
+        
+        if self.calibrator:
+            y_proba = self.calibrator.predict_proba(X)[:, 1]
+        else:
+            y_proba = self.model.predict_proba(X)[:, 1]
+        
+        thresholds = np.arange(0.1, 0.9, 0.01)
+        best_score = -1
+        
+        for threshold in thresholds:
+            y_pred = (y_proba >= threshold).astype(int)
+            
+            if self.threshold_optimization == 'f1':
+                score = f1_score(y, y_pred)
+            elif self.threshold_optimization == 'recall':
+                score = recall_score(y, y_pred)
+            elif self.threshold_optimization == 'precision':
+                score = precision_score(y, y_pred, zero_division=0)
+            
+            if score > best_score:
+                best_score = score
+                self.optimal_threshold = threshold
+        
+        print(f"Optimal threshold: {self.optimal_threshold:.3f}")
+    
+    def predict(self, X):
+        """Make predictions with optimized threshold"""
+        
+        if self.calibrator:
+            y_proba = self.calibrator.predict_proba(X)[:, 1]
+        else:
+            y_proba = self.model.predict_proba(X)[:, 1]
+        
+        return (y_proba >= self.optimal_threshold).astype(int)
+    
+    def predict_proba(self, X):
+        """Get calibrated probabilities"""
+        
+        if self.calibrator:
+            return self.calibrator.predict_proba(X)
+        else:
+            return self.model.predict_proba(X)
+
+# Test production pipeline
+print("\nTesting Production Pipeline")
+print("-" * 40)
+
+pipeline = ImbalancedLearningPipeline(
+    sampling_method='smote',
+    use_class_weight=True,
+    calibrate_probabilities=True,
+    threshold_optimization='f1'
+)
+
+pipeline.fit(X_train, y_train)
+y_pred_pipeline = pipeline.predict(X_test)
+y_proba_pipeline = pipeline.predict_proba(X_test)[:, 1]
+
+print("\nProduction Pipeline Results:")
+pipeline_metrics = evaluate_imbalanced_model(y_test, y_pred_pipeline, y_proba_pipeline)
+for metric, value in list(pipeline_metrics.items())[:10]:
+    print(f"  {metric:20} {value:.3f}")
+
+# Monitoring and Alerting
+print("\n" + "="*60)
+print("MONITORING IMBALANCED MODELS IN PRODUCTION")
+print("="*60)
+
+class ImbalanceMonitor:
+    """
+    Monitor model performance on imbalanced data
+    """
+    
+    def __init__(self, expected_positive_rate=0.01, alert_threshold=0.2):
+        self.expected_positive_rate = expected_positive_rate
+        self.alert_threshold = alert_threshold
+        self.history = []
+        
+    def check_prediction_distribution(self, predictions):
+        """Check if prediction distribution is abnormal"""
+        
+        positive_rate = np.mean(predictions)
+        deviation = abs(positive_rate - self.expected_positive_rate) / self.expected_positive_rate
+        
+        alert = deviation > self.alert_threshold
+        
+        self.history.append({
+            'timestamp': pd.Timestamp.now(),
+            'positive_rate': positive_rate,
+            'deviation': deviation,
+            'alert': alert
+        })
+        
+        return {
+            'positive_rate': positive_rate,
+            'expected_rate': self.expected_positive_rate,
+            'deviation_pct': deviation * 100,
+            'alert': alert,
+            'message': 'ALERT: Unusual prediction distribution!' if alert else 'Normal'
+        }
+    
+    def check_confidence_drift(self, probabilities):
+        """Check if model confidence has drifted"""
+        
+        mean_confidence = np.mean(np.maximum(probabilities, 1 - probabilities))
+        high_confidence_ratio = np.mean(
+            (probabilities > 0.9) | (probabilities < 0.1)
+        )
+        
+        return {
+            'mean_confidence': mean_confidence,
+            'high_confidence_ratio': high_confidence_ratio,
+            'low_confidence_samples': np.sum((probabilities > 0.4) & (probabilities < 0.6))
+        }
+
+# Simulate monitoring
+monitor = ImbalanceMonitor(expected_positive_rate=0.01)
+
+# Check current predictions
+monitoring_result = monitor.check_prediction_distribution(y_pred_pipeline)
+confidence_check = monitor.check_confidence_drift(y_proba_pipeline)
+
+print("Monitoring Results:")
+print(f"  Predicted positive rate: {monitoring_result['positive_rate']:.3f}")
+print(f"  Expected positive rate:  {monitoring_result['expected_rate']:.3f}")
+print(f"  Deviation:              {monitoring_result['deviation_pct']:.1f}%")
+print(f"  Status:                 {monitoring_result['message']}")
+print(f"\nConfidence Analysis:")
+print(f"  Mean confidence:         {confidence_check['mean_confidence']:.3f}")
+print(f"  High confidence ratio:   {confidence_check['high_confidence_ratio']:.3f}")
+print(f"  Uncertain samples:       {confidence_check['low_confidence_samples']}")</code></pre>
+
+    <h2>Best Practices for Imbalanced Learning</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("BEST PRACTICES FOR IMBALANCED LEARNING")
+print("="*60)
+
+best_practices = """
+📋 IMBALANCED LEARNING CHECKLIST:
+
+1. **Understand Your Problem**
+   □ Determine the cost of false positives vs false negatives
+   □ Define success metrics (not just accuracy!)
+   □ Understand the business context
+
+2. **Data Collection**
+   □ Collect more minority class samples if possible
+   □ Ensure data quality, especially for minority class
+   □ Consider active learning for targeted collection
+
+3. **Exploratory Data Analysis**
+   □ Visualize class distribution
+   □ Check for class overlap
+   □ Identify informative features
+
+4. **Choose Appropriate Metrics**
+   □ Use F1, PR-AUC, or G-Mean instead of accuracy
+   □ Consider business-specific metrics
+   □ Monitor both precision and recall
+
+5. **Resampling Strategies**
+   □ Try both over and undersampling
+   □ Use SMOTE for synthetic sample generation
+   □ Consider hybrid methods (SMOTEENN)
+   □ Always resample only training data
+
+6. **Algorithm Selection**
+   □ Use algorithms that handle imbalance well
+   □ Try ensemble methods (Random Forest, XGBoost)
+   □ Consider anomaly detection for extreme imbalance
+
+7. **Model Tuning**
+   □ Adjust class weights
+   □ Optimize decision threshold
+   □ Use cost-sensitive learning
+   □ Calibrate probabilities
+
+8. **Validation Strategy**
+   □ Use stratified cross-validation
+   □ Ensure test set reflects production distribution
+   □ Monitor performance on both classes
+
+9. **Production Deployment**
+   □ Monitor prediction distribution
+   □ Track performance metrics over time
+   □ Set up alerts for distribution shift
+   □ Plan for model retraining
+
+10. **Continuous Improvement**
+    □ Collect feedback on predictions
+    □ Update sampling strategy based on results
+    □ Consider online learning approaches
+    □ Document lessons learned
+"""
+
+print(best_practices)
+
+# Summary comparison table
+summary_data = {
+    'Method': ['Do Nothing', 'Random Oversampling', 'SMOTE', 'Undersampling', 
+              'Class Weights', 'Threshold Tuning', 'Ensemble Methods', 'Combined Approach'],
+    'Pros': [
+        'Simple, no data modification',
+        'Straightforward, preserves information',
+        'Creates new samples, reduces overfitting',
+        'Fast training, reduced dataset size',
+        'No data modification, algorithm-level',
+        'Simple post-processing, flexible',
+        'Robust, handles complexity well',
+        'Best of multiple approaches'
+    ],
+    'Cons': [
+        'Poor minority class performance',
+        'Can cause overfitting',
+        'May create unrealistic samples',
+        'Loses majority class information',
+        'Not all algorithms support',
+        'Requires validation data',
+        'Computationally expensive',
+        'Complex to implement and maintain'
+    ],
+    'When to Use': [
+        'Never for imbalanced data',
+        'Small datasets, simple patterns',
+        'Moderate imbalance, sufficient data',
+        'Large datasets, training time matters',
+        'Tree-based models, quick solution',
+        'Need specific precision/recall trade-off',
+        'Complex patterns, high stakes',
+        'Production systems, best performance'
+    ]
+}
+
+summary_df = pd.DataFrame(summary_data)
+print("\n" + "="*60)
+print("METHOD COMPARISON SUMMARY")
+print("="*60)
+
+for idx, row in summary_df.iterrows():
+    print(f"\n{row['Method']}:")
+    print(f"  ✓ Pros: {row['Pros']}")
+    print(f"  ✗ Cons: {row['Cons']}")
+    print(f"  📌 Use when: {row['When to Use']}")</code></pre>
+
+    <h2>Practice Exercises</h2>
+    
+    <h3>Exercise 1: Custom Imbalance Handler</h3>
+    <p>Build a comprehensive imbalance handling system that:</p>
+    <ol>
+        <li>Automatically detects imbalance severity</li>
+        <li>Recommends appropriate techniques based on data characteristics</li>
+        <li>Implements multiple resampling strategies</li>
+        <li>Optimizes for different business metrics</li>
+        <li>Provides detailed performance analysis</li>
+    </ol>
+
+    <h3>Exercise 2: Dynamic Threshold Optimization</h3>
+    <p>Create a system for dynamic threshold optimization:</p>
+    <ol>
+        <li>Finds optimal thresholds for different metrics</li>
+        <li>Handles multi-class imbalanced problems</li>
+        <li>Adapts thresholds based on cost matrices</li>
+        <li>Monitors and updates thresholds in production</li>
+    </ol>
+
+    <h3>Exercise 3: Imbalanced Ensemble Framework</h3>
+    <p>Develop an ensemble framework for imbalanced data:</p>
+    <ol>
+        <li>Combines multiple imbalance handling techniques</li>
+        <li>Uses different sampling strategies for base learners</li>
+        <li>Implements custom voting strategies</li>
+        <li>Includes confidence-weighted predictions</li>
+        <li>Provides interpretable results</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+        <li>🎯 <strong>Accuracy is misleading:</strong> Use F1, PR-AUC, or G-Mean for imbalanced data</li>
+        <li>⚖️ <strong>Multiple approaches exist:</strong> Data-level, algorithm-level, and hybrid solutions</li>
+        <li>🔄 <strong>SMOTE > Random Oversampling:</strong> Synthetic samples reduce overfitting</li>
+        <li>💰 <strong>Consider costs:</strong> False negatives often cost more than false positives</li>
+        <li>🎚️ <strong>Threshold tuning is powerful:</strong> Simple yet effective for many cases</li>
+        <li>🏗️ <strong>Ensemble methods excel:</strong> BalancedRandomForest, EasyEnsemble work well</li>
+        <li>📊 <strong>Stratified CV is essential:</strong> Maintains class distribution in folds</li>
+        <li>🔍 <strong>Monitor in production:</strong> Track prediction distribution and drift</li>
+        <li>🎨 <strong>No one-size-fits-all:</strong> Best approach depends on your specific problem</li>
+        <li>🔬 <strong>Experiment and validate:</strong> Try multiple methods and compare carefully</li>
+    </ul>
+
+    <h2>Summary</h2>
+    <p>Imbalanced learning is a critical challenge in real-world machine learning applications. From fraud detection to disease diagnosis, the most important problems often involve rare events. The techniques covered here—from SMOTE to cost-sensitive learning, from threshold optimization to specialized ensemble methods—provide a comprehensive toolkit for handling class imbalance. Remember that the best approach depends on your specific context: the severity of imbalance, the costs of different errors, and the nature of your data. Always validate thoroughly, monitor in production, and be prepared to adapt your strategy as you learn more about your problem domain.</p>
+
+    <!-- Navigation -->
+    <nav class="lesson-nav" aria-label="Lesson navigation">
+        <a href="feature_engineering.html" class="prev-lesson">Previous: Feature Engineering</a>
+        <a href="index.html" class="home-link">Course Home</a>
+        <a href="time_series_intro.html" class="next-lesson">Next: Time Series Analysis</a>
+    </nav>
+    
+    <script src="js/clipboard.js"></script>
+    </main>
+</body>
+</html>

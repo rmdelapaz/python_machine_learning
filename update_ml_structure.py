@@ -35,7 +35,9 @@ def get_project_paths():
                 r"\\wsl$\Ubuntu\home\practicalace\projects\python_machine_learning",
                 r"\\wsl.localhost\Ubuntu\home\practicalace\projects\python_machine_learning",
             ],
-            'datascience': [
+            'source': [
+                r"\\wsl$\Ubuntu\home\practicalace\projects\python_intro",
+                r"\\wsl.localhost\Ubuntu\home\practicalace\projects\python_intro",
                 r"\\wsl$\Ubuntu\home\practicalace\projects\python_datascience",
                 r"\\wsl.localhost\Ubuntu\home\practicalace\projects\python_datascience",
             ]
@@ -47,7 +49,9 @@ def get_project_paths():
                 "/home/practicalace/projects/python_machine_learning",
                 os.path.expanduser("~/projects/python_machine_learning"),
             ],
-            'datascience': [
+            'source': [
+                "/home/practicalace/projects/python_intro",
+                os.path.expanduser("~/projects/python_intro"),
                 "/home/practicalace/projects/python_datascience", 
                 os.path.expanduser("~/projects/python_datascience"),
             ]
@@ -56,10 +60,17 @@ def get_project_paths():
     # Find which paths exist
     found_paths = {}
     for project, path_list in paths.items():
-        for path in path_list:
-            if os.path.exists(path):
-                found_paths[project] = path
-                break
+        if project == 'source':
+            # For source, find the first available project
+            for path in path_list:
+                if os.path.exists(path):
+                    found_paths['source'] = path
+                    break
+        else:
+            for path in path_list:
+                if os.path.exists(path):
+                    found_paths[project] = path
+                    break
     
     if 'ml' not in found_paths:
         print("❌ Could not find python_machine_learning folder!")
@@ -88,16 +99,16 @@ def create_directory_structure(ml_path):
             print(f"  ✓ {dir_name}/ already exists")
 
 def copy_css_files(paths):
-    """Copy CSS files from python_datascience"""
+    """Copy CSS files from source project (python_intro or python_datascience)"""
     print("\n📄 Copying CSS files...")
     
-    if 'datascience' not in paths:
-        print("  ⚠️  python_datascience not found, creating default CSS files...")
+    if 'source' not in paths:
+        print("  ⚠️  No source project found, creating default CSS files...")
         create_default_css(paths['ml'])
         return
     
     css_files = ['main.css', 'enhanced.css']
-    source_dir = os.path.join(paths['datascience'], 'styles')
+    source_dir = os.path.join(paths['source'], 'styles')
     dest_dir = os.path.join(paths['ml'], 'styles')
     
     for css_file in css_files:
@@ -301,12 +312,45 @@ blockquote {
     print("  ✅ Created enhanced.css")
 
 def copy_js_files(paths):
-    """Copy JavaScript files"""
+    """Copy JavaScript files from source project or create them"""
     print("\n📜 Copying JavaScript files...")
     
     js_dir = os.path.join(paths['ml'], 'js')
     
-    # Create clipboard.js
+    # Try to copy from source project first
+    if 'source' in paths:
+        source_js_dir = os.path.join(paths['source'], 'js')
+        js_files = ['clipboard.js', 'course-enhancements.js']
+        
+        for js_file in js_files:
+            source_file = os.path.join(source_js_dir, js_file)
+            dest_file = os.path.join(js_dir, js_file)
+            
+            if os.path.exists(source_file):
+                if not os.path.exists(dest_file):
+                    shutil.copy2(source_file, dest_file)
+                    print(f"  ✅ Copied {js_file} from {os.path.basename(paths['source'])}")
+                else:
+                    print(f"  ✓ {js_file} already exists")
+            else:
+                # If file doesn't exist in source, create default
+                print(f"  ⚠️  {js_file} not found in source, creating default...")
+                create_default_js_file(js_dir, js_file)
+        return
+    
+    # If no source project, create default files
+    print("  ⚠️  No source project found, creating default JS files...")
+    create_default_js_files(js_dir)
+
+def create_default_js_file(js_dir, filename):
+    """Create a default JS file if not found in source"""
+    if filename == 'clipboard.js':
+        create_default_clipboard_js(js_dir)
+    elif filename == 'course-enhancements.js':
+        create_default_enhancements_js(js_dir)
+
+def create_default_clipboard_js(js_dir):
+    """Create default clipboard.js file"""
     clipboard_content = '''/**
  * Copy to Clipboard functionality for code blocks
  * Adds a copy button to all code blocks and handles the copy action
@@ -537,14 +581,112 @@ def copy_js_files(paths):
     
 })();'''
     
-    # Save JavaScript files
     with open(os.path.join(js_dir, 'clipboard.js'), 'w', encoding='utf-8') as f:
         f.write(clipboard_content)
-    print("  ✅ Created clipboard.js")
+    print("  ✅ Created default clipboard.js")
+
+def create_default_enhancements_js(js_dir):
+    """Create default course-enhancements.js file"""
+    enhancements_content = '''/**
+ * Course Enhancements for Machine Learning Course
+ * Adds various UI improvements and features
+ */
+
+(function() {
+    'use strict';
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        // Add reading time estimation
+        function addReadingTime() {
+            const content = document.querySelector('main');
+            if (!content) return;
+            
+            const text = content.textContent || content.innerText;
+            const wordsPerMinute = 200;
+            const words = text.split(/\\s+/).length;
+            const readingTime = Math.ceil(words / wordsPerMinute);
+            
+            const readingTimeElement = document.querySelector('.reading-time');
+            if (readingTimeElement) {
+                readingTimeElement.textContent = `Estimated reading time: ${readingTime} minutes`;
+            }
+        }
+        
+        // Add progress indicator
+        function updateProgressBar() {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            
+            const progressBar = document.querySelector('.progress-bar');
+            if (progressBar) {
+                progressBar.style.width = scrolled + '%';
+            }
+        }
+        
+        // Add smooth scrolling for anchor links
+        function addSmoothScrolling() {
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                });
+            });
+        }
+        
+        // Add keyboard navigation
+        function addKeyboardNavigation() {
+            document.addEventListener('keydown', function(e) {
+                // Alt + Left: Previous lesson
+                if (e.altKey && e.key === 'ArrowLeft') {
+                    const prevLink = document.querySelector('.prev-lesson');
+                    if (prevLink) prevLink.click();
+                }
+                
+                // Alt + Right: Next lesson
+                if (e.altKey && e.key === 'ArrowRight') {
+                    const nextLink = document.querySelector('.next-lesson');
+                    if (nextLink) nextLink.click();
+                }
+                
+                // Alt + Home: Course home
+                if (e.altKey && e.key === 'Home') {
+                    const homeLink = document.querySelector('.home-link');
+                    if (homeLink) homeLink.click();
+                }
+            });
+        }
+        
+        // Initialize features
+        addReadingTime();
+        addSmoothScrolling();
+        addKeyboardNavigation();
+        
+        // Update progress bar on scroll
+        window.addEventListener('scroll', updateProgressBar);
+        
+        // Initial progress bar update
+        updateProgressBar();
+        
+    });
+    
+})();'''
     
     with open(os.path.join(js_dir, 'course-enhancements.js'), 'w', encoding='utf-8') as f:
         f.write(enhancements_content)
-    print("  ✅ Created course-enhancements.js")
+    print("  ✅ Created default course-enhancements.js")
+
+def create_default_js_files(js_dir):
+    """Create default JS files when no source is available"""
+    create_default_clipboard_js(js_dir)
+    create_default_enhancements_js(js_dir)
 
 def update_html_file(filepath):
     """Update a single HTML file to include scripts and enhanced CSS"""
@@ -670,15 +812,28 @@ def process_all_html_files(ml_path):
     
     return updated_count > 0
 
-def create_favicon(ml_path):
-    """Create or copy favicon"""
+def create_favicon(ml_path, paths):
+    """Create or copy favicon from source project"""
     print("\n🎨 Setting up favicon...")
     
     favicon_path = os.path.join(ml_path, 'favicon.png')
     if not os.path.exists(favicon_path):
-        # Try to copy from another project
+        # Try to copy from source project first
+        if 'source' in paths:
+            # Try both .png and .ico
+            for favicon_name in ['favicon.png', 'favicon.ico']:
+                source_favicon = os.path.join(paths['source'], favicon_name)
+                if os.path.exists(source_favicon):
+                    # If it's .ico, we'll still save as .png in destination
+                    shutil.copy2(source_favicon, favicon_path)
+                    print(f"  ✅ Copied favicon from {os.path.basename(paths['source'])}")
+                    return
+        
+        # Try other known locations
         possible_sources = [
+            "\\\\wsl$\\Ubuntu\\home\\practicalace\\projects\\python_intro\\favicon.ico",
             "\\\\wsl$\\Ubuntu\\home\\practicalace\\projects\\python_datascience\\favicon.png",
+            "/home/practicalace/projects/python_intro/favicon.ico",
             "/home/practicalace/projects/python_datascience/favicon.png",
         ]
         
@@ -763,8 +918,9 @@ def main():
     paths = get_project_paths()
     
     print(f"✅ Found python_machine_learning at: {paths['ml']}")
-    if 'datascience' in paths:
-        print(f"✅ Found python_datascience at: {paths['datascience']}")
+    if 'source' in paths:
+        source_name = os.path.basename(paths['source'])
+        print(f"✅ Using source project: {source_name} at {paths['source']}")
     
     # Step 1: Create directory structure
     create_directory_structure(paths['ml'])
@@ -776,7 +932,7 @@ def main():
     copy_js_files(paths)
     
     # Step 4: Create/copy favicon
-    create_favicon(paths['ml'])
+    create_favicon(paths['ml'], paths)
     
     # Step 5: Update HTML files
     if process_all_html_files(paths['ml']):

@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Learn about Bagging (Bootstrap Aggregating) ensemble methods for reducing variance and improving model stability.">
+    <title>Bagging Methods - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+
+    <nav>
+        <a href="index.html" class="logo">Python Machine Learning</a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="index.html#advanced">Advanced Topics</a>
+        </div>
+    </nav>
+    
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="index.html#advanced">Advanced Topics</a></li>
+            <li aria-current="page">Bagging Methods</li>
+        </ul>
+    </nav>
+
+    <main id="main-content">
+    <div class="container">
+        <h1>🎒 Bagging: Bootstrap Aggregating for Better Models</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>Bagging (Bootstrap Aggregating) is an ensemble method that combines multiple versions of a predictor to reduce variance and prevent overfitting. By training multiple models on different bootstrap samples of the data and aggregating their predictions, bagging creates more stable and robust models. This lesson covers the theory behind bagging, implementation details, Random Forests as an extension of bagging, and practical applications.</p>
+        </div>
+
+        <h2>How Bagging Works</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            A[Original Dataset<br/>N samples] --> B[Bootstrap Sampling]
+            
+            B --> C1[Sample 1<br/>N samples with replacement]
+            B --> C2[Sample 2<br/>N samples with replacement]
+            B --> C3[Sample 3<br/>N samples with replacement]
+            B --> C4[...<br/>]
+            B --> C5[Sample M<br/>N samples with replacement]
+            
+            C1 --> D1[Model 1]
+            C2 --> D2[Model 2]
+            C3 --> D3[Model 3]
+            C4 --> D4[...]
+            C5 --> D5[Model M]
+            
+            D1 --> E[Aggregation]
+            D2 --> E
+            D3 --> E
+            D4 --> E
+            D5 --> E
+            
+            E --> F{Task Type}
+            F -->|Classification| G[Majority Voting]
+            F -->|Regression| H[Averaging]
+            
+            G --> I[Final Prediction]
+            H --> I
+            
+            style A fill:#e3f2fd
+            style E fill:#fff9c4
+            style I fill:#c8e6c9
+        </div>
+
+        <h2>Bagging vs Single Model</h2>
+        
+        <div class="mermaid">
+        graph LR
+            subgraph "Single Model"
+                A1[All Data] --> B1[One Model]
+                B1 --> C1[High Variance<br/>Overfitting Risk]
+            end
+            
+            subgraph "Bagging Ensemble"
+                A2[Bootstrap Samples] --> B2[Multiple Models]
+                B2 --> C2[Lower Variance<br/>Better Generalization]
+            end
+            
+            style C1 fill:#ffccbc
+            style C2 fill:#c8e6c9
+        </div>
+
+        <h2>Setting Up Environment</h2>
+        
+        <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.datasets import make_classification, make_regression, load_breast_cancer
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.ensemble import BaggingClassifier, BaggingRegressor, RandomForestClassifier
+from sklearn.metrics import accuracy_score, mean_squared_error, classification_report
+from sklearn.preprocessing import StandardScaler
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set style for visualizations
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+
+# Set random seed for reproducibility
+np.random.seed(42)
+
+print("Bagging Methods Tutorial")
+print("=" * 50)</code></pre>
+
+        <h2>Implementing Bagging from Scratch</h2>
+        
+        <pre class="language-python"><code>class BaggingFromScratch:
+    """
+    Bagging implementation from scratch
+    """
+    
+    def __init__(self, base_estimator, n_estimators=10, max_samples=1.0, 
+                 max_features=1.0, bootstrap=True, random_state=None):
+        """
+        Initialize bagging ensemble
+        
+        Parameters:
+        -----------
+        base_estimator : object
+            Base estimator to use
+        n_estimators : int
+            Number of estimators in ensemble
+        max_samples : float
+            Fraction of samples to use for each estimator
+        max_features : float
+            Fraction of features to use for each estimator
+        bootstrap : bool
+            Whether to use bootstrap sampling
+        """
+        self.base_estimator = base_estimator
+        self.n_estimators = n_estimators
+        self.max_samples = max_samples
+        self.max_features = max_features
+        self.bootstrap = bootstrap
+        self.random_state = random_state
+        self.estimators_ = []
+        self.feature_indices_ = []
+        
+        if random_state is not None:
+            np.random.seed(random_state)
+    
+    def _bootstrap_sample(self, X, y):
+        """Create bootstrap sample"""
+        n_samples = X.shape[0]
+        sample_size = int(self.max_samples * n_samples)
+        
+        if self.bootstrap:
+            # Sample with replacement
+            indices = np.random.choice(n_samples, size=sample_size, replace=True)
+        else:
+            # Sample without replacement
+            indices = np.random.choice(n_samples, size=sample_size, replace=False)
+        
+        return X[indices], y[indices], indices
+    
+    def _random_feature_subset(self, n_features):
+        """Select random subset of features"""
+        feature_size = int(self.max_features * n_features)
+        feature_indices = np.random.choice(n_features, size=feature_size, replace=False)
+        return sorted(feature_indices)
+    
+    def fit(self, X, y):
+        """
+        Train bagging ensemble
+        """
+        n_samples, n_features = X.shape
+        
+        for i in range(self.n_estimators):
+            # Create bootstrap sample
+            X_sample, y_sample, sample_indices = self._bootstrap_sample(X, y)
+            
+            # Select random features
+            feature_indices = self._random_feature_subset(n_features)
+            self.feature_indices_.append(feature_indices)
+            
+            # Select feature subset
+            X_sample = X_sample[:, feature_indices]
+            
+            # Train base estimator
+            estimator = self.base_estimator.__class__(**self.base_estimator.get_params())
+            estimator.fit(X_sample, y_sample)
+            
+            self.estimators_.append(estimator)
+            
+        return self
+    
+    def predict(self, X):
+        """
+        Make predictions using ensemble
+        """
+        # Collect predictions from all estimators
+        predictions = []
+        
+        for estimator, feature_indices in zip(self.estimators_, self.feature_indices_):
+            # Use only selected features
+            X_subset = X[:, feature_indices]
+            pred = estimator.predict(X_subset)
+            predictions.append(pred)
+        
+        # Aggregate predictions
+        predictions = np.array(predictions)
+        
+        # For classification: majority voting
+        # For regression: averaging
+        if hasattr(self.base_estimator, 'predict_proba'):
+            # Classification - majority voting
+            from scipy import stats
+            final_predictions = stats.mode(predictions, axis=0)[0].flatten()
+        else:
+            # Regression - averaging
+            final_predictions = np.mean(predictions, axis=0)
+        
+        return final_predictions
+    
+    def predict_proba(self, X):
+        """
+        Predict class probabilities (for classification)
+        """
+        if not hasattr(self.base_estimator, 'predict_proba'):
+            raise AttributeError("Base estimator doesn't support probability prediction")
+        
+        # Collect probability predictions
+        probas = []
+        
+        for estimator, feature_indices in zip(self.estimators_, self.feature_indices_):
+            X_subset = X[:, feature_indices]
+            proba = estimator.predict_proba(X_subset)
+            probas.append(proba)
+        
+        # Average probabilities
+        return np.mean(probas, axis=0)
+    
+    def score(self, X, y):
+        """
+        Calculate accuracy score
+        """
+        predictions = self.predict(X)
+        if hasattr(self.base_estimator, 'predict_proba'):
+            return accuracy_score(y, predictions)
+        else:
+            return -mean_squared_error(y, predictions)
+
+# Demonstrate custom bagging
+print("\n" + "=" * 50)
+print("CUSTOM BAGGING IMPLEMENTATION")
+print("=" * 50)
+
+# Generate sample data
+X, y = make_classification(n_samples=500, n_features=20, n_informative=15,
+                          n_redundant=5, random_state=42)
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Create base estimator
+base_estimator = DecisionTreeClassifier(max_depth=10, random_state=42)
+
+# Train single model
+base_estimator.fit(X_train, y_train)
+single_score = base_estimator.score(X_test, y_test)
+
+# Create and train bagging ensemble
+bagging = BaggingFromScratch(
+    base_estimator=DecisionTreeClassifier(max_depth=10),
+    n_estimators=20,
+    max_samples=0.8,
+    max_features=0.8,
+    bootstrap=True,
+    random_state=42
+)
+
+bagging.fit(X_train, y_train)
+bagging_score = bagging.score(X_test, y_test)
+
+print(f"Single Decision Tree Accuracy: {single_score:.4f}")
+print(f"Bagging Ensemble Accuracy: {bagging_score:.4f}")
+print(f"Improvement: {(bagging_score - single_score):.4f}")
+print(f"Number of estimators: {len(bagging.estimators_)}")</code></pre>
+
+        <h2>Scikit-learn Bagging Implementation</h2>
+        
+        <pre class="language-python"><code>def compare_bagging_parameters():
+    """
+    Compare different bagging parameters
+    """
+    # Load dataset
+    data = load_breast_cancer()
+    X, y = data.data, data.target
+    
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    
+    # Standardize features
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
+    
+    # Different bagging configurations
+    configs = [
+        {'n_estimators': 10, 'max_samples': 1.0, 'max_features': 1.0},
+        {'n_estimators': 50, 'max_samples': 1.0, 'max_features': 1.0},
+        {'n_estimators': 50, 'max_samples': 0.7, 'max_features': 1.0},
+        {'n_estimators': 50, 'max_samples': 0.7, 'max_features': 0.7},
+    ]
+    
+    results = []
+    
+    for config in configs:
+        # Create bagging classifier
+        bagging = BaggingClassifier(
+            base_estimator=DecisionTreeClassifier(max_depth=5),
+            **config,
+            random_state=42,
+            n_jobs=-1
+        )
+        
+        # Train
+        bagging.fit(X_train, y_train)
+        
+        # Evaluate
+        train_score = bagging.score(X_train, y_train)
+        test_score = bagging.score(X_test, y_test)
+        
+        # Cross-validation
+        cv_scores = cross_val_score(bagging, X_train, y_train, cv=5)
+        
+        results.append({
+            'config': config,
+            'train_score': train_score,
+            'test_score': test_score,
+            'cv_mean': cv_scores.mean(),
+            'cv_std': cv_scores.std()
+        })
+        
+        print(f"\nConfig: {config}")
+        print(f"Train Score: {train_score:.4f}")
+        print(f"Test Score: {test_score:.4f}")
+        print(f"CV Score: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
+    
+    return results
+
+# Run comparison
+print("\n" + "=" * 50)
+print("BAGGING PARAMETER COMPARISON")
+print("=" * 50)
+results = compare_bagging_parameters()
+
+# Visualize results
+def visualize_bagging_comparison(results):
+    """
+    Visualize bagging comparison results
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # Extract data for plotting
+    labels = [f"n={r['config']['n_estimators']}\ns={r['config']['max_samples']}\nf={r['config']['max_features']}" 
+              for r in results]
+    train_scores = [r['train_score'] for r in results]
+    test_scores = [r['test_score'] for r in results]
+    cv_means = [r['cv_mean'] for r in results]
+    cv_stds = [r['cv_std'] for r in results]
+    
+    # Plot 1: Train vs Test scores
+    x = np.arange(len(labels))
+    width = 0.35
+    
+    axes[0].bar(x - width/2, train_scores, width, label='Train', alpha=0.8)
+    axes[0].bar(x + width/2, test_scores, width, label='Test', alpha=0.8)
+    axes[0].set_xlabel('Configuration')
+    axes[0].set_ylabel('Accuracy')
+    axes[0].set_title('Train vs Test Accuracy')
+    axes[0].set_xticks(x)
+    axes[0].set_xticklabels(labels, fontsize=8)
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+    
+    # Plot 2: Cross-validation scores
+    axes[1].bar(x, cv_means, yerr=cv_stds, capsize=5, alpha=0.8, color='green')
+    axes[1].set_xlabel('Configuration')
+    axes[1].set_ylabel('CV Accuracy')
+    axes[1].set_title('Cross-Validation Performance')
+    axes[1].set_xticks(x)
+    axes[1].set_xticklabels(labels, fontsize=8)
+    axes[1].grid(True, alpha=0.3)
+    
+    plt.suptitle('Bagging Configuration Comparison', fontsize=14)
+    plt.tight_layout()
+    plt.show()
+
+visualize_bagging_comparison(results)</code></pre>
+
+        <h2>Out-of-Bag (OOB) Score</h2>
+        
+        <div class="mermaid">
+        flowchart LR
+            A[Bootstrap Sample 1] --> B[~63% of data used]
+            A --> C[~37% out-of-bag]
+            
+            D[Bootstrap Sample 2] --> E[Different 63%]
+            D --> F[Different 37% OOB]
+            
+            C --> G[OOB Predictions]
+            F --> G
+            
+            G --> H[OOB Score]
+            H --> I[Free Validation!]
+            
+            style C fill:#e3f2fd
+            style F fill:#e3f2fd
+            style I fill:#c8e6c9
+        </div>
+
+        <pre class="language-python"><code>class OOBAnalysis:
+    """
+    Out-of-Bag score analysis
+    """
+    
+    def demonstrate_oob(self, X, y):
+        """
+        Demonstrate OOB scoring
+        """
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.3, random_state=42
+        )
+        
+        # Bagging with OOB score
+        bagging_oob = BaggingClassifier(
+            base_estimator=DecisionTreeClassifier(max_depth=5),
+            n_estimators=100,
+            oob_score=True,  # Enable OOB scoring
+            random_state=42,
+            n_jobs=-1
+        )
+        
+        # Train
+        bagging_oob.fit(X_train, y_train)
+        
+        # Get scores
+        test_score = bagging_oob.score(X_test, y_test)
+        oob_score = bagging_oob.oob_score_
+        
+        print("\n" + "=" * 50)
+        print("OUT-OF-BAG (OOB) SCORING")
+        print("=" * 50)
+        print(f"OOB Score: {oob_score:.4f}")
+        print(f"Test Score: {test_score:.4f}")
+        print(f"Difference: {abs(oob_score - test_score):.4f}")
+        
+        # Get OOB predictions
+        oob_predictions = bagging_oob.oob_decision_function_
+        
+        # Visualize OOB predictions confidence
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Plot 1: OOB prediction confidence distribution
+        axes[0].hist(oob_predictions[:, 1], bins=30, alpha=0.7, edgecolor='black')
+        axes[0].set_xlabel('OOB Prediction Confidence (Class 1)')
+        axes[0].set_ylabel('Frequency')
+        axes[0].set_title('OOB Prediction Confidence Distribution')
+        axes[0].grid(True, alpha=0.3)
+        
+        # Plot 2: OOB vs actual predictions
+        test_predictions = bagging_oob.predict_proba(X_test)[:, 1]
+        axes[1].scatter(test_predictions, bagging_oob.predict_proba(X_test)[:, 1], 
+                       alpha=0.5, s=20)
+        axes[1].plot([0, 1], [0, 1], 'r--', label='Perfect Agreement')
+        axes[1].set_xlabel('Test Predictions')
+        axes[1].set_ylabel('Model Predictions')
+        axes[1].set_title('Prediction Consistency')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.suptitle('Out-of-Bag Analysis', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+        
+        return oob_score, test_score
+    
+    def oob_feature_importance(self, X, y, feature_names=None):
+        """
+        Calculate feature importance using OOB samples
+        """
+        if feature_names is None:
+            feature_names = [f'Feature_{i}' for i in range(X.shape[1])]
+        
+        # Train bagging with OOB
+        bagging = BaggingClassifier(
+            base_estimator=DecisionTreeClassifier(max_depth=5),
+            n_estimators=100,
+            oob_score=True,
+            random_state=42
+        )
+        bagging.fit(X, y)
+        
+        baseline_oob = bagging.oob_score_
+        
+        # Calculate permutation importance using OOB
+        importance_scores = []
+        
+        for i in range(X.shape[1]):
+            # Permute feature i
+            X_permuted = X.copy()
+            np.random.shuffle(X_permuted[:, i])
+            
+            # Retrain and get OOB score
+            bagging_permuted = BaggingClassifier(
+                base_estimator=DecisionTreeClassifier(max_depth=5),
+                n_estimators=100,
+                oob_score=True,
+                random_state=42
+            )
+            bagging_permuted.fit(X_permuted, y)
+            
+            # Calculate importance as drop in OOB score
+            importance = baseline_oob - bagging_permuted.oob_score_
+            importance_scores.append(importance)
+        
+        # Create importance DataFrame
+        importance_df = pd.DataFrame({
+            'feature': feature_names,
+            'importance': importance_scores
+        }).sort_values('importance', ascending=False)
+        
+        # Visualize
+        plt.figure(figsize=(10, 6))
+        plt.barh(range(min(15, len(importance_df))), 
+                importance_df['importance'].head(15))
+        plt.yticks(range(min(15, len(importance_df))), 
+                  importance_df['feature'].head(15))
+        plt.xlabel('Importance (OOB Score Drop)')
+        plt.title('Feature Importance from OOB Permutation')
+        plt.gca().invert_yaxis()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+        
+        return importance_df
+
+# Demonstrate OOB analysis
+oob_analysis = OOBAnalysis()
+
+# Use breast cancer dataset
+data = load_breast_cancer()
+X, y = data.data, data.target
+
+# OOB scoring
+oob_score, test_score = oob_analysis.demonstrate_oob(X, y)
+
+# Feature importance using OOB
+print("\n" + "=" * 50)
+print("OOB-BASED FEATURE IMPORTANCE")
+print("=" * 50)
+importance_df = oob_analysis.oob_feature_importance(
+    X[:, :10], y, feature_names=data.feature_names[:10]  # Use subset for speed
+)
+print("\nTop 5 Important Features:")
+print(importance_df.head())</code></pre>
+
+        <h2>Random Forest: Enhanced Bagging</h2>
+        
+        <pre class="language-python"><code>def random_forest_analysis():
+    """
+    Analyze Random Forest as an enhanced bagging method
+    """
+    # Generate data
+    X, y = make_classification(n_samples=1000, n_features=20, 
+                              n_informative=15, n_redundant=5,
+                              random_state=42)
+    
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.3, random_state=42
+    )
+    
+    # Compare models
+    models = {
+        'Single Tree': DecisionTreeClassifier(max_depth=10, random_state=42),
+        'Bagging': BaggingClassifier(
+            DecisionTreeClassifier(max_depth=10),
+            n_estimators=50,
+            random_state=42
+        ),
+        'Random Forest': RandomForestClassifier(
+            n_estimators=50,
+            max_depth=10,
+            random_state=42
+        )
+    }
+    
+    results = {}
+    predictions = {}
+    
+    for name, model in models.items():
+        # Train
+        model.fit(X_train, y_train)
+        
+        # Predict
+        y_pred = model.predict(X_test)
+        predictions[name] = y_pred
+        
+        # Evaluate
+        train_score = model.score(X_train, y_train)
+        test_score = model.score(X_test, y_test)
+        
+        results[name] = {
+            'train_score': train_score,
+            'test_score': test_score,
+            'overfit_gap': train_score - test_score
+        }
+        
+        print(f"\n{name}:")
+        print(f"  Train Score: {train_score:.4f}")
+        print(f"  Test Score: {test_score:.4f}")
+        print(f"  Overfitting Gap: {train_score - test_score:.4f}")
+    
+    # Visualize comparison
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    
+    # Plot 1: Score comparison
+    models_names = list(results.keys())
+    train_scores = [results[m]['train_score'] for m in models_names]
+    test_scores = [results[m]['test_score'] for m in models_names]
+    
+    x = np.arange(len(models_names))
+    width = 0.35
+    
+    axes[0].bar(x - width/2, train_scores, width, label='Train', alpha=0.8)
+    axes[0].bar(x + width/2, test_scores, width, label='Test', alpha=0.8)
+    axes[0].set_xlabel('Model')
+    axes[0].set_ylabel('Accuracy')
+    axes[0].set_title('Model Performance Comparison')
+    axes[0].set_xticks(x)
+    axes[0].set_xticklabels(models_names, rotation=45)
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+    
+    # Plot 2: Overfitting comparison
+    overfit_gaps = [results[m]['overfit_gap'] for m in models_names]
+    axes[1].bar(models_names, overfit_gaps, color=['red', 'orange', 'green'])
+    axes[1].set_xlabel('Model')
+    axes[1].set_ylabel('Train-Test Gap')
+    axes[1].set_title('Overfitting Analysis')
+    axes[1].tick_params(axis='x', rotation=45)
+    axes[1].grid(True, alpha=0.3)
+    
+    # Plot 3: Feature importance (Random Forest)
+    rf_model = models['Random Forest']
+    importances = rf_model.feature_importances_
+    indices = np.argsort(importances)[::-1][:10]
+    
+    axes[2].bar(range(10), importances[indices])
+    axes[2].set_xlabel('Feature Index')
+    axes[2].set_ylabel('Importance')
+    axes[2].set_title('Random Forest Feature Importance')
+    axes[2].set_xticks(range(10))
+    axes[2].set_xticklabels(indices)
+    axes[2].grid(True, alpha=0.3)
+    
+    plt.suptitle('Random Forest vs Bagging vs Single Tree', fontsize=14)
+    plt.tight_layout()
+    plt.show()
+    
+    return results
+
+print("\n" + "=" * 50)
+print("RANDOM FOREST ANALYSIS")
+print("=" * 50)
+rf_results = random_forest_analysis()</code></pre>
+
+        <h2>Variance Reduction Analysis</h2>
+        
+        <pre class="language-python"><code>def variance_reduction_analysis():
+    """
+    Analyze how bagging reduces variance
+    """
+    # Generate noisy data
+    np.random.seed(42)
+    X = np.random.randn(300, 2)
+    y = (X[:, 0]**2 + X[:, 1]**2 > 1.5).astype(int)
+    
+    # Add noise
+    noise_idx = np.random.choice(300, 30, replace=False)
+    y[noise_idx] = 1 - y[noise_idx]
+    
+    # Create different models
+    models = [
+        ('Single Tree (depth=3)', DecisionTreeClassifier(max_depth=3)),
+        ('Single Tree (depth=10)', DecisionTreeClassifier(max_depth=10)),
+        ('Bagging (depth=3)', BaggingClassifier(DecisionTreeClassifier(max_depth=3), n_estimators=50)),
+        ('Bagging (depth=10)', BaggingClassifier(DecisionTreeClassifier(max_depth=10), n_estimators=50))
+    ]
+    
+    # Create mesh for decision boundary
+    h = 0.02
+    x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
+    y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                        np.arange(y_min, y_max, h))
+    
+    # Plot decision boundaries
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    axes = axes.ravel()
+    
+    for idx, (name, model) in enumerate(models):
+        # Train model
+        model.fit(X, y)
+        
+        # Predict on mesh
+        Z = model.predict(np.c_[xx.ravel(), yy.ravel()])
+        Z = Z.reshape(xx.shape)
+        
+        # Plot
+        axes[idx].contourf(xx, yy, Z, alpha=0.3, cmap='coolwarm')
+        axes[idx].scatter(X[:, 0], X[:, 1], c=y, cmap='coolwarm', 
+                         edgecolor='black', linewidth=0.5, s=30)
+        axes[idx].set_title(f'{name}')
+        axes[idx].set_xlabel('Feature 1')
+        axes[idx].set_ylabel('Feature 2')
+        axes[idx].grid(True, alpha=0.3)
+    
+    plt.suptitle('Decision Boundaries: Single Tree vs Bagging', fontsize=14)
+    plt.tight_layout()
+    plt.show()
+    
+    # Calculate variance across multiple runs
+    print("\n" + "=" * 50)
+    print("VARIANCE ANALYSIS ACROSS MULTIPLE RUNS")
+    print("=" * 50)
+    
+    n_runs = 20
+    test_size = 100
+    X_test = np.random.randn(test_size, 2)
+    y_test = (X_test[:, 0]**2 + X_test[:, 1]**2 > 1.5).astype(int)
+    
+    for name, base_model in [('Single Tree', DecisionTreeClassifier(max_depth=10)),
+                             ('Bagging', BaggingClassifier(DecisionTreeClassifier(max_depth=10), n_estimators=50))]:
+        predictions = []
+        
+        for run in range(n_runs):
+            # Generate new training data
+            X_train = np.random.randn(200, 2)
+            y_train = (X_train[:, 0]**2 + X_train[:, 1]**2 > 1.5).astype(int)
+            
+            # Add noise
+            noise_idx = np.random.choice(200, 20, replace=False)
+            y_train[noise_idx] = 1 - y_train[noise_idx]
+            
+            # Train and predict
+            model = base_model.__class__(**base_model.get_params())
+            model.fit(X_train, y_train)
+            pred = model.predict(X_test)
+            predictions.append(pred)
+        
+        # Calculate variance
+        predictions = np.array(predictions)
+        variance = np.var(predictions, axis=0).mean()
+        
+        print(f"\n{name}:")
+        print(f"  Average prediction variance: {variance:.4f}")
+        print(f"  Prediction stability: {1 - variance:.4f}")
+
+variance_reduction_analysis()</code></pre>
+
+        <h2>Best Practices</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 Bagging Best Practices</h3>
+            <ul>
+                <li><strong>Base Estimator:</strong> Use high-variance models (deep trees) as base estimators</li>
+                <li><strong>Number of Estimators:</strong> More is generally better, diminishing returns after 50-100</li>
+                <li><strong>Sample Size:</strong> Default 100% works well, try 70-80% for large datasets</li>
+                <li><strong>Feature Sampling:</strong> Random feature subsets can improve diversity</li>
+                <li><strong>OOB Score:</strong> Use for model selection without separate validation set</li>
+                <li><strong>Parallel Training:</strong> Set n_jobs=-1 for parallel processing</li>
+                <li><strong>Random Forest:</strong> Prefer over basic bagging for most tasks</li>
+                <li><strong>Avoid with:</strong> Low-variance models like linear regression</li>
+            </ul>
+        </div>
+
+        <h2>Practice Exercises</h2>
+        
+        <div class="exercise-card">
+            <h3>Exercise 1: Custom Bagging for Regression</h3>
+            <p>Implement bagging for regression tasks:</p>
+            <ul>
+                <li>Modify the custom implementation for regression</li>
+                <li>Use different aggregation methods (mean, median)</li>
+                <li>Compare with single regressor performance</li>
+                <li>Analyze prediction intervals from ensemble</li>
+            </ul>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 2: Bagging with Different Base Models</h3>
+            <p>Experiment with various base estimators:</p>
+            <ul>
+                <li>Try SVM, KNN, and Neural Networks as base models</li>
+                <li>Compare effectiveness of bagging for each</li>
+                <li>Identify which models benefit most from bagging</li>
+                <li>Analyze computational cost vs improvement</li>
+            </ul>
+        </div>
+
+        <h2>Summary</h2>
+        
+        <div class="summary-box">
+            <h3>✅ You've Learned</h3>
+            <ul>
+                <li>How bagging works through bootstrap aggregating</li>
+                <li>Implementation of bagging from scratch</li>
+                <li>Using scikit-learn's BaggingClassifier and BaggingRegressor</li>
+                <li>Out-of-Bag (OOB) scoring for validation</li>
+                <li>Random Forest as an enhanced bagging method</li>
+                <li>How bagging reduces variance and overfitting</li>
+                <li>When to use bagging and best practices</li>
+            </ul>
+        </div>
+    </div>
+
+    <nav class="lesson-nav" aria-label="Lesson Navigation">
+        <a href="ensemble_boosting.html" class="prev-lesson">← Previous</a>
+        <a href="index.html" class="home-link">🏠 Home</a>
+        <a href="advanced_stacking.html" class="next-lesson">Next →</a>
+    </nav>
+    </main>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#f0f0f0',
+                primaryTextColor: '#333',
+                primaryBorderColor: '#667eea',
+                lineColor: '#667eea',
+                secondaryColor: '#e0e7ff',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
+</body>
+</html>

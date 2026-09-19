@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Master scikit-learn pipelines and composite estimators. Learn to build robust, reproducible machine learning workflows with Pipeline, FeatureUnion, and ColumnTransformer.">
+    <title>Pipelines & Composite Estimators - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script src="js/course-enhancements.js" defer></script>
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+    
+    <main id="main-content">
+    <header role="banner">
+        <h1>Pipelines & Composite Estimators: Building Production-Ready ML Workflows</h1>
+        <div class="reading-time" aria-label="Estimated reading time"></div>
+    </header>
+    
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="index.html">Home</a>
+        <span class="separator">›</span>
+        <a href="#">Machine Learning Module</a>
+        <span class="separator">›</span>
+        <a href="#">Advanced Workflows</a>
+        <span class="separator">›</span>
+        <span class="current">Pipelines & Composite Estimators</span>
+    </nav>
+
+    <h2>From Notebooks to Production: The Power of Pipelines 🚀</h2>
+    
+    <blockquote>
+        <p>A machine learning pipeline is like a well-orchestrated assembly line. Each component performs its specific task, data flows seamlessly from one stage to the next, and the entire process is reproducible and deployable. Master pipelines, and you'll write cleaner, more maintainable, and production-ready ML code!</p>
+    </blockquote>
+
+    <h2>Why Pipelines Matter</h2>
+    
+    <div class="mermaid">
+    graph LR
+        A[Raw Data] --> B[Pipeline]
+        B --> C[Predictions]
+        
+        B --> D[Data Cleaning]
+        D --> E[Feature Engineering]
+        E --> F[Feature Selection]
+        F --> G[Scaling/Encoding]
+        G --> H[Model Training]
+        H --> C
+        
+        I[Benefits] --> J[No Data Leakage]
+        I --> K[Reproducible]
+        I --> L[Easy Deployment]
+        I --> M[Clean Code]
+        I --> N[Hyperparameter Tuning]
+        
+        style B fill:#667eea,color:#fff
+        style I fill:#51cf66
+    </div>
+
+    <pre class="language-python"><code># The Problem: Without Pipelines (Error-Prone and Messy)
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+
+# Typical workflow without pipelines - DON'T DO THIS!
+def ml_workflow_without_pipeline(X, y):
+    """
+    This approach leads to:
+    1. Data leakage (fitting preprocessors on test data)
+    2. Difficult deployment (need to track all preprocessing steps)
+    3. Error-prone code (easy to forget steps)
+    4. Poor maintainability
+    """
+    
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    
+    # Handle missing values
+    imputer = SimpleImputer(strategy='mean')
+    X_train = imputer.fit_transform(X_train)
+    X_test = imputer.transform(X_test)  # Easy to forget!
+    
+    # Scale features
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)  # Easy to mess up fit vs transform!
+    
+    # Train model
+    model = RandomForestClassifier()
+    model.fit(X_train, y_train)
+    
+    # Predict
+    y_pred = model.predict(X_test)
+    
+    # Now for deployment, you need to:
+    # 1. Save imputer, scaler, and model separately
+    # 2. Remember the exact order of operations
+    # 3. Apply them correctly to new data
+    
+    return model, imputer, scaler  # Messy!
+
+# The Solution: With Pipelines (Clean and Professional)
+from sklearn.pipeline import Pipeline
+
+def ml_workflow_with_pipeline(X, y):
+    """
+    Pipeline approach:
+    1. Prevents data leakage automatically
+    2. Single object to deploy
+    3. Clean, readable code
+    4. Easy to maintain and modify
+    """
+    
+    # Create pipeline
+    pipeline = Pipeline([
+        ('imputer', SimpleImputer(strategy='mean')),
+        ('scaler', StandardScaler()),
+        ('classifier', RandomForestClassifier())
+    ])
+    
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    
+    # Fit entire pipeline
+    pipeline.fit(X_train, y_train)
+    
+    # Predict (automatically applies all preprocessing)
+    y_pred = pipeline.predict(X_test)
+    
+    return pipeline  # Clean! Single object contains everything
+
+print("✅ Pipeline Benefits:")
+print("• Prevents data leakage")
+print("• Encapsulates entire workflow")
+print("• Easy deployment")
+print("• Automatic handling of transform vs fit_transform")
+print("• Works with cross-validation and grid search")</code></pre>
+
+    <h2>Building Basic Pipelines</h2>
+    
+    <pre class="language-python"><code>import pandas as pd
+import numpy as np
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.preprocessing import StandardScaler, PolynomialFeatures
+from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score, GridSearchCV
+from sklearn.datasets import load_breast_cancer, make_classification
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Load sample data
+X, y = load_breast_cancer(return_X_y=True)
+print(f"Dataset shape: {X.shape}")
+print(f"Classes: {np.unique(y)}")
+
+# 1. BASIC PIPELINE: Step-by-step construction
+print("\n" + "="*60)
+print("1. BASIC PIPELINE CONSTRUCTION")
+print("="*60)
+
+# Method 1: Using Pipeline class (explicit naming)
+basic_pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('pca', PCA(n_components=10)),
+    ('classifier', LogisticRegression(random_state=42))
+])
+
+print("Pipeline steps:")
+for name, step in basic_pipeline.steps:
+    print(f"  {name}: {step.__class__.__name__}")
+
+# Method 2: Using make_pipeline (automatic naming)
+quick_pipeline = make_pipeline(
+    StandardScaler(),
+    PCA(n_components=10),
+    LogisticRegression(random_state=42)
+)
+
+print("\nQuick pipeline steps:")
+for name, step in quick_pipeline.steps:
+    print(f"  {name}: {step.__class__.__name__}")
+
+# Train and evaluate
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Fit pipeline
+basic_pipeline.fit(X_train, y_train)
+
+# Access intermediate steps
+print(f"\nPCA explained variance ratio: {basic_pipeline.named_steps['pca'].explained_variance_ratio_[:3]}...")
+print(f"Classifier coefficients shape: {basic_pipeline.named_steps['classifier'].coef_.shape}")
+
+# Evaluate
+train_score = basic_pipeline.score(X_train, y_train)
+test_score = basic_pipeline.score(X_test, y_test)
+print(f"\nTrain accuracy: {train_score:.3f}")
+print(f"Test accuracy: {test_score:.3f}")
+
+# 2. ACCESSING AND MODIFYING PIPELINE COMPONENTS
+print("\n" + "="*60)
+print("2. ACCESSING AND MODIFYING PIPELINE COMPONENTS")
+print("="*60)
+
+# Access specific step
+scaler = basic_pipeline.named_steps['scaler']
+print(f"Scaler mean: {scaler.mean_[:3]}...")
+print(f"Scaler scale: {scaler.scale_[:3]}...")
+
+# Modify pipeline parameters
+basic_pipeline.set_params(pca__n_components=15, classifier__C=0.1)
+print("\nModified parameters:")
+print(f"  PCA components: {basic_pipeline.get_params()['pca__n_components']}")
+print(f"  Classifier C: {basic_pipeline.get_params()['classifier__C']}")
+
+# Get all parameters
+all_params = basic_pipeline.get_params()
+print(f"\nTotal parameters: {len(all_params)}")
+print("Sample parameters:", {k: v for k, v in list(all_params.items())[:5]})
+
+# 3. PIPELINE WITH CUSTOM TRANSFORMERS
+print("\n" + "="*60)
+print("3. CUSTOM TRANSFORMERS IN PIPELINES")
+print("="*60)
+
+from sklearn.base import BaseEstimator, TransformerMixin
+
+class OutlierRemover(BaseEstimator, TransformerMixin):
+    """Custom transformer to remove outliers using IQR method"""
+    
+    def __init__(self, factor=1.5):
+        self.factor = factor
+        self.lower_bounds_ = None
+        self.upper_bounds_ = None
+    
+    def fit(self, X, y=None):
+        """Calculate outlier bounds"""
+        Q1 = np.percentile(X, 25, axis=0)
+        Q3 = np.percentile(X, 75, axis=0)
+        IQR = Q3 - Q1
+        
+        self.lower_bounds_ = Q1 - self.factor * IQR
+        self.upper_bounds_ = Q3 + self.factor * IQR
+        
+        return self
+    
+    def transform(self, X):
+        """Clip outliers to bounds"""
+        X_transformed = np.clip(X, self.lower_bounds_, self.upper_bounds_)
+        return X_transformed
+
+class FeatureLogger(BaseEstimator, TransformerMixin):
+    """Custom transformer that logs data shape (for debugging)"""
+    
+    def __init__(self, message=""):
+        self.message = message
+    
+    def fit(self, X, y=None):
+        return self
+    
+    def transform(self, X):
+        print(f"{self.message} - Shape: {X.shape}")
+        return X
+
+# Pipeline with custom transformers
+custom_pipeline = Pipeline([
+    ('logger1', FeatureLogger("After input")),
+    ('outliers', OutlierRemover(factor=2.0)),
+    ('logger2', FeatureLogger("After outlier removal")),
+    ('scaler', StandardScaler()),
+    ('logger3', FeatureLogger("After scaling")),
+    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))
+])
+
+print("Training pipeline with custom transformers:")
+custom_pipeline.fit(X_train, y_train)
+print(f"\nTest accuracy: {custom_pipeline.score(X_test, y_test):.3f}")
+
+# 4. FEATURE UNIONS: Parallel Processing
+print("\n" + "="*60)
+print("4. FEATURE UNIONS - PARALLEL PROCESSING")
+print("="*60)
+
+from sklearn.pipeline import FeatureUnion
+
+# Create different feature extraction branches
+feature_union = FeatureUnion([
+    ('pca', PCA(n_components=10)),
+    ('select_best', SelectKBest(f_classif, k=10)),
+    ('poly', PolynomialFeatures(degree=2, include_bias=False))
+])
+
+# Combine with pipeline
+union_pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('features', feature_union),
+    ('classifier', LogisticRegression(max_iter=1000, random_state=42))
+])
+
+print("Feature Union Pipeline:")
+print("  Parallel branches:")
+print("    - PCA (10 components)")
+print("    - SelectKBest (10 features)")  
+print("    - Polynomial features (degree 2)")
+
+# Note: This will create many features!
+# Fit a small subset to demonstrate
+X_small = X[:100]
+y_small = y[:100]
+
+union_pipeline.fit(X_small, y_small)
+X_transformed = union_pipeline.named_steps['features'].transform(X_small[:5])
+print(f"\nOriginal features: {X_small.shape[1]}")
+print(f"Transformed features: {X_transformed.shape[1]}")
+print("  = 10 (PCA) + 10 (SelectKBest) + many (Polynomial)")</code></pre>
+
+    <h2>Advanced Pipeline Techniques: ColumnTransformer</h2>
+    
+    <pre class="language-python"><code># Working with mixed data types using ColumnTransformer
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder
+from sklearn.impute import SimpleImputer
+
+print("\n" + "="*60)
+print("COLUMN TRANSFORMER - HANDLING MIXED DATA TYPES")
+print("="*60)
+
+# Create a mixed-type dataset
+np.random.seed(42)
+n_samples = 1000
+
+mixed_data = pd.DataFrame({
+    # Numerical features
+    'age': np.random.randint(18, 80, n_samples),
+    'income': np.random.lognormal(10, 1, n_samples),
+    'credit_score': np.random.normal(700, 100, n_samples),
+    
+    # Categorical features
+    'education': np.random.choice(['HS', 'BS', 'MS', 'PhD'], n_samples),
+    'city': np.random.choice(['NYC', 'LA', 'Chicago', 'Houston'], n_samples),
+    
+    # Ordinal feature
+    'satisfaction': np.random.choice(['low', 'medium', 'high'], n_samples),
+    
+    # Binary feature
+    'employed': np.random.choice([0, 1], n_samples),
+    
+    # Feature with missing values
+    'bonus': np.where(np.random.random(n_samples) > 0.3, 
+                      np.random.lognormal(8, 1, n_samples), np.nan)
+})
+
+# Add target variable
+mixed_data['approved'] = (
+    (mixed_data['credit_score'] > 700) & 
+    (mixed_data['income'] > 20000)
+).astype(int)
+
+print("Mixed dataset info:")
+print(mixed_data.info())
+print("\nFirst few rows:")
+print(mixed_data.head())
+
+# Separate features and target
+X_mixed = mixed_data.drop('approved', axis=1)
+y_mixed = mixed_data['approved']
+
+# Define column groups
+numeric_features = ['age', 'income', 'credit_score', 'bonus']
+categorical_features = ['education', 'city']
+ordinal_features = ['satisfaction']
+binary_features = ['employed']
+
+# Create transformers for each type
+numeric_transformer = Pipeline([
+    ('imputer', SimpleImputer(strategy='median')),
+    ('scaler', StandardScaler())
+])
+
+categorical_transformer = Pipeline([
+    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))
+])
+
+ordinal_transformer = Pipeline([
+    ('imputer', SimpleImputer(strategy='most_frequent')),
+    ('ordinal', OrdinalEncoder(categories=[['low', 'medium', 'high']]))
+])
+
+# Combine with ColumnTransformer
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numeric_transformer, numeric_features),
+        ('cat', categorical_transformer, categorical_features),
+        ('ord', ordinal_transformer, ordinal_features),
+        ('bin', 'passthrough', binary_features)  # No transformation needed
+    ],
+    remainder='drop'  # Drop any other columns
+)
+
+# Create full pipeline
+full_pipeline = Pipeline([
+    ('preprocessor', preprocessor),
+    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))
+])
+
+print("\n📊 Pipeline Structure:")
+print("1. Preprocessor (ColumnTransformer):")
+print("   - Numeric: Impute (median) → StandardScaler")
+print("   - Categorical: Impute (constant) → OneHotEncoder")
+print("   - Ordinal: Impute (mode) → OrdinalEncoder")
+print("   - Binary: Passthrough")
+print("2. Classifier: RandomForest")
+
+# Train and evaluate
+X_train_mixed, X_test_mixed, y_train_mixed, y_test_mixed = train_test_split(
+    X_mixed, y_mixed, test_size=0.2, random_state=42
+)
+
+full_pipeline.fit(X_train_mixed, y_train_mixed)
+
+print(f"\nTrain accuracy: {full_pipeline.score(X_train_mixed, y_train_mixed):.3f}")
+print(f"Test accuracy: {full_pipeline.score(X_test_mixed, y_test_mixed):.3f}")
+
+# Inspect transformed feature names
+# Get feature names after transformation
+def get_feature_names(column_transformer):
+    """Get feature names from all transformers"""
+    feature_names = []
+    
+    for name, pipe, features in column_transformer.transformers_:
+        if name == 'remainder':
+            continue
+        
+        if hasattr(pipe, 'get_feature_names_out'):
+            # For transformers with get_feature_names_out
+            names = pipe.get_feature_names_out(features)
+            feature_names.extend(names)
+        elif name == 'bin':
+            # Passthrough
+            feature_names.extend(features)
+        else:
+            # For pipelines, get from last step
+            if hasattr(pipe, 'named_steps'):
+                last_step = list(pipe.named_steps.values())[-1]
+                if hasattr(last_step, 'get_feature_names_out'):
+                    names = last_step.get_feature_names_out(features)
+                    feature_names.extend(names)
+                else:
+                    feature_names.extend(features)
+            else:
+                feature_names.extend(features)
+    
+    return feature_names
+
+# Note: In scikit-learn >= 1.0, you can use:
+# feature_names = preprocessor.get_feature_names_out()
+
+# Get transformed data shape
+X_transformed = preprocessor.fit_transform(X_train_mixed)
+print(f"\nTransformed data shape: {X_transformed.shape}")
+print(f"Original features: {X_train_mixed.shape[1]}")
+print(f"Transformed features: {X_transformed.shape[1]}")</code></pre>
+
+    <h2>Pipeline with Cross-Validation and Grid Search</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("PIPELINES WITH CROSS-VALIDATION AND GRID SEARCH")
+print("="*60)
+
+# Create a complex pipeline for hyperparameter tuning
+complex_pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('feature_selection', SelectKBest(f_classif)),
+    ('pca', PCA()),
+    ('classifier', RandomForestClassifier(random_state=42))
+])
+
+# Define parameter grid for the entire pipeline
+param_grid = {
+    'feature_selection__k': [10, 15, 20],
+    'pca__n_components': [5, 10, 15],
+    'classifier__n_estimators': [50, 100],
+    'classifier__max_depth': [5, 10, None]
+}
+
+print("Parameter grid for pipeline:")
+for param, values in param_grid.items():
+    print(f"  {param}: {values}")
+
+# Grid search with pipeline
+grid_search = GridSearchCV(
+    complex_pipeline,
+    param_grid,
+    cv=5,
+    scoring='accuracy',
+    n_jobs=-1,
+    verbose=1
+)
+
+print("\nPerforming grid search on pipeline...")
+grid_search.fit(X_train, y_train)
+
+print(f"\nBest parameters: {grid_search.best_params_}")
+print(f"Best CV score: {grid_search.best_score_:.3f}")
+print(f"Test score: {grid_search.score(X_test, y_test):.3f}")
+
+# Analyze results
+results_df = pd.DataFrame(grid_search.cv_results_)
+top_10 = results_df.nlargest(10, 'mean_test_score')[['params', 'mean_test_score', 'std_test_score']]
+
+print("\nTop 10 parameter combinations:")
+for idx, row in top_10.iterrows():
+    print(f"Score: {row['mean_test_score']:.3f} (+/- {row['std_test_score']:.3f})")
+    for param, value in row['params'].items():
+        print(f"  {param}: {value}")
+    print()
+
+# Cross-validation with pipeline (no grid search)
+print("\n" + "="*60)
+print("CROSS-VALIDATION WITH PIPELINES")
+print("="*60)
+
+# Different pipelines to compare
+pipelines = {
+    'Logistic': make_pipeline(
+        StandardScaler(),
+        LogisticRegression(random_state=42)
+    ),
+    'Random Forest': make_pipeline(
+        StandardScaler(),
+        RandomForestClassifier(n_estimators=100, random_state=42)
+    ),
+    'Gradient Boosting': make_pipeline(
+        StandardScaler(),
+        GradientBoostingClassifier(n_estimators=100, random_state=42)
+    ),
+    'SVM + PCA': make_pipeline(
+        StandardScaler(),
+        PCA(n_components=10),
+        LogisticRegression(random_state=42)
+    )
+}
+
+# Compare pipelines
+cv_results = {}
+for name, pipeline in pipelines.items():
+    scores = cross_val_score(pipeline, X, y, cv=5, scoring='accuracy')
+    cv_results[name] = scores
+    print(f"{name:20} CV Score: {scores.mean():.3f} (+/- {scores.std():.3f})")
+
+# Visualize comparison
+fig, ax = plt.subplots(figsize=(10, 6))
+positions = range(len(cv_results))
+bp = ax.boxplot(cv_results.values(), positions=positions, widths=0.6)
+ax.set_xticklabels(cv_results.keys(), rotation=45, ha='right')
+ax.set_ylabel('Accuracy')
+ax.set_title('Pipeline Comparison with Cross-Validation')
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()</code></pre>
+
+    <h2>Advanced Composite Estimators</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("ADVANCED COMPOSITE ESTIMATORS")
+print("="*60)
+
+# 1. VOTING CLASSIFIER: Combine multiple models
+from sklearn.ensemble import VotingClassifier
+
+# Create individual models
+clf1 = LogisticRegression(random_state=42)
+clf2 = RandomForestClassifier(n_estimators=100, random_state=42)
+clf3 = GradientBoostingClassifier(n_estimators=100, random_state=42)
+
+# Create voting classifier
+voting_clf = VotingClassifier(
+    estimators=[
+        ('lr', clf1),
+        ('rf', clf2),
+        ('gb', clf3)
+    ],
+    voting='soft'  # Use predicted probabilities
+)
+
+# Create pipeline with voting classifier
+voting_pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('voting', voting_clf)
+])
+
+print("Voting Pipeline Structure:")
+print("  1. StandardScaler")
+print("  2. VotingClassifier:")
+print("     - Logistic Regression")
+print("     - Random Forest")
+print("     - Gradient Boosting")
+
+voting_pipeline.fit(X_train, y_train)
+print(f"\nVoting pipeline accuracy: {voting_pipeline.score(X_test, y_test):.3f}")
+
+# Access individual classifier predictions
+voting_clf_fitted = voting_pipeline.named_steps['voting']
+for name, clf in voting_clf_fitted.estimators_:
+    score = clf.score(voting_pipeline.named_steps['scaler'].transform(X_test), y_test)
+    print(f"  {name} individual accuracy: {score:.3f}")
+
+# 2. STACKING CLASSIFIER: Meta-learning
+from sklearn.ensemble import StackingClassifier
+
+# Base estimators
+base_estimators = [
+    ('rf', RandomForestClassifier(n_estimators=100, random_state=42)),
+    ('gb', GradientBoostingClassifier(n_estimators=100, random_state=42))
+]
+
+# Meta-estimator
+meta_estimator = LogisticRegression()
+
+# Create stacking classifier
+stacking_clf = StackingClassifier(
+    estimators=base_estimators,
+    final_estimator=meta_estimator,
+    cv=5  # Use cross-validation to train meta-estimator
+)
+
+# Pipeline with stacking
+stacking_pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('stacking', stacking_clf)
+])
+
+print("\n" + "="*60)
+print("STACKING CLASSIFIER")
+print("="*60)
+
+stacking_pipeline.fit(X_train, y_train)
+print(f"Stacking pipeline accuracy: {stacking_pipeline.score(X_test, y_test):.3f}")
+
+# 3. CUSTOM COMPOSITE ESTIMATOR
+class MultiOutputPipeline(BaseEstimator):
+    """
+    Custom estimator that creates separate pipelines for different outputs
+    Useful for multi-output or hierarchical problems
+    """
+    
+    def __init__(self, pipelines):
+        self.pipelines = pipelines
+        
+    def fit(self, X, y):
+        """Fit all pipelines"""
+        self.fitted_pipelines_ = {}
+        
+        for name, pipeline in self.pipelines.items():
+            print(f"Fitting pipeline: {name}")
+            self.fitted_pipelines_[name] = pipeline.fit(X, y)
+        
+        return self
+    
+    def predict(self, X):
+        """Aggregate predictions from all pipelines"""
+        predictions = []
+        
+        for name, pipeline in self.fitted_pipelines_.items():
+            pred = pipeline.predict_proba(X)[:, 1]  # Get positive class probability
+            predictions.append(pred)
+        
+        # Average predictions
+        avg_predictions = np.mean(predictions, axis=0)
+        return (avg_predictions > 0.5).astype(int)
+    
+    def score(self, X, y):
+        """Calculate accuracy"""
+        from sklearn.metrics import accuracy_score
+        return accuracy_score(y, self.predict(X))
+
+# Create multiple pipelines with different preprocessing
+multi_pipelines = {
+    'standard': Pipeline([
+        ('scaler', StandardScaler()),
+        ('clf', LogisticRegression(random_state=42))
+    ]),
+    'pca': Pipeline([
+        ('scaler', StandardScaler()),
+        ('pca', PCA(n_components=10)),
+        ('clf', RandomForestClassifier(n_estimators=100, random_state=42))
+    ]),
+    'poly': Pipeline([
+        ('poly', PolynomialFeatures(degree=2, include_bias=False)),
+        ('scaler', StandardScaler()),
+        ('clf', LogisticRegression(max_iter=1000, random_state=42))
+    ])
+}
+
+# Use custom composite estimator
+print("\n" + "="*60)
+print("CUSTOM COMPOSITE ESTIMATOR")
+print("="*60)
+
+# Note: For polynomial features, use smaller dataset
+X_small_train = X_train[:200]
+y_small_train = y_train[:200]
+X_small_test = X_test[:50]
+y_small_test = y_test[:50]
+
+multi_output = MultiOutputPipeline(multi_pipelines)
+multi_output.fit(X_small_train, y_small_train)
+print(f"\nMulti-pipeline accuracy: {multi_output.score(X_small_test, y_small_test):.3f}")</code></pre>
+
+    <h2>Pipeline Persistence and Deployment</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("PIPELINE PERSISTENCE AND DEPLOYMENT")
+print("="*60)
+
+import joblib
+import pickle
+from datetime import datetime
+
+# Create a complete pipeline ready for deployment
+deployment_pipeline = Pipeline([
+    ('preprocessor', ColumnTransformer(
+        transformers=[
+            ('num', StandardScaler(), [0, 1, 2]),  # Numeric columns
+            ('passthrough', 'passthrough', slice(3, None))  # Rest
+        ]
+    )),
+    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))
+])
+
+# Train the pipeline
+deployment_pipeline.fit(X_train, y_train)
+
+# 1. SAVE PIPELINE
+print("1. Saving Pipeline")
+print("-" * 40)
+
+# Method 1: Using joblib (recommended)
+joblib_filename = 'pipeline_model.joblib'
+joblib.dump(deployment_pipeline, joblib_filename)
+print(f"✅ Pipeline saved with joblib: {joblib_filename}")
+
+# Method 2: Using pickle
+pickle_filename = 'pipeline_model.pkl'
+with open(pickle_filename, 'wb') as f:
+    pickle.dump(deployment_pipeline, f)
+print(f"✅ Pipeline saved with pickle: {pickle_filename}")
+
+# 2. SAVE WITH METADATA
+print("\n2. Saving with Metadata")
+print("-" * 40)
+
+model_package = {
+    'pipeline': deployment_pipeline,
+    'metadata': {
+        'model_name': 'BreastCancerClassifier',
+        'version': '1.0.0',
+        'trained_date': datetime.now().isoformat(),
+        'training_score': deployment_pipeline.score(X_train, y_train),
+        'test_score': deployment_pipeline.score(X_test, y_test),
+        'feature_names': [f'feature_{i}' for i in range(X.shape[1])],
+        'target_names': ['malignant', 'benign'],
+        'pipeline_steps': [step[0] for step in deployment_pipeline.steps],
+        'requirements': {
+            'scikit-learn': '>=1.0.0',
+            'numpy': '>=1.20.0',
+            'pandas': '>=1.3.0'
+        }
+    }
+}
+
+joblib.dump(model_package, 'model_package.joblib')
+print("✅ Model package saved with metadata")
+
+# 3. LOAD AND USE PIPELINE
+print("\n3. Loading and Using Pipeline")
+print("-" * 40)
+
+# Load pipeline
+loaded_pipeline = joblib.load(joblib_filename)
+
+# Verify it works
+loaded_score = loaded_pipeline.score(X_test, y_test)
+print(f"✅ Pipeline loaded successfully")
+print(f"  Test score: {loaded_score:.3f}")
+
+# Load model package
+loaded_package = joblib.load('model_package.joblib')
+print(f"\n📦 Model Package Contents:")
+print(f"  Model: {loaded_package['metadata']['model_name']}")
+print(f"  Version: {loaded_package['metadata']['version']}")
+print(f"  Trained: {loaded_package['metadata']['trained_date']}")
+print(f"  Training score: {loaded_package['metadata']['training_score']:.3f}")
+
+# 4. DEPLOYMENT FUNCTION
+print("\n4. Deployment-Ready Prediction Function")
+print("-" * 40)
+
+class ModelPredictor:
+    """Production-ready model predictor"""
+    
+    def __init__(self, model_path):
+        """Load model and metadata"""
+        self.package = joblib.load(model_path)
+        self.pipeline = self.package['pipeline']
+        self.metadata = self.package['metadata']
+        
+    def predict(self, X):
+        """Make predictions with error handling"""
+        try:
+            # Validate input
+            if not isinstance(X, (pd.DataFrame, np.ndarray)):
+                raise ValueError("Input must be DataFrame or numpy array")
+            
+            # Make predictions
+            predictions = self.pipeline.predict(X)
+            
+            # Get probabilities if available
+            if hasattr(self.pipeline, 'predict_proba'):
+                probabilities = self.pipeline.predict_proba(X)
+            else:
+                probabilities = None
+            
+            return {
+                'predictions': predictions,
+                'probabilities': probabilities,
+                'model_version': self.metadata['version']
+            }
+            
+        except Exception as e:
+            return {
+                'error': str(e),
+                'model_version': self.metadata['version']
+            }
+    
+    def get_info(self):
+        """Get model information"""
+        return self.metadata
+
+# Use deployment predictor
+predictor = ModelPredictor('model_package.joblib')
+result = predictor.predict(X_test[:5])
+
+print("Deployment Prediction Results:")
+print(f"  Predictions: {result['predictions']}")
+print(f"  Model version: {result['model_version']}")
+
+# Clean up files
+import os
+for file in ['pipeline_model.joblib', 'pipeline_model.pkl', 'model_package.joblib']:
+    if os.path.exists(file):
+        os.remove(file)</code></pre>
+
+    <h2>Best Practices for Pipelines</h2>
+    
+    <pre class="language-python"><code>print("\n" + "="*60)
+print("PIPELINE BEST PRACTICES")
+print("="*60)
+
+# 1. CACHING EXPENSIVE STEPS
+from tempfile import mkdtemp
+from shutil import rmtree
+
+print("1. Pipeline Caching")
+print("-" * 40)
+
+# Create cache directory
+cachedir = mkdtemp()
+
+# Pipeline with caching
+cached_pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('pca', PCA(n_components=20)),  # Expensive step
+    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))
+], memory=cachedir)  # Enable caching
+
+print("Training with cache (first run - slower)...")
+import time
+start = time.time()
+cached_pipeline.fit(X_train, y_train)
+first_time = time.time() - start
+print(f"  Time: {first_time:.2f} seconds")
+
+print("Training with cache (second run - faster)...")
+start = time.time()
+cached_pipeline.fit(X_train, y_train)
+second_time = time.time() - start
+print(f"  Time: {second_time:.2f} seconds")
+print(f"  Speedup: {first_time/second_time:.1f}x")
+
+# Clean up cache
+rmtree(cachedir)
+
+# 2. PARAMETER VALIDATION
+print("\n2. Parameter Validation in Custom Transformers")
+print("-" * 40)
+
+class ValidatedScaler(BaseEstimator, TransformerMixin):
+    """Custom transformer with parameter validation"""
+    
+    def __init__(self, method='standard', scale_range=(0, 1)):
+        self.method = method
+        self.scale_range = scale_range
+        
+    def fit(self, X, y=None):
+        # Validate parameters
+        if self.method not in ['standard', 'minmax', 'robust']:
+            raise ValueError(f"method must be 'standard', 'minmax', or 'robust', got {self.method}")
+        
+        if len(self.scale_range) != 2:
+            raise ValueError("scale_range must be tuple of (min, max)")
+        
+        if self.scale_range[0] >= self.scale_range[1]:
+            raise ValueError("scale_range[0] must be less than scale_range[1]")
+        
+        # Fit based on method
+        if self.method == 'standard':
+            self.mean_ = np.mean(X, axis=0)
+            self.std_ = np.std(X, axis=0)
+        elif self.method == 'minmax':
+            self.min_ = np.min(X, axis=0)
+            self.max_ = np.max(X, axis=0)
+        
+        return self
+    
+    def transform(self, X):
+        if self.method == 'standard':
+            return (X - self.mean_) / self.std_
+        elif self.method == 'minmax':
+            X_std = (X - self.min_) / (self.max_ - self.min_)
+            X_scaled = X_std * (self.scale_range[1] - self.scale_range[0]) + self.scale_range[0]
+            return X_scaled
+        return X
+
+# Test validation
+try:
+    bad_scaler = ValidatedScaler(method='invalid')
+    bad_scaler.fit(X_train)
+except ValueError as e:
+    print(f"✅ Validation caught error: {e}")
+
+# 3. PIPELINE VISUALIZATION
+print("\n3. Pipeline Visualization")
+print("-" * 40)
+
+from sklearn import set_config
+set_config(display='diagram')  # Enable HTML diagram display
+
+# Create a complex pipeline for visualization
+viz_pipeline = Pipeline([
+    ('preprocessor', ColumnTransformer([
+        ('num', StandardScaler(), [0, 1, 2]),
+        ('cat', OneHotEncoder(), [3, 4])
+    ], remainder='passthrough')),
+    ('feature_selection', SelectKBest(k=10)),
+    ('classifier', RandomForestClassifier(n_estimators=100))
+])
+
+# In Jupyter notebook, this would display an interactive diagram
+# print(viz_pipeline)  
+
+# Text representation
+print("Pipeline structure:")
+for i, (name, step) in enumerate(viz_pipeline.steps):
+    print(f"  Step {i+1}: {name}")
+    print(f"    Class: {step.__class__.__name__}")
+
+# 4. ERROR HANDLING IN PIPELINES
+print("\n4. Robust Pipeline with Error Handling")
+print("-" * 40)
+
+class RobustTransformer(BaseEstimator, TransformerMixin):
+    """Transformer with comprehensive error handling"""
+    
+    def __init__(self, handle_errors='warn'):
+        self.handle_errors = handle_errors  # 'warn', 'raise', 'ignore'
+        
+    def fit(self, X, y=None):
+        try:
+            # Check for common issues
+            if np.any(np.isnan(X)):
+                self._handle_error("Input contains NaN values")
+            
+            if np.any(np.isinf(X)):
+                self._handle_error("Input contains infinite values")
+            
+            # Fit logic here
+            self.mean_ = np.nanmean(X, axis=0)
+            
+        except Exception as e:
+            self._handle_error(f"Error during fit: {e}")
+        
+        return self
+    
+    def transform(self, X):
+        try:
+            # Transform with fallback
+            X_transformed = X - self.mean_
+            return X_transformed
+            
+        except Exception as e:
+            self._handle_error(f"Error during transform: {e}")
+            return X  # Return original if transform fails
+    
+    def _handle_error(self, message):
+        if self.handle_errors == 'raise':
+            raise RuntimeError(message)
+        elif self.handle_errors == 'warn':
+            import warnings
+            warnings.warn(message)
+        # If 'ignore', do nothing
+
+# Test robust transformer
+X_with_issues = X_train.copy()
+X_with_issues[0, 0] = np.nan  # Add NaN
+
+robust_pipeline = Pipeline([
+    ('robust', RobustTransformer(handle_errors='warn')),
+    ('classifier', RandomForestClassifier(n_estimators=10, random_state=42))
+])
+
+print("Testing robust pipeline with problematic data...")
+robust_pipeline.fit(X_with_issues, y_train)
+print("✅ Pipeline handled errors gracefully")
+
+# 5. PIPELINE TESTING
+print("\n5. Unit Testing for Pipelines")
+print("-" * 40)
+
+def test_pipeline_components(pipeline, X_sample, y_sample):
+    """Test individual pipeline components"""
+    
+    tests_passed = []
+    tests_failed = []
+    
+    # Test 1: Pipeline can be fitted
+    try:
+        pipeline.fit(X_sample, y_sample)
+        tests_passed.append("Pipeline fitting")
+    except Exception as e:
+        tests_failed.append(f"Pipeline fitting: {e}")
+    
+    # Test 2: Pipeline can make predictions
+    try:
+        predictions = pipeline.predict(X_sample)
+        assert len(predictions) == len(y_sample)
+        tests_passed.append("Predictions shape")
+    except Exception as e:
+        tests_failed.append(f"Predictions: {e}")
+    
+    # Test 3: Pipeline score works
+    try:
+        score = pipeline.score(X_sample, y_sample)
+        assert 0 <= score <= 1
+        tests_passed.append("Scoring")
+    except Exception as e:
+        tests_failed.append(f"Scoring: {e}")
+    
+    # Test 4: All steps have been fitted
+    try:
+        for name, step in pipeline.steps:
+            if hasattr(step, 'fit'):
+                assert hasattr(step, 'mean_') or hasattr(step, 'classes_') or hasattr(step, 'components_')
+        tests_passed.append("All steps fitted")
+    except:
+        tests_failed.append("Some steps not properly fitted")
+    
+    # Report
+    print(f"✅ Passed: {len(tests_passed)}/{len(tests_passed) + len(tests_failed)} tests")
+    for test in tests_passed:
+        print(f"   ✓ {test}")
+    
+    if tests_failed:
+        print(f"\n❌ Failed tests:")
+        for test in tests_failed:
+            print(f"   ✗ {test}")
+    
+    return len(tests_failed) == 0
+
+# Test a pipeline
+test_pipeline = make_pipeline(
+    StandardScaler(),
+    PCA(n_components=5),
+    LogisticRegression(random_state=42)
+)
+
+all_tests_passed = test_pipeline_components(test_pipeline, X_train[:100], y_train[:100])
+print(f"\nAll tests passed: {all_tests_passed}")</code></pre>
+
+    <h2>Real-World Pipeline Example</h2>
+    
+    <pre class="language-python"><code># Complete real-world example: Text Classification Pipeline
+print("\n" + "="*60)
+print("REAL-WORLD EXAMPLE: TEXT CLASSIFICATION PIPELINE")
+print("="*60)
+
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.naive_bayes import MultinomialNB
+
+# Sample text data
+texts = [
+    "Machine learning is amazing",
+    "Deep learning with neural networks",
+    "Natural language processing is fun",
+    "Computer vision for image recognition",
+    "I love programming in Python",
+    "Data science is the future",
+    "Algorithms and data structures",
+    "Statistical analysis of big data",
+    "Predictive modeling techniques",
+    "Artificial intelligence revolution"
+] * 10  # Replicate for more samples
+
+# Create labels (0: ML/AI, 1: Programming)
+labels = [0, 0, 0, 0, 1, 0, 1, 0, 0, 0] * 10
+
+# Text processing pipeline
+text_pipeline = Pipeline([
+    ('tfidf', TfidfVectorizer(
+        max_features=100,
+        ngram_range=(1, 2),  # Unigrams and bigrams
+        stop_words='english',
+        lowercase=True
+    )),
+    ('classifier', MultinomialNB())
+])
+
+# Train-test split
+from sklearn.model_selection import train_test_split
+X_train_text, X_test_text, y_train_text, y_test_text = train_test_split(
+    texts, labels, test_size=0.2, random_state=42
+)
+
+# Train pipeline
+text_pipeline.fit(X_train_text, y_train_text)
+
+# Evaluate
+train_accuracy = text_pipeline.score(X_train_text, y_train_text)
+test_accuracy = text_pipeline.score(X_test_text, y_test_text)
+
+print(f"Text Classification Pipeline:")
+print(f"  Train accuracy: {train_accuracy:.3f}")
+print(f"  Test accuracy: {test_accuracy:.3f}")
+
+# Make predictions on new texts
+new_texts = [
+    "Neural networks and deep learning",
+    "Python programming tutorial",
+    "Machine learning algorithms"
+]
+
+predictions = text_pipeline.predict(new_texts)
+probabilities = text_pipeline.predict_proba(new_texts)
+
+print(f"\nPredictions on new texts:")
+for text, pred, prob in zip(new_texts, predictions, probabilities):
+    label = "ML/AI" if pred == 0 else "Programming"
+    confidence = prob.max()
+    print(f"  '{text[:30]}...' → {label} (confidence: {confidence:.2f})")
+
+# Feature importance (top words)
+tfidf = text_pipeline.named_steps['tfidf']
+feature_names = tfidf.get_feature_names_out()
+classifier = text_pipeline.named_steps['classifier']
+
+# Get top features for each class
+for class_idx in range(2):
+    top_indices = np.argsort(classifier.feature_log_prob_[class_idx])[-5:]
+    top_features = [feature_names[i] for i in top_indices]
+    class_name = "ML/AI" if class_idx == 0 else "Programming"
+    print(f"\nTop features for {class_name}: {top_features}")</code></pre>
+
+    <h2>Practice Exercises</h2>
+    
+    <h3>Exercise 1: Multi-Stage Pipeline</h3>
+    <p>Build a pipeline that:</p>
+    <ol>
+        <li>Handles missing values with different strategies for different columns</li>
+        <li>Performs feature engineering (polynomial features, interactions)</li>
+        <li>Selects best features using multiple methods</li>
+        <li>Applies dimensionality reduction</li>
+        <li>Uses an ensemble of classifiers</li>
+    </ol>
+
+    <h3>Exercise 2: Custom Transformer Library</h3>
+    <p>Create a library of custom transformers:</p>
+    <ol>
+        <li>DateFeatureExtractor - extracts features from datetime columns</li>
+        <li>TextStatisticsExtractor - extracts statistics from text columns</li>
+        <li>OutlierCapper - caps outliers at percentiles</li>
+        <li>TargetEncoder - performs target encoding safely</li>
+    </ol>
+
+    <h3>Exercise 3: Pipeline Comparison Framework</h3>
+    <p>Develop a framework that:</p>
+    <ol>
+        <li>Takes multiple pipeline configurations</li>
+        <li>Performs cross-validation on each</li>
+        <li>Compares performance metrics</li>
+        <li>Visualizes results</li>
+        <li>Recommends the best pipeline with explanation</li>
+    </ol>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+        <li>🔧 Pipelines encapsulate the entire ML workflow from preprocessing to prediction</li>
+        <li>🚫 Prevent data leakage by ensuring proper fit/transform separation</li>
+        <li>📦 Single object to save and deploy makes production easier</li>
+        <li>🔄 Work seamlessly with cross-validation and grid search</li>
+        <li>🎯 ColumnTransformer handles mixed data types elegantly</li>
+        <li>⚡ FeatureUnion enables parallel feature processing</li>
+        <li>🏗️ Custom transformers extend pipeline functionality</li>
+        <li>💾 Caching speeds up repeated computations</li>
+        <li>🧪 Test pipelines like any other code component</li>
+        <li>📊 Composite estimators (Voting, Stacking) improve performance</li>
+    </ul>
+
+    <h2>Summary</h2>
+    <p>Pipelines are the backbone of production machine learning. They transform messy notebook code into clean, maintainable, and deployable solutions. By mastering pipelines, you ensure reproducibility, prevent common errors like data leakage, and create ML workflows that can seamlessly move from development to production. Remember: if you're not using pipelines, you're making your ML journey harder than it needs to be!</p>
+
+    <!-- Navigation -->
+    <nav class="lesson-nav" aria-label="Lesson navigation">
+        <a href="hyperparameter_tuning.html" class="prev-lesson">Previous: Hyperparameter Tuning</a>
+        <a href="index.html" class="home-link">Course Home</a>
+        <a href="ensemble_methods.html" class="next-lesson">Next: Advanced Ensemble Methods</a>
+    </nav>
+    
+    <script src="js/clipboard.js"></script>
+    </main>
+</body>
+</html>

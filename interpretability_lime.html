@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Learn about LIME (Local Interpretable Model-agnostic Explanations) for interpreting machine learning model predictions.">
+    <title>LIME - Model Interpretability - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/enhanced.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    
+    <!-- Progress indicator -->
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+
+    <nav>
+        <a href="index.html" class="logo">Python Machine Learning</a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="index.html#interpretability">Interpretability</a>
+        </div>
+    </nav>
+    
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="index.html#interpretability">Interpretability</a></li>
+            <li aria-current="page">LIME</li>
+        </ul>
+    </nav>
+
+    <main id="main-content">
+    <div class="container">
+        <h1>🍋 LIME: Local Interpretable Model-agnostic Explanations</h1>
+        
+        <div class="lesson-card">
+            <h2>Introduction</h2>
+            <p>LIME (Local Interpretable Model-agnostic Explanations) is a technique for explaining individual predictions of any machine learning classifier or regressor. It works by approximating the model locally with an interpretable model, helping us understand why a model made a specific prediction. This is crucial for building trust in ML systems, debugging models, and meeting regulatory requirements for explainable AI.</p>
+        </div>
+
+        <h2>How LIME Works</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            A[Original Instance] --> B[Generate Perturbations]
+            B --> C[Sample Around Instance]
+            C --> D[Get Black-box Predictions]
+            D --> E[Weight by Proximity]
+            E --> F[Train Local Linear Model]
+            F --> G[Extract Feature Importance]
+            G --> H[Explanation]
+            
+            subgraph "LIME Process"
+                B
+                C
+                D
+                E
+                F
+            end
+            
+            style A fill:#e3f2fd
+            style H fill:#c8e6c9
+            style F fill:#fff9c4
+        </div>
+
+        <h2>LIME Algorithm Visualization</h2>
+        
+        <div class="mermaid">
+        graph LR
+            A[Complex Model<br/>f(x)] --> B[Local Region]
+            B --> C[Linear Approximation<br/>g(x)]
+            
+            D[Instance x] --> E[Perturbed Samples]
+            E --> F[Predictions]
+            F --> G[Weighted Linear Model]
+            G --> H[Feature Contributions]
+            
+            style A fill:#ffccbc
+            style C fill:#c8e6c9
+            style H fill:#e3f2fd
+        </div>
+
+        <h2>Setting Up Environment</h2>
+        
+        <pre class="language-python"><code>import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.datasets import load_iris, load_breast_cancer, fetch_20newsgroups
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.pipeline import make_pipeline
+import warnings
+warnings.filterwarnings('ignore')
+
+# LIME library
+import lime
+import lime.lime_tabular
+import lime.lime_text
+import lime.lime_image
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+np.random.seed(42)
+
+print("LIME - Local Interpretable Model-agnostic Explanations")
+print("=" * 60)</code></pre>
+
+        <h2>LIME for Tabular Data</h2>
+        
+        <pre class="language-python"><code>class LIMETabularExplainer:
+    """
+    LIME explainer for tabular data
+    """
+    
+    def __init__(self, X_train, feature_names, class_names):
+        """
+        Initialize LIME explainer for tabular data
+        """
+        self.explainer = lime.lime_tabular.LimeTabularExplainer(
+            X_train,
+            feature_names=feature_names,
+            class_names=class_names,
+            verbose=True,
+            mode='classification'
+        )
+        self.feature_names = feature_names
+        self.class_names = class_names
+        
+    def explain_instance(self, model, instance, num_features=10):
+        """
+        Explain a single prediction
+        """
+        # Get prediction
+        prediction = model.predict([instance])[0]
+        probability = model.predict_proba([instance])[0]
+        
+        # Generate explanation
+        exp = self.explainer.explain_instance(
+            instance,
+            model.predict_proba,
+            num_features=num_features
+        )
+        
+        return exp, prediction, probability
+    
+    def visualize_explanation(self, exp, prediction, probability):
+        """
+        Visualize LIME explanation
+        """
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Get explanation data
+        exp_list = exp.as_list()
+        features = [x[0] for x in exp_list]
+        values = [x[1] for x in exp_list]
+        
+        # Feature importance plot
+        colors = ['green' if x > 0 else 'red' for x in values]
+        axes[0].barh(range(len(values)), values, color=colors)
+        axes[0].set_yticks(range(len(features)))
+        axes[0].set_yticklabels(features, fontsize=9)
+        axes[0].set_xlabel('Feature Contribution')
+        axes[0].set_title('Local Feature Importance')
+        axes[0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
+        
+        # Prediction probabilities
+        axes[1].bar(self.class_names, probability)
+        axes[1].set_xlabel('Class')
+        axes[1].set_ylabel('Probability')
+        axes[1].set_title(f'Prediction: {self.class_names[prediction]}')
+        axes[1].set_ylim([0, 1])
+        
+        # Add probability values on bars
+        for i, (name, prob) in enumerate(zip(self.class_names, probability)):
+            axes[1].text(i, prob + 0.01, f'{prob:.3f}', ha='center')
+        
+        plt.suptitle('LIME Explanation for Individual Prediction', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+        
+        return fig
+
+# Demonstrate LIME on tabular data
+print("\n" + "=" * 60)
+print("LIME FOR TABULAR DATA - IRIS DATASET")
+print("=" * 60)
+
+# Load data
+iris = load_iris()
+X, y = iris.data, iris.target
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Train a black-box model
+print("\nTraining Random Forest model...")
+rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+rf_model.fit(X_train, y_train)
+print(f"Model accuracy: {rf_model.score(X_test, y_test):.3f}")
+
+# Create LIME explainer
+lime_explainer = LIMETabularExplainer(
+    X_train,
+    feature_names=iris.feature_names,
+    class_names=iris.target_names
+)
+
+# Explain a test instance
+test_idx = 5
+test_instance = X_test[test_idx]
+true_label = y_test[test_idx]
+
+print(f"\nExplaining instance {test_idx}:")
+print(f"True label: {iris.target_names[true_label]}")
+
+exp, pred, proba = lime_explainer.explain_instance(rf_model, test_instance)
+lime_explainer.visualize_explanation(exp, pred, proba)
+
+# Show the explanation in different formats
+print("\nExplanation as text:")
+for feat, imp in exp.as_list()[:5]:
+    print(f"  {feat}: {imp:.3f}")</code></pre>
+
+        <h2>LIME for Complex Models</h2>
+        
+        <pre class="language-python"><code>class ComplexModelExplainer:
+    """
+    LIME explanations for complex models
+    """
+    
+    def __init__(self):
+        self.models = {}
+        self.data = None
+        
+    def prepare_data(self):
+        """
+        Prepare breast cancer dataset
+        """
+        # Load data
+        data = load_breast_cancer()
+        X, y = data.data, data.target
+        
+        # Scale features
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_scaled, y, test_size=0.3, random_state=42
+        )
+        
+        self.data = {
+            'X_train': X_train,
+            'X_test': X_test,
+            'y_train': y_train,
+            'y_test': y_test,
+            'feature_names': data.feature_names,
+            'class_names': data.target_names,
+            'scaler': scaler
+        }
+        
+        return self.data
+    
+    def train_models(self):
+        """
+        Train different complex models
+        """
+        print("\n" + "=" * 60)
+        print("TRAINING COMPLEX MODELS")
+        print("=" * 60)
+        
+        models = {
+            'Random Forest': RandomForestClassifier(
+                n_estimators=100, 
+                max_depth=10,
+                random_state=42
+            ),
+            'Gradient Boosting': GradientBoostingClassifier(
+                n_estimators=100,
+                learning_rate=0.1,
+                random_state=42
+            ),
+            'Neural Network': MLPClassifier(
+                hidden_layer_sizes=(100, 50),
+                max_iter=500,
+                random_state=42
+            )
+        }
+        
+        for name, model in models.items():
+            print(f"\nTraining {name}...")
+            model.fit(self.data['X_train'], self.data['y_train'])
+            score = model.score(self.data['X_test'], self.data['y_test'])
+            print(f"  Accuracy: {score:.3f}")
+            self.models[name] = model
+        
+        return self.models
+    
+    def compare_explanations(self, instance_idx=0):
+        """
+        Compare LIME explanations across different models
+        """
+        print("\n" + "=" * 60)
+        print("COMPARING EXPLANATIONS ACROSS MODELS")
+        print("=" * 60)
+        
+        # Get test instance
+        test_instance = self.data['X_test'][instance_idx]
+        true_label = self.data['y_test'][instance_idx]
+        
+        # Create explainer
+        explainer = lime.lime_tabular.LimeTabularExplainer(
+            self.data['X_train'],
+            feature_names=self.data['feature_names'],
+            class_names=self.data['class_names'],
+            mode='classification'
+        )
+        
+        # Collect explanations for each model
+        explanations = {}
+        predictions = {}
+        
+        for model_name, model in self.models.items():
+            # Get explanation
+            exp = explainer.explain_instance(
+                test_instance,
+                model.predict_proba,
+                num_features=10
+            )
+            
+            # Store results
+            explanations[model_name] = exp.as_list()
+            predictions[model_name] = model.predict([test_instance])[0]
+        
+        # Visualize comparison
+        self.visualize_model_comparison(explanations, predictions, true_label)
+        
+        return explanations
+    
+    def visualize_model_comparison(self, explanations, predictions, true_label):
+        """
+        Visualize explanation comparison
+        """
+        fig, axes = plt.subplots(1, len(self.models), figsize=(15, 6))
+        
+        for idx, (model_name, exp_list) in enumerate(explanations.items()):
+            # Extract features and values
+            features = [x[0].split()[0] for x in exp_list[:8]]  # Top 8 features
+            values = [x[1] for x in exp_list[:8]]
+            
+            # Plot
+            colors = ['green' if x > 0 else 'red' for x in values]
+            axes[idx].barh(range(len(values)), values, color=colors)
+            axes[idx].set_yticks(range(len(features)))
+            axes[idx].set_yticklabels(features, fontsize=8)
+            axes[idx].set_xlabel('Contribution')
+            axes[idx].set_title(f'{model_name}\nPred: {self.data["class_names"][predictions[model_name]]}')
+            axes[idx].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
+        
+        plt.suptitle(f'Model Explanations Comparison\nTrue Label: {self.data["class_names"][true_label]}', 
+                    fontsize=14)
+        plt.tight_layout()
+        plt.show()
+    
+    def stability_analysis(self, instance_idx=0, n_runs=10):
+        """
+        Analyze stability of LIME explanations
+        """
+        print("\n" + "=" * 60)
+        print("LIME STABILITY ANALYSIS")
+        print("=" * 60)
+        
+        test_instance = self.data['X_test'][instance_idx]
+        model = self.models['Random Forest']
+        
+        # Create explainer
+        explainer = lime.lime_tabular.LimeTabularExplainer(
+            self.data['X_train'],
+            feature_names=self.data['feature_names'],
+            class_names=self.data['class_names'],
+            mode='classification'
+        )
+        
+        # Run multiple explanations
+        all_explanations = []
+        
+        for run in range(n_runs):
+            exp = explainer.explain_instance(
+                test_instance,
+                model.predict_proba,
+                num_features=10
+            )
+            
+            # Convert to dict for easier processing
+            exp_dict = {feat.split()[0]: val for feat, val in exp.as_list()}
+            all_explanations.append(exp_dict)
+        
+        # Calculate statistics
+        feature_importance_stats = {}
+        all_features = set()
+        for exp_dict in all_explanations:
+            all_features.update(exp_dict.keys())
+        
+        for feature in all_features:
+            importances = [exp.get(feature, 0) for exp in all_explanations]
+            feature_importance_stats[feature] = {
+                'mean': np.mean(importances),
+                'std': np.std(importances),
+                'min': np.min(importances),
+                'max': np.max(importances)
+            }
+        
+        # Visualize stability
+        self.visualize_stability(feature_importance_stats)
+        
+        return feature_importance_stats
+    
+    def visualize_stability(self, stats):
+        """
+        Visualize explanation stability
+        """
+        # Sort features by mean importance
+        sorted_features = sorted(stats.items(), 
+                               key=lambda x: abs(x[1]['mean']), 
+                               reverse=True)[:10]
+        
+        features = [f[0] for f in sorted_features]
+        means = [f[1]['mean'] for f in sorted_features]
+        stds = [f[1]['std'] for f in sorted_features]
+        
+        # Plot
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Mean importance with error bars
+        colors = ['green' if x > 0 else 'red' for x in means]
+        axes[0].barh(range(len(means)), means, xerr=stds, 
+                    color=colors, alpha=0.7, capsize=3)
+        axes[0].set_yticks(range(len(features)))
+        axes[0].set_yticklabels(features, fontsize=9)
+        axes[0].set_xlabel('Mean Feature Contribution')
+        axes[0].set_title('Feature Importance Stability')
+        axes[0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
+        
+        # Coefficient of variation
+        cv = [abs(std/mean) if mean != 0 else 0 
+              for mean, std in zip(means, stds)]
+        axes[1].barh(range(len(cv)), cv, color='steelblue')
+        axes[1].set_yticks(range(len(features)))
+        axes[1].set_yticklabels(features, fontsize=9)
+        axes[1].set_xlabel('Coefficient of Variation')
+        axes[1].set_title('Relative Stability (lower is more stable)')
+        
+        plt.suptitle('LIME Explanation Stability Analysis', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+# Demonstrate complex model explanations
+complex_explainer = ComplexModelExplainer()
+data = complex_explainer.prepare_data()
+models = complex_explainer.train_models()
+
+# Compare explanations
+explanations = complex_explainer.compare_explanations(instance_idx=10)
+
+# Analyze stability
+stability_stats = complex_explainer.stability_analysis(instance_idx=10, n_runs=20)</code></pre>
+
+        <h2>LIME for Text Classification</h2>
+        
+        <pre class="language-python"><code>class LIMETextExplainer:
+    """
+    LIME for text classification
+    """
+    
+    def __init__(self):
+        self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
+        self.model = None
+        self.explainer = lime.lime_text.LimeTextExplainer(class_names=['negative', 'positive'])
+        
+    def prepare_text_data(self):
+        """
+        Prepare sample text data
+        """
+        # Sample movie reviews
+        texts = [
+            "This movie was absolutely fantastic! Great acting and amazing plot.",
+            "Terrible film. Waste of time. Poor acting and boring story.",
+            "One of the best movies I've ever seen. Highly recommend!",
+            "Disappointing. Expected much better. Not worth watching.",
+            "Brilliant cinematography and outstanding performances by all actors.",
+            "Awful movie. Can't believe I sat through the whole thing.",
+            "A masterpiece! Every scene was perfectly crafted.",
+            "Boring and predictable. Save your money."
+        ]
+        
+        # Labels: 1 for positive, 0 for negative
+        labels = [1, 0, 1, 0, 1, 0, 1, 0]
+        
+        return texts, labels
+    
+    def train_text_classifier(self, texts, labels):
+        """
+        Train a simple text classifier
+        """
+        print("\n" + "=" * 60)
+        print("TRAINING TEXT CLASSIFIER")
+        print("=" * 60)
+        
+        # Create pipeline
+        self.model = make_pipeline(
+            self.vectorizer,
+            RandomForestClassifier(n_estimators=100, random_state=42)
+        )
+        
+        # Train
+        self.model.fit(texts, labels)
+        print("Text classifier trained!")
+        
+        return self.model
+    
+    def explain_text_prediction(self, text):
+        """
+        Explain a text classification
+        """
+        print("\n" + "=" * 60)
+        print("LIME TEXT EXPLANATION")
+        print("=" * 60)
+        print(f"\nText: '{text}'")
+        
+        # Get prediction
+        prediction = self.model.predict([text])[0]
+        probability = self.model.predict_proba([text])[0]
+        
+        print(f"Prediction: {'Positive' if prediction == 1 else 'Negative'}")
+        print(f"Confidence: {probability[prediction]:.3f}")
+        
+        # Generate explanation
+        exp = self.explainer.explain_instance(
+            text,
+            self.model.predict_proba,
+            num_features=10
+        )
+        
+        # Visualize
+        self.visualize_text_explanation(text, exp, prediction)
+        
+        return exp
+    
+    def visualize_text_explanation(self, text, exp, prediction):
+        """
+        Visualize text explanation
+        """
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Get explanation
+        exp_list = exp.as_list()
+        words = [x[0] for x in exp_list]
+        weights = [x[1] for x in exp_list]
+        
+        # Feature importance
+        colors = ['green' if prediction == 1 else 'red' if w > 0 else 'red' if prediction == 1 else 'green' 
+                  for w in weights]
+        axes[0].barh(range(len(weights)), weights, color=colors)
+        axes[0].set_yticks(range(len(words)))
+        axes[0].set_yticklabels(words)
+        axes[0].set_xlabel('Weight')
+        axes[0].set_title(f'Word Importance for {"Positive" if prediction == 1 else "Negative"} Prediction')
+        axes[0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
+        
+        # Highlighted text
+        axes[1].axis('off')
+        axes[1].set_title('Text with Important Words Highlighted')
+        
+        # Create highlighted text representation
+        text_words = text.lower().split()
+        highlighted_text = ""
+        
+        word_dict = {w.lower(): weight for w, weight in exp_list}
+        
+        y_position = 0.9
+        x_position = 0.05
+        
+        for word in text_words:
+            clean_word = word.strip('.,!?";')
+            
+            if clean_word in word_dict:
+                weight = word_dict[clean_word]
+                if abs(weight) > 0.01:  # Only highlight important words
+                    if weight > 0:
+                        color = 'green' if prediction == 1 else 'red'
+                    else:
+                        color = 'red' if prediction == 1 else 'green'
+                    
+                    axes[1].text(x_position, y_position, word + ' ', 
+                               fontsize=12, color=color, weight='bold')
+                else:
+                    axes[1].text(x_position, y_position, word + ' ', 
+                               fontsize=12, color='black')
+            else:
+                axes[1].text(x_position, y_position, word + ' ', 
+                           fontsize=12, color='black')
+            
+            x_position += 0.1
+            if x_position > 0.9:
+                x_position = 0.05
+                y_position -= 0.1
+        
+        plt.suptitle('LIME Text Classification Explanation', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+# Demonstrate text explanation
+text_explainer = LIMETextExplainer()
+
+# Prepare data
+texts, labels = text_explainer.prepare_text_data()
+
+# Train classifier
+model = text_explainer.train_text_classifier(texts, labels)
+
+# Explain predictions
+test_texts = [
+    "This movie was incredible! Best film of the year!",
+    "Boring and poorly made. Complete waste of time.",
+    "The acting was superb but the plot was confusing."
+]
+
+for test_text in test_texts:
+    exp = text_explainer.explain_text_prediction(test_text)</code></pre>
+
+        <h2>Advanced LIME Techniques</h2>
+        
+        <div class="mermaid">
+        flowchart TB
+            A[LIME Extensions] --> B[Anchors]
+            A --> C[SHAP Integration]
+            A --> D[Counterfactuals]
+            
+            B --> B1[Rule-based Explanations]
+            C --> C1[Global Interpretability]
+            D --> D1[What-if Scenarios]
+            
+            E[Best Practices] --> F[Sampling Strategy]
+            E --> G[Kernel Width]
+            E --> H[Feature Selection]
+            
+            style A fill:#e3f2fd
+            style E fill:#fff9c4
+        </div>
+
+        <pre class="language-python"><code>class AdvancedLIMETechniques:
+    """
+    Advanced LIME techniques and best practices
+    """
+    
+    @staticmethod
+    def submodular_pick(data, model, explainer, num_exps=5):
+        """
+        Select diverse representative explanations using submodular optimization
+        """
+        print("\n" + "=" * 60)
+        print("SUBMODULAR PICK - REPRESENTATIVE EXPLANATIONS")
+        print("=" * 60)
+        
+        # This would use lime.submodular_pick.SubmodularPick
+        # For demonstration, we'll show the concept
+        
+        print("Submodular Pick selects diverse, representative instances")
+        print("that together provide good coverage of the model's behavior.")
+        print("\nBenefits:")
+        print("  - Reduces redundancy in explanations")
+        print("  - Provides global understanding from local explanations")
+        print("  - Efficiently summarizes model behavior")
+        
+        # Simulate picking diverse instances
+        n_samples = len(data)
+        picked_indices = np.random.choice(n_samples, num_exps, replace=False)
+        
+        return picked_indices
+    
+    @staticmethod
+    def fidelity_analysis(explainer, model, X_test, n_samples=100):
+        """
+        Analyze fidelity of LIME explanations
+        """
+        print("\n" + "=" * 60)
+        print("FIDELITY ANALYSIS")
+        print("=" * 60)
+        
+        fidelity_scores = []
+        
+        for i in range(min(n_samples, len(X_test))):
+            instance = X_test[i]
+            
+            # Get LIME explanation
+            exp = explainer.explain_instance(
+                instance,
+                model.predict_proba,
+                num_features=10
+            )
+            
+            # Get linear model coefficients
+            local_model = exp.local_exp[1]  # For class 1
+            intercept = exp.intercept[1]
+            
+            # Calculate local prediction
+            local_pred = intercept
+            for feat_idx, coef in local_model:
+                local_pred += coef * instance[feat_idx]
+            
+            # Get actual model prediction
+            actual_pred = model.predict_proba([instance])[0, 1]
+            
+            # Calculate fidelity (how well local model approximates)
+            fidelity = 1 - abs(local_pred - actual_pred)
+            fidelity_scores.append(fidelity)
+        
+        # Statistics
+        mean_fidelity = np.mean(fidelity_scores)
+        std_fidelity = np.std(fidelity_scores)
+        
+        print(f"Mean Fidelity: {mean_fidelity:.3f}")
+        print(f"Std Fidelity: {std_fidelity:.3f}")
+        print(f"Min Fidelity: {np.min(fidelity_scores):.3f}")
+        print(f"Max Fidelity: {np.max(fidelity_scores):.3f}")
+        
+        # Visualize
+        plt.figure(figsize=(10, 5))
+        plt.subplot(1, 2, 1)
+        plt.hist(fidelity_scores, bins=20, edgecolor='black', alpha=0.7)
+        plt.xlabel('Fidelity Score')
+        plt.ylabel('Frequency')
+        plt.title('Distribution of Fidelity Scores')
+        plt.axvline(mean_fidelity, color='red', linestyle='--', 
+                   label=f'Mean: {mean_fidelity:.3f}')
+        plt.legend()
+        
+        plt.subplot(1, 2, 2)
+        plt.plot(fidelity_scores, 'o-', alpha=0.5)
+        plt.xlabel('Instance Index')
+        plt.ylabel('Fidelity Score')
+        plt.title('Fidelity Scores by Instance')
+        plt.axhline(mean_fidelity, color='red', linestyle='--', alpha=0.5)
+        
+        plt.suptitle('LIME Explanation Fidelity Analysis')
+        plt.tight_layout()
+        plt.show()
+        
+        return fidelity_scores
+    
+    @staticmethod
+    def parameter_sensitivity(X_train, X_test, model, instance_idx=0):
+        """
+        Analyze sensitivity to LIME parameters
+        """
+        print("\n" + "=" * 60)
+        print("PARAMETER SENSITIVITY ANALYSIS")
+        print("=" * 60)
+        
+        instance = X_test[instance_idx]
+        
+        # Different parameter settings
+        kernel_widths = [0.25, 0.75, 1.0, 3.0]
+        num_samples_list = [100, 500, 1000, 5000]
+        
+        results = {}
+        
+        # Test different kernel widths
+        print("\nTesting kernel widths...")
+        for width in kernel_widths:
+            explainer = lime.lime_tabular.LimeTabularExplainer(
+                X_train,
+                kernel_width=width,
+                verbose=False
+            )
+            
+            exp = explainer.explain_instance(
+                instance,
+                model.predict_proba,
+                num_features=5
+            )
+            
+            results[f'width_{width}'] = exp.as_list()
+        
+        # Test different sample sizes
+        print("Testing sample sizes...")
+        for num_samples in num_samples_list:
+            explainer = lime.lime_tabular.LimeTabularExplainer(
+                X_train,
+                verbose=False
+            )
+            
+            exp = explainer.explain_instance(
+                instance,
+                model.predict_proba,
+                num_features=5,
+                num_samples=num_samples
+            )
+            
+            results[f'samples_{num_samples}'] = exp.as_list()
+        
+        print("\nParameter sensitivity results stored.")
+        print("Key insight: LIME explanations can vary with parameters.")
+        print("Recommendation: Use multiple runs and average for stability.")
+        
+        return results
+
+# Demonstrate advanced techniques
+print("\n" + "=" * 60)
+print("ADVANCED LIME TECHNIQUES")
+print("=" * 60)
+
+# Reuse the breast cancer data and model from earlier
+advanced = AdvancedLIMETechniques()
+
+# Submodular pick demonstration
+picked = advanced.submodular_pick(data['X_test'], models['Random Forest'], None)
+
+# Fidelity analysis
+explainer = lime.lime_tabular.LimeTabularExplainer(
+    data['X_train'],
+    feature_names=data['feature_names'],
+    class_names=data['class_names'],
+    mode='classification'
+)
+
+fidelity_scores = advanced.fidelity_analysis(
+    explainer, 
+    models['Random Forest'],
+    data['X_test'],
+    n_samples=50
+)
+
+# Parameter sensitivity
+sensitivity_results = advanced.parameter_sensitivity(
+    data['X_train'],
+    data['X_test'],
+    models['Random Forest'],
+    instance_idx=5
+)</code></pre>
+
+        <h2>Best Practices</h2>
+        
+        <div class="summary-box">
+            <h3>🎯 LIME Best Practices</h3>
+            <ul>
+                <li><strong>Sample Size:</strong> Use sufficient samples (1000-5000) for stable explanations</li>
+                <li><strong>Feature Selection:</strong> Limit to interpretable number of features (5-10)</li>
+                <li><strong>Kernel Width:</strong> Tune based on data dimensionality and local neighborhood</li>
+                <li><strong>Multiple Runs:</strong> Average over multiple runs for stability</li>
+                <li><strong>Validation:</strong> Check fidelity of local approximation</li>
+                <li><strong>Domain Knowledge:</strong> Interpret explanations in context</li>
+                <li><strong>Combine Methods:</strong> Use with SHAP or other techniques for validation</li>
+                <li><strong>Text Data:</strong> Preprocess consistently with model training</li>
+                <li><strong>Categorical Features:</strong> Handle properly with one-hot encoding</li>
+                <li><strong>Global Understanding:</strong> Use submodular pick for representative set</li>
+            </ul>
+        </div>
+
+        <h2>Practice Exercises</h2>
+        
+        <div class="exercise-card">
+            <h3>Exercise 1: Custom LIME Implementation</h3>
+            <p>Implement a simplified version of LIME:</p>
+            <ul>
+                <li>Create perturbation sampling function</li>
+                <li>Implement proximity weighting</li>
+                <li>Fit local linear model</li>
+                <li>Extract and visualize coefficients</li>
+            </ul>
+        </div>
+
+        <div class="exercise-card">
+            <h3>Exercise 2: LIME for Image Classification</h3>
+            <p>Apply LIME to explain image predictions:</p>
+            <ul>
+                <li>Use LIME for image segmentation</li>
+                <li>Identify important superpixels</li>
+                <li>Compare explanations for correct vs incorrect predictions</li>
+                <li>Analyze robustness to perturbations</li>
+            </ul>
+        </div>
+
+        <h2>Summary</h2>
+        
+        <div class="summary-box">
+            <h3>✅ You've Learned</h3>
+            <ul>
+                <li>LIME fundamentals and how it creates local explanations</li>
+                <li>Implementing LIME for tabular, text, and complex models</li>
+                <li>Comparing explanations across different models</li>
+                <li>Analyzing stability and fidelity of explanations</li>
+                <li>Advanced techniques like submodular pick</li>
+                <li>Parameter sensitivity and tuning</li>
+                <li>Best practices for reliable explanations</li>
+            </ul>
+        </div>
+    </div>
+
+    <nav class="lesson-nav" aria-label="Lesson Navigation">
+        <a href="model_interpretation.html" class="prev-lesson">← Previous</a>
+        <a href="index.html" class="home-link">🏠 Home</a>
+        <a href="interpretability_shap.html" class="next-lesson">Next →</a>
+    </nav>
+    </main>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#f0f0f0',
+                primaryTextColor: '#333',
+                primaryBorderColor: '#667eea',
+                lineColor: '#667eea',
+                secondaryColor: '#e0e7ff',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
+</body>
+</html>
