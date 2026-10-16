@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 5</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 5: Anomaly Detection and PCA</h1>
+    <p class="sub">Your workbook for Session 5: a warm-up on Lessons 8.4 and 8.5, the key ideas of Lessons 8.6 and 9.1, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>8.6–9.1</b></span>
+      <span class="chip">Session <b>5</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Build an anomaly score from normal data and use it as a review queue, not a verdict.</li>
+  <li>Read the detectors' conventions correctly: -1 for outliers, score_samples higher for normal, contamination only a threshold.</li>
+  <li>Judge a detector with AUC, average precision and catches within a budget, on a time split, against a rule.</li>
+  <li>Run PCA on scaled data, choose how many components to keep, and name them from their loadings.</li>
+  <li>Test whether PCA helps a model, and use reconstruction for compression and anomaly scores.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-Up: Density Methods and Mixtures</h2><span class="rule"></span></div>
+<p>Five questions from Lessons 8.4 and 8.5. Two minutes, no notes.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.cluster <span class="k">import</span> DBSCAN
+pts = np.array([[<span class="s">0.0</span>], [<span class="s">0.1</span>], [<span class="s">0.2</span>], [<span class="s">4.0</span>], [<span class="s">4.1</span>], [<span class="s">4.2</span>], [<span class="s">9.0</span>]])
+labels = DBSCAN(eps=<span class="s">0.15</span>, min_samples=<span class="s">2</span>).fit_predict(pts)
+print(labels, len(set(labels) - {-<span class="s">1</span>}))</pre><div class="opts"><div class="opt">A) <code class="inline">[0 0 0 1 1 1 2] 3</code></div><div class="opt">B) <code class="inline">[ 0  0  0  1  1  1 -1] 2</code></div><div class="opt">C) <code class="inline">[ 0  0  0  1  1  1 -1] 3</code></div><div class="opt">D) <code class="inline">[-1 -1 -1 -1 -1 -1 -1] 0</code></div></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">Why can you not score next month's customers with a fitted HDBSCAN?</div><div class="opts"><div class="opt">A) It forgets its clusters after fit</div><div class="opt">B) It has fit_predict but no predict: it describes the data it saw</div><div class="opt">C) It needs the churn label</div><div class="opt">D) It only works on two features</div></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.mixture <span class="k">import</span> GaussianMixture
+x = np.array([[<span class="s">0.0</span>], [<span class="s">0.3</span>], [<span class="s">0.5</span>], [<span class="s">6.0</span>], [<span class="s">6.4</span>]])
+gm = GaussianMixture(n_components=<span class="s">2</span>, random_state=<span class="s">42</span>).fit(x)
+print(gm.predict_proba([[<span class="s">50.0</span>]]).round(<span class="s">2</span>).sum())</pre><div class="opts"><div class="opt">A) <code class="inline">0.0</code></div><div class="opt">B) <code class="inline">0.5</code></div><div class="opt">C) <code class="inline">1.0</code></div><div class="opt">D) A very small number</div></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">BIC for 1 to 6 components: 50,600; 47,200; 46,700; 46,300; 46,100; 46,050. Which reading is right?</div><div class="opts"><div class="opt">A) 6, the minimum</div><div class="opt">B) The big drop is from 1 to 2; after that gains shrink: choose 2 to 4 and defend it with profiles</div><div class="opt">C) BIC cannot be used without a minimum</div><div class="opt">D) 1: simpler is always better</div></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">A customer has probabilities 0.97 for one component but the lowest log-density in the data. Borderline, atypical, or both?</div><div class="opts"><div class="opt">A) Borderline</div><div class="opt">B) Atypical</div><div class="opt">C) Both</div><div class="opt">D) Neither</div></div></div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">8.6</span><h3>Anomaly Detection</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Tell point, contextual and collective anomalies apart and choose between supervised and unsupervised detection</li>
+  <li>Apply simple statistical rules (z-score, interquartile range) as a baseline</li>
+  <li>Score anomalies with Isolation Forest and Local Outlier Factor, and read the -1/1 and score conventions correctly</li>
+  <li>Choose a threshold from a review budget instead of tuning contamination</li>
+  <li>Evaluate a detector with ROC AUC, average precision and catches within a budget on a time-based split</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The night guard.</b> Learn what normal looks like, score how far each case is from it, review as many top scores as you can afford.</li>
+  <li><b>Three kinds:</b> point, contextual, collective. Good features (per-category amounts, velocity) turn the last two into the first.</li>
+  <li><b>Rules</b> (z-score, IQR fence) are transparent baselines that see one column at a time.</li>
+  <li><b>Isolation Forest:</b> random cuts isolate odd points quickly. <b>LOF:</b> compares a point's density with its neighbors'; needs scaling; <code class="inline">novelty=True</code> for new data.</li>
+  <li><b>Conventions:</b> <code class="inline">predict</code> gives -1 (outlier) and 1; <code class="inline">score_samples</code> is higher for NORMAL points: negate it.</li>
+  <li><b>contamination</b> only sets the threshold; choose the threshold from a review budget and costs.</li>
+  <li><b>Judge</b> with ROC AUC, average precision and catches in the budget, on a time split, against a rule. Unusual is not the same as bad.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: two rules on a skewed column</div>
+<p>200 ordinary order amounts plus three huge ones. Which rule notices what?</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+rng = np.random.default_rng(<span class="s">42</span>)
+amounts = np.append(rng.lognormal(<span class="s">4.8</span>, <span class="s">0.5</span>, size=<span class="s">200</span>).round(<span class="s">2</span>), [<span class="s">2400.0</span>, <span class="s">2600.0</span>, <span class="s">3100.0</span>])
+
+z = (amounts - amounts.mean()) / amounts.std(ddof=<span class="s">1</span>)
+q1, q3 = np.percentile(amounts, [<span class="s">25</span>, <span class="s">75</span>])
+fence = q3 + <span class="s">1.5</span> * (q3 - q1)
+print(<span class="s">f"mean {amounts.mean():.1f}, std {amounts.std(ddof=1):.1f} (without the three: {amounts[:200].std(ddof=1):.1f})"</span>)
+print(<span class="s">f"z-score above 3: {(z &gt; 3).sum()} flagged; smallest flagged {amounts[z &gt; 3].min():.0f}"</span>)
+print(<span class="s">f"IQR fence ${fence:.0f}: {(amounts &gt; fence).sum()} flagged; smallest flagged {amounts[amounts &gt; fence].min():.0f}"</span>)</pre>
+<pre class="out">mean 170.3, std 319.3 (without the three: 65.2)
+z-score above 3: 3 flagged; smallest flagged 2400
+IQR fence $278: 9 flagged; smallest flagged 288</pre><p>The three huge orders inflate the standard deviation from 65 to 319, so the z-score rule sees only those three: everything else looks ordinary next to them. The IQR fence uses quartiles, which the extremes cannot drag, so it flags the three plus six genuinely high ordinary orders from the long tail. Neither is "right": the z-score is easily blinded by the outliers it is looking for, and the fence flags a skewed tail. That is why rules are a baseline.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-05/l8_6-anomaly-detection/monthly_queue_starter.py</code>. Fit once on January to March; score April, May, June with a 2% queue; watch a fixed threshold drift.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-05/l8_6-anomaly-detection/unusual_customers_starter.py</code>. The 60 most unusual customers by two detectors: do they agree, and do they churn?</li>
+  <li>Check the sign once: higher must mean more unusual.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction first, then run the code.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (Which way do the scores point?)</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> roc_auc_score
+print(roc_auc_score([<span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>], [<span class="s">0.9</span>, <span class="s">0.7</span>, <span class="s">0.8</span>, <span class="s">0.1</span>]))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (Which value is an outlier?)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+pred = np.array([<span class="s">1</span>, <span class="s">1</span>, -<span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, -<span class="s">1</span>, <span class="s">1</span>])
+print((pred == <span class="s">1</span>).sum(), (pred == -<span class="s">1</span>).sum())</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A Fraud Review Queue</b> (lesson page). In class: Steps 1 and 2. At home: Steps 3 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: time split; June 8,262 payments, 64 frauds, budget 165</li>
+  <li>☐ Step 2: <code class="inline">review_report</code>; amount rule 8 caught, velocity rule 26</li>
+  <li>☐ Step 3: Isolation Forest without labels: 32 of 64</li>
+  <li>☐ Step 4: LOF (16) and a Gaussian mixture (24)</li>
+  <li>☐ Step 5: supervised boosting (41) and the overlap of the two queues</li>
+  <li>☐ Step 6: review budgets from costs; false alarms for new vs established accounts</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.ensemble <span class="k">import</span> IsolationForest
+rng = np.random.default_rng(<span class="s">42</span>)
+X = np.vstack([rng.normal(<span class="s">0</span>, <span class="s">1</span>, size=(<span class="s">49</span>, <span class="s">2</span>)), [[<span class="s">8.0</span>, <span class="s">8.0</span>]]])
+pred = IsolationForest(contamination=<span class="s">0.02</span>, random_state=<span class="s">42</span>).fit(X).predict(X)
+print(np.unique(pred, return_counts=<span class="k">True</span>))</pre><div class="opts"><div class="opt">A) <code class="inline">(array([0, 1]), array([ 1, 49]))</code></div><div class="opt">B) <code class="inline">(array([-1,  1]), array([ 1, 49]))</code></div><div class="opt">C) <code class="inline">(array([-1,  1]), array([49,  1]))</code></div><div class="opt">D) <code class="inline">(array([1]), array([50]))</code></div></div></div>
+<div class="q" data-sc="2"><div class="qn">Q2</div><div class="qt">Your detector's ROC AUC on June is 0.12, computed from score_samples. What is the most likely explanation?</div><div class="opts"><div class="opt">A) The detector ranks frauds worse than random: drop it</div><div class="opt">B) contamination is too low</div><div class="opt">C) Too few trees in the forest</div><div class="opt">D) score_samples is a normality score (higher = more normal); negate it and the AUC is 0.88</div></div></div>
+<div class="q" data-sc="3" data-kind="short"><div class="qn">Q3</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.ensemble <span class="k">import</span> IsolationForest
+X = np.random.default_rng(<span class="s">3</span>).normal(size=(<span class="s">200</span>, <span class="s">2</span>))
+<span class="k">for</span> c <span class="k">in</span> [<span class="s">0.01</span>, <span class="s">0.05</span>]:
+    model = IsolationForest(contamination=c, random_state=<span class="s">42</span>).fit(X)
+    print(c, (model.predict(X) == -<span class="s">1</span>).sum())</pre><div class="write"></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">An Isolation Forest with contamination=0.02 fitted on January to March flags 2.16% of March but 1.72% of June. Why, and what does the lesson recommend?</div><div class="opts"><div class="opt">A) The forest was refitted on June; fix the random_state</div><div class="opt">B) June's payments are distributed differently from the fit months, so a fixed threshold drifts: rank each month and review the top N the team can handle</div><div class="opt">C) contamination is a random setting; average several runs</div><div class="opt">D) Rounding: 2% of a smaller month is fewer payments</div></div></div>
+<div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">In today's lab, the Isolation Forest's 60 most unusual customers churn at 0.067, well below the 0.165 average. What is the right conclusion?</div><div class="opts"><div class="opt">A) The detector is broken: anomalies should churn more</div><div class="opt">B) Unusual customers are loyal; target them with fewer offers</div><div class="opt">C) An anomaly score finds the unusual, not the bad: these are heavy buyers; whether unusual means a problem is a separate question</div><div class="opt">D) Use the LOF's top 60 instead, because they churn at 0.333</div></div></div>
+<div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">You fit Local Outlier Factor on May's payments and want to score June's. Which setup works?</div><div class="opts"><div class="opt">A) <code class="inline">LocalOutlierFactor()</code>, then <code class="inline">predict(june)</code></div><div class="opt">B) <code class="inline">LocalOutlierFactor()</code>, then <code class="inline">fit_predict(june)</code></div><div class="opt">C) <code class="inline">LocalOutlierFactor(novelty=True)</code> fitted on May, then <code class="inline">-score_samples(june)</code></div><div class="opt">D) <code class="inline">LocalOutlierFactor(novelty=True)</code> fitted on May, then <code class="inline">score_samples(may)</code></div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the night guard in your own words, then write the three numbers from your project you would show the payments manager, and why those three. Finally: most payments in your best queue were honest. How would you explain to a customer why their order was held?</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">9.1</span><h3>Principal Component Analysis</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain what a principal component is and why scaling matters</li>
+  <li>Choose the number of components from explained variance</li>
+  <li>Interpret loadings to name what each component captures</li>
+  <li>Test whether PCA before a model helps, inside a pipeline</li>
+  <li>Use reconstruction for compression, denoising and anomaly scores</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The flashlight.</b> PCA turns the cloud until its shadow is widest; each later component is the widest direction left, at a right angle.</li>
+  <li><b>Unsupervised, mixed, linear.</b> It never sees the target; each component mixes all columns; directions are straight.</li>
+  <li><b>Scale first</b> when units differ; do not standardize columns that share one meaningful unit.</li>
+  <li><b>How many?</b> Scree elbow, a variance target (<code class="inline">n_components=0.90</code>), or cross-validation for a model.</li>
+  <li><b>Loadings</b> (<code class="inline">components_</code>) name a component; signs are arbitrary.</li>
+  <li><b>Most variance is not most useful:</b> on churn, two components lost much of the signal; test PCA inside a pipeline.</li>
+  <li><b>Reconstruction</b> (<code class="inline">inverse_transform</code>) compresses, denoises and gives an anomaly score.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: three columns that all mean "how much"</div>
+<p>Three scaled churn columns that all measure "how much": orders, spend, returns. What does PCA make of them?</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.decomposition <span class="k">import</span> PCA
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+cols = [<span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"returns_12m"</span>]
+Z = StandardScaler().fit_transform(customers[cols])
+pca = PCA().fit(Z)
+print(<span class="s">"share of variance:"</span>, pca.explained_variance_ratio_.round(<span class="s">3</span>))
+print(pd.DataFrame(pca.components_.T, index=cols, columns=[<span class="s">"PC1"</span>, <span class="s">"PC2"</span>, <span class="s">"PC3"</span>]).round(<span class="s">2</span>))</pre>
+<pre class="out">share of variance: [0.624 0.239 0.137]
+              PC1   PC2   PC3
+orders_12m   0.60 -0.48 -0.64
+spend_12m    0.63 -0.22  0.75
+returns_12m  0.50  0.85 -0.17</pre><p>PC1 weights all three positively and about equally: "how much this customer buys", 62% of the variance. PC2 sets returns against orders: customers who return a lot for what they buy. PC3 (14%) sets spend against orders: big tickets versus many small orders. Three correlated columns, one dominant shared direction plus two smaller contrasts.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-05/l9_1-pca/payment_pca_starter.py</code>. Unscaled vs scaled PCA on payments; name PC1 and PC2; where is the fraud?</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-05/l9_1-pca/daily_sales_pca_starter.py</code>. Days × four stores: the chain's day, and what PC2 follows.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction first, then run the code.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (Rows are components, columns are features.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.decomposition <span class="k">import</span> PCA
+rng = np.random.default_rng(<span class="s">0</span>)
+X = rng.normal(size=(<span class="s">100</span>, <span class="s">5</span>))
+print(PCA(n_components=<span class="s">2</span>).fit(X).components_.shape)</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (All three columns are multiples of x.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.decomposition <span class="k">import</span> PCA
+x = np.array([<span class="s">1.0</span>, <span class="s">2.0</span>, <span class="s">3.0</span>, <span class="s">4.0</span>, <span class="s">5.0</span>])
+X = np.column_stack([x, <span class="s">3</span> * x, -x])
+print(PCA().fit(X).explained_variance_ratio_.round(<span class="s">2</span>))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>Seasonal Fingerprints</b> (lesson page). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: <code class="inline">(96, 24)</code> monthly table</li>
+  <li>☐ Step 2: log1p, remove each row's mean (do not standardize: why?)</li>
+  <li>☐ Step 3: PC1 explains 0.799</li>
+  <li>☐ Step 4: the PC1 wave over 24 months</li>
+  <li>☐ Step 5: seasonal score per product and category</li>
+  <li>☐ Step 6: one history rebuilt from PC1; <code class="inline">seasonal_scores.csv</code></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.decomposition <span class="k">import</span> PCA
+rng = np.random.default_rng(<span class="s">42</span>)
+a, b = rng.normal(size=<span class="s">200</span>), rng.normal(size=<span class="s">200</span>)
+X = np.column_stack([a, b, a + b])
+print(PCA().fit(X).explained_variance_ratio_.round(<span class="s">3</span>))</pre><div class="opts"><div class="opt">A) <code class="inline">[0.333 0.333 0.333]</code></div><div class="opt">B) <code class="inline">[1. 0. 0.]</code></div><div class="opt">C) <code class="inline">[0.5 0.5 0. ]</code></div><div class="opt">D) <code class="inline">[0.732 0.268 0.   ]</code></div></div></div>
+<div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">Unscaled PCA on the nine payment features gives a PC1 that explains 95% of the variance and is almost exactly account_age_days. Why?</div><div class="opts"><div class="opt">A) Account age is the most important fraud signal</div><div class="opt">B) Account age is measured in days, up to about 7,000, so its variance dwarfs the 0/1 flags and small counts</div><div class="opt">C) PCA always puts the first column first</div><div class="opt">D) The other columns are categorical</div></div></div>
+<div class="q" data-sc="9" data-kind="short"><div class="qn">Q9</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.decomposition <span class="k">import</span> PCA
+X = np.random.default_rng(<span class="s">1</span>).normal(size=(<span class="s">50</span>, <span class="s">6</span>))
+p = PCA(n_components=<span class="s">3</span>).fit(X)
+print(p.transform(X).shape, p.components_.shape)</pre><div class="write"></div></div>
+<div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">In which situation is PCA before a model most likely to help?</div><div class="opts"><div class="opt">A) Ten business columns that each mean something, with the strongest signal in a low-variance column</div><div class="opt">B) Four categorical columns, one-hot encoded</div><div class="opt">C) A target that depends on one column PCA spreads over several components</div><div class="opt">D) 784 highly correlated pixel columns feeding a slow k-nearest-neighbors model</div></div></div>
+<div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">On June's payments, PCA reconstruction error reached AUC 0.819 but only 19 frauds in the 165-payment queue; Isolation Forest caught 32. What explains the gap?</div><div class="opts"><div class="opt">A) Much of this fraud is extreme on a few columns rather than breaking the correlations most payments share</div><div class="opt">B) PCA leaked the labels</div><div class="opt">C) Four components were too many</div><div class="opt">D) Reconstruction error cannot be used as a score</div></div></div>
+<div class="q" data-sc="12" data-kind="short"><div class="qn">Q12</div><div class="qt">On the ten scaled churn features, how many components does <code class="inline">PCA(n_components=0.90)</code> keep, and is that a useful reduction?</div><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>PCA compressed 24 months of sales into one number per product almost perfectly, but it could not compress ten churn columns without losing the churn signal. Write down what was different about the two tables. Then name one dataset where you would expect PCA to compress well, and one where you would not.</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<p>Three questions, no notes.</p>
+<div class="q"><div class="qn">E1</div><div class="qt">An Isolation Forest's predict returns -1 and 1, and score_samples gives an AUC of 0.2. Write the two lines you would use instead to build a review queue of 165.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">Your manager asks you to raise contamination from 0.01 to 0.05 "so the detector catches more fraud". What do you explain?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">You run PCA on ten customer columns without scaling and PC1 explains 92%. What happened, and when would skipping the scaler be right?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish A Fraud Review Queue (Steps 3 to 6) and Seasonal Fingerprints (Steps 4 to 6)</li>
+  <li>☐ Lesson 8.6 Exercises 1 to 3; Lesson 9.1 Exercises 1 to 3 (Exercise 4 of each is a stretch)</li>
+  <li>☐ Both Quick Quizzes and both journal entries</li>
+  <li>☐ Download Fashion-MNIST for Session 6 (the command is in the bring list) and check that <code class="inline">import umap</code> works</li>
+  <li>☐ Optional: the second lab of each block, <code class="inline">debug_anomaly.py</code></li>
+  <li>☐ Bring to Session 6: a ready laptop, Fashion-MNIST in <code class="inline">data/</code>, my Module 7 to 9 notebooks (Checkpoint 1 is open notebook), this workbook and my journal</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>anomaly score</td><td>How far a case is from normal; higher = more unusual</td></tr>
+<tr><td>point / contextual / collective anomaly</td><td>Unusual alone / only in context / only as a group</td></tr>
+<tr><td>Isolation Forest</td><td>Random cuts; short average path = anomaly</td></tr>
+<tr><td>Local Outlier Factor</td><td>A point's density compared with its neighbors'; <code class="inline">novelty=True</code> scores new data</td></tr>
+<tr><td>contamination</td><td>Expected share of outliers; sets only the threshold (<code class="inline">offset_</code>)</td></tr>
+<tr><td>average precision</td><td>Area under the precision-recall curve; rewards frauds at the very top</td></tr>
+<tr><td>review budget</td><td>How many top scores the team can check; the real threshold</td></tr>
+<tr><td>principal component</td><td>A direction of maximum remaining variance; a mix of all columns</td></tr>
+<tr><td>explained variance ratio</td><td>A component's share of the total variance</td></tr>
+<tr><td>loadings</td><td>The weights in <code class="inline">components_</code>; read the large ones, ignore the sign</td></tr>
+<tr><td>scree plot</td><td>Variance share per component; look for an elbow</td></tr>
+<tr><td>reconstruction error</td><td>The gap between a row and its rebuild from the kept components</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 5 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 3</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 3: Metrics and Preprocessing</h1>
+    <p class="sub">Your workbook for Session 3: a warm-up on Session 2, the key ideas of Lessons 1.4 and 2.1, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>1.4–2.1</b></span>
+      <span class="chip">Session <b>3</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Turn a confusion matrix into precision and recall, and say each in a sentence a manager can act on.</li>
+  <li>Move a decision threshold, and choose one from business costs using training data only, never the test set.</li>
+  <li>Judge a ranking with ROC AUC and average precision, and know which one to trust when the positives are rare.</li>
+  <li>Grade a forecast with MAE, RMSE and R² against a naive baseline, and recognize the MAPE trap.</li>
+  <li>Prepare a whole table, gaps, units and words included, with imputers, scalers, encoders and one ColumnTransformer learned from the training rows.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-up: Session 2 in Five Questions</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Answer alone, then compare with a neighbor</div>
+<p>From Lessons 1.2 and 1.3. Write a sentence or two for each. Your instructor will go through them in the first ten minutes.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">Why does every churn split in this course pass <code class="inline">stratify=y</code>?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">In the honest-evaluation project, a depth-2 tree on the single column <code class="inline">has_reason</code> scored 0.942 on validation against a baseline of 0.835. What do you do, and what do you check first?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Why cross-validate <code class="inline">make_pipeline(StandardScaler(), LogisticRegression())</code> instead of scaling <code class="inline">X_train</code> once and cross-validating the model on the scaled table?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">What does <code class="inline">cross_val_predict(model, X_train, y_train, cv=cv, method="predict_proba")[:, 1]</code> give you, and why is it honest?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">You reran the bake-off with <code class="inline">scoring=["accuracy", "roc_auc", "f1"]</code>. What did the baseline score on accuracy and on F1, and why so different?</div><div class="write"></div></div>
+</div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">1.4</span><h3>Metrics for Classification and Regression</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Read a confusion matrix and compute precision, recall and F1, saying what each means for Pinecrest's retention team</li>
+  <li>Move a classifier's decision threshold and explain the precision-recall trade-off it controls</li>
+  <li>Use ROC AUC and average precision to judge how well a model ranks, and know when the precision-recall view is the honest one</li>
+  <li>Choose a threshold from business costs with out-of-fold probabilities or TunedThresholdClassifierCV, without peeking at the test set</li>
+  <li>Report MAE, RMSE and R² for a regression against a baseline, and avoid the MAPE trap on zero sales</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The smoke alarm.</b> Recall: when there is a fire, does it go off? Precision: when it goes off, is there a fire? The threshold: how sensitive to set it, which depends on what each mistake costs.</li>
+  <li><b>The confusion matrix</b> counts TN, FP, FN and TP (rows: the truth; columns: the prediction). <code class="inline">confusion_matrix(y_test, y_pred).ravel()</code> gives them in that order.</li>
+  <li><b>Precision = TP / (TP + FP)</b>, "of those we called, how many were leaving?"; <b>recall = TP / (TP + FN)</b>, "of those leaving, how many did we call?"; <b>F1</b> is their harmonic mean.</li>
+  <li><b>The threshold is a decision, not a property of the model.</b> Lower it: recall up, precision down. <code class="inline">FixedThresholdClassifier</code> saves a threshold with the model. Never choose it on the test set.</li>
+  <li><b>ROC AUC</b> = the chance a random churner outranks a random stayer (0.5 random, 1.0 perfect). <b>Average precision</b> summarizes the precision-recall curve; its random baseline is the positive rate (0.165 churn, about 0.009 fraud). For rare positives it is the more honest number.</li>
+  <li><b>Thresholds from costs.</b> Profit = value × TP − cost × (TP + FP); break-even probability = cost / value. Choose on out-of-fold probabilities, or with <code class="inline">TunedThresholdClassifierCV(model, scoring=make_scorer(profit), cv=cv)</code>, then test once.</li>
+  <li><b>Regression:</b> MAE (average miss, in units), RMSE (punishes big misses, always at least the MAE), R² (against predicting the mean). Always next to a naive baseline. MAPE explodes when true values can be 0.</li>
+  <li><b>Metric functions take <code class="inline">(y_true, y_pred)</code></b>, AUC needs scores not labels, and in scikit-learn 1.9 they return plain floats (<code class="inline">round(x, 3)</code>).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: one threshold, two business answers</div>
+<p>A small tree on three columns, so you can follow every number. The question: what does moving the threshold from 0.5 to 0.3 do to the retention team's calls, and to its profit at $15 per offer and $60 per churner reached?</p>
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> confusion_matrix, precision_score, recall_score
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+<span class="k">from</span> sklearn.tree <span class="k">import</span> DecisionTreeClassifier
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+X = customers[[<span class="s">"days_since_last_order"</span>, <span class="s">"discount_share"</span>, <span class="s">"tenure_months"</span>]]
+y = customers[<span class="s">"churned"</span>]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=<span class="s">0.25</span>, stratify=y, random_state=<span class="s">42</span>)
+tree = DecisionTreeClassifier(max_depth=<span class="s">4</span>, random_state=<span class="s">42</span>).fit(X_train, y_train)
+proba = tree.predict_proba(X_test)[:, <span class="s">1</span>]
+<span class="k">for</span> t <span class="k">in</span> [<span class="s">0.5</span>, <span class="s">0.3</span>]:
+    flagged = (proba &gt;= t).astype(int)
+    tn, fp, fn, tp = confusion_matrix(y_test, flagged).ravel()
+    print(<span class="s">f"threshold {t}: flagged {flagged.sum()}  TP {tp}  FP {fp}  FN {fn}  "</span>
+          <span class="s">f"precision {precision_score(y_test, flagged):.3f}  recall {recall_score(y_test, flagged):.3f}"</span>)</pre>
+<pre class="out">threshold 0.5: flagged 126  TP 87  FP 39  FN 161  precision 0.690  recall 0.351
+threshold 0.3: flagged 274  TP 152  FP 122  FN 96  precision 0.555  recall 0.613</pre><p>Read the first line as the care team would: 126 calls, 87 reach real churners, 39 are wasted, and 161 churners are missed. Lowering the threshold to 0.3 more than doubles the calls (274) and finds 152 churners: recall rises from 0.351 to 0.613 while precision falls from 0.690 to 0.555. Now put money on it.</p>
+<pre class="code"><span class="k">for</span> t <span class="k">in</span> [<span class="s">0.5</span>, <span class="s">0.3</span>]:
+    flagged = (proba &gt;= t).astype(int)
+    tp = ((flagged == <span class="s">1</span>) &amp; (y_test == <span class="s">1</span>)).sum()
+    print(<span class="s">f"threshold {t}: profit {60 * tp - 15 * flagged.sum():,} dollars"</span>)</pre>
+<pre class="out">threshold 0.5: profit 3,330 dollars
+threshold 0.3: profit 5,010 dollars</pre><p>The lower threshold earns more, because $60 for a churner reached is worth four wasted $15 offers. One caution: this example compares thresholds on the TEST set only to show the trade-off. To CHOOSE a threshold, use out-of-fold training probabilities, as the lesson project does.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li>Open <code class="inline">labs/module-03/l1_4-metrics/fraud_review_starter.py</code>. Run it once as it is: it prints the test-set size and six TODO reminders.</li>
+  <li>The question: a reviewer checks each flagged card payment ($10), and every fraud that slips through costs about $375. Which threshold makes the review queue cheapest?</li>
+  <li>TODO 1 and 2 (together): the confusion matrix in business words; ROC AUC next to average precision and the fraud rate. Write your prediction for TODO 2 first.</li>
+  <li>TODO 3 to 6 (in pairs): the cost function, out-of-fold probabilities on the TRAINING payments, the cheapest threshold, one test-set comparison of four policies, and <code class="inline">FixedThresholdClassifier</code>.</li>
+  <li>Done when your numbers match the "Expected when done" lines the starter prints.</li>
+  <li>Finished early? The Stretch line, then <code class="inline">debug_metrics.py</code> (two bugs that stop it, two that do not). At home: <code class="inline">store_forecast_starter.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (Six customers, two thresholds.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+proba = np.array([<span class="s">0.9</span>, <span class="s">0.7</span>, <span class="s">0.4</span>, <span class="s">0.3</span>, <span class="s">0.2</span>, <span class="s">0.1</span>])
+truth = np.array([<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>])
+<span class="k">for</span> t <span class="k">in</span> [<span class="s">0.5</span>, <span class="s">0.25</span>]:
+    flagged = (proba &gt;= t).astype(int)
+    print(t, flagged.sum(), (flagged &amp; truth).sum())</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (Predicting the mean every time.)</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> mean_absolute_error, r2_score
+y = [<span class="s">2</span>, <span class="s">4</span>, <span class="s">6</span>, <span class="s">8</span>]
+print(r2_score(y, [<span class="s">5</span>, <span class="s">5</span>, <span class="s">5</span>, <span class="s">5</span>]), mean_absolute_error(y, [<span class="s">5</span>, <span class="s">5</span>, <span class="s">5</span>, <span class="s">5</span>]))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>Plan the Retention Campaign</b> (lesson page, "Project: Plan the Retention Campaign"). In class: Steps 1 and 2. At home: Steps 3 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: load and split, keeping <code class="inline">customer_id</code>. Check: <code class="inline">4500 1500 break-even probability 0.25</code></li>
+  <li>☐ Step 2: out-of-fold forest probabilities. Check: <code class="inline">[0.185 0.005 0.191 0.008 0.494] mean 0.166</code></li>
+  <li>☐ Step 3: the profit curve on the training customers: best threshold 0.26</li>
+  <li>☐ Step 4: the test set, once: four policies with precision, recall and profit</li>
+  <li>☐ Step 5: the 150-call list and its precision</li>
+  <li>☐ Step 6: <code class="inline">retention_calls.csv</code>: IDs and probabilities only</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">A churn model's confusion matrix on a test set: TN 880, FP 60, FN 20, TP 40. What are its precision and recall?</div><div class="opts"><div class="opt">A) precision 0.667, recall 0.400</div><div class="opt">B) precision 0.400, recall 0.667</div><div class="opt">C) precision 0.978, recall 0.936</div><div class="opt">D) precision 0.920, recall 0.400</div></div></div>
+<div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> precision_score, recall_score
+y_true = [<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>]
+y_pred = [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>]
+print(round(precision_score(y_true, y_pred), <span class="s">3</span>), recall_score(y_true, y_pred))</pre><div class="write"></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">You want the decision threshold that maximizes the retention campaign's profit. Where should the probabilities you search over come from?</div><div class="opts"><div class="opt">A) The test set: it is the most realistic data you have</div><div class="opt">B) The training rows, from the fitted model's own <code class="inline">predict_proba(X_train)</code></div><div class="opt">C) The training rows, out of fold: <code class="inline">cross_val_predict(..., method="predict_proba")</code> or <code class="inline">TunedThresholdClassifierCV</code></div><div class="opt">D) Nowhere: always use 0.5, because the model was trained for it</div></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> roc_auc_score
+y = [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>]
+print(roc_auc_score(y, [<span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>]), roc_auc_score(y, [<span class="s">0.2</span>, <span class="s">0.6</span>, <span class="s">0.7</span>, <span class="s">0.9</span>]))</pre><div class="opts"><div class="opt">A) <code class="inline">0.75 1.0</code></div><div class="opt">B) <code class="inline">1.0 1.0</code></div><div class="opt">C) <code class="inline">0.5 1.0</code></div><div class="opt">D) <code class="inline">ValueError</code>: ROC AUC needs probabilities</div></div></div>
+<div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">A retention offer costs $20 and reaching a real churner is worth $80. If the model's probabilities were perfectly calibrated, whom should Pinecrest contact?</div><div class="opts"><div class="opt">A) Everyone predicted to churn at the default threshold of 0.5</div><div class="opt">B) Nobody: each offer costs money</div><div class="opt">C) The customers with a churn probability of at least 0.80</div><div class="opt">D) The customers with a churn probability of at least 0.25</div></div></div>
+<div class="q" data-sc="6" data-kind="short"><div class="qn">Q6</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> mean_absolute_error, root_mean_squared_error
+y_true = [<span class="s">10</span>, <span class="s">20</span>, <span class="s">30</span>, <span class="s">40</span>]
+y_pred = [<span class="s">12</span>, <span class="s">18</span>, <span class="s">30</span>, <span class="s">50</span>]
+print(mean_absolute_error(y_true, y_pred), round(root_mean_squared_error(y_true, y_pred), <span class="s">2</span>))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the smoke-alarm picture using the words precision, recall and threshold. Then write the four cells of the confusion matrix for a problem you care about (a medical test, a spam filter, a job screen) and put a rough cost on each. Where would you set the threshold, and who should get to decide?</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">2.1</span><h3>Impute, Scale and Encode</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Fill missing values with SimpleImputer, and keep the fact that a value was missing with <code class="inline">add_indicator=True</code></li>
+  <li>Choose between StandardScaler, MinMaxScaler, RobustScaler and a log transform, and explain what each one changes</li>
+  <li>Encode categories with OneHotEncoder (including categories never seen in training) and ordered categories with OrdinalEncoder</li>
+  <li>Build a ColumnTransformer that sends each group of columns to the right transformer, fitted on the training data only</li>
+  <li>Train a model on all 16 usable churn columns, not just the 10 clean numeric ones</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>Mise en place.</b> Each kind of column gets its own treatment: gaps → imputer, units → scaler, words → encoder. The recipe is learned from the training rows, then applied unchanged to the test rows and every new customer.</li>
+  <li><b>Ask what a gap means before filling it.</b> Customers with no email count churned at 25.3% against 15.6%: the gap is a clue.</li>
+  <li><b>SimpleImputer</b> fills with a learned value (<code class="inline">statistics_</code>): median for skewed numbers, <code class="inline">most_frequent</code> or a constant such as "unknown" for text. <code class="inline">add_indicator=True</code> keeps a 0/1 "was missing" column.</li>
+  <li><b>Scalers change units, not shape.</b> StandardScaler (mean 0, sd 1), MinMaxScaler (0 to 1), RobustScaler (median 0, interquartile range 1; resists outliers). A log (<code class="inline">np.log1p</code>) changes the shape. Trees need neither.</li>
+  <li><b>OneHotEncoder(sparse_output=False, handle_unknown="ignore")</b>: one 0/1 column per category; an unseen category becomes all zeros; a gap becomes its own column. Never <code class="inline">pd.get_dummies</code> on new data.</li>
+  <li><b>OrdinalEncoder</b> only for ordered categories, always with the order spelled out: <code class="inline">categories=[["Basic", "Silver", "Gold"]]</code>. The default is alphabetical.</li>
+  <li><b>ColumnTransformer</b>: a list of (name, transformer, columns); branches run side by side, unlisted columns are dropped. Steps that must run one after another go in a <code class="inline">make_pipeline</code> inside one branch.</li>
+  <li><b>fit_transform on train, transform on everything else.</b> Check it: scaled training columns have a mean of exactly 0; test columns only close to 0.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: the product catalog, ready for a model</div>
+<p>A different Pinecrest table, the product catalog, prepared with the same tools. No model today: the goal is a numeric table and a check that a brand-new product still gets a row.</p>
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.compose <span class="k">import</span> ColumnTransformer
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> MinMaxScaler, OneHotEncoder
+products = pd.read_csv(<span class="s">"data/products_ml.csv"</span>)
+print(products.shape)
+print(products[[<span class="s">"brand"</span>, <span class="s">"price"</span>, <span class="s">"launch_year"</span>, <span class="s">"primary_activity"</span>]].head(<span class="s">3</span>))</pre>
+<pre class="out">(200, 8)
+            brand   price  launch_year primary_activity
+0  Larkspur Ridge  220.95         2020           hiking
+1  Larkspur Ridge  164.95         2025          running
+2  Larkspur Ridge  165.95         2023         climbing</pre><p>Two numbers on very different scales, and two text columns with no order. MinMaxScaler puts both numbers on 0 to 1; OneHotEncoder makes one column per brand and per activity.</p>
+<pre class="code">prep = ColumnTransformer([
+    (<span class="s">"nums"</span>, MinMaxScaler(), [<span class="s">"price"</span>, <span class="s">"launch_year"</span>]),
+    (<span class="s">"cats"</span>, OneHotEncoder(sparse_output=<span class="k">False</span>, handle_unknown=<span class="s">"ignore"</span>), [<span class="s">"brand"</span>, <span class="s">"primary_activity"</span>]),
+]).set_output(transform=<span class="s">"pandas"</span>)
+table = prep.fit_transform(products)
+print(table.shape)
+print(table.columns[:<span class="s">5</span>].tolist())</pre>
+<pre class="out">(200, 16)
+['nums__price', 'nums__launch_year', 'cats__brand_Cedar Notch', 'cats__brand_Granite Fork', 'cats__brand_Juniper Vane']</pre><p>Eight columns became 16: two scaled numbers, 8 brands and 6 activities. The name and the category were not listed, so they were dropped. Now a product launched next year by a brand the catalog has never seen:</p>
+<pre class="code">new = pd.DataFrame({<span class="s">"price"</span>: [<span class="s">99.95</span>], <span class="s">"launch_year"</span>: [<span class="s">2026</span>], <span class="s">"brand"</span>: [<span class="s">"Brand-New Co"</span>],
+                    <span class="s">"primary_activity"</span>: [<span class="s">"hiking"</span>]})
+row = prep.transform(new)
+print(row[[<span class="s">"nums__price"</span>, <span class="s">"nums__launch_year"</span>]].round(<span class="s">3</span>).to_dict(<span class="s">"records"</span>))
+print(<span class="s">"brand columns set:"</span>, int(row.filter(like=<span class="s">"cats__brand"</span>).sum(axis=<span class="s">1</span>).iloc[<span class="s">0</span>]),
+      <span class="s">"| activity columns set:"</span>, int(row.filter(like=<span class="s">"cats__primary_activity"</span>).sum(axis=<span class="s">1</span>).iloc[<span class="s">0</span>]))</pre>
+<pre class="out">[{'nums__price': 0.127, 'nums__launch_year': 1.167}]
+brand columns set: 0 | activity columns set: 1</pre><p>Two things to notice. The launch year scales to 1.167, above 1: MinMaxScaler learned 2019 to 2025 from the training table and does not clip new values. And the unknown brand sets no brand column at all (all zeros, thanks to <code class="inline">handle_unknown="ignore"</code>), while the known activity, hiking, sets exactly one.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li>Open <code class="inline">labs/module-03/l2_1-preprocessing/fraud_columns_starter.py</code>. Run it once as it is.</li>
+  <li>The question: does the product category help the fraud model, and does the model survive next month's feed (a category never sold before, a payment with no account age)?</li>
+  <li>TODO 1 (together): the fraud rate by category on the training rows.</li>
+  <li>TODO 2 to 6 (in pairs): the ColumnTransformer, the model with and without the category (judged with ROC AUC and average precision), what the preprocessor learned, and three new payments.</li>
+  <li>Done when your numbers match the "Expected when done" lines.</li>
+  <li>Finished early? <code class="inline">debug_preprocess.py</code>. At home: <code class="inline">demand_categories_starter.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (Two of the three known values are 25-34.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.impute <span class="k">import</span> SimpleImputer
+imp = SimpleImputer(strategy=<span class="s">"most_frequent"</span>).fit([[<span class="s">"25-34"</span>], [np.nan], [<span class="s">"25-34"</span>], [<span class="s">"65+"</span>]])
+print(imp.statistics_, imp.transform([[np.nan]]).ravel())</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (Median 3; the middle half runs from 2 to 4.)</div><pre class="code"><span class="k">from</span> sklearn.preprocessing <span class="k">import</span> RobustScaler
+print(RobustScaler().fit_transform([[<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">3</span>], [<span class="s">4</span>], [<span class="s">100</span>]]).ravel())</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A Model-Ready Customer Table</b> (lesson page, "Project: A Model-Ready Customer Table"). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: split the whole table, keep the IDs. Check: <code class="inline">16 features; 4500 train rows; 1500 test rows</code></li>
+  <li>☐ Step 2: the gap audit on the training rows (which column deserves an indicator?)</li>
+  <li>☐ Step 3: the preprocessor. Check: <code class="inline">(4500, 40) (1500, 40)</code></li>
+  <li>☐ Step 4: three checks: no gaps, train columns centered exactly, test columns only close</li>
+  <li>☐ Step 5: baseline against logistic regression, accuracy and ROC AUC</li>
+  <li>☐ Step 6: three new customers scored; <code class="inline">new_customer_scores.csv</code></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> OneHotEncoder
+enc = OneHotEncoder(sparse_output=<span class="k">False</span>, handle_unknown=<span class="s">"ignore"</span>)
+enc.fit(pd.DataFrame({<span class="s">"store"</span>: [<span class="s">"Bend"</span>, <span class="s">"Boise"</span>, <span class="s">"Bend"</span>]}))
+print(enc.transform(pd.DataFrame({<span class="s">"store"</span>: [<span class="s">"Boise"</span>, <span class="s">"Reno"</span>]})))</pre><div class="opts"><div class="opt">A) <code class="inline">[[0. 1. 0.] [0. 0. 1.]]</code> (a new Reno column)</div><div class="opt">B) <code class="inline">ValueError</code>: Found unknown categories ['Reno']</div><div class="opt">C) <code class="inline">[[0. 1.] [0. 0.]]</code></div><div class="opt">D) <code class="inline">[[1. 0.] [0. 0.]]</code></div></div></div>
+<div class="q" data-sc="8" data-kind="short"><div class="qn">Q8</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.impute <span class="k">import</span> SimpleImputer
+imp = SimpleImputer(strategy=<span class="s">"mean"</span>, add_indicator=<span class="k">True</span>).fit([[<span class="s">2.0</span>], [np.nan], [<span class="s">4.0</span>], [<span class="s">9.0</span>]])
+print(imp.transform([[np.nan], [<span class="s">1.0</span>]]))</pre><div class="write"></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">After <code class="inline">StandardScaler</code>, <code class="inline">days_since_last_order</code> still has a skew of 1.71, the same as the raw column. Why?</div><div class="opts"><div class="opt">A) Scaling changes the units, not the shape; a log transform such as <code class="inline">np.log1p</code> changes the shape</div><div class="opt">B) The scaler was fitted on the test rows instead of the training rows</div><div class="opt">C) StandardScaler only removes skew when there are no outliers</div><div class="opt">D) Skew cannot be measured on scaled data</div></div></div>
+<div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.preprocessing <span class="k">import</span> OrdinalEncoder
+enc = OrdinalEncoder().fit([[<span class="s">"Small"</span>], [<span class="s">"Medium"</span>], [<span class="s">"Large"</span>]])
+print(enc.transform([[<span class="s">"Small"</span>], [<span class="s">"Large"</span>]]).ravel())</pre><div class="opts"><div class="opt">A) <code class="inline">[0. 2.]</code></div><div class="opt">B) <code class="inline">[2. 1.]</code></div><div class="opt">C) <code class="inline">[1. 0.]</code></div><div class="opt">D) <code class="inline">[2. 0.]</code></div></div></div>
+<div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">In a <code class="inline">ColumnTransformer</code>, the <code class="inline">email_opens_90d</code> column needs its gaps filled AND then scaling. How do you do it?</div><div class="opts"><div class="opt">A) Two branches on the same column: one with the imputer, one with the scaler</div><div class="opt">B) One branch whose transformer is <code class="inline">make_pipeline(SimpleImputer(...), StandardScaler())</code></div><div class="opt">C) Put the scaler in the branch and fill the gaps in pandas on the whole table before splitting</div><div class="opt">D) Set <code class="inline">remainder="passthrough"</code> so the scaler runs after the imputer</div></div></div>
+<div class="q" data-sc="12" data-kind="short"><div class="qn">Q12</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.compose <span class="k">import</span> ColumnTransformer
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> OneHotEncoder, StandardScaler
+df = pd.DataFrame({<span class="s">"spend"</span>: [<span class="s">10.0</span>, <span class="s">20.0</span>, <span class="s">30.0</span>], <span class="s">"store"</span>: [<span class="s">"Bend"</span>, <span class="s">"Boise"</span>, <span class="s">"Bend"</span>],
+                   <span class="s">"customer_id"</span>: [<span class="s">"C1"</span>, <span class="s">"C2"</span>, <span class="s">"C3"</span>]})
+ct = ColumnTransformer([(<span class="s">"num"</span>, StandardScaler(), [<span class="s">"spend"</span>]),
+                        (<span class="s">"cat"</span>, OneHotEncoder(sparse_output=<span class="k">False</span>), [<span class="s">"store"</span>])])
+print(ct.fit_transform(df).shape, ct.get_feature_names_out().tolist())</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Pick three columns from the churn table: one with gaps, one in dollars and one with text. For each, write the transformer you chose, what it learns during fit, and what would go wrong if it learned that from the test set instead. Then write one sentence about the missing email counts: what did the gap itself tell you?</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<p>Three questions, no notes. Write your answers, hand them in or keep them: they tell you and your instructor what to revisit.</p>
+<div class="q"><div class="qn">E1</div><div class="qt">A model's confusion matrix: TN 900, FP 100, FN 30, TP 70. Compute its precision and recall, and say each in one business sentence.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">Why choose a decision threshold from out-of-fold training probabilities instead of the test set?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">Next month's customer comes from the new Reno store and did not give an age. What does each part of your fitted preprocessor do with them?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish the retention-campaign plan (Steps 3 to 6) and the model-ready customer table (Steps 4 to 6)</li>
+  <li>☐ Lesson 1.4 Hands-on Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Lesson 2.1 Hands-on Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Both Quick Quizzes on the lesson pages</li>
+  <li>☐ Both journal entries in <code class="inline">journal.md</code></li>
+  <li>☐ "Before the Next Lesson" (1.4 and 2.1): the unused churn columns, one dashboard metric and why, print <code class="inline">preprocess</code>, and which objects must be refitted inside every fold</li>
+  <li>☐ Optional: <code class="inline">store_forecast_starter.py</code>, <code class="inline">demand_categories_starter.py</code>, <code class="inline">debug_metrics.py</code>, <code class="inline">debug_preprocess.py</code></li>
+  <li>☐ Bring to Session 4: a READY laptop, <code class="inline">pinecrest-ml</code> with <code class="inline">data/</code> and <code class="inline">labs/</code>, my 2.1 project notebook, this workbook and my journal</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>confusion matrix</td><td>The four counts TN, FP, FN, TP: rows are the truth, columns the prediction</td></tr>
+<tr><td>positive class</td><td>The class you are looking for (churned, fraud), coded 1 or named with <code class="inline">pos_label</code></td></tr>
+<tr><td>precision</td><td>TP / (TP + FP): of those flagged, the share that really are positive</td></tr>
+<tr><td>recall</td><td>TP / (TP + FN): of the real positives, the share flagged (also sensitivity, true positive rate)</td></tr>
+<tr><td>F1 / F-beta</td><td>Harmonic mean of precision and recall; beta above 1 weighs recall more</td></tr>
+<tr><td>decision threshold</td><td>The probability above which a case is flagged; 0.5 by default, a business decision</td></tr>
+<tr><td>ROC AUC</td><td>Chance a random positive outranks a random negative; 0.5 random, 1.0 perfect</td></tr>
+<tr><td>average precision</td><td>Summary of the precision-recall curve; its random baseline is the positive rate</td></tr>
+<tr><td>break-even probability</td><td>cost / value: the probability at which contacting someone pays for itself</td></tr>
+<tr><td>out-of-fold prediction</td><td>A prediction for a training row from a fold model that did not see that row (<code class="inline">cross_val_predict</code>)</td></tr>
+<tr><td>MAE / RMSE / R²</td><td>Average miss in units / root of the mean squared miss / share of variation explained compared with the mean</td></tr>
+<tr><td>imputation</td><td>Filling a gap with a value learned from the training data (SimpleImputer)</td></tr>
+<tr><td>missing indicator</td><td>A 0/1 column that remembers which values were filled (<code class="inline">add_indicator=True</code>)</td></tr>
+<tr><td>one-hot encoding</td><td>One 0/1 column per category (OneHotEncoder)</td></tr>
+<tr><td>ordinal encoding</td><td>One column of ordered codes 0, 1, 2 (OrdinalEncoder, order spelled out)</td></tr>
+<tr><td>ColumnTransformer</td><td>Sends each list of columns to its own transformer and puts the results side by side</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 3 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

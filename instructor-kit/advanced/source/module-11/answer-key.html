@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Key: Session 11</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">answers &amp; solutions · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Answer Key</div>
+    <h1>Session 11: Serving, Monitoring and the Churn Case Study</h1>
+    <p class="sub">Answers and reasoning for every Session 11 item: the warm-up, both self-checks, the predict-then-run items, the lab reference outputs, the lesson pages' own quizzes, the capstone plan check and the exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Session <b>11</b></span>
+      <span class="chip"><b>12</b> self-check items</span>
+      <span class="chip">Confidential</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">W1</div><div class="qt">Lesson 11.2 hid each customer's LATEST purchase for testing, not a random one. Why?</div><div class="opts"><div class="opt correct">It mimics the real job (predict the next purchase from earlier ones) and keeps future purchases out of the training matrix: the same rule as splitting by time in Lesson 1.2.</div></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">Best sellers scored a hit rate at 10 of 0.209 and item-kNN 0.308. Say what 0.308 means in one sentence.</div><div class="opts"><div class="opt correct">For about 31% of customers, the product they really bought next was in their personal top-10 list (already-owned products excluded): about 50% more often than the best-seller list.</div></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Why did SVD with 40 factors recommend worse than with 5?</div><div class="opts"><div class="opt correct">With many factors it memorizes each customer's past basket instead of broad tastes, so it generalizes worse (0.19 against 0.311 at k = 5).</div></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">A colleague emails you <code class="inline">churn_model.joblib</code>. What is the risk of loading it, and what did Lesson 12.1 use instead?</div><div class="opts"><div class="opt correct">A joblib file is a pickle: loading it can run arbitrary code. Lesson 12.1 saved with skops, which loads only reviewed types passed to <code class="inline">trusted=</code>.</div></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Your model card stores a SHA-256 of <code class="inline">customers_churn.csv</code>. Today the hash differs. What do you know, and what don't you?</div><div class="opts"><div class="opt correct">The file is not byte-for-byte the one the model was trained on; the hash cannot say what changed (one row, the order, a column).</div></div></div>
+
+  <div class="sec"><h2>12.2 · Serving and Monitoring Models: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">A caller posts a customer with <code class="inline">"home_store": "Denver"</code> to the lesson's <code class="inline">/predict</code>. What happens?</div><div class="opts"><div class="opt">A) The one-hot encoder ignores the unknown store and the caller gets status 200 with a probability</div><div class="opt correct">B) pydantic rejects it before the model runs: status 422, and the body names <code class="inline">home_store</code> and the allowed stores</div><div class="opt">C) uvicorn crashes and the caller gets status 500</div><div class="opt">D) <code class="inline">to_frame</code> raises a <code class="inline">KeyError</code> and the caller gets status 500</div></div><div class="why"><b>Why:</b> <code class="inline">home_store</code> is a <code class="inline">Literal</code> of five stores in <code class="inline">schemas.py</code>. FastAPI validates the body with the schema before calling the endpoint, so the model never runs and the 422 lists every problem at once.<br><b>A</b> is wrong: That is what would happen if a caller called the PIPELINE directly: the order window exists so it never does.<br><b>C</b> is wrong: A 500 means the server failed; an invalid request is the caller's problem, answered with 422.<br><b>D</b> is wrong: to_frame is never reached: validation comes first.</div></div>
+  <div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> pydantic <span class="k">import</span> BaseModel, Field
+<span class="k">class</span> Visit(BaseModel):
+    days: int = Field(ge=<span class="s">0</span>, le=<span class="s">365</span>)
+    share: float = Field(ge=<span class="s">0</span>, le=<span class="s">1</span>)
+v = Visit(days=<span class="s">"30"</span>, share=<span class="s">1</span>)
+print(v.days * <span class="s">2</span>, v.share)</pre><div class="opts"><div class="opt correct"><code class="inline">60 1.0</code></div></div><div class="why"><b>Why:</b> pydantic's default (lax) mode converts the text <code class="inline">"30"</code> to the integer 30 and the integer 1 to the float 1.0 the schema asks for; both pass their limits. Doubling an int gives 60.</div></div>
+  <div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">Why does <code class="inline">to_frame</code> in <code class="inline">serve.py</code> end with <code class="inline">.astype(DTYPES)</code>?</div><div class="opts"><div class="opt">A) It makes predictions faster</div><div class="opt">B) pydantic cannot produce a DataFrame without it</div><div class="opt">C) skops refuses to load the model unless the dtypes are stored</div><div class="opt correct">D) A one-row table with a <code class="inline">None</code> gets the <code class="inline">object</code> dtype, the imputer does not see it as missing, and the model scores a slightly different customer with no error</div></div><div class="why"><b>Why:</b> This is training-serving skew (Common Mistake 3): <code class="inline">object 0.0719</code> without the dtypes, <code class="inline">str 0.0708</code> with them. The cure is to store the training dtypes with the model and test that the API matches the notebook on real rows, gaps included.<br><b>A</b> is wrong: Speed is not the point; the numbers are.<br><b>B</b> is wrong: pydantic hands over plain Python values; pandas builds the frame.<br><b>C</b> is wrong: skops checks types inside the model file, not the request's columns.</div></div>
+  <div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">This week <code class="inline">email_opens_90d</code> has a PSI of 8.4, its missing rate is 100% (9% in the reference), and the mean score barely moved. What is the best reading?</div><div class="opts"><div class="opt correct">A) A broken data feed: fix it and re-score the week; do not retrain on it</div><div class="opt">B) Customers changed: retrain on this week's batch</div><div class="opt">C) Nothing to do: the scores did not move, so the model is fine</div><div class="opt">D) PSI cannot be trusted above 1, so ignore it</div></div><div class="why"><b>Why:</b> Every value fell into the missing bin: the customers did not change, the pipe did. The imputer quietly filled the median, so the scores looked normal while 500 customers were scored as average email readers (the lesson's week 3).<br><b>B</b> is wrong: Retraining on a broken feed teaches the model the bug, and the labels are months away anyway.<br><b>C</b> is wrong: That is exactly the trap: only the missing-rate and PSI checks warned.<br><b>D</b> is wrong: A huge PSI is honest here: it is the signature of a broken feed.</div></div>
+  <div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">What does this print? (A two-bin PSI.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+ref = np.array([<span class="s">0.5</span>, <span class="s">0.5</span>])
+cur = np.array([<span class="s">0.8</span>, <span class="s">0.2</span>])
+print(round(float(np.sum((cur - ref) * np.log(cur / ref))), <span class="s">3</span>))</pre><div class="opts"><div class="opt">A) <code class="inline">0.0</code></div><div class="opt">B) <code class="inline">-0.416</code></div><div class="opt correct">C) <code class="inline">0.416</code></div><div class="opt">D) <code class="inline">0.3</code></div></div><div class="why"><b>Why:</b> (0.8 - 0.5) × ln(1.6) + (0.2 - 0.5) × ln(0.4) = 0.141 + 0.275 = 0.416. Both terms are positive: PSI never goes below 0, and it is well past the 0.25 "real shift" line.<br><b>A</b> is wrong: That would need identical shares.<br><b>B</b> is wrong: Each term is (difference) × ln(ratio), which always has the same sign twice: never negative.<br><b>D</b> is wrong: 0.3 is the change in one share, not the index.</div></div>
+  <div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">With 30,000 rows, a Kolmogorov-Smirnov test on discount share gives p &lt; 0.0001, while the PSI is 0.021. Should the monitor raise an alert?</div><div class="opts"><div class="opt">A) Yes: p below 0.05 means the inputs drifted</div><div class="opt correct">B) No: with enough rows any difference is detectable; PSI says the shift is tiny, and an alert should be about size</div><div class="opt">C) Yes: PSI is unreliable on large batches</div><div class="opt">D) No: KS tests only work on categories</div></div><div class="why"><b>Why:</b> Lesson 12.2 Exercise 4: the same 3% nudge gives p = 0.42 on 500 rows and p &lt; 0.0001 on 30,000, while PSI stays near 0.02. A test answers "can I detect any difference?"; PSI answers "how big is it?".<br><b>A</b> is wrong: Significance grows with the sample size, not with the size of the change.<br><b>C</b> is wrong: PSI is about shares, so it hardly moves with the count.<br><b>D</b> is wrong: KS compares numeric distributions.</div></div>
+
+  <div class="sec"><h2>12.2 · Serving and Monitoring Models: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> pydantic <span class="k">import</span> BaseModel, Field
+<span class="k">class</span> Order(BaseModel):
+    units: int = Field(ge=<span class="s">1</span>, le=<span class="s">10</span>)
+    note: str | <span class="k">None</span> = <span class="k">None</span>
+print(Order(units=<span class="s">"7"</span>).units + <span class="s">1</span>, Order(units=<span class="s">7</span>).note)</pre><div class="opts"><div class="opt correct"><code class="inline">8 None</code></div></div><div class="why"><b>Why:</b> Lax mode turns the text "7" into the integer 7 (7 + 1 = 8); <code class="inline">note</code> is optional and defaults to None.</div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+ref = np.array([<span class="s">0.25</span>, <span class="s">0.25</span>, <span class="s">0.25</span>, <span class="s">0.25</span>])
+<span class="k">for</span> cur <span class="k">in</span> [np.array([<span class="s">0.25</span>, <span class="s">0.25</span>, <span class="s">0.25</span>, <span class="s">0.25</span>]), np.array([<span class="s">0.10</span>, <span class="s">0.20</span>, <span class="s">0.30</span>, <span class="s">0.40</span>])]:
+    print(round(float(np.sum((cur - ref) * np.log(cur / ref))), <span class="s">3</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">0.0
+0.228</code></div></div><div class="why"><b>Why:</b> Identical shares give 0.0. Moving 15 points of share from the first bin to the last gives 0.228: in the "watch" band, just under 0.25.</div></div>
+
+  <div class="sec"><h2>13.1 · Case Study: Predicting Churn: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="7"><div class="qn">Q7</div><div class="qt">Next quarter the retention offer costs $25 and is still worth $60 when it reaches a would-be churner. If the probabilities are calibrated, above which churn probability does an offer pay?</div><div class="opts"><div class="opt">A) <code class="inline">0.25</code></div><div class="opt">B) <code class="inline">0.5</code></div><div class="opt correct">C) <code class="inline">0.417</code></div><div class="opt">D) <code class="inline">2.4</code></div></div><div class="why"><b>Why:</b> Offer when p × 60 &gt; 25, so p &gt; 25 / 60 = 0.417. The cost-scenario lab confirms it on out-of-fold predictions: the best threshold on the training data is 0.43.<br><b>A</b> is wrong: That was the $15 offer.<br><b>B</b> is wrong: 0.5 is predict's default, not a business rule.<br><b>D</b> is wrong: That is value / cost, upside down.</div></div>
+  <div class="q" data-sc="8" data-kind="short"><div class="qn">Q8</div><div class="qt">What does this print? ($15 an offer, $60 a churner reached.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+y = np.array([<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>])
+flagged = np.array([<span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>])
+print(<span class="s">60</span> * ((flagged == <span class="s">1</span>) &amp; (y == <span class="s">1</span>)).sum() - <span class="s">15</span> * flagged.sum())</pre><div class="opts"><div class="opt correct"><code class="inline">60</code></div></div><div class="why"><b>Why:</b> Four offers, two of them reach churners: 2 × 60 - 4 × 15 = 120 - 60 = 60.</div></div>
+  <div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">Cross-validated AUC: random forest 0.868 ± 0.020, gradient boosting (defaults) 0.861 ± 0.013. What may you conclude?</div><div class="opts"><div class="opt correct">A) The data does not yet say which tree family is better: the gap is inside one fold-to-fold spread</div><div class="opt">B) The forest is better and should be deployed</div><div class="opt">C) Boosting is better because its spread is smaller</div><div class="opt">D) Open the test set to break the tie</div></div><div class="why"><b>Why:</b> A gap of 0.007 with spreads of 0.013 to 0.020 is noise. The case study tunes boosting because its defaults leave the most room; the tuned model's 0.879 then clears both by more than a spread.<br><b>B</b> is wrong: 0.007 is well inside the noise.<br><b>C</b> is wrong: A smaller spread is not a higher score.<br><b>D</b> is wrong: The test set is opened once, after every choice is made: never to choose.</div></div>
+  <div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">Which order matches the case study?</div><div class="opts"><div class="opt">A) Tune, split, leak check, threshold, test, explain</div><div class="opt">B) Split, threshold on the test set, compare, tune, explain</div><div class="opt">C) Compare on the test set, tune with CV, choose the threshold on the test set, explain</div><div class="opt correct">D) Split, leak check, compare with CV, tune with CV, threshold with CV, test once, explain and write up</div></div><div class="why"><b>Why:</b> Everything before "Open the Test Set, Once" uses the 4,500 training customers through cross-validation. The test set gives one honest estimate of the whole plan.<br><b>A</b> is wrong: Tuning before the split lets the test rows shape the model.<br><b>B</b> is wrong: Choosing the threshold on the test set inflates the reported profit (Mistake 4: $5,280 looks better than the honest $5,220).<br><b>C</b> is wrong: Every choice made on the test set makes its score optimistic.</div></div>
+  <div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">The manager asks whether the coupon actually keeps customers, or only goes to people who would have stayed anyway. What does the memo suggest?</div><div class="opts"><div class="opt">A) Look at permutation importance: the top feature is the cause</div><div class="opt correct">B) Hold back the offer from a random 10% of the list and compare who stays</div><div class="opt">C) Compare churn of customers who used discounts with those who did not</div><div class="opt">D) Raise the threshold until precision is 100%</div></div><div class="why"><b>Why:</b> Only an experiment answers a causal question. A random hold-out from the same high-risk list gives two comparable groups; the difference in churn is what the offer really does.<br><b>A</b> is wrong: Importance describes what the model relies on, not why customers leave.<br><b>C</b> is wrong: Discount users differ from others in many ways: a comparison, not an experiment.<br><b>D</b> is wrong: Precision says the list is accurate, not that the coupon works.</div></div>
+  <div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">The budget allows 200 offers; 360 test customers are above the break-even probability. Which rule does the case-study project use?</div><div class="opts"><div class="opt correct">A) The 200 riskiest customers, and never anyone below the break-even probability</div><div class="opt">B) 200 customers drawn at random from the 360</div><div class="opt">C) All 360: the budget is a guideline</div><div class="opt">D) The 200 customers closest to the break-even probability</div></div><div class="why"><b>Why:</b> Rank by probability and spend the budget from the top; an offer below break-even loses money even if the budget allows it. On the test customers that list reaches 131 churners and earns $4,860, against -$540 for 200 random offers.<br><b>B</b> is wrong: Random offers from the list waste the ranking.<br><b>C</b> is wrong: It breaks the budget.<br><b>D</b> is wrong: Those are the least valuable offers above the line.</div></div>
+
+  <div class="sec"><h2>13.1 · Case Study: Predicting Churn: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+y = np.array([<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>])
+offer = np.array([<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>])
+print(<span class="s">60</span> * ((offer == <span class="s">1</span>) &amp; (y == <span class="s">1</span>)).sum() - <span class="s">15</span> * offer.sum())</pre><div class="opts"><div class="opt correct"><code class="inline">15</code></div></div><div class="why"><b>Why:</b> Three offers, one reaches a churner: 60 - 45 = 15.</div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">for</span> cost, value <span class="k">in</span> [(<span class="s">15</span>, <span class="s">60</span>), (<span class="s">20</span>, <span class="s">50</span>), (<span class="s">30</span>, <span class="s">60</span>)]:
+    print(<span class="s">f"{cost / value:.2f}"</span>, end=<span class="s">"  "</span>)</pre><div class="opts"><div class="opt correct"><code class="inline">0.25  0.40  0.50  </code></div></div><div class="why"><b>Why:</b> 15/60 = 0.25, 20/50 = 0.40, 30/60 = 0.50. A pricier offer needs a riskier customer to pay.</div></div>
+
+  <div class="sec"><h2>Lab Reference Solutions</h2><span class="rule"></span></div>
+<div class="blk lab"><div class="h">Lab 12.2-A: labs/module-11/l12_2-serving/fraud_api_starter.py → fraud_api_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">train 33,182 payments (309 fraud), May 8,556, June 8,262
+types to review: ['functools.partial', 'sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor', 'sklearn.utils.validation.check_array']
+matches the reviewed list: True
+threshold 0.0775  reference hold rate 0.0101  reference mean score 0.0084
+
+4 problems
+  amount -&gt; Input should be greater than 0
+  hour -&gt; Input should be less than or equal to 23
+  items -&gt; Field required
+  category -&gt; Input should be 'Accessories', 'Apparel', 'Camp Kitchen', 'Climbing', 'Footwear', 'Gift Cards', 'Packs', 'Sleeping', 'Snow' or 'Tents'
+
+ {'status': 'ok', 'model_version': 'fraud-hgb-2025-04-30'}
+200 {'fraud_score': 0.0021, 'hold': False, 'model_version': 'fraud-hgb-2025-04-30'}
+422 ['amount', 'hour', 'items', 'category']
+
+API matches the notebook: True
+June: 83 of 8,262 held (1.00%; reference 1.01%), 35 of 64 frauds among them</pre><p>Reading it: the threshold is the 99th percentile of May's scores, so about 1% are held (the team's capacity); June holds 83 (1.00%) with 35 of 64 frauds. The trusted list has three entries; two (<code class="inline">functools.partial</code>, <code class="inline">check_array</code>) are there because <code class="inline">categorical_features="from_dtype"</code> stores a preprocessing function in the model. They are expected for this model, which is exactly what a reviewer must confirm before writing them out. The 422 lists all four problems; the match test is the habit from the lesson.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 12.2-B: labs/module-11/l12_2-serving/fraud_monitor_starter.py → fraud_monitor_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">reference: 24,881 payments, fraud rate 0.95%, hold threshold 0.0984
+       max_psi  category_psi  mean_score  hold_rate
+month                                              
+April    0.003        0.0007      0.0088     0.0089
+May      0.003        0.0013      0.0084     0.0089
+June     0.003        0.0009      0.0082     0.0080
+reference mean_score 0.0095, hold_rate 0.0100
+       fraud_rate  held  frauds_held  frauds  avg_precision
+month                                                      
+April      0.0087    74           37      72          0.519
+May        0.0076    76           33      65          0.521
+June       0.0077    66           33      64          0.531
+June 1-15 : velocity PSI 0.000, hold rate 0.0074, frauds held 14 of 29
+June 16-30: velocity PSI 2.523, hold rate 0.0025, frauds held 10 of 35
+June 16-30 with the feed intact: hold rate 0.0086, frauds held 19 of 35
+
+April to June: no input drift (every PSI under 0.01) and the hold rate stays near 1%. When the labels
+arrived, average precision was steady, so the falling fraud rate did not hurt the ranking.
+June 16 to 30: velocity_24h shifted (PSI far above 0.25) because the feed broke. Fix the feed and
+re-score those payments; do not retrain on them.</pre><p>Reading it: real months do not drift in their inputs (every PSI ≤ 0.003); the fraud rate falls from 0.95% to 0.77%, so the hold rate drifts slightly under 1%, yet average precision is steady once labels arrive. "No drift, and the model kept its ranking" is a real, reportable result. The broken feed is the contrast: unlike the lesson's email tracker (where the imputer hid the damage), a zeroed <code class="inline">velocity_24h</code> drops the scores: 10 instead of 19 frauds held in the second half of June.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-11/l12_2-serving/debug_serving.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">KeyError: 0</code> on the first run: the schema says <code class="inline">amount: int</code>, so every payment with cents is rejected (422) and the response is <code class="inline">{"detail": [...]}</code>, not a list. Fix: <code class="inline">amount: float</code>. Lesson: print <code class="inline">response.status_code</code> before reading the body.</li>
+  <li>A crash comparing a float with a string (<code class="inline">ufunc 'greater_equal' did not contain a loop...</code>): the threshold was stored as text in the JSON. Fix: store it as a number (or <code class="inline">float(...)</code>).</li>
+  <li>Silent: <code class="inline">round(float(p), 2)</code>. Fraud scores are around 0.01, so two decimals turn most of them into 0.0 or 0.01; the match test prints <code class="inline">False</code>. Fix: four decimals, as the lesson.</li>
+  <li>Silent: <code class="inline">hold</code> comes from <code class="inline">model.predict</code> (cut-off 0.5): 28 held instead of 83. Fix: <code class="inline">scores &gt;= threshold</code>. Fixed, the file prints <code class="inline">API matches the notebook: True</code> and <code class="inline">June: 83 held, 35 of them fraud</code>.</li>
+  <li>Not a bug, worth saying: scikit-learn 1.9's gradient boosting with <code class="inline">from_dtype</code> maps categories by value, so a frame whose categories are listed in another order still scores correctly; one-hot encoding done outside a pipeline would not be so forgiving.</li>
+</ol>
+</div>
+<div class="blk lab"><div class="h">Lab 13.1-A: labs/module-11/l13_1-case-study/leak_audit_starter.py → leak_audit_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">                       auc_alone  filled_if_1  filled_if_0  distinct                  flag
+column                                                                                    
+cancellation_reason        0.815        0.630        0.000         6  FILLED FOR ONE CLASS
+days_since_last_order      0.715        1.000        1.000       346                      
+spend_12m                  0.652        1.000        1.000      5843                      
+discount_share             0.633        1.000        1.000       722                      
+orders_12m                 0.627        1.000        1.000        21                      
+loyalty_tier               0.596        1.000        1.000         3                      
+email_opens_90d            0.589        0.859        0.921        36                      
+app_user                   0.575        1.000        1.000         2                      
+avg_order_value            0.567        1.000        1.000      5034                      
+support_tickets_12m        0.566        1.000        1.000         7                      
+preferred_category         0.561        1.000        1.000         9                      
+tenure_months              0.560        1.000        1.000        96                      
+returns_12m                0.524        1.000        1.000        10                      
+region                     0.516        1.000        1.000         6                      
+signup_date                0.515        1.000        1.000      2384                      
+home_store                 0.503        1.000        1.000         5                      
+customer_id                0.500        1.000        1.000      6000               ID-LIKE
+age_group                  0.495        0.917        0.919         6                      
+return_rate                0.477        1.000        1.000       436                      
+
+flagged: {'cancellation_reason': 'FILLED FOR ONE CLASS', 'customer_id': 'ID-LIKE'}
+strongest single honest column: days_since_last_order (0.715)
+cancellation_reason alone: AUC 0.815, filled for 63% of churners and 0% of stayers
+
+                           auc_alone  filled_if_1  filled_if_0  distinct     flag
+column                                                                           
+velocity_24h                   0.782          1.0          1.0         8         
+amount                         0.708          1.0          1.0     27674         
+account_age_days               0.689          1.0          1.0      3351         
+device_new                     0.686          1.0          1.0         2         
+card_attempts                  0.651          1.0          1.0         5         
+hour                           0.616          1.0          1.0        24         
+items                          0.614          1.0          1.0         7         
+billing_shipping_mismatch      0.599          1.0          1.0         2         
+country_mismatch               0.565          1.0          1.0         2         
+category                       0.559          1.0          1.0        10         
+transaction_id                 0.500          1.0          1.0     50000  ID-LIKE
+
+flagged: {'transaction_id': 'ID-LIKE'}</pre><p>Reading it: only one rule catches the planted leak, "filled for one class": its single-column AUC (0.815) is high but not absurd, so a "too good" rule alone would miss it. <code class="inline">customer_id</code> is a label (AUC 0.500 because test IDs never appear in training). <code class="inline">return_rate</code> below 0.5 means a single straight line on it has no stable direction. The fraud table is clean: say so in a capstone's data section.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 13.1-B: labs/module-11/l13_1-case-study/cost_scenarios_starter.py → cost_scenarios_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">4500 training customers, out-of-fold probabilities from 5 folds, mean 0.164
+            break_even  best_threshold  offers  profit_best  profit_at_0.25
+offer_cost                                                                 
+10               0.167            0.17    1362        22800           21890
+15               0.250            0.24    1067        16935           16755
+20               0.333            0.31     825        12000           11620
+25               0.417            0.43     522         8490            6485
+        lowest_p  churners  block_profit
+offers                                  
+100        0.754        83          3480
+200        0.679        82          3420
+300        0.590        72          2820
+400        0.503        58          1980
+500        0.445        53          1680
+600        0.392        34           540
+700        0.355        34           540
+800        0.317        48          1380
+900        0.288        29           240
+1000       0.258        35           600
+1100       0.231        29           240
+1200       0.213        17          -480
+1300       0.183        20          -300
+1400       0.162        15          -600
+1500       0.145        17          -480
+1600       0.130        11          -840
+the block ending at offer 1200 is the first that loses money (its lowest probability is 0.213)
+$25 offer, old threshold 0.25  :  360 offers, profit $1,620
+$25 offer, new threshold 0.43  :  183 offers, profit $2,745
+$25 offer, break-even 0.417    :  194 offers, profit $2,770</pre><p>Reading it: the best threshold on out-of-fold predictions tracks cost / 60 within 0.02, because the tuned boosting model is close to calibrated (13.1 Exercise 3). Keeping 0.25 after the coupon grows to $25 costs about $2,000 per 4,500 customers on the training data and $1,125 on the 1,500 test customers. Blocks of 100 offers stop paying around p = 0.21 to 0.23, which is the break-even rule seen from the budget side.</p>
+</div>
+
+  <div class="sec"><h2>The Lesson Pages' Own Quick Quizzes</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Lesson 12.2 · Serving and Monitoring Models</div>
+<ol class="steps">
+  <li><b>B</b> FastAPI answers 422 and the body explains which field is wrong: validation runs before the endpoint.</li>
+  <li><b>C</b> 6: lax mode converts "3" to the integer 3; doubled, 6.</li>
+  <li><b>A</b> Find out why recency changed (data bug or real change): drift says where to look.</li>
+  <li><b>C</b> The AUC on last quarter's customers: the only one that needs labels.</li>
+  <li><b>B</b> Training-row predictions are over-confident; out-of-fold predictions look like new data.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Lesson 13.1 · Case Study: Predicting Churn</div>
+<ol class="steps">
+  <li><b>A</b> 0.25: $20 / $80.</li>
+  <li><b>C</b> Remove it: it is recorded after the outcome, so it is a leak.</li>
+  <li><b>B</b> Once, after the model, hyperparameters and threshold are all chosen.</li>
+  <li><b>B</b> Customers who rely heavily on discounts are more likely to leave (a description, not a cause).</li>
+  <li><b>A</b> 30: one churner reached (+60) and two offers (-30).</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>Capstone Choice: What to Look For</h2><span class="rule"></span></div>
+<p>A plan paragraph is ready when it names a decision and its user, the prediction moment, the split the template uses, a metric with its business meaning, the baseline number, and a "do not deploy" bar. The most common gaps: no prediction moment (so no leakage test is possible), a metric without a unit ("accuracy" for fraud), and no bar. Coaching notes per problem are in <code class="inline">final-assessment.html</code>.</p>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<ol class="steps">
+  <li>Two silent failures: a frame without the training dtypes (caught by the match test on rows with gaps); a broken feed hidden by the imputer (caught by missing rates and PSI); an impossible value (caught by schema limits).</li>
+  <li>0.333 (= 20 / 60). Check it on out-of-fold predictions or with TunedThresholdClassifierCV; the rule assumes calibrated probabilities. The lab's best for $20 was 0.31.</li>
+  <li>A letter, a decision and a number, for example "D: the ten products on each customer's home page; best-seller hit rate 0.209".</li>
+</ol>
+
+  <div class="sec"><h2>Common Wrong Answers and What They Reveal</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li><b>Q1 A ("the encoder ignores it").</b> Thinks of the pipeline as the front door. Draw the window again: the schema runs first.</li>
+  <li><b>Q3 A or C.</b> Has not seen the silent skew. Rerun demo Step 10 for them.</li>
+  <li><b>Q4 B ("retrain").</b> Treats drift as a verdict. Ask which labels they would retrain on.</li>
+  <li><b>Q5 B (a negative PSI).</b> Expects the terms to cancel. Each term is a difference times the log of the same ratio: always ≥ 0.</li>
+  <li><b>Q9 B.</b> Reads a gap without its spread. Ask for the ± numbers every time.</li>
+  <li><b>Exit ticket 2: "0.333, done".</b> Right number, missing check: the case study's whole point is theory confirmed by data.</li>
+</ul>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 11 · Answer Key · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

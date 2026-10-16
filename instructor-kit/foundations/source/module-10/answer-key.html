@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Key: Session 10</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">answers &amp; solutions · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Answer Key</div>
+    <h1>Session 10: Ensembles and Model Selection</h1>
+    <p class="sub">Answers and reasoning for every Session 10 item: warm-up, both self-checks, the predict-then-run items, the lab reference outputs, the lessons' own quizzes, final-project plan guidance and the exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Session <b>10</b></span>
+      <span class="chip"><b>12</b> self-check items</span>
+      <span class="chip">Confidential</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<ol class="steps">
+  <li>You draw a bootstrap sample of 10,000 rows from 10,000. About how many distinct rows does it hold, and what are the others called? <b>Answer:</b> About 6,300 (63.2%); the rest are out-of-bag, and a forest's OOB score is computed from them.</li>
+  <li>A forest with 300 trees has an OOB ROC AUC of 0.866. What happens if you raise n_estimators to 3,000? <b>Answer:</b> About the same AUC, ten times the fitting time. More trees never overfit; the score plateaus.</li>
+  <li>In gradient boosting, what is each new tree trained to predict? <b>Answer:</b> What the current model still gets wrong: the residuals (more generally the negative gradient of the loss).</li>
+  <li>You early-stop an XGBoost or HistGradientBoosting model. Which rows may decide when it stops? <b>Answer:</b> A validation set split off from the training rows, never the test set.</li>
+  <li>HistGradientBoostingClassifier on churn needs which preparation for the five text columns? <b>Answer:</b> Only <code class="inline">astype("category")</code>: no one-hot encoding, no imputer, no scaler (missing values stay as they are).</li>
+</ol>
+
+  <div class="sec"><h2>5.4 · Voting and Stacking: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">Three churn models have out-of-fold probabilities that correlate 0.98 with each other, and each scores about 0.86 ROC AUC. What should you expect from a soft vote of the three?</div><div class="opts"><div class="opt">A) A large gain, because three models always beat one</div><div class="opt correct">B) About 0.86: members that make the same mistakes add almost nothing</div><div class="opt">C) A score below 0.5, because correlated members cancel out</div><div class="opt">D) An error: a soft vote needs uncorrelated members</div></div><div class="why"><b>Why:</b> A team gains only where its members disagree. Near-copies make the same mistakes on the same customers, like the panel in which everyone read the same review.<br><b>A</b> is wrong: The lesson's simulation: with 90% copying, 25 voters score no better than one.<br><b>C</b> is wrong: Averaging similar probabilities gives similar probabilities, not worse ones.<br><b>D</b> is wrong: Voting runs on any members; it just does not help when they agree.</div></div>
+  <div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+probs = np.array([[<span class="s">0.30</span>, <span class="s">0.80</span>, <span class="s">0.60</span>],
+                  [<span class="s">0.10</span>, <span class="s">0.40</span>, <span class="s">0.45</span>]])       <span class="c"># 2 customers x 3 models</span>
+print(probs.mean(axis=<span class="s">1</span>).round(<span class="s">2</span>), (probs &gt; <span class="s">0.5</span>).sum(axis=<span class="s">1</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">[0.57 0.32] [2 0]</code></div></div><div class="why"><b>Why:</b> Soft vote: (0.30 + 0.80 + 0.60) / 3 = 0.57 and (0.10 + 0.40 + 0.45) / 3 = 0.32. Hard vote: the first customer gets two votes above 0.5, the second none. Note how a soft vote keeps a ranking (0.57 vs 0.32) that the hard vote throws away.</div></div>
+  <div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">A stack's meta-model was fitted on each member's predictions for its own training rows. Its weights come out as logreg -3.25, forest 2.69, boost 12.66. What went wrong?</div><div class="opts"><div class="opt">A) Nothing: the booster is simply the best member</div><div class="opt">B) The meta-model needs scaled inputs, so the weights are meaningless</div><div class="opt">C) The members were not tuned before stacking</div><div class="opt correct">D) In-sample predictions are overconfident, so the meta-model over-trusts the most flexible member</div></div><div class="why"><b>Why:</b> On its own training rows the booster scores 0.999 ROC AUC, against 0.859 out-of-fold. A meta-model trained on those numbers learns to trust it blindly and even gives logistic regression a negative vote; on the test set this leaky stack scores 0.854, below its best member. Build meta-features with cross_val_predict, or let StackingClassifier's cv do it.<br><b>A</b> is wrong: The out-of-fold weights for the same members are 1.03, 5.23 and 1.55: the booster is not dominant at all.<br><b>B</b> is wrong: The members' probabilities are already on the same 0-to-1 scale.<br><b>C</b> is wrong: Tuning helps, but it does not cause a negative weight on a useful member.</div></div>
+  <div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt"><code class="inline">hard_vote.predict_proba(X_test)</code> raises <code class="inline">AttributeError</code>. You need a ranked call list. What is the fix?</div><div class="opts"><div class="opt correct">A) Build the vote with <code class="inline">voting="soft"</code>, from members that all have <code class="inline">predict_proba</code></div><div class="opt">B) Call <code class="inline">hard_vote.predict(X_test)</code> and sort by it</div><div class="opt">C) Add <code class="inline">probability=True</code> to the VotingClassifier</div><div class="opt">D) Use a StackingClassifier with a hard vote inside it</div></div><div class="why"><b>Why:</b> A hard vote counts 0/1 labels, so it has no probability to return. A soft vote averages probabilities, keeps predict_proba, and can rank customers, draw a ROC curve and move the threshold.<br><b>B</b> is wrong: predict gives 0 or 1 for everyone: sorting by it gives ties, not a ranking.<br><b>C</b> is wrong: VotingClassifier has no such argument (that is an SVC setting).<br><b>D</b> is wrong: Stacking learns from probabilities; it does not take a hard vote as a member to fix this.</div></div>
+  <div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">from</span> sklearn.ensemble <span class="k">import</span> VotingClassifier
+<span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.tree <span class="k">import</span> DecisionTreeClassifier
+vote = VotingClassifier([LogisticRegression(), DecisionTreeClassifier()], voting=<span class="s">"soft"</span>)
+vote.fit([[<span class="s">0</span>], [<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">3</span>]], [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>])</pre><div class="opts"><div class="opt">A) It fits a soft vote of the two models</div><div class="opt">B) It fits, but only the first model is used</div><div class="opt correct">C) <code class="inline">ValueError</code>: every member needs a name, as a (string, estimator) pair</div><div class="opt">D) <code class="inline">TypeError</code>: a VotingClassifier needs at least three members</div></div><div class="why"><b>Why:</b> VotingClassifier and StackingClassifier need named members so that their settings can be addressed later (for example in a grid search) and found in named_estimators_. The message: <code class="inline">ValueError: Invalid 'estimators' attribute, 'estimators' should be a non-empty...</code><br><b>A</b> is wrong: It never gets as far as fitting.<br><b>B</b> is wrong: Nothing is fitted; the list is rejected.<br><b>D</b> is wrong: Two members are allowed; names are the problem.</div></div>
+  <div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">A paired bootstrap of the stack minus the single booster gives a mean gain of +0.0023 ROC AUC, 95% interval -0.0070 to +0.0124. Both put 98 real churners in their top 150. What is the professional recommendation?</div><div class="opts"><div class="opt">A) Ship the stack: its mean gain is positive</div><div class="opt">B) Ship the stack only if it is retrained every week</div><div class="opt">C) Rerun the bootstrap on the training rows until the interval excludes zero</div><div class="opt correct">D) Keep the single booster: the gain is within the noise and changes no call, and the stack has 19 fits and four pieces to run</div></div><div class="why"><b>Why:</b> An interval that comfortably contains zero means this test set cannot tell the two apart, and the business number (churners in the calls) is identical. The extra training time, latency and explanation cost buy nothing measurable.<br><b>A</b> is wrong: A positive mean inside a wide interval that includes zero is not evidence.<br><b>B</b> is wrong: Retraining frequency does not create a gain that is not there.<br><b>C</b> is wrong: Searching until a test passes is p-hacking; and training rows would be the wrong place to measure anyway.</div></div>
+
+  <div class="sec"><h2>5.4 · Voting and Stacking: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+votes = np.array([[<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>],
+                  [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>],
+                  [<span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>]])          <span class="c"># three models, three customers</span>
+print((votes.sum(axis=<span class="s">1</span>) &gt;= <span class="s">2</span>).astype(int))</pre><div class="opts"><div class="opt correct"><code class="inline">[1 0 1]</code></div></div><div class="why"><b>Why:</b> Each row is one customer; a customer gets 1 when at least two of the three models vote 1. Hard voting is exactly this count.</div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+a = np.array([<span class="s">0.10</span>, <span class="s">0.40</span>, <span class="s">0.80</span>, <span class="s">0.30</span>])
+b = <span class="s">2</span> * a + <span class="s">0.05</span>                      <span class="c"># a "second model" that only rescales the first</span>
+print(round(np.corrcoef(a, b)[<span class="s">0</span>, <span class="s">1</span>], <span class="s">3</span>), np.argsort(a).tolist() == np.argsort(b).tolist())</pre><div class="opts"><div class="opt correct"><code class="inline">1.0 True</code></div></div><div class="why"><b>Why:</b> A rescaled copy correlates perfectly (1.0) and ranks customers identically: it is a second voter repeating the first. Correlation of out-of-fold probabilities measures exactly this.</div></div>
+
+  <div class="sec"><h2>6.1 · Model Selection and Learning Curves: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="7"><div class="qn">Q7</div><div class="qt">Why does the lesson pass ONE splitter object, created with a fixed random_state, to every candidate's cross_validate call?</div><div class="opts"><div class="opt">A) So the test set takes part in the comparison</div><div class="opt correct">B) So every candidate is scored on exactly the same folds and the scores can be compared fold by fold</div><div class="opt">C) So each model is fitted only once</div><div class="opt">D) Because cross_validate refuses an integer cv</div></div><div class="why"><b>Why:</b> Some folds are simply harder than others. When every model meets the same folds, paired differences cancel that shared difficulty. With a different shuffle per model, the forest's edge over boosting fell from 9 wins of 10 to 6 of 10.<br><b>A</b> is wrong: The test set never takes part in model selection.<br><b>C</b> is wrong: Every candidate is still fitted once per fold.<br><b>D</b> is wrong: cv=5 is accepted (and also gives identical folds, because it does not shuffle).</div></div>
+  <div class="q" data-sc="8" data-kind="short"><div class="qn">Q8</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+a = np.array([<span class="s">0.84</span>, <span class="s">0.87</span>, <span class="s">0.88</span>, <span class="s">0.85</span>, <span class="s">0.86</span>])   <span class="c"># model A, 5 shared folds</span>
+b = np.array([<span class="s">0.83</span>, <span class="s">0.85</span>, <span class="s">0.89</span>, <span class="s">0.84</span>, <span class="s">0.84</span>])   <span class="c"># model B, same folds</span>
+diff = a - b
+print(round(diff.mean(), <span class="s">3</span>), (diff &gt; <span class="s">0</span>).sum())</pre><div class="opts"><div class="opt correct"><code class="inline">0.01 4</code></div></div><div class="why"><b>Why:</b> The per-fold differences are 0.01, 0.02, -0.01, 0.01, 0.02: mean 0.01, and A is ahead in four of the five folds. That is the paired view: fold difficulty is shared, so the difference is what tells you about the models.</div></div>
+  <div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">A validation curve for a tree shows training AUC 0.857 and validation AUC 0.835 at depth 4, and training AUC 1.000 with validation AUC 0.673 at depth 15. What is happening at depth 15?</div><div class="opts"><div class="opt">A) Underfitting: the tree is too simple</div><div class="opt">B) Nothing: a perfect training score means the model is right</div><div class="opt correct">C) Overfitting: the tree memorizes the training customers</div><div class="opt">D) The validation folds contain an error</div></div><div class="why"><b>Why:</b> A near-perfect training score with a falling validation score is the overfitting signature: the gap between the curves is the overfitting meter. Depth 4 to 5 is the sweet spot.<br><b>A</b> is wrong: Underfitting looks like depth 1 to 3: both scores low and close together.<br><b>B</b> is wrong: A perfect training score is usually the warning, not the reward.<br><b>D</b> is wrong: The same pattern appears on every fold: it is the model, not the data.</div></div>
+  <div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">Logistic regression's learning curve flattens at about 0.83 by 1,200 rows, with training and validation scores close together. Which next step is most likely to help?</div><div class="opts"><div class="opt correct">A) Better features or a more flexible model</div><div class="opt">B) Collecting twice as many rows of the same data</div><div class="opt">C) Stronger regularization</div><div class="opt">D) A larger test set</div></div><div class="why"><b>Why:</b> Curves that meet early and flatten mean high bias: the model has learned all it can from these columns. One lapsed-customer flag added 0.005 (Exercise 3), and a feature-built logistic regression reaches 0.877 (this session's worked example).<br><b>B</b> is wrong: More rows of the same data do not move a flat, converged curve.<br><b>C</b> is wrong: Regularization fights variance; this model is not overfitting.<br><b>D</b> is wrong: A test set measures; it does not improve the model.</div></div>
+  <div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">You call <code class="inline">validation_curve(tree_pipe, ..., param_name="max_depth", ...)</code> where tree_pipe was built with make_pipeline. What happens?</div><div class="opts"><div class="opt">A) It works: the pipeline passes max_depth to the tree</div><div class="opt correct">B) <code class="inline">ValueError</code>: the pipeline has no max_depth; use <code class="inline">decisiontreeclassifier__max_depth</code></div><div class="opt">C) It silently varies the scaler instead</div><div class="opt">D) <code class="inline">KeyError</code>: max_depth</div></div><div class="why"><b>Why:</b> A pipeline's own parameters are memory, steps, transform_input and verbose. A step's parameter is addressed as step name, two underscores, parameter; make_pipeline names steps after their class in lowercase. sorted(tree_pipe.get_params()) lists every valid name.<br><b>A</b> is wrong: Pipelines do not guess which step you mean.<br><b>C</b> is wrong: Nothing runs silently: the name is rejected.<br><b>D</b> is wrong: scikit-learn raises ValueError with the list of valid parameters.</div></div>
+  <div class="q" data-sc="12" data-kind="short"><div class="qn">Q12</div><div class="qt">One-standard-error rule. What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+depths = [<span class="s">3</span>, <span class="s">4</span>, <span class="s">5</span>, <span class="s">6</span>]
+means = np.array([<span class="s">0.829</span>, <span class="s">0.835</span>, <span class="s">0.834</span>, <span class="s">0.829</span>])
+se = np.array([<span class="s">0.007</span>, <span class="s">0.007</span>, <span class="s">0.007</span>, <span class="s">0.008</span>])
+best = int(np.argmax(means))
+print(next(d <span class="k">for</span> d, m <span class="k">in</span> zip(depths, means) <span class="k">if</span> m &gt;= means[best] - se[best]))</pre><div class="opts"><div class="opt correct"><code class="inline">3</code></div></div><div class="why"><b>Why:</b> The best depth is 4 (0.835, standard error 0.007), so the threshold is 0.828. Scanning from the simplest depth, depth 3 already reaches 0.829: the rule picks the simpler tree, trading a sliver of measured score for a model less likely to have won by luck.</div></div>
+
+  <div class="sec"><h2>6.1 · Model Selection and Learning Curves: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> RepeatedStratifiedKFold
+print(RepeatedStratifiedKFold(n_splits=<span class="s">3</span>, n_repeats=<span class="s">4</span>, random_state=<span class="s">42</span>).get_n_splits())</pre><div class="opts"><div class="opt correct"><code class="inline">12</code></div></div><div class="why"><b>Why:</b> 3 folds × 4 repeats = 12 train/validation splits, so 12 fits per candidate.</div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+<span class="k">from</span> sklearn.tree <span class="k">import</span> DecisionTreeClassifier
+pipe = make_pipeline(StandardScaler(), DecisionTreeClassifier())
+print([name <span class="k">for</span> name <span class="k">in</span> pipe.get_params() <span class="k">if</span> name.endswith(<span class="s">"max_depth"</span>)])</pre><div class="opts"><div class="opt correct"><code class="inline">['decisiontreeclassifier__max_depth']</code></div></div><div class="why"><b>Why:</b> make_pipeline names each step after its class in lowercase; a step's parameter is step name, two underscores, parameter.</div></div>
+
+  <div class="sec"><h2>Lab Reference Solutions</h2><span class="rule"></span></div>
+<div class="blk lab"><div class="h">Lab 5.4-A: labs/module-10/l5_4-voting-stacking/fraud_ensemble_starter.py → fraud_ensemble_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">Jan-May: 41,738 payments, 374 frauds | June: 8,262 payments, 64 frauds
+
+out-of-fold average precision (Jan-May):
+  logreg  0.506
+  forest  0.513
+  boost   0.524
+correlation of out-of-fold probabilities:
+        logreg  forest  boost
+logreg    1.00    0.89   0.89
+forest    0.89    1.00   0.92
+boost     0.89    0.92   1.00
+
+soft votes, out-of-fold average precision:
+  all three       0.541
+  forest + boost  0.531
+  logreg + boost  0.539
+chosen on Jan-May: all three
+
+meta-model weights (logreg, forest, boost): [5.04 4.45 5.5 ]
+
+June (opened once), 64 frauds; a random 100 would hold 0.8:
+  logreg                 AP 0.539   frauds in top 100: 36
+  forest                 AP 0.509   frauds in top 100: 35
+  boost                  AP 0.556   frauds in top 100: 36
+  vote: all three        AP 0.570   frauds in top 100: 36
+  stack                  AP 0.573   frauds in top 100: 36
+
+stack minus boost: +0.016 AP, 95% interval [-0.016, +0.057]
+Verdict: keep the single model (boost): June cannot tell them apart, and the stack costs 19 fits instead of 1</pre><p>Reading it: the fraud members disagree more than the churn members (they still correlate 0.89 to 0.92), and the soft vote of all three gains about 0.017 AP out-of-fold over the best member. On June the stack and the vote score highest, but the bootstrap interval for the gain runs from -0.016 to +0.057: 64 frauds cannot separate them, and every contender puts 35 or 36 frauds in a 100-payment queue. The verdict printed from the variables is the lesson's: keep one model. Meta-model weights near 5 for all three are not "importance"; they say the meta-model leans on all three opinions about equally.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 5.4-B: labs/module-10/l5_4-voting-stacking/demand_blend_starter.py → demand_blend_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">fit Jan-Sep 2024: 3,840 rows | blend on Oct-Dec 2024: 1,248 | test 2025: 4,896
+boost  MAE on Oct-Dec 2024: 9.78
+forest MAE on Oct-Dec 2024: 10.92
+correlation of the two holdout forecasts: 0.95
+  weight on boost 0.0: holdout MAE 10.92
+  weight on boost 0.1: holdout MAE 10.75
+  weight on boost 0.2: holdout MAE 10.58
+  weight on boost 0.3: holdout MAE 10.44
+  weight on boost 0.4: holdout MAE 10.31
+  weight on boost 0.5: holdout MAE 10.19
+  weight on boost 0.6: holdout MAE 10.08
+  weight on boost 0.7: holdout MAE 9.99
+  weight on boost 0.8: holdout MAE 9.91
+  weight on boost 0.9: holdout MAE 9.84
+  weight on boost 1.0: holdout MAE 9.78
+chosen weight on boost: 1.0
+
+2025 (opened once):
+  boost          MAE 8.05
+  forest         MAE 8.47
+  blend          MAE 8.05
+  50/50 average  MAE 8.11
+
+blend saves 0.00 units per row against the booster alone (0.0%)
+Verdict: keep the single booster: the blend's gain is too small to pay for a second model</pre><p>Reading it: the weight is chosen on October to December 2024, a period after the members' training months, which is how time-ordered data replaces out-of-fold predictions (Lesson 5.4, Mistake 3). The holdout says "all booster", and 2025 agrees: the 50/50 average (8.11) is worse than the booster alone (8.05). Same outcome as the lesson's Exercise 4 stack (weights 0.93 / 0.04 / 0): an honest way of finding out you do not need an ensemble.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-10/l5_4-voting-stacking/debug_stack.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">ValueError: Invalid 'estimators' attribute, 'estimators' should be a non-empty list of (string, estimator) tuples.</code> → <code class="inline">VotingClassifier([("logreg", logreg), ("boost", boost)], ...)</code>.</li>
+  <li><code class="inline">AttributeError: This 'VotingClassifier' has no attribute 'predict_proba'</code> → <code class="inline">voting="soft"</code> (the comment even says soft vote).</li>
+  <li><code class="inline">ValueError: cross_val_predict only works for partitions</code> → <code class="inline">cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=42)</code>: churn rows are not ordered in time, and the meta-model needs one prediction for every training row.</li>
+  <li>No error: the hand-made meta-model is fitted on in-sample predictions. With the bug it prints weights [-2.44 13.59] and AUC 0.853; with <code class="inline">cross_val_predict(..., cv=cv, method="predict_proba")</code> it prints [2.58 3.44] and 0.860, the same as the StackingClassifier. The soft vote prints 0.858.</li>
+</ol>
+</div>
+<div class="blk lab"><div class="h">Lab 6.1-A: labs/module-10/l6_1-model-selection/fraud_bakeoff_starter.py → fraud_bakeoff_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">               ap_mean  ap_std  auc_mean
+model                                   
+boost_gentle     0.521   0.057     0.847
+logistic         0.504   0.051     0.855
+boost_default    0.446   0.050     0.827
+baseline         0.009   0.000     0.500
+boost_gentle - boost_default: mean +0.075, std 0.034, boost_gentle wins 10 of 10 folds
+boost_gentle - logistic: mean +0.017, std 0.023, boost_gentle wins 7 of 10 folds
+
+chosen on Jan-May: boost_gentle (CV AP 0.521 +/- 0.057)
+June boost_gentle  AP 0.556   frauds in top 100: 36 of 64
+June logistic      AP 0.539   frauds in top 100: 36 of 64
+June random order  AP 0.008</pre><p>Reading it: (1) the metric changes the winner: AUC ranks logistic regression first, AP ranks gentle boosting first; the review queue is the top of a ranked list, so AP was the right choice, and it was made before looking. (2) Default boosting overfits the 374 frauds: gentle settings win all 10 folds by 0.075. (3) Gentle boosting against logistic regression is a close call: it passes the lesson's rule (0.017 &gt; 0.023 / √10 ≈ 0.007) but wins only 7 of 10 folds, and the June queues hold the same 36 frauds. A report that picks either model and says "close; the simpler model is a defensible choice" is correct. Baseline AP 0.009 = the fraud rate of the training months.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 6.1-B: labs/module-10/l6_1-model-selection/demand_curves_starter.py → demand_curves_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">5088 rows of 2024, sorted by week
+shuffled KFold   CV MAE 7.60 +/- 0.19
+blocks of weeks  CV MAE 8.49 +/- 1.34
+2025 test MAE of this model (Lesson 5.3): 8.05
+
+training rows  train MAE  validation MAE
+         1343       3.42           10.66
+         2726       4.82            9.96
+         4070       5.32            8.41
+saved demand_learning_curve.png
+
+at full size: validation MAE 8.41, gap to training 3.09 units; the last third of the rows cut validation MAE by 1.55
+Diagnosis: high variance and still improving: more history (a third year) should help</pre><p>Reading it: shuffled folds put weeks from both sides of each validation week into training, so the model interpolates within a season it has already seen: 7.60, far better than the real 2025 test (8.05). Blocks of weeks (unshuffled KFold on rows sorted by week) are pessimistic instead (8.49), because each block's season is missing from its training data; for a whole-year-ahead forecast that is the safer side to err on. Learning curve: training MAE far below validation and validation still falling fast: variance, so more history (a third year) should help. One honest caveat for strong learners: on time data, more rows also means more of the calendar, so part of the gain is seasonal coverage. learning_curve trains every fold on the same number of rows (4,070), so its full-size point (8.41) is close to, not identical with, cross_val_score's 8.49.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-10/l6_1-model-selection/debug_bakeoff.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">InvalidParameterError: The 'scoring' parameter of cross_validate must be a str among {...} ... Got 'auc' instead.</code> → <code class="inline">scoring="roc_auc"</code>.</li>
+  <li><code class="inline">ValueError: Invalid parameter 'max_depth' for estimator Pipeline(...)</code> → <code class="inline">param_name="decisiontreeclassifier__max_depth"</code>.</li>
+  <li>No error: each candidate gets its own splitter (<code class="inline">random_state=seed</code>), so the paired differences mix two folds' luck (with the bug: logistic 0.830, tree 0.838, +0.008 winning 7 of 10). Fix: one <code class="inline">RepeatedStratifiedKFold(..., random_state=42)</code> created before the loop.</li>
+  <li>No error: the winner is picked by test AUC, so the test set chose the model. Fix: choose by the CV mean, then fit and score only the chosen model once. Fixed output: logistic 0.832 +/- 0.017, tree_d5 0.842 +/- 0.018, +0.010 winning 8 of 10, best depth 4, chosen tree_d5, test AUC 0.846 (here the choice happens to be the same; the process was still wrong).</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>The Lesson Pages' Own Quick Quizzes</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Lesson 5.4 · Voting and Stacking</div>
+<ol class="steps">
+  <li><b>C</b> 70%: identical voters are one voter repeated; they are wrong together on the same 30% of cases.</li>
+  <li><b>A</b> In-sample predictions are overconfident, so the meta-model would learn to over-trust the most flexible member.</li>
+  <li><b>B</b> <code class="inline">[0.6] [2]</code>: the average of 0.2, 0.9 and 0.7, and two of the three are above 0.5.</li>
+  <li><b>A</b> Given the other two members' predictions, the forest's probability moves the final prediction the most.</li>
+  <li><b>C</b> The stack's gain is within the noise of a bootstrap, and the model must score customers quickly and be explained.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Lesson 6.1 · Model Selection and Learning Curves</div>
+<ol class="steps">
+  <li><b>B</b> Overfitting: training 1.000, validation 0.67.</li>
+  <li><b>C</b> A more flexible model or better features: the curves met and flattened (high bias).</li>
+  <li><b>A</b> So every model is scored on the same folds and the scores can be compared fold by fold.</li>
+  <li><b>C</b> Within noise (6 of 10 wins, mean 0.004 against a std of 0.012): choose on speed, simplicity or explainability.</li>
+  <li><b>A</b> 15: 5 folds × 3 repeats.</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>Final-Project Plans: What to Look For</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li><b>A good plan</b> names a decision and who makes it, the moment of prediction, the course's split (copied, not invented), one deciding metric chosen now, the do-nothing number, two candidates, one specific leak, and what would change the recommendation.</li>
+  <li><b>Churn plans</b> that list every column as a feature: ask about <code class="inline">cancellation_reason</code> (filled only after a customer leaves; it lifts AUC to about 0.94). <b>Demand plans</b> with "units sold last week" as a feature: ask when the forecast is made (the start of 2025: last week's sales are not known for most weeks). <b>Fraud plans</b> with a stratified random split: ask what June is for (the model is used on the future; the fraud rate drifts from 1.00% to 0.77%).</li>
+  <li><b>Metric:</b> accuracy as the deciding metric is a red flag for churn and fraud (doing nothing scores 0.835 and 0.991). For demand, MAE in units is the course's choice; RMSE is acceptable if argued.</li>
+  <li>The full rubric and instructor answer notes with reference numbers are in <code class="inline">final-assessment.html</code> (kit root).</li>
+</ul>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<ol class="steps">
+  <li><b>Out-of-fold:</b> in-sample predictions are overconfident (booster 0.999 in-sample, 0.859 out-of-fold), so a meta-model trained on them over-trusts the most flexible member; the leaky stack scored 0.854, below its best member.</li>
+  <li><b>0.867 vs 0.860, +0.007, std 0.008, 9 of 10:</b> small but consistent (the mean is about three times 0.008 / √10). Then weigh cost, speed and explainability, and confirm on the test set once.</li>
+  <li><b>Final project:</b> any coherent triple: churn / AP (or profit) / 0.165 and -$7,620; demand / MAE / 13.42 (per-product mean); fraud / AP then cost / $24,000 for reviewing nothing.</li>
+</ol>
+
+  <div class="sec"><h2>Common Wrong Answers and What They Reveal</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li><b>Q1 A ("a large gain").</b> Believes more models always help. Show the simulation's 90%-copying line.</li>
+  <li><b>Q3 A ("the booster is simply the best").</b> Reads weights as accuracy. Put the out-of-fold weights (1.03 / 5.23 / 1.55) beside the leaky ones.</li>
+  <li><b>Q6 A ("ship it: the mean gain is positive").</b> Ignores the interval. Ask what the care team would notice (nothing: 98 vs 98).</li>
+  <li><b>Q10 B ("more data").</b> Reads "lower score" as "needs data". Point at the two curves touching.</li>
+  <li><b>Exit ticket 2 "forest wins" with no reasoning.</b> The habit the lesson targets: insist on the paired numbers.</li>
+</ul>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 10 · Answer Key · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

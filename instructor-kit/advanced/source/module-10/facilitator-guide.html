@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facilitator Guide: Session 10</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">contains answers &amp; timing · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Facilitator Guide</div>
+    <h1>Session 10: Recommendations and Reproducibility</h1>
+    <p class="sub">How to teach Session 10 of Advanced Machine Learning: turn 32,000 purchases into a personal "Picked for You" list and prove with an honest leave-last-out test that it beats the best sellers (0.308 vs 0.209), then make results reproducible and models safe to share: seeds, fingerprints, versions, skops instead of pickles, and an MLflow store that answers "which settings gave this number?".</p>
+    <div class="meta-row">
+      <span class="chip"><b>2</b> lessons</span>
+      <span class="chip"><b>3 hrs</b> session</span>
+      <span class="chip">Lessons <b>11.2–12.1</b></span>
+      <span class="chip">Session <b>10</b> of 13</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>How to Use This Guide</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Same rhythm for both lessons: frame → live demo → guided lab → start the project. Exercises, quizzes and journals go home.</li>
+  <li>Every code block below was run to produce its output (scikit-learn 1.9.1, SciPy, MLflow 3.17.1, skops 0.16.0, 4 CPU threads). MLflow run IDs and timings differ on every machine; nothing else should.</li>
+  <li>Keep <code class="inline">applications_recommendation_systems.html</code> and <code class="inline">mlops_intro.html</code> open for the figures (long tail, the leave-last-out diagram, hit rate against k, the lab-notebook diagram). Labs are in <code class="inline">labs/module-10/</code>.</li>
+  <li>No deep learning and no downloads today: the whole session runs in seconds per cell. The slowest lab (Lab 12.1 A) takes about 30 seconds, mostly MLflow setting up its database.</li>
+</ul>
+<div class="note warn"><div class="t">Two habits this session is really about</div>
+<p>Both lessons are about evaluation discipline more than algorithms. In 11.2, hide something real (the last purchase), ask the model to find it, compare with a baseline that knows nothing about the customer, and choose settings on a validation item. In 12.1, make that number provable later: seed, fingerprint, versions, settings, and a model file that cannot run code when someone opens it. Keep returning to "compared with what?" and "could you prove it in six months?"</p>
+</div>
+
+  <div class="sec"><h2>Before the Session</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ <b>Kit check:</b> <code class="inline">python3 labs/check_labs.py module-10</code>: 8 PASS lines, about 60 seconds. The 12.1 labs write their MLflow database and models to a temporary <code class="inline">OUTPUT</code> folder during the check; on a learner's machine they go to <code class="inline">output/</code> next to the lab.</li>
+  <li>☐ <b>Environment:</b> <code class="inline">check_environment.py</code> READY covers MLflow and skops. Run <code class="inline">python -c "import mlflow, skops"</code> on the projector machine once beforehand: the first MLflow import takes several seconds.</li>
+  <li>☐ <b>Projector:</b> notebooks <code class="inline">lesson_11_2</code> and <code class="inline">lesson_12_1</code> in a FRESH folder for 12.1 (no old <code class="inline">mlflow.db</code>, so the query shows only today's runs); a second terminal for <code class="inline">mlflow ui</code>.</li>
+  <li>☐ <b>Board:</b> "random 0.047 | best sellers 0.209 | item-kNN | SVD" for 11.2; the five ingredients for 12.1.</li>
+  <li>☐ <b>Hand out:</b> starters, <code class="inline">debug_recommender.py</code>, <code class="inline">debug_reproducibility.py</code>.</li>
+</ul>
+<div class="blk warn"><div class="h">Known environment traps</div>
+<table class="timing">
+<thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td><code class="inline">MlflowException: The filesystem tracking backend (e.g., './mlruns') is in maintenance mode...</code></td><td>Old tutorial code or the default store</td><td><code class="inline">mlflow.set_tracking_uri("sqlite:///mlflow.db")</code> before anything else.</td></tr>
+<tr><td><code class="inline">search_runs</code> shows yesterday's or someone else's runs</td><td>The same <code class="inline">mlflow.db</code> and experiment name reused</td><td>Fine in real life (that is the point); for the demo, a fresh folder or a new experiment name.</td></tr>
+<tr><td><code class="inline">mlflow ui</code> says the port is in use</td><td>Another MLflow (or app) on 5000</td><td><code class="inline">mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5001</code>.</td></tr>
+<tr><td>A line <code class="inline">INFO mlflow.agent.hint: Load the ... skill</code> appears</td><td>MLflow 3.17 prints a hint for coding assistants</td><td>Harmless. Set the environment variable <code class="inline">MLFLOW_DISABLE_AGENT_HINT=1</code> to silence it (the labs do).</td></tr>
+<tr><td><code class="inline">UntrustedTypesFoundException</code></td><td>skops wants a reviewed list</td><td><code class="inline">get_untrusted_types</code>, read it, pass the types you accept in <code class="inline">trusted=</code>.</td></tr>
+<tr><td><code class="inline">MemoryError</code> or a very slow cell in 11.2</td><td><code class="inline">.toarray()</code> on a big matrix, or customer × customer similarity on a laptop with little RAM</td><td>At 3,000 customers both are fine (72 MB for 3,000 × 3,000); never on a real shop's data.</td></tr>
+</tbody>
+</table>
+</div>
+
+  <div class="sec"><h2>Session 10 Agenda (3 hours)</h2><span class="rule"></span></div>
+  <table class="timing">
+    <thead><tr><th>Clock</th><th>Minutes</th><th>Segment</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="t">0:00</td><td class="t">10</td><td>Warm-up</td><td>Five retrieval questions on Lessons 10.5 and 11.1; homework check (`landcover_resnet18.pt`, `review_follow_up.csv`).</td></tr>
+      <tr><td class="t">0:10</td><td class="t">10</td><td><b>11.2</b> Frame and mental model</td><td>The clerk who remembers; the customer-by-product grid; leave the last one out.</td></tr>
+      <tr><td class="t">0:20</td><td class="t">30</td><td><b>11.2</b> Live demo</td><td>The grid and the long tail, the split, the sparse matrix and helpers, random and best-seller baselines, item-kNN, one customer, SVD and its factors, k, content and cold start, coverage, mistakes.</td></tr>
+      <tr><td class="t">0:50</td><td class="t">20</td><td><b>11.2</b> Guided lab</td><td><code class="inline">labs/module-10/l11_2-recommendations/segment_baselines_starter.py</code>; fast pairs take <code class="inline">labs/module-10/l11_2-recommendations/user_based_starter.py</code>.</td></tr>
+      <tr><td class="t">1:10</td><td class="t">15</td><td><b>11.2</b> Start the lesson project</td><td>Picked for You, Steps 1 to 3 (choose on the validation item); Steps 4 to 6 go home.</td></tr>
+      <tr><td class="t">1:25</td><td class="t">10</td><td>Break</td><td>Board: the five ingredients (code, data, environment, randomness, settings).</td></tr>
+      <tr><td class="t">1:35</td><td class="t">10</td><td><b>12.1</b> Frame and mental model</td><td>The lab notebook; five ingredients; why a model file is code.</td></tr>
+      <tr><td class="t">1:45</td><td class="t">30</td><td><b>12.1</b> Live demo</td><td>Seeds, a data fingerprint, versions, joblib and a pickle that runs code, skops and its trusted types, a model card, MLflow with SQLite: runs, a query, three loud mistakes.</td></tr>
+      <tr><td class="t">2:15</td><td class="t">20</td><td><b>12.1</b> Guided lab</td><td><code class="inline">labs/module-10/l12_1-reproducibility/track_demand_starter.py</code>; fast pairs take <code class="inline">labs/module-10/l12_1-reproducibility/safe_handover_starter.py</code>.</td></tr>
+      <tr><td class="t">2:35</td><td class="t">15</td><td><b>12.1</b> Start the lesson project</td><td>A tracked, reproducible churn model, Steps 1 to 3 (four candidates in MLflow); Steps 4 to 6 go home.</td></tr>
+      <tr><td class="t">2:50</td><td class="t">10</td><td>Wrap-up</td><td>Exit ticket (3 questions), homework, bring list for Session 11.</td></tr>
+      <tr><td class="t"><b>Total</b></td><td class="t"><b>180</b></td><td></td><td>Ends at 3:00.</td></tr>
+    </tbody>
+  </table>
+<p><b>In the room.</b> The lessons estimate 110 + 105 = 215 minutes for a solo learner; the room has 150. So each lesson gets the mental model, the demo, one guided lab and the first steps of its project.</p>
+<p><b>Goes home (2 to 3 hours).</b> Project 11.2 Steps 4 to 6 (test once, <code class="inline">picked_for_you.csv</code>) and Project 12.1 Steps 4 to 6 (<code class="inline">churn_final.skops</code>, <code class="inline">churn_final.json</code>, the from-scratch check); Exercises 1 to 3 of each lesson; both quizzes and journals; the unfinished lab.</p>
+<p><b>Protect, in this order:</b> 11.2 demo Steps 4 to 9 (split, baselines, item-kNN: "0.209 vs 0.308"); 12.1 demo Steps 6 to 8 (the pickle that runs code, skops); the MLflow query (Step 12); Lab A of each lesson. <b>Cut first:</b> 11.2 demo Steps 11 and 14 (factors, coverage: point at the page), then 12.1 Step 4, then the 12.1 project start.</p>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">0:00</span><h3>Warm-up: Transfer Learning and Text</h3><span class="dur">10 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">How to run it</div>
+<ul class="tick">
+  <li>Five questions on the slide, two minutes alone, answers by show of hands. Homework check: who has <code class="inline">landcover_resnet18.pt</code> (12.1 will talk about saving files like it) and <code class="inline">review_follow_up.csv</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Questions and answers</div>
+<div class="q"><div class="qn">W1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+<span class="k">from</span> torchvision <span class="k">import</span> models
+m = models.resnet18(weights=<span class="k">None</span>)
+<span class="k">for</span> p <span class="k">in</span> m.parameters():
+    p.requires_grad = <span class="k">False</span>
+m.fc = nn.Linear(<span class="s">512</span>, <span class="s">5</span>)
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> m.parameters() <span class="k">if</span> p.requires_grad))</pre><div class="opts"><div class="opt correct"><code class="inline">2565</code></div></div><div class="why"><b>Why:</b> Frozen first, then a new 5-class head: 512 × 5 + 5 = 2,565. New layers are trainable by default.</div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+print(CountVectorizer().build_analyzer()(<span class="s">"Not bad, NOT bad at all!"</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">['not', 'bad', 'not', 'bad', 'at', 'all']</code></div></div><div class="why"><b>Why:</b> Lowercased, punctuation dropped, every occurrence kept in order by the analyzer. Counted as a bag: not 2, bad 2, at 1, all 1. A unigram model cannot tell Not bad from bad.</div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Why must the backbone be in <code class="inline">eval()</code> mode while you extract features?</div><div class="opts"><div class="opt correct">Batch normalization must use its stored ImageNet statistics; in training mode a tile's features depend on its batch and the stored statistics drift.</div></div><div class="why"><b>Why:</b> no_grad does not do this: it only switches off gradient tracking.</div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Someone fits a <code class="inline">TfidfVectorizer</code> on all reviews, then splits. What is wrong, and how do you fix it?</div><div class="opts"><div class="opt correct">Test reviews shape the vocabulary and the IDF values: a leak. Split first, fit inside a pipeline.</div></div><div class="why"><b>Why:</b> Today's recommender has the same rule in a new costume: the matrix is built from training purchases only.</div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Frozen features: 0.885 with 500 labels, 0.902 with 2,000. What is the better next step than labeling more?</div><div class="opts"><div class="opt correct">Fine-tune the top block (layer4) with a small learning rate: validation 0.876 → 0.924 in the project.</div></div><div class="why"><b>Why:</b> Measuring what more data buys, before paying for it, is the habit.</div></div>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Lesson Plans</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">11.2</span><h3>Recommendation Systems</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Build a sparse customer-by-product matrix from purchase records with SciPy</li>
+  <li>Evaluate a recommender with a leave-last-out split and hit rate at 10, against random and best-seller baselines</li>
+  <li>Implement item-based collaborative filtering with cosine similarity, and matrix factorization with <code class="inline">TruncatedSVD</code></li>
+  <li>Use product attributes for content-based recommendations, and explain how they rescue a brand-new product</li>
+  <li>Judge a recommender on more than accuracy: catalog coverage and popularity bias</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: the clerk who remembers; the grid; leave the last one out</td></tr>
+<tr><td class="t">30m</td><td>Live demo: grid, long tail, split, helpers, baselines, item-kNN, one customer, SVD, k, cold start, coverage</td></tr>
+<tr><td class="t">20m</td><td>Guided lab: <code class="inline">segment_baselines_starter.py</code>, then <code class="inline">user_based_starter.py</code></td></tr>
+<tr><td class="t">15m</td><td>Start the project: Picked for You, Steps 1 to 3</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"A long-serving clerk at the Bend store has watched thousands of customers. When a regular buys a climbing harness she does not reach for the best-selling socks: 'People who buy that harness usually come back for a chalk bag.' No rule book; she noticed which products end up with the same customers. That is collaborative filtering. A new clerk can only point at the best sellers (popularity) or read the labels (content-based). Today we build all three and measure which helps customers most."</p>
+<p>Then the shape of the problem: no target column, a big mostly empty grid of customers × products, and the job is to RANK the empty cells. "The tools you know: cosine similarity from kNN, a cousin of PCA, and holding out data you never train on."</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>Notebook <code class="inline">lesson_11_2</code>. Everything runs in about a second per cell. Ask for predictions before Steps 7, 9 and 13.</p>
+<ol class="steps">
+  <li><b>Two files (2m).</b> "One row per customer and product bought; a product table. No target column this time."
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+interactions = pd.read_csv(<span class="s">"data/interactions.csv"</span>)
+products = pd.read_csv(<span class="s">"data/products_ml.csv"</span>)
+print(interactions.shape, products.shape)
+print(interactions.head(<span class="s">3</span>))</pre>
+<pre class="out">(32178, 5) (200, 8)
+  customer_id product_id  purchases  rating last_purchase_date
+0     C100001   APL-3021          2     5.0         2024-03-20
+1     C100001   KIT-3003          2     5.0         2024-08-27
+2     C100001   KIT-3013          1     NaN         2024-09-23</pre>
+Implicit feedback (purchases) vs explicit (ratings, 38% of rows). We use purchases.</li>
+  <li><b>How empty is the grid? (2m).</b> "A typical customer has bought 9 of 200 products."
+<pre class="code">n_customers = interactions[<span class="s">"customer_id"</span>].nunique()
+n_products = interactions[<span class="s">"product_id"</span>].nunique()
+print(<span class="s">f"{n_customers:,} customers x {n_products} products: {len(interactions) / (n_customers * n_products):.1%} filled"</span>)
+print(interactions.groupby(<span class="s">"customer_id"</span>).size().describe()[[<span class="s">"mean"</span>, <span class="s">"50%"</span>, <span class="s">"min"</span>, <span class="s">"max"</span>]].to_dict())</pre>
+<pre class="out">3,000 customers x 200 products: 5.4% filled
+{'mean': 10.726, '50%': 9.0, 'min': 3.0, 'max': 45.0}</pre>
+An empty cell is not a dislike: they may have bought a tent elsewhere. That is why we RANK empty cells instead of predicting yes or no.</li>
+  <li><b>The long tail (2m).</b> "Two sunscreens reach a third of all customers each; the typical product sells to about 120."
+<pre class="code">buyers = interactions.groupby(<span class="s">"product_id"</span>).size().sort_values(ascending=<span class="k">False</span>)
+names = products.set_index(<span class="s">"product_id"</span>)[<span class="s">"name"</span>]
+print(names[buyers.index[:<span class="s">2</span>]].tolist(), buyers.head(<span class="s">2</span>).tolist())
+print(<span class="s">f"median buyers {buyers.median():.0f}; top 20 products = {buyers.head(20).sum() / buyers.sum():.1%} of purchases"</span>)</pre>
+<pre class="out">['Larkspur Ridge Lookout Sunscreen SPF 50', 'Juniper Vane Tempo Sunscreen SPF 50'] [992, 941]
+median buyers 120; top 20 products = 29.9% of purchases</pre>
+Show the lesson's long-tail chart. A best-seller list shows its left end to everyone.</li>
+  <li><b>Leave the last one out (3m).</b> "Hide each customer's most recent purchase, train on the rest, ask for ten suggestions. Hit = the hidden product is on the list." Draw the lesson's flow diagram.
+<pre class="code">interactions = interactions.sort_values([<span class="s">"customer_id"</span>, <span class="s">"last_purchase_date"</span>, <span class="s">"product_id"</span>])
+test = interactions.groupby(<span class="s">"customer_id"</span>).tail(<span class="s">1</span>)
+train = interactions.drop(test.index)
+print(<span class="s">f"{len(train):,} training rows, {len(test):,} test rows (one per customer)"</span>)</pre>
+<pre class="out">29,178 training rows, 3,000 test rows (one per customer)</pre>
+Latest, not random: it mimics predicting the next purchase and keeps the future out of training (Lesson 1.2's time-split rule).</li>
+  <li><b>A sparse matrix from training rows (2m).</b> "Rows are customers, columns products, a 1 where they bought."
+<pre class="code"><span class="k">from</span> scipy.sparse <span class="k">import</span> csr_matrix
+customer_ids = np.sort(interactions[<span class="s">"customer_id"</span>].unique())
+product_ids = products[<span class="s">"product_id"</span>].to_numpy()
+row_of = pd.Series(np.arange(len(customer_ids)), index=customer_ids)
+col_of = pd.Series(np.arange(len(product_ids)), index=product_ids)
+R = csr_matrix(
+    (np.ones(len(train)), (row_of[train[<span class="s">"customer_id"</span>]].to_numpy(), col_of[train[<span class="s">"product_id"</span>]].to_numpy())),
+    shape=(len(customer_ids), len(product_ids)),
+)
+print(R.shape, <span class="s">f"{R.nnz:,} stored ones"</span>)</pre>
+<pre class="out">(3000, 200) 29,178 stored ones</pre></li>
+  <li><b>Two helpers for every recommender (3m).</b> "Any recommender is a score matrix. Mask what they own, sort descending, take ten." Narrate each line of top_k.
+<pre class="code">owned = R.toarray() &gt; <span class="s">0</span>
+test_col = col_of[test.set_index(<span class="s">"customer_id"</span>).loc[customer_ids, <span class="s">"product_id"</span>]].to_numpy()
+
+<span class="k">def</span> top_k(scores, k=<span class="s">10</span>):
+    scores = np.array(scores, dtype=float)      <span class="c"># a copy, so the caller's matrix is untouched</span>
+    scores[owned] = -np.inf                     <span class="c"># never recommend what they already have</span>
+    <span class="k">return</span> np.argsort(-scores, axis=<span class="s">1</span>)[:, :k]   <span class="c"># column numbers of the k highest scores</span>
+
+<span class="k">def</span> hit_rate(scores, k=<span class="s">10</span>):
+    <span class="k">return</span> (top_k(scores, k) == test_col[:, <span class="k">None</span>]).any(axis=<span class="s">1</span>).mean()
+
+print(owned.shape, test_col[:<span class="s">5</span>])</pre>
+<pre class="out">(3000, 200) [196  46 197  98 107]</pre></li>
+  <li><b>The floor and the baseline (2m).</b> Ask for predictions first: "Random? Best sellers?"
+<pre class="code">rng = np.random.default_rng(<span class="s">42</span>)
+random_scores = rng.random(R.shape)
+popularity = np.asarray(R.sum(axis=<span class="s">0</span>)).ravel()
+popularity_scores = np.tile(popularity, (R.shape[<span class="s">0</span>], <span class="s">1</span>))
+print(<span class="s">f"random      HR@10 = {hit_rate(random_scores):.3f}"</span>)
+print(<span class="s">f"popularity  HR@10 = {hit_rate(popularity_scores):.3f}"</span>)</pre>
+<pre class="out">random      HR@10 = 0.047
+popularity  HR@10 = 0.209</pre>
+Board: random 0.047, best sellers 0.209. "A personal recommender must beat 0.209 to earn its complexity."</li>
+  <li><b>The clerk's trick: item similarity (3m).</b> "Two products are similar if mostly the same customers bought them."
+<pre class="code"><span class="k">from</span> sklearn.metrics.pairwise <span class="k">import</span> cosine_similarity
+item_sim = cosine_similarity(R.T)        <span class="c"># products x products</span>
+np.fill_diagonal(item_sim, <span class="s">0</span>)
+harness = col_of[<span class="s">"CLM-3001"</span>]
+nearest = np.argsort(-item_sim[harness])[:<span class="s">4</span>]
+print(item_sim.shape, names.iloc[harness])
+print(products.iloc[nearest][[<span class="s">"name"</span>]].assign(similarity=item_sim[harness, nearest].round(<span class="s">3</span>)))</pre>
+<pre class="out">(200, 200) Juniper Vane Headwater Climbing Harness
+                                       name  similarity
+121    Juniper Vane Summit Climbing Harness       0.282
+113  Pinecrest Timberline Locking Carabiner       0.268
+125         Cedar Notch Wayfinder Chalk Bag       0.267
+124                Pinecrest Tempo 60m Rope       0.254</pre>
+Nobody told the computer that harnesses, carabiners and ropes belong together.</li>
+  <li><b>Score = similarity to what they own (2m).</b> "One multiplication: R @ item_sim."
+<pre class="code">knn_scores = R @ item_sim
+print(type(knn_scores).__name__, knn_scores.shape)
+print(<span class="s">f"item-kNN    HR@10 = {hit_rate(knn_scores):.3f}"</span>)</pre>
+<pre class="out">ndarray (3000, 200)
+item-kNN    HR@10 = 0.308</pre>
+0.308: about 50% more hits than the best sellers. The core result, in two lines of linear algebra.</li>
+  <li><b>One customer (2m).</b> "Numbers convince; one example builds intuition."
+<pre class="code">r = row_of[<span class="s">"C100027"</span>]
+print(<span class="s">"bought:"</span>, names.iloc[np.flatnonzero(owned[r])].tolist())
+print(<span class="s">"recommended:"</span>, names.iloc[top_k(knn_scores, <span class="s">3</span>)[r]].tolist())
+print(<span class="s">"really bought next:"</span>, names.iloc[test_col[r]])</pre>
+<pre class="out">bought: ['Wrenfield Trailhead Approach Shoes', 'Pinecrest Wayfinder Approach Shoes', 'Tallgrass Talus Chalk Bag']
+recommended: ['Juniper Vane Summit Climbing Harness', 'Juniper Vane Tundra Climbing Pants', 'Wrenfield Meadow Climbing Pants']
+really bought next: Cedar Notch Cairn Climbing Harness</pre>
+Three climbing purchases in, the model offers climbing gear; the harness bought next is on the full top-5 list (lesson page).</li>
+  <li><b>Matrix factorization (3m).</b> "Maybe 200 preferences are really a handful of tastes." Write R ≈ customer factors @ product factors.
+<pre class="code"><span class="k">from</span> sklearn.decomposition <span class="k">import</span> TruncatedSVD
+svd = TruncatedSVD(n_components=<span class="s">5</span>, random_state=<span class="s">42</span>)
+customer_factors = svd.fit_transform(R)
+product_factors = svd.components_
+svd_scores = customer_factors @ product_factors
+print(customer_factors.shape, product_factors.shape, <span class="s">f"variance captured {svd.explained_variance_ratio_.sum():.1%}"</span>)
+print(<span class="s">f"SVD k=5     HR@10 = {hit_rate(svd_scores):.3f}"</span>)</pre>
+<pre class="out">(3000, 5) (5, 200) variance captured 17.1%
+SVD k=5     HR@10 = 0.311</pre></li>
+  <li><b>What did the factors learn? (2m).</b> "The activity column was never shown to the model: a fair check."
+<pre class="code">activity = products[<span class="s">"primary_activity"</span>]
+<span class="k">for</span> f <span class="k">in</span> range(<span class="s">5</span>):
+    top_products = np.argsort(-product_factors[f])[:<span class="s">10</span>]
+    print(<span class="s">f"factor {f}:"</span>, activity.iloc[top_products].value_counts().to_dict())</pre>
+<pre class="out">factor 0: {'general': 8, 'hiking': 2}
+factor 1: {'paddling': 4, 'general': 3, 'running': 3}
+factor 2: {'hiking': 7, 'general': 3}
+factor 3: {'climbing': 10}
+factor 4: {'running': 8, 'general': 1, 'camping': 1}</pre>
+Hiking, climbing, running come out cleanly; factor 0 is popularity. Naming a factor is your interpretation.</li>
+  <li><b>How many factors? (2m).</b> "More factors fit the past better. Do they predict better?"
+<pre class="code">svd_hr = {}
+<span class="k">for</span> k <span class="k">in</span> [<span class="s">2</span>, <span class="s">5</span>, <span class="s">10</span>, <span class="s">20</span>, <span class="s">40</span>]:
+    model = TruncatedSVD(n_components=k, random_state=<span class="s">42</span>)
+    svd_hr[k] = round(float(hit_rate(model.fit_transform(R) @ model.components_)), <span class="s">3</span>)
+print(svd_hr)</pre>
+<pre class="out">{2: 0.22, 5: 0.311, 10: 0.258, 20: 0.227, 40: 0.19}</pre>
+Peak at 5, worse than best sellers at 40: bias-variance in a new costume. Then confess: "We just picked k on the test item. The project does it properly."</li>
+  <li><b>Content and the cold start (2m).</b> "A product launched yesterday has no buyers: collaborative filtering can never show it."
+<pre class="code"><span class="k">from</span> sklearn.preprocessing <span class="k">import</span> OneHotEncoder
+attributes = OneHotEncoder(sparse_output=<span class="k">False</span>).fit_transform(products[[<span class="s">"primary_activity"</span>, <span class="s">"category"</span>]])
+content_sim = cosine_similarity(attributes)
+np.fill_diagonal(content_sim, <span class="s">0</span>)
+content_scores = R @ content_sim
+print(<span class="s">f"content     HR@10 = {hit_rate(content_scores):.3f}"</span>)
+new_product = col_of[<span class="s">"PDL-3018"</span>]
+cold = R.copy().tolil()
+cold[:, new_product] = <span class="s">0</span>                       <span class="c"># wipe its history: a brand-new product</span>
+print(<span class="s">"largest item-kNN similarity after wiping:"</span>, cosine_similarity(cold.tocsr().T)[new_product].max())
+print(<span class="s">"content neighbors:"</span>, names.iloc[np.argsort(-content_sim[new_product])[:<span class="s">2</span>]].tolist())</pre>
+<pre class="out">content     HR@10 = 0.192
+largest item-kNN similarity after wiping: 0.0
+content neighbors: ['Pinecrest Timberline Kayak Paddle', 'Larkspur Ridge Foothill Deck Bag']</pre></li>
+  <li><b>Beyond hit rate (2m).</b> "Two lists with the same hit rate can be very different for the shop."
+<pre class="code">best_sellers = np.argsort(-popularity)[:<span class="s">20</span>]
+methods = {<span class="s">"best sellers"</span>: popularity_scores, <span class="s">"item-kNN"</span>: knn_scores, <span class="s">"SVD k=5"</span>: svd_scores, <span class="s">"content"</span>: content_scores}
+<span class="k">for</span> name, scores <span class="k">in</span> methods.items():
+    lists = top_k(scores)
+    print(<span class="s">f"{name:12s} HR@10 {hit_rate(scores):.3f}  products shown {len(np.unique(lists)):3d}  "</span>
+          <span class="s">f"top-20 slots {np.isin(lists, best_sellers).mean():.0%}"</span>)</pre>
+<pre class="out">best sellers HR@10 0.209  products shown  31  top-20 slots 100%
+item-kNN     HR@10 0.308  products shown 161  top-20 slots 51%
+SVD k=5      HR@10 0.311  products shown 153  top-20 slots 51%
+content      HR@10 0.192  products shown 200  top-20 slots 20%</pre>
+Then the responsibility box: recommendations create the purchases they are trained on (feedback loops), and purchase lists are personal data.</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>Similarity on the wrong axis.</b> <code class="inline">ValueError: matmul: dimension mismatch with signature (n,k=200),(k=3000,m)-&gt;(n,m)</code>. Coach: "Print the shape of your similarity matrix. Products × products?" Pass <code class="inline">R.T</code>.</li>
+  <li><b>Sorting ascending, or forgetting the mask.</b> Silent: HR@10: 0.001 (ascending) and owned slots: 14%, HR@10 without the mask: 0.270. Coach: "Compare with random (0.047). A model that loses to random is a bug."</li>
+  <li><b>Tuning on the test item.</b> Silent and tempting after the k chart. Coach: "Which purchase did you use to choose k?" The project's validation item is the answer.</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (everyone, 12m):</b> <code class="inline">labs/module-10/l11_2-recommendations/segment_baselines_starter.py</code>; reference <code class="inline">labs/module-10/l11_2-recommendations/segment_baselines_solution.py</code>. Is a smarter best-seller list enough? Best sellers of the customer's home store and of their favorite activity, against global best sellers and item-kNN, on the lesson's honest test.</li>
+  <li><b>Expected, Lab A:</b> global 0.209; home-store best sellers 0.209 (36 products shown, 98% of slots from the top 20: stores barely differ); favorite-activity best sellers 0.265 (183 products, 31%); item-kNN 0.308 (161, 51%). Stretch: customers whose favorite is "general" 0.229 vs 0.280 for item-kNN.</li>
+  <li><b>Debrief (2m):</b> a cheap, explainable segment baseline closes about half the gap between best sellers and item-kNN, and shows more of the catalog. That is the bar a vendor's "AI recommendations" should be measured against, not the global best-seller list.</li>
+  <li><b>Lab B (fast pairs, 8m):</b> <code class="inline">labs/module-10/l11_2-recommendations/user_based_starter.py</code>; reference <code class="inline">labs/module-10/l11_2-recommendations/user_based_solution.py</code>. User-based filtering with n neighbors, n chosen on a validation item, then one test score; and a "because you just bought" list. Expected: validation 0.202 / 0.282 / 0.292 / 0.266 for 10 / 50 / 200 / 1,000 neighbors (item-kNN 0.286); chosen 200; test user-kNN 0.321, item-kNN 0.308; last purchase only 0.212. The last-purchase result is an honest negative: in this data the purchase dates within the period carry little order, so the whole history beats the most recent item.</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-10/l11_2-recommendations/debug_recommender.py</code>: a broadcasting error and the wrong axis (loud); the FIRST purchase as the test item and an ascending sort (silent). Fixed: random 0.047, best sellers 0.209, item-kNN 0.308.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p><b>Picked for You</b>: five products per customer, the model chosen on a validation item and scored once. In the room: Steps 1 to 3.</p>
+<ul class="tick">
+  <li>Step 1: three-way split by time. <b>Check:</b> <code class="inline">fit 26,178   validation 3,000   test 3,000</code>.</li>
+  <li>Step 2: the helpers as functions of their inputs. <b>Check:</b> <code class="inline">(3000, 200) 26178</code>.</li>
+  <li>Step 3: candidates on the validation item. <b>Check:</b> best sellers 0.209, item-kNN 0.286, SVD k=5 0.285: chosen item-kNN (a near tie; either is defensible).</li>
+  <li><b>Goes home:</b> Step 4 (test once: 0.308 vs 0.209, +47%), Step 5 (retrain on everything, <code class="inline">picked_for_you.csv</code>, 15,000 rows), Step 6 (sanity checks: 0 owned, 112 products, 63% of slots from the top 20).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<ul class="tick">
+  <li>What does one row of R @ item_sim hold? <b>Answer:</b> each product's summed similarity to everything that customer owns.</li>
+  <li>Why is a random list's hit rate about 0.05? <b>Answer:</b> 10 picks from about 190 unowned products.</li>
+  <li>Why can item-kNN never recommend a brand-new product? <b>Answer:</b> its column is all zeros, so its similarity to everything is 0.</li>
+  <li>Name one cost of the best-seller list besides hit rate. <b>Answer:</b> coverage (31 products); it buries the long tail and new products.</li>
+</ul>
+<p>Workbook self-check, items Q1 to Q6.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q1</b> <span data-sc="1">B) A bug, such as sorting the scores ascending or forgetting to mask owned products</span>; <b>Q2</b> <span data-sc="2"><code class="inline">[1.   0.41 0.41]</code></span>; <b>Q3</b> <span data-sc="3">D) Owned products are similar to what the customer bought, so they score high and crowd the list; customers would see items they already have</span>; <b>Q4</b> <span data-sc="4">A) Catalog coverage: how many different products appear on anyone's list</span>; <b>Q5</b> <span data-sc="5"><code class="inline">(6, 3) (3, 8)</code></span>; <b>Q6</b> <span data-sc="6">C) k was tuned on the test item, so 0.311 is optimistic; choose k on a validation item and score the test item once</span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> the workbook's worked example (four customers, four products) by hand on paper before the demo's 3,000 × 200.</p>
+<p><b>Stretch:</b> Exercise 4 (who benefits: 11+ products 0.357 vs 0.265 for 2 to 5) and the Bonus Challenge (a blended hybrid chosen on validation).</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">12.1</span><h3>Reproducibility and Experiment Tracking</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Name the five ingredients of a reproducible result (code, data, environment, randomness, settings) and capture each one</li>
+  <li>Fingerprint a data file with SHA-256 and record library versions next to a model</li>
+  <li>Save and load a fitted pipeline with <code class="inline">joblib</code>, and explain why loading a pickle from an untrusted source can run arbitrary code</li>
+  <li>Save and load models with <code class="inline">skops.io</code>, reviewing the untrusted types before you trust them</li>
+  <li>Track parameters, metrics and models with MLflow, query the runs, and load a logged model back</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: the lab notebook; five ingredients; a model file is code</td></tr>
+<tr><td class="t">30m</td><td>Live demo: seeds, fingerprint, versions, joblib and the pickle, skops, model card, MLflow runs and a query, three mistakes</td></tr>
+<tr><td class="t">20m</td><td>Guided lab: <code class="inline">track_demand_starter.py</code>, then <code class="inline">safe_handover_starter.py</code></td></tr>
+<tr><td class="t">15m</td><td>Start the project: four tracked candidates, Steps 1 to 3</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"A good chemist writes every experiment in a bound lab notebook: which batch of each chemical, which instrument, the temperature, the result, even the failures. Anyone can repeat it, and nobody argues about what was done." Write the five ingredients: <b>code</b> (Git), <b>data</b> (the exact bytes), <b>environment</b> (versions), <b>randomness</b> (seeds), <b>settings</b> (hyperparameters, features, split). "Record all five plus the results and you have a lab notebook for models. MLflow is a lab notebook that fills itself in."</p>
+<p>Then the uncomfortable half: "A saved model file is not data. A pickle is a small program, and opening it runs it. How you load a model decides whether a stranger's file can run commands on your machine."</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>Notebook <code class="inline">lesson_12_1</code> in a fresh folder (so the MLflow query shows only today's runs). The first MLflow call prints INFO lines while it creates the database: say so before it happens.</p>
+<ol class="steps">
+  <li><b>The model we look after (2m).</b> "Module 2's churn pipeline: preprocessing inside, so it travels with the model."
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.compose <span class="k">import</span> ColumnTransformer
+<span class="k">from</span> sklearn.impute <span class="k">import</span> SimpleImputer
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> Pipeline, make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> OneHotEncoder, StandardScaler
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+numeric = [<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"days_since_last_order"</span>, <span class="s">"returns_12m"</span>,
+           <span class="s">"return_rate"</span>, <span class="s">"support_tickets_12m"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>, <span class="s">"email_opens_90d"</span>]
+categorical = [<span class="s">"home_store"</span>, <span class="s">"region"</span>, <span class="s">"age_group"</span>, <span class="s">"loyalty_tier"</span>, <span class="s">"preferred_category"</span>]
+X, y = customers[numeric + categorical], customers[<span class="s">"churned"</span>]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=<span class="s">0.25</span>, stratify=y, random_state=<span class="s">42</span>)
+
+<span class="k">def</span> build_pipeline(model):
+    prep = ColumnTransformer([
+        (<span class="s">"num"</span>, make_pipeline(SimpleImputer(strategy=<span class="s">"median"</span>), StandardScaler()), numeric),
+        (<span class="s">"cat"</span>, make_pipeline(SimpleImputer(strategy=<span class="s">"most_frequent"</span>), OneHotEncoder(handle_unknown=<span class="s">"ignore"</span>)), categorical),
+    ])
+    <span class="k">return</span> Pipeline([(<span class="s">"prep"</span>, prep), (<span class="s">"model"</span>, model)])
+
+print(X_train.shape, X_test.shape)</pre>
+<pre class="out">(4500, 16) (1500, 16)</pre></li>
+  <li><b>Randomness: seeds (3m).</b> "Fit the same forest twice without a seed, then with one."
+<pre class="code"><span class="k">from</span> sklearn.ensemble <span class="k">import</span> RandomForestClassifier
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> roc_auc_score
+
+<span class="k">def</span> forest_probabilities(seed):
+    forest = build_pipeline(RandomForestClassifier(n_estimators=<span class="s">50</span>, min_samples_leaf=<span class="s">5</span>, random_state=seed))
+    <span class="k">return</span> forest.fit(X_train, y_train).predict_proba(X_test)[:, <span class="s">1</span>]
+
+print(<span class="s">"no seed:  two fits identical?"</span>, np.array_equal(forest_probabilities(<span class="k">None</span>), forest_probabilities(<span class="k">None</span>)))
+print(<span class="s">"seed 42:  two fits identical?"</span>, np.array_equal(forest_probabilities(<span class="s">42</span>), forest_probabilities(<span class="s">42</span>)))
+<span class="k">for</span> seed <span class="k">in</span> [<span class="s">42</span>, <span class="s">7</span>]:
+    print(<span class="s">f"seed {seed:2d}: test AUC {roc_auc_score(y_test, forest_probabilities(seed)):.4f}"</span>)</pre>
+<pre class="out">no seed:  two fits identical? False
+seed 42:  two fits identical? True
+seed 42: test AUC 0.8612
+seed  7: test AUC 0.8560</pre>
+Fix the seed so results repeat; and a third-decimal difference between seeds is noise, not a finding.</li>
+  <li><b>Data: a fingerprint, not a file name (2m).</b> "Change one character and all 64 change."
+<pre class="code"><span class="k">import</span> hashlib
+
+<span class="k">def</span> file_sha256(path):
+    digest = hashlib.sha256()
+    <span class="k">with</span> open(path, <span class="s">"rb"</span>) <span class="k">as</span> f:
+        <span class="k">for</span> chunk <span class="k">in</span> iter(<span class="k">lambda</span>: f.read(<span class="s">1_000_000</span>), <span class="s">b""</span>):   <span class="c"># 1 MB at a time: works for huge files</span>
+            digest.update(chunk)
+    <span class="k">return</span> digest.hexdigest()
+
+data_hash = file_sha256(<span class="s">"data/customers_churn.csv"</span>)
+print(len(data_hash), <span class="s">"hex characters, starting"</span>, data_hash[:<span class="s">16</span>])</pre>
+<pre class="out">64 hex characters, starting ac541c7e8691d33f</pre>
+Same first 16 characters as the lesson page means the same file.</li>
+  <li><b>Environment: write down the versions (1m).</b> Then show (do not run) <code class="inline">python -m pip freeze &gt; requirements-lock.txt</code>.
+<pre class="code"><span class="k">import</span> platform
+<span class="k">from</span> importlib.metadata <span class="k">import</span> version
+environment = {<span class="s">"python"</span>: platform.python_version()}
+<span class="k">for</span> package <span class="k">in</span> [<span class="s">"scikit-learn"</span>, <span class="s">"pandas"</span>, <span class="s">"numpy"</span>, <span class="s">"skops"</span>, <span class="s">"mlflow"</span>]:
+    environment[package] = version(package)
+print(environment)</pre>
+<pre class="out">{'python': '3.12.14', 'scikit-learn': '1.9.1', 'pandas': '3.0.6', 'numpy': '2.5.4', 'skops': '0.16.0', 'mlflow': '3.17.1'}</pre>
+Their versions may differ; what matters is that they record theirs.</li>
+  <li><b>Saving with joblib (2m).</b> "Save the whole pipeline: imputer medians, scaler means and categories are part of the model."
+<pre class="code"><span class="k">import</span> joblib
+<span class="k">from</span> sklearn.ensemble <span class="k">import</span> HistGradientBoostingClassifier
+churn_model = build_pipeline(HistGradientBoostingClassifier(random_state=<span class="s">42</span>)).fit(X_train, y_train)
+test_auc = roc_auc_score(y_test, churn_model.predict_proba(X_test)[:, <span class="s">1</span>])
+print(<span class="s">f"test AUC: {test_auc:.4f}"</span>)
+joblib.dump(churn_model, <span class="s">"churn_model.joblib"</span>)
+reloaded = joblib.load(<span class="s">"churn_model.joblib"</span>)
+print(<span class="s">"same predictions after reload:"</span>, np.array_equal(reloaded.predict_proba(X_test), churn_model.predict_proba(X_test)))</pre>
+<pre class="out">test AUC: 0.8598
+same predictions after reload: True</pre></li>
+  <li><b>A pickle runs code (3m).</b> "Now the catch. This file contains no model; watch what LOADING it does."
+<pre class="code"><span class="k">import</span> pickle
+
+<span class="k">class</span> NotReallyAModel:
+    <span class="k">def</span> __reduce__(self):                       <span class="c"># tells pickle how to "rebuild" this object</span>
+        <span class="k">return</span> (print, (<span class="s">"This line ran while the file was being LOADED."</span>,))
+
+<span class="k">with</span> open(<span class="s">"innocent_looking_model.pkl"</span>, <span class="s">"wb"</span>) <span class="k">as</span> f:
+    pickle.dump(NotReallyAModel(), f)
+loaded = joblib.load(<span class="s">"innocent_looking_model.pkl"</span>)
+print(<span class="s">"what came back:"</span>, loaded)</pre>
+<pre class="out">This line ran while the file was being LOADED.
+what came back: None</pre>
+Pause here. "It was print. It could have been anything, with your permissions." Never load a pickle you did not make or fully trust.</li>
+  <li><b>skops: review before you trust (2m).</b> "skops describes objects instead of storing instructions. Ask the file what it needs before loading it."
+<pre class="code"><span class="k">import</span> skops.io <span class="k">as</span> sio
+sio.dump(churn_model, <span class="s">"churn_model.skops"</span>)
+print(sio.get_untrusted_types(file=<span class="s">"churn_model.skops"</span>))</pre>
+<pre class="out">['numpy.dtype', 'sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor']</pre></li>
+  <li><b>Load with a list you wrote out (2m).</b> "Type the list; do not paste whatever the file reports. A future file that asks for something new should stop you."
+<pre class="code">trusted_types = [<span class="s">"numpy.dtype"</span>, <span class="s">"sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor"</span>]
+safe_model = sio.load(<span class="s">"churn_model.skops"</span>, trusted=trusted_types)
+print(type(safe_model).__name__, [name <span class="k">for</span> name, _ <span class="k">in</span> safe_model.steps])
+print(<span class="s">"same predictions:"</span>, np.array_equal(safe_model.predict_proba(X_test), churn_model.predict_proba(X_test)))</pre>
+<pre class="out">Pipeline ['prep', 'model']
+same predictions: True</pre></li>
+  <li><b>A model card (2m).</b> "A model without its story is half a lab notebook."
+<pre class="code"><span class="k">import</span> json
+model_card = {
+    <span class="s">"model_file"</span>: <span class="s">"churn_model.skops"</span>, <span class="s">"estimator"</span>: type(churn_model[-<span class="s">1</span>]).__name__,
+    <span class="s">"features"</span>: numeric + categorical, <span class="s">"data_file"</span>: <span class="s">"data/customers_churn.csv"</span>, <span class="s">"data_sha256"</span>: data_hash,
+    <span class="s">"split"</span>: {<span class="s">"test_size"</span>: <span class="s">0.25</span>, <span class="s">"stratify"</span>: <span class="s">"churned"</span>, <span class="s">"random_state"</span>: <span class="s">42</span>},
+    <span class="s">"train_rows"</span>: len(X_train), <span class="s">"test_auc"</span>: round(test_auc, <span class="s">4</span>),
+    <span class="s">"environment"</span>: environment, <span class="s">"skops_trusted_types"</span>: trusted_types,
+}
+<span class="k">with</span> open(<span class="s">"churn_model.json"</span>, <span class="s">"w"</span>) <span class="k">as</span> f:
+    json.dump(model_card, f, indent=<span class="s">2</span>)
+print({key: model_card[key] <span class="k">for</span> key <span class="k">in</span> [<span class="s">"estimator"</span>, <span class="s">"train_rows"</span>, <span class="s">"test_auc"</span>]})</pre>
+<pre class="out">{'estimator': 'HistGradientBoostingClassifier', 'train_rows': 4500, 'test_auc': 0.8598}</pre>
+Add aloud what professional cards add: intended use ("rank customers for retention offers, not decisions about individual accounts"), limitations, fairness checks.</li>
+  <li><b>MLflow with a SQLite store (2m).</b> "A lab notebook that fills itself in. Local file, no server, no account." Warn about the INFO lines on first use.
+<pre class="code"><span class="k">import</span> mlflow
+mlflow.set_tracking_uri(<span class="s">"sqlite:///mlflow.db"</span>)     <span class="c"># a single local database file in this folder</span>
+mlflow.set_experiment(<span class="s">"churn-lesson"</span>)
+print(mlflow.get_tracking_uri())</pre>
+<pre class="out">sqlite:///mlflow.db</pre></li>
+  <li><b>One run per candidate (3m).</b> "Log every hyperparameter, including the defaults you never typed."
+<pre class="code"><span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> StratifiedKFold, cross_val_score
+
+cv = StratifiedKFold(n_splits=<span class="s">5</span>, shuffle=<span class="k">True</span>, random_state=<span class="s">42</span>)
+candidates = {<span class="s">"logreg"</span>: LogisticRegression(max_iter=<span class="s">1000</span>), <span class="s">"hgb"</span>: HistGradientBoostingClassifier(random_state=<span class="s">42</span>)}
+<span class="k">for</span> name, model <span class="k">in</span> candidates.items():
+    <span class="k">with</span> mlflow.start_run(run_name=name):
+        scores = cross_val_score(build_pipeline(model), X_train, y_train, cv=cv, scoring=<span class="s">"roc_auc"</span>)
+        mlflow.log_params(model.get_params())
+        mlflow.set_tags({<span class="s">"estimator"</span>: type(model).__name__, <span class="s">"data_sha256"</span>: data_hash})
+        mlflow.log_metrics({<span class="s">"cv_auc"</span>: scores.mean(), <span class="s">"cv_auc_std"</span>: scores.std()})
+        print(<span class="s">f"{name:7s} CV AUC {scores.mean():.3f} ± {scores.std():.3f}"</span>)</pre>
+<pre class="out">logreg  CV AUC 0.832 ± 0.023
+hgb     CV AUC 0.861 ± 0.013</pre></li>
+  <li><b>Query the store (2m).</b> "In a real project the runs come from different days and people: query, do not scroll."
+<pre class="code">runs = mlflow.search_runs(experiment_names=[<span class="s">"churn-lesson"</span>], order_by=[<span class="s">"metrics.cv_auc DESC"</span>])
+print(runs[[<span class="s">"tags.mlflow.runName"</span>, <span class="s">"metrics.cv_auc"</span>, <span class="s">"params.max_iter"</span>]].round(<span class="s">4</span>).to_string(index=<span class="k">False</span>))</pre>
+<pre class="out">tags.mlflow.runName  metrics.cv_auc params.max_iter
+                hgb          0.8615             100
+             logreg          0.8324            1000</pre>
+Parameters are text, metrics numbers. If time allows, <code class="inline">mlflow ui --backend-store-uri sqlite:///mlflow.db</code> in a terminal and open http://127.0.0.1:5000 for a minute; Ctrl+C to stop.</li>
+  <li><b>Three loud mistakes (3m).</b> "No reviewed list; an old tutorial's mlruns folder; changing a parameter inside a run." (First line of each message.)
+<pre class="code"><span class="k">try</span>:
+    sio.load(<span class="s">"churn_model.skops"</span>)
+<span class="k">except</span> Exception <span class="k">as</span> e:
+    print(type(e).__name__ + <span class="s">":"</span>, str(e).splitlines()[<span class="s">0</span>])
+
+<span class="k">try</span>:
+    mlflow.set_tracking_uri(<span class="s">"./mlruns"</span>)
+    mlflow.set_experiment(<span class="s">"churn-lesson"</span>)
+<span class="k">except</span> Exception <span class="k">as</span> e:
+    print(type(e).__name__ + <span class="s">":"</span>, str(e).split(<span class="s">". "</span>)[<span class="s">0</span>] + <span class="s">"."</span>)
+mlflow.set_tracking_uri(<span class="s">"sqlite:///mlflow.db"</span>)
+
+<span class="k">try</span>:
+    <span class="k">with</span> mlflow.start_run(run_name=<span class="s">"oops"</span>):
+        mlflow.log_param(<span class="s">"learning_rate"</span>, <span class="s">0.1</span>)
+        mlflow.log_param(<span class="s">"learning_rate"</span>, <span class="s">0.05</span>)
+<span class="k">except</span> Exception <span class="k">as</span> e:
+    print(type(e).__name__ + <span class="s">":"</span>, str(e).split(<span class="s">". "</span>)[<span class="s">0</span>] + <span class="s">"."</span>)</pre>
+<pre class="out">UntrustedTypesFoundException: Untrusted types found in the file: ['numpy.dtype', 'sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor'].
+MlflowException: The filesystem tracking backend (e.g., './mlruns') is in maintenance mode and will not receive further updates.
+MlflowException: Changing param values is not allowed.</pre>
+Each refusal is a feature: skops makes you decide, MLflow 3.17 needs a database (sqlite:///mlflow.db), a logged parameter cannot be rewritten (one run per setting; the failed run stays in the store).</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>Saving the classifier instead of the pipeline.</b> <code class="inline">ValueError: could not convert string to float: 'Asheville'</code> (raw columns reach a model that expects preprocessed numbers). Coach: "What does your file contain: <code class="inline">type(obj)</code>?" Save the whole Pipeline.</li>
+  <li><b>Trusting whatever the file asks for.</b> <code class="inline">trusted=sio.get_untrusted_types(file=path)</code> silences skops and defeats it. Coach: "Read me the list. Which of these did you expect for this model?" (Lab 12.1 B: the list depends on the model.)</li>
+  <li><b>The old <code class="inline">mlruns</code> store and parameters changed inside a run.</b> Loud, with good messages. Coach: one run per setting, <code class="inline">sqlite:///mlflow.db</code>, and read the message to the end: it names the fix.</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (everyone, 12m):</b> <code class="inline">labs/module-10/l12_1-reproducibility/track_demand_starter.py</code>; reference <code class="inline">labs/module-10/l12_1-reproducibility/track_demand_solution.py</code>. A lab notebook for the weekly demand forecast: CONFIG, fingerprint, three candidates tracked in MLflow (SQLite and artifacts inside <code class="inline">OUTPUT</code>), the winner chosen by querying the store (lowest MAE: <code class="inline">ASC</code>), one test score, a filtered query and a seed check. About 30 seconds.</li>
+  <li><b>Expected, Lab A:</b> fingerprint <code class="inline">c48cd2582060519c</code>; fit 3,840 / validation 1,248 / test 4,896; validation MAE ridge 12.63, forest 11.31, hgb 10.74; hgb first; test MAE (2025) 8.21; below 12: hgb and forest; 4 runs in the store; hgb 10.7445 for every seed; forest 11.3146 twice and 11.2821 with seed 7.</li>
+  <li><b>Debrief (2m):</b> two traps learners hit: <code class="inline">DESC</code> for an error metric (it puts the worst first), and believing a seed matters for every model. The HGB regressor on 3,840 rows uses no randomness (early stopping only switches on above 10,000 rows), so its seed changes nothing; the forest's does. The validation weeks (October to December) are harder than 2025 as a whole, so validation MAE is higher than test MAE: a split by season, not a bug.</li>
+  <li><b>Lab B (fast pairs, 8m):</b> <code class="inline">labs/module-10/l12_1-reproducibility/safe_handover_starter.py</code>; reference <code class="inline">labs/module-10/l12_1-reproducibility/safe_handover_solution.py</code>. Hand a fraud model to another team: skops, a refused load, trust lists for three model kinds, a model card, and a verify function that rebuilds the score from the card alone. Expected: AP 0.4743; HGB needs only TreePredictor; logistic regression <code class="inline">[]</code>; forest <code class="inline">['sklearn.tree._tree.Tree']</code>; verify (True, True, 0.4743) for the original, a byte copy and a pandas re-save; (False, True, 0.4743) after a one-cent edit; skops 462 kB vs joblib 142 kB.</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-10/l12_1-reproducibility/debug_reproducibility.py</code>: <code class="inline">./mlruns</code> and a parameter logged twice (loud); an unseeded forest and an automatic trust list (silent). Fixed, two runs print the same lines ending <code class="inline">test AUC 0.8637</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p><b>A tracked, reproducible churn model.</b> In the room: Steps 1 to 3.</p>
+<ul class="tick">
+  <li>Step 1: one CONFIG, one fingerprint. <b>Check:</b> <code class="inline">data fingerprint: ac541c7e8691d33f</code>.</li>
+  <li>Step 2: data, split, four candidates. <b>Check:</b> <code class="inline">(4500, 16) ['logreg', 'forest', 'hgb', 'hgb-slow']</code>.</li>
+  <li>Step 3: one run per candidate. <b>Check:</b> CV AUC logreg 0.8324, forest 0.8678, hgb 0.8615, hgb-slow 0.8588.</li>
+  <li><b>Goes home:</b> Step 4 (pick from the store: forest; test once 0.8612), Step 5 (<code class="inline">churn_final.skops</code> with trusted <code class="inline">numpy.dtype</code> and <code class="inline">sklearn.tree._tree.Tree</code>, <code class="inline">churn_final.json</code>, the final run), Step 6 (<code class="inline">Reproduced : True</code>). <b>Keep both files and <code class="inline">mlflow.db</code>: Lesson 12.2 serves exactly this model.</b></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<ul class="tick">
+  <li>Name the five ingredients. <b>Answer:</b> code, data, environment, randomness, settings.</li>
+  <li>Same seed, same data, different laptop: could the AUC differ? <b>Answer:</b> in the last digits, yes (thread count, math libraries, versions): that is why the environment is recorded.</li>
+  <li>What did the harmless pickle prove? <b>Answer:</b> loading a pickle runs code chosen by whoever made the file.</li>
+  <li>Why write the trusted list by hand? <b>Answer:</b> so a file that asks for something new stops you instead of loading.</li>
+</ul>
+<p>Workbook self-check, items Q7 to Q12.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q7</b> <span data-sc="7">C) The random seed of the forest</span>; <b>Q8</b> <span data-sc="8"><code class="inline">64 True</code></span>; <b>Q9</b> <span data-sc="9">A) <code class="inline">UntrustedTypesFoundException</code>: it names the HistGradientBoosting tree type, which you must review and pass in <code class="inline">trusted=</code></span>; <b>Q10</b> <span data-sc="10">D) Loading a joblib file (a pickle) can run arbitrary code; skops only rebuilds known types or types you trust explicitly</span>; <b>Q11</b> <span data-sc="11"><code class="inline">True None</code></span>; <b>Q12</b> <span data-sc="12">B) <code class="inline">mlflow.search_runs(experiment_names=["churn"], order_by=["metrics.cv_auc DESC"])</code></span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> the five-ingredient checklist from the workbook next to the keyboard; tick each one as the demo records it.</p>
+<p><b>Stretch:</b> Exercise 4 (<code class="inline">train_churn.py</code>, run twice); the Bonus Challenge (autolog vs explicit logging).</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Closing</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Exit ticket (3 questions, no notes, 4 minutes)</div>
+<ol class="steps">
+  <li>Item-kNN scores HR@10 0.308 and the best sellers 0.209. Explain in one sentence what that comparison means for Pinecrest's email. <b>Answer:</b> the personal list contains the product a customer really bought next for about 31% of customers against 21% for the best-seller row: about 50% more hits, from the same purchase history.</li>
+  <li>Name the five ingredients of a reproducible result and one tool or habit for each. <b>Answer:</b> code (Git, a script), data (SHA-256 fingerprint), environment (versions, <code class="inline">pip freeze</code>), randomness (seeds), settings (a CONFIG dict, logged params).</li>
+  <li>A teammate sends <code class="inline">model.joblib</code>. What do you do before loading it? <b>Answer:</b> only load it if you fully trust the source; better, ask for a skops file, review <code class="inline">get_untrusted_types</code>, and load with an explicit <code class="inline">trusted=</code> list.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Homework (about 2 to 3 hours)</div>
+<ul class="tick">
+  <li><b>Finish both projects.</b> 11.2 Steps 4 to 6 (test HR@10 0.308 vs 0.209, <code class="inline">picked_for_you.csv</code>, sanity checks); 12.1 Steps 4 to 6 (forest, test AUC 0.8612, <code class="inline">churn_final.skops</code> + <code class="inline">churn_final.json</code>, <code class="inline">Reproduced : True</code>).</li>
+  <li><b>Lesson exercises.</b> 11.2: Exercises 1 to 3 (list lengths, purchase counts 0.302, cold start: 100% paddlers); 12.1: Exercises 1 to 3 (fingerprint sensitivity, a logreg trust list, a filtered query). Exercise 4 of each is a stretch.</li>
+  <li><b>Both Quick Quizzes</b> and <b>both journal entries</b> (12.1: the five ingredients for an earlier project of yours).</li>
+  <li><b>Before the Next Lesson (from 12.1):</b> run <code class="inline">mlflow ui --backend-store-uri sqlite:///mlflow.db</code> and explore; add <code class="inline">mlflow.db</code>, <code class="inline">mlruns/</code> and <code class="inline">*.skops</code> to <code class="inline">.gitignore</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Bring list for Session 11</div>
+<ul class="tick">
+  <li>A laptop on which <code class="inline">check_environment.py</code> ends with READY: Session 11 uses <b>FastAPI</b>, <b>uvicorn</b> and <b>httpx</b> (all in the course <code class="inline">requirements.txt</code>; nothing new to install).</li>
+  <li>The 12.1 project files <code class="inline">churn_final.skops</code> and <code class="inline">churn_final.json</code> (and <code class="inline">mlflow.db</code>): Lesson 12.2 serves exactly this model. (12.2 can recreate them, but bring yours.)</li>
+  <li>The <code class="inline">pinecrest-ml</code> folder with <code class="inline">data/</code> (<code class="inline">customers_churn.csv</code>) and <code class="inline">labs/</code> (Session 11 starters are in <code class="inline">labs/module-11/</code>).</li>
+  <li>The workbook and the journal; a terminal that can start <code class="inline">uvicorn</code>.</li>
+</ul>
+</div>
+
+  <div class="sec"><h2>If You Run Long or Short</h2><span class="rule"></span></div>
+<div class="blk warn"><div class="h">Running long: what to protect and what to cut first</div>
+<ul class="tick">
+  <li><b>Protect:</b> 11.2 demo Steps 4 to 9; 12.1 demo Steps 6 to 8 and 12; Lab A of each lesson to TODO 3.</li>
+  <li><b>Cut first (saves 4m):</b> 11.2 demo Steps 11 and 14: show the lesson page's tables.</li>
+  <li><b>Cut second (saves 3m):</b> 12.1 demo Steps 4 and 9: one sentence each.</li>
+  <li><b>Cut third (saves 15m):</b> the 12.1 project start: read the brief, give the Step 3 check numbers, send it home.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Running short: what to add</div>
+<ul class="tick">
+  <li><code class="inline">mlflow ui</code> on the projector: compare the two runs side by side, open a run's parameters.</li>
+  <li>Lab B of each lesson for everyone; debrief user-kNN beating item-kNN on test (0.321 vs 0.308) after being chosen honestly on validation.</li>
+  <li>11.2 Exercise 4 live: who benefits from personalization.</li>
+</ul>
+</div>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 10 · Facilitator Guide · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

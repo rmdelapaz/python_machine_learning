@@ -3,908 +3,1098 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about MLOps - Machine Learning Operations for deploying and maintaining ML systems in production.">
-    <title>Introduction to MLOps - Python Machine Learning</title>
+    <meta name="description" content="Make machine-learning results repeatable: fix seeds, fingerprint data, record the environment, save models safely with skops instead of pickle, and track experiments with MLflow. Python Machine Learning Lesson 12.1.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Reproducibility and Experiment Tracking - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#mlops">MLOps</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#mlops">MLOps</a></li>
-            <li aria-current="page">Introduction to MLOps</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>🚀 Introduction to MLOps: Operationalizing Machine Learning</h1>
+        <div class="container">
+            <header>
+                <h1>🧾 Lesson 12.1: Reproducibility and Experiment Tracking</h1>
+                <p class="lead">Make sure that "our churn model scores 0.860" is still true, provable and rebuildable six months from now, and that the saved model file cannot be used against you.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Explain what MLOps is and how it extends DevOps to the machine learning lifecycle</li>
-                <li>Map the ML lifecycle stages and the MLOps components that support each one</li>
-                <li>Track experiments, parameters, and metrics with MLflow</li>
-                <li>Version and register models so you can reproduce and promote them</li>
-                <li>Set up monitoring to detect data and model drift over time</li>
-                <li>Describe a CI/CD pipeline tailored to machine learning</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Instrument a training script with MLflow to log parameters and metrics, register the resulting model, and outline the monitoring and CI/CD you'd add for production.</p>
-        </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>MLOps (Machine Learning Operations) is a set of practices that combines Machine Learning, DevOps, and Data Engineering to deploy and maintain ML systems in production reliably and efficiently. It addresses the unique challenges of ML systems including data versioning, model versioning, experiment tracking, model monitoring, and automated retraining. This lesson introduces the core concepts, tools, and best practices for implementing MLOps.</p>
-        </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Name the five ingredients of a reproducible result (code, data, environment, randomness, settings) and capture each one</li>
+                        <li>Fingerprint a data file with SHA-256 and record library versions next to a model</li>
+                        <li>Save and load a fitted pipeline with <code>joblib</code>, and explain why loading a pickle from an untrusted source can run arbitrary code</li>
+                        <li>Save and load models with <code>skops.io</code>, reviewing the untrusted types before you trust them</li>
+                        <li>Track parameters, metrics and models with MLflow, query the runs, and load a logged model back</li>
+                    </ul>
+                </div>
 
-        <h2>The ML Lifecycle</h2>
-        
-        <div class="mermaid">
-        flowchart LR
-            A[Business Problem] --> B[Data Collection]
-            B --> C[Data Preparation]
-            C --> D[Feature Engineering]
-            D --> E[Model Training]
-            E --> F[Model Evaluation]
-            F --> G{Good Enough?}
-            
-            G -->|No| H[Hyperparameter Tuning]
-            H --> E
-            
-            G -->|Yes| I[Model Deployment]
-            I --> J[Monitoring]
-            J --> K[Model Performance]
-            K --> L{Degradation?}
-            
-            L -->|Yes| M[Retrain]
-            M --> E
-            
-            L -->|No| J
-            
-            style A fill:#e3f2fd
-            style I fill:#c8e6c9
-            style J fill:#fff9c4
-            style M fill:#ffccbc
-        </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 105 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="applications_recommendation_systems.html">Lesson 11.2: Recommendation Systems</a>; <a href="pipelines_composite.html">Lesson 2.2: Pipelines</a> and <a href="evaluation_cross_validation.html">Lesson 1.3: Cross-Validation</a> are used throughout</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A tracked, reproducible churn model: four candidates compared in MLflow, the winner saved with skops beside a model card, then reloaded and verified from scratch</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code></li>
+                </ul>
+            </header>
 
-        <h2>MLOps Components</h2>
-        
-        <div class="mermaid">
-        graph TB
-            A[MLOps Platform] --> B[Development]
-            A --> C[Deployment]
-            A --> D[Monitoring]
-            
-            B --> B1[Experiment Tracking]
-            B --> B2[Version Control]
-            B --> B3[Feature Store]
-            B --> B4[Model Registry]
-            
-            C --> C1[CI/CD Pipelines]
-            C --> C2[Model Serving]
-            C --> C3[A/B Testing]
-            C --> C4[Infrastructure]
-            
-            D --> D1[Data Drift]
-            D --> D2[Model Performance]
-            D --> D3[System Health]
-            D --> D4[Alerting]
-            
-            style A fill:#f0f4c3
-            style B fill:#e1f5fe
-            style C fill:#f3e5f5
-            style D fill:#fff3e0
-        </div>
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">The Lab Notebook</a></li>
+                        <li><a href="#setup" class="toc-link">The Model We Will Look After</a></li>
+                        <li><a href="#randomness" class="toc-link">Randomness, Data and Environment</a></li>
+                        <li><a href="#saving" class="toc-link">Saving Models: joblib and Its Danger</a></li>
+                        <li><a href="#skops" class="toc-link">Safer Saving with skops</a></li>
+                        <li><a href="#mlflow" class="toc-link">Experiment Tracking with MLflow</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: A Tracked, Reproducible Churn Model</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
 
-        <h2>Setting Up MLOps Environment</h2>
-        
-        <pre class="language-python"><code># Core MLOps libraries
-import mlflow
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 The Lab Notebook</h2>
+
+                <p>Six months from now, someone at Pinecrest will ask: "The churn model in the retention dashboard: which data was it trained on, with which settings, and how good was it?" If the honest answer is "it was in a notebook on someone's laptop", the model cannot be trusted, fixed or improved. <strong>MLOps</strong> (machine-learning operations) is the set of habits and tools that keep models answerable after they leave the notebook. This lesson covers the first half: making results reproducible and keeping a record of every experiment. Lesson 12.2 covers serving and monitoring.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Lab Notebook</h4>
+                    <p>A good chemist writes down every experiment in a bound lab notebook: which batch of each chemical, which instrument, the temperature, the result, even the failures. Anyone can repeat the experiment from the notebook, and nobody argues about what was done. A machine-learning result has the same kinds of ingredients, and each one can quietly change the answer:</p>
+                    <ul>
+                        <li><strong>Code</strong>: the exact steps (version control, such as Git, takes care of this)</li>
+                        <li><strong>Data</strong>: the exact bytes of the file you trained on</li>
+                        <li><strong>Environment</strong>: Python and library versions</li>
+                        <li><strong>Randomness</strong>: seeds for splits, forests and anything shuffled</li>
+                        <li><strong>Settings</strong>: hyperparameters, features, split sizes</li>
+                    </ul>
+                    <p>Record all five, plus the results, and you have a lab notebook for your models. MLflow is a lab notebook that fills itself in.</p>
+                </div>
+
+                <div class="mermaid">
+graph TD
+    A["Code, data, environment"] --> C["One training run"]
+    B["Seeds and settings"] --> C
+    C --> D["Model file"]
+    C --> E["Metrics"]
+    D --> F["Record: MLflow and model card"]
+    E --> F
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>Irreproducible results are not a rare accident; they are what happens by default. Two people rerun "the same" notebook and get different numbers because of an unseeded split, a refreshed data extract or an upgraded library, and an afternoon disappears into finding out why. The habits in this lesson take minutes to add and save days later. They also protect you: a model file is code-like, and the way you load it decides whether a stranger's file can run commands on your machine.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="setup" class="lesson-section">
+                <h2>📂 The Model We Will Look After</h2>
+
+                <p>The model is the churn pipeline from Module 2: impute, scale and one-hot encode inside a <code>ColumnTransformer</code>, then a classifier. A small function builds the pipeline around any classifier, so every experiment uses identical preprocessing.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
-import numpy as np
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order", "returns_12m",
+           "return_rate", "support_tickets_12m", "discount_share", "app_user", "email_opens_90d"]
+categorical = ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"]
+
+X = customers[numeric + categorical]
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
+
+def build_pipeline(model):
+    prep = ColumnTransformer([
+        ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric),
+        ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"), OneHotEncoder(handle_unknown="ignore")), categorical),
+    ])
+    return Pipeline([("prep", prep), ("model", model)])
+
+print(X_train.shape, X_test.shape)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(4500, 16) (1500, 16)</code></pre>
+                </div>
+
+                <p>Note what is already reproducible here: the split has a <code>random_state</code>, and preprocessing lives inside the pipeline, so it travels with the model when you save it. The <code>cancellation_reason</code> leak from Lesson 1.2 is, of course, not among the features.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="randomness" class="lesson-section">
+                <h2>🎲 Randomness, Data and Environment</h2>
+
+                <h3>Seeds</h3>
+                <p>A random forest picks random rows and random features for every tree. Without a seed, each fit draws different random numbers, so the model and its scores change a little each time. Fit the same forest twice without a seed and twice with one:</p>
+
+                <pre><code class="language-python">from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import roc_auc_score
+
+def forest_probabilities(seed):
+    forest = build_pipeline(RandomForestClassifier(n_estimators=50, min_samples_leaf=5, random_state=seed))
+    return forest.fit(X_train, y_train).predict_proba(X_test)[:, 1]
+
+print("no seed:  two fits identical?", np.array_equal(forest_probabilities(None), forest_probabilities(None)))
+print("seed 42:  two fits identical?", np.array_equal(forest_probabilities(42), forest_probabilities(42)))
+for seed in [42, 7]:
+    print(f"seed {seed:2d}: test AUC {roc_auc_score(y_test, forest_probabilities(seed)):.4f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>no seed:  two fits identical? False
+seed 42:  two fits identical? True
+seed 42: test AUC 0.8612
+seed  7: test AUC 0.8560</code></pre>
+                </div>
+
+                <p>With a seed, the same code gives the same model, bit for bit. A different seed gives a slightly different, equally valid model: the third decimal of the AUC moves. That tells you two things. Fix the seed so results are repeatable, and never treat a difference in the third decimal between two models as real unless it survives several seeds or cross-validation folds (Lesson 1.3).</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Seeds Are Necessary, Not Sufficient</h4>
+                    <p>A seed makes randomness repeatable <em>on the same software</em>. Change the number of threads, the operating system's math library or the scikit-learn version, and some results can differ in the last digits even with the same seed (this is why the deep-learning lessons label output "yours may vary slightly"). That is why the environment is one of the five ingredients.</p>
+                </div>
+
+                <h3>Data: a Fingerprint, Not a File Name</h3>
+                <p>"Trained on <code>customers_churn.csv</code>" is not enough: files with the same name get refreshed, edited and re-exported. A <strong>hash</strong> such as SHA-256 turns the exact bytes of a file into a 64-character fingerprint. Change a single character in the file and the fingerprint changes completely. Store the fingerprint with the model and you can later prove which data it saw.</p>
+
+                <pre><code class="language-python">import hashlib
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1_000_000), b""):   # read in 1 MB chunks: works for huge files too
+            digest.update(chunk)
+    return digest.hexdigest()
+
+data_hash = file_sha256("data/customers_churn.csv")
+print(len(data_hash), "hex characters, starting", data_hash[:16])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>64 hex characters, starting ac541c7e8691d33f</code></pre>
+                </div>
+
+                <p>If your fingerprint starts with the same 16 characters, you have exactly the same file as this page. For data in a database rather than a file, record the query and the date of the extract, or hash an exported snapshot. Tools such as DVC take this further by versioning data files alongside Git.</p>
+
+                <h3>Environment: Write Down the Versions</h3>
+                <p>Record the versions of Python and the libraries that touch the model:</p>
+
+                <pre><code class="language-python">import platform
+from importlib.metadata import version
+
+environment = {"python": platform.python_version()}
+for package in ["scikit-learn", "pandas", "numpy", "skops", "mlflow"]:
+    environment[package] = version(package)
+print(environment)</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>{'python': '3.12.14', 'scikit-learn': '1.9.1', 'pandas': '3.0.6', 'numpy': '2.5.4', 'skops': '0.16.0', 'mlflow': '3.17.1'}</code></pre>
+                </div>
+
+                <p>Your versions may differ from the page; what matters is that you record yours. For the whole environment, freeze every installed package into a lock file and keep it next to the code:</p>
+
+                <pre><code class="language-bash">python -m pip freeze &gt; requirements-lock.txt</code></pre>
+
+                <p>The course's <code>requirements.txt</code> from Lesson 0.1 says which packages to install; the frozen lock file says exactly which versions you had, so the environment can be rebuilt later with <code>python -m pip install -r requirements-lock.txt</code>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="saving" class="lesson-section">
+                <h2>💾 Saving Models: joblib and Its Danger</h2>
+
+                <p>Training takes time; predicting should not require retraining. Fit the pipeline once and save the fitted object to a file. The classic tool is <code>joblib</code>, which scikit-learn has recommended for years. Save the <strong>whole pipeline</strong>, not just the classifier at the end: the imputer medians, scaler means and one-hot categories are part of the model (Mistake 2 shows why).</p>
+
+                <pre><code class="language-python">import os
 import joblib
-import json
-import os
-from datetime import datetime
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.ensemble import HistGradientBoostingClassifier
 
-print("MLOps Introduction")
-print("=" * 50)
-print(f"MLflow version: {mlflow.__version__}")
+churn_model = build_pipeline(HistGradientBoostingClassifier(random_state=42)).fit(X_train, y_train)
+test_auc = roc_auc_score(y_test, churn_model.predict_proba(X_test)[:, 1])
+print(f"test AUC: {test_auc:.4f}")
 
-# Create project structure
-def create_project_structure():
-    """Create standard MLOps project structure"""
-    directories = [
-        'data/raw',
-        'data/processed',
-        'models',
-        'notebooks',
-        'src',
-        'tests',
-        'configs',
-        'logs',
-        'artifacts'
-    ]
-    
-    for directory in directories:
-        os.makedirs(directory, exist_ok=True)
-    
-    print("Project structure created:")
-    for directory in directories:
-        print(f"  ├── {directory}/")
+joblib.dump(churn_model, "churn_model.joblib")
+reloaded = joblib.load("churn_model.joblib")
+print("same predictions after reload:", np.array_equal(reloaded.predict_proba(X_test), churn_model.predict_proba(X_test)))
+print(f"file size: {os.path.getsize('churn_model.joblib') / 1e6:.2f} MB")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>test AUC: 0.8598
+same predictions after reload: True
+file size: 0.38 MB</code></pre>
+                </div>
 
-create_project_structure()</code></pre>
+                <p>It works, and the reloaded model gives identical predictions. Now the catch. <code>joblib</code> files are Python <strong>pickles</strong>, and a pickle is not just data: it is a small program of instructions for rebuilding objects, and one allowed instruction is "call this function with these arguments". Here is a harmless demonstration: an object whose saved form tells Python to call <code>print</code> while it is being loaded.</p>
 
-        <h2>Experiment Tracking with MLflow</h2>
-        
-        <pre class="language-python"><code>class ExperimentTracker:
-    """
-    Experiment tracking with MLflow
-    """
-    
-    def __init__(self, experiment_name="ml_experiments"):
-        self.experiment_name = experiment_name
-        mlflow.set_experiment(experiment_name)
-        
-    def train_with_tracking(self, X_train, X_test, y_train, y_test, params):
-        """
-        Train model with experiment tracking
-        """
-        with mlflow.start_run():
-            # Log parameters
-            mlflow.log_params(params)
-            
-            # Train model
-            model = RandomForestClassifier(**params)
-            
-            # Track training time
-            start_time = datetime.now()
-            model.fit(X_train, y_train)
-            training_time = (datetime.now() - start_time).total_seconds()
-            
-            # Make predictions
-            y_pred = model.predict(X_test)
-            
-            # Calculate metrics
-            metrics = {
-                'accuracy': accuracy_score(y_test, y_pred),
-                'precision': precision_score(y_test, y_pred, average='weighted'),
-                'recall': recall_score(y_test, y_pred, average='weighted'),
-                'f1': f1_score(y_test, y_pred, average='weighted'),
-                'training_time': training_time
-            }
-            
-            # Log metrics
-            mlflow.log_metrics(metrics)
-            
-            # Log model
-            mlflow.sklearn.log_model(
-                model, 
-                "model",
-                registered_model_name=f"RandomForest_{self.experiment_name}"
-            )
-            
-            # Log additional artifacts
-            feature_importance = pd.DataFrame({
-                'feature': X_train.columns,
-                'importance': model.feature_importances_
-            }).sort_values('importance', ascending=False)
-            
-            # Save and log feature importance
-            feature_importance.to_csv('artifacts/feature_importance.csv', index=False)
-            mlflow.log_artifact('artifacts/feature_importance.csv')
-            
-            print(f"Run ID: {mlflow.active_run().info.run_id}")
-            print(f"Metrics: {metrics}")
-            
-            return model, metrics
-    
-    def run_experiments(self, X, y):
-        """
-        Run multiple experiments with different parameters
-        """
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
-        
-        # Define parameter grid
-        param_grid = [
-            {'n_estimators': 50, 'max_depth': 5, 'random_state': 42},
-            {'n_estimators': 100, 'max_depth': 10, 'random_state': 42},
-            {'n_estimators': 200, 'max_depth': 15, 'random_state': 42},
-            {'n_estimators': 100, 'max_depth': None, 'random_state': 42}
-        ]
-        
-        results = []
-        
-        print("\nRunning experiments...")
-        print("-" * 40)
-        
-        for i, params in enumerate(param_grid, 1):
-            print(f"\nExperiment {i}: {params}")
-            model, metrics = self.train_with_tracking(
-                X_train, X_test, y_train, y_test, params
-            )
-            results.append({
-                'experiment': i,
-                'params': params,
-                'metrics': metrics
-            })
-        
-        return results
-    
-    def compare_experiments(self, results):
-        """
-        Compare experiment results
-        """
-        import matplotlib.pyplot as plt
-        
-        # Create comparison DataFrame
-        comparison = []
-        for result in results:
-            row = {'experiment': result['experiment']}
-            row.update(result['params'])
-            row.update(result['metrics'])
-            comparison.append(row)
-        
-        df = pd.DataFrame(comparison)
-        
-        # Visualization
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-        
-        # Accuracy comparison
-        axes[0, 0].bar(df['experiment'], df['accuracy'])
-        axes[0, 0].set_xlabel('Experiment')
-        axes[0, 0].set_ylabel('Accuracy')
-        axes[0, 0].set_title('Model Accuracy Comparison')
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # F1 score comparison
-        axes[0, 1].bar(df['experiment'], df['f1'], color='green')
-        axes[0, 1].set_xlabel('Experiment')
-        axes[0, 1].set_ylabel('F1 Score')
-        axes[0, 1].set_title('F1 Score Comparison')
-        axes[0, 1].grid(True, alpha=0.3)
-        
-        # Training time vs n_estimators
-        axes[1, 0].scatter(df['n_estimators'], df['training_time'], s=100)
-        axes[1, 0].set_xlabel('Number of Estimators')
-        axes[1, 0].set_ylabel('Training Time (s)')
-        axes[1, 0].set_title('Training Time vs Model Complexity')
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # Accuracy vs max_depth
-        max_depth_values = df['max_depth'].fillna(20)  # Replace None with 20 for viz
-        axes[1, 1].scatter(max_depth_values, df['accuracy'], s=100, color='orange')
-        axes[1, 1].set_xlabel('Max Depth')
-        axes[1, 1].set_ylabel('Accuracy')
-        axes[1, 1].set_title('Accuracy vs Tree Depth')
-        axes[1, 1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Experiment Results Comparison', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        return df
+                <pre><code class="language-python">import pickle
 
-# Demonstrate experiment tracking
-print("\n" + "=" * 50)
-print("EXPERIMENT TRACKING DEMO")
-print("=" * 50)
+class NotReallyAModel:
+    def __reduce__(self):                       # tells pickle how to "rebuild" this object
+        return (print, ("This line ran while the file was being LOADED.",))
 
-# Generate sample data
-from sklearn.datasets import make_classification
+with open("innocent_looking_model.pkl", "wb") as f:
+    pickle.dump(NotReallyAModel(), f)
 
-X, y = make_classification(
-    n_samples=1000, n_features=20, n_informative=15,
-    n_redundant=5, random_state=42
-)
+loaded = joblib.load("innocent_looking_model.pkl")
+print("what came back:", loaded)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>This line ran while the file was being LOADED.
+what came back: None</code></pre>
+                </div>
 
-# Convert to DataFrame for better tracking
-feature_names = [f'feature_{i}' for i in range(20)]
-X_df = pd.DataFrame(X, columns=feature_names)
+                <div class="card card-danger">
+                    <h4>🛑 Loading a Pickle Runs Code</h4>
+                    <p>Nothing was "predicted"; just opening the file ran a function. Here it was <code>print</code>. In a malicious file it could be any function in Python: one that deletes files, installs software or sends your data away, with your permissions. <strong>Never load a <code>.pkl</code> or <code>.joblib</code> file you did not create yourself or receive from a source you fully trust.</strong> That includes models downloaded from the internet and files attached to messages. Treat a model file like a program you are about to run.</p>
+                </div>
 
-# Initialize tracker and run experiments
-tracker = ExperimentTracker("intro_mlops")
-results = tracker.run_experiments(X_df, y)
+                <p>One more practical problem: a pickle stores references to scikit-learn's internal classes. Load it with a different scikit-learn version and you get an <code>InconsistentVersionWarning</code>, and the model may behave differently or fail. That is another reason to record the environment next to every saved model.</p>
+            </section>
 
-# Compare results
-print("\n" + "=" * 50)
-print("EXPERIMENT COMPARISON")
-print("=" * 50)
-comparison_df = tracker.compare_experiments(results)
-print("\nResults Summary:")
-print(comparison_df[['experiment', 'n_estimators', 'max_depth', 'accuracy', 'f1']])</code></pre>
+            <!-- ============================================================ -->
+            <section id="skops" class="lesson-section">
+                <h2>🔐 Safer Saving with skops</h2>
 
-        <h2>Model Versioning and Registry</h2>
-        
-        <pre class="language-python"><code>class ModelRegistry:
-    """
-    Model versioning and registry management
-    """
-    
-    def __init__(self, registry_path="models"):
-        self.registry_path = registry_path
-        os.makedirs(registry_path, exist_ok=True)
-        self.metadata_file = os.path.join(registry_path, "registry.json")
-        self.load_registry()
-    
-    def load_registry(self):
-        """Load or create model registry"""
-        if os.path.exists(self.metadata_file):
-            with open(self.metadata_file, 'r') as f:
-                self.registry = json.load(f)
-        else:
-            self.registry = {"models": {}}
-    
-    def save_registry(self):
-        """Save registry metadata"""
-        with open(self.metadata_file, 'w') as f:
-            json.dump(self.registry, f, indent=2, default=str)
-    
-    def register_model(self, model, model_name, version, metrics, metadata=None):
-        """
-        Register a new model version
-        """
-        # Create version directory
-        version_path = os.path.join(self.registry_path, model_name, f"v{version}")
-        os.makedirs(version_path, exist_ok=True)
-        
-        # Save model
-        model_file = os.path.join(version_path, "model.pkl")
-        joblib.dump(model, model_file)
-        
-        # Create model metadata
-        model_info = {
-            "name": model_name,
-            "version": version,
-            "path": model_file,
-            "timestamp": datetime.now().isoformat(),
-            "metrics": metrics,
-            "metadata": metadata or {},
-            "model_type": type(model).__name__
-        }
-        
-        # Update registry
-        if model_name not in self.registry["models"]:
-            self.registry["models"][model_name] = {}
-        
-        self.registry["models"][model_name][f"v{version}"] = model_info
-        
-        # Mark as latest version
-        self.registry["models"][model_name]["latest"] = f"v{version}"
-        
-        # Save registry
-        self.save_registry()
-        
-        print(f"Model registered: {model_name} v{version}")
-        print(f"Location: {model_file}")
-        
-        return model_info
-    
-    def load_model(self, model_name, version="latest"):
-        """
-        Load a specific model version
-        """
-        if model_name not in self.registry["models"]:
-            raise ValueError(f"Model {model_name} not found in registry")
-        
-        if version == "latest":
-            version = self.registry["models"][model_name]["latest"]
-        
-        model_info = self.registry["models"][model_name][version]
-        model = joblib.load(model_info["path"])
-        
-        print(f"Loaded model: {model_name} {version}")
-        print(f"Metrics: {model_info['metrics']}")
-        
-        return model, model_info
-    
-    def list_models(self):
-        """List all registered models"""
-        print("\n" + "=" * 50)
-        print("MODEL REGISTRY")
-        print("=" * 50)
-        
-        for model_name, versions in self.registry["models"].items():
-            print(f"\n{model_name}:")
-            latest = versions.get("latest", "None")
-            
-            for version_key, version_info in versions.items():
-                if version_key != "latest" and isinstance(version_info, dict):
-                    is_latest = " (latest)" if version_key == latest else ""
-                    metrics = version_info.get("metrics", {})
-                    print(f"  {version_key}{is_latest}: accuracy={metrics.get('accuracy', 'N/A'):.3f}")
-    
-    def compare_versions(self, model_name):
-        """
-        Compare different versions of a model
-        """
-        if model_name not in self.registry["models"]:
-            print(f"Model {model_name} not found")
-            return
-        
-        versions_data = []
-        for version_key, version_info in self.registry["models"][model_name].items():
-            if version_key != "latest" and isinstance(version_info, dict):
-                versions_data.append({
-                    'version': version_key,
-                    'timestamp': version_info['timestamp'],
-                    'accuracy': version_info['metrics'].get('accuracy', 0),
-                    'f1': version_info['metrics'].get('f1', 0)
-                })
-        
-        if versions_data:
-            df = pd.DataFrame(versions_data)
-            print(f"\nVersion comparison for {model_name}:")
-            print(df.to_string(index=False))
+                <p><code>skops.io</code> saves scikit-learn models in a format that describes the objects instead of storing instructions to run. When loading, it only rebuilds types on its list of known, safe types. Anything else must be named by you, explicitly, before it will load.</p>
 
-# Demonstrate model registry
-print("\n" + "=" * 50)
-print("MODEL REGISTRY DEMO")
-print("=" * 50)
+                <pre><code class="language-python">import skops.io as sio
 
-registry = ModelRegistry()
+sio.dump(churn_model, "churn_model.skops")
+unknown_types = sio.get_untrusted_types(file="churn_model.skops")
+print(unknown_types)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>['numpy.dtype', 'sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor']</code></pre>
+                </div>
 
-# Register models from our experiments
-for i, result in enumerate(results[:3], 1):  # Register first 3 models
-    # Train a simple model for demo
-    model = RandomForestClassifier(**result['params'])
-    X_train, X_test, y_train, y_test = train_test_split(X_df, y, test_size=0.2, random_state=42)
-    model.fit(X_train, y_train)
-    
-    registry.register_model(
-        model=model,
-        model_name="random_forest_classifier",
-        version=i,
-        metrics=result['metrics'],
-        metadata={"experiment_id": result['experiment']}
+                <p><code>get_untrusted_types</code> reads the file <em>without</em> loading it and lists the types that are not on skops's default safe list. Here there are two: a NumPy data type and the tree structure used by histogram gradient boosting. You created this file a moment ago, so you can review the list and trust exactly these two. Write the list out in your code rather than passing whatever the file reports: if a future file asks for something new, you want the load to stop and make you look.</p>
+
+                <pre><code class="language-python">trusted_types = ["numpy.dtype", "sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor"]
+
+safe_model = sio.load("churn_model.skops", trusted=trusted_types)
+print(type(safe_model).__name__, [name for name, _ in safe_model.steps])
+print("same predictions:", np.array_equal(safe_model.predict_proba(X_test), churn_model.predict_proba(X_test)))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>Pipeline ['prep', 'model']
+same predictions: True</code></pre>
+                </div>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Safer, Not Magic</h4>
+                    <p>skops blocks the "run any function" attack that makes pickle dangerous, but trusting a type is still a decision. Its own error message (Mistake 1) explains that a deliberately malformed gradient-boosting tree could crash the process at prediction time. The rule stays the same: only load models from sources you trust, and use skops so that the format itself cannot run code on load.</p>
+                </div>
+
+                <h3>📝 A Model Card Next to the File</h3>
+                <p>A model file without its story is half a lab notebook. Write a small JSON <strong>model card</strong> beside it with everything a future reader needs: what it is, what it saw, how good it was, and how to load it.</p>
+
+                <pre><code class="language-python">import json
+
+model_card = {
+    "model_file": "churn_model.skops",
+    "estimator": type(churn_model[-1]).__name__,
+    "features": numeric + categorical,
+    "data_file": "data/customers_churn.csv",
+    "data_sha256": data_hash,
+    "split": {"test_size": 0.25, "stratify": "churned", "random_state": 42},
+    "train_rows": len(X_train),
+    "test_auc": round(test_auc, 4),
+    "environment": environment,
+    "skops_trusted_types": trusted_types,
+}
+with open("churn_model.json", "w") as f:
+    json.dump(model_card, f, indent=2)
+
+print(json.dumps({key: model_card[key] for key in ["estimator", "train_rows", "test_auc"]}, indent=2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>{
+  "estimator": "HistGradientBoostingClassifier",
+  "train_rows": 4500,
+  "test_auc": 0.8598
+}</code></pre>
+                </div>
+
+                <p>Professional model cards also describe the intended use, known limitations and fairness checks (Lesson 7.3). For a churn model, "intended for ranking customers for retention offers, not for decisions about individual accounts" is exactly the kind of sentence that belongs there.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mlflow" class="lesson-section">
+                <h2>📒 Experiment Tracking with MLflow</h2>
+
+                <p>Hand-written cards are fine for one model. During a project you try dozens of variations, and you will not remember which settings gave which score. <strong>MLflow</strong> is an open-source tool that records every <strong>run</strong> (one training attempt) with its parameters, metrics, files and model, grouped into <strong>experiments</strong>, and gives you a web page to compare them.</p>
+
+                <div class="mermaid">
+graph TD
+    A["Tracking store: mlflow.db"] --> B["Experiment: churn-lesson"]
+    B --> C["Runs: logreg, hgb, final-hgb"]
+    C --> D["Params and metrics"]
+    C --> E["Tags and artifacts"]
+                </div>
+
+                <p>MLflow stores everything locally by default; no server or account is needed. Point it at a SQLite database file in your project folder and name an experiment:</p>
+
+                <pre><code class="language-python">import mlflow
+
+mlflow.set_tracking_uri("sqlite:///mlflow.db")     # a single local database file in this folder
+mlflow.set_experiment("churn-lesson")
+print(mlflow.get_tracking_uri())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>sqlite:///mlflow.db</code></pre>
+                </div>
+
+                <p>The first time, MLflow creates <code>mlflow.db</code> and prints a few <code>INFO</code> lines while it sets up its tables (in a notebook they appear in a pink or gray box under the cell); that is normal. Older tutorials use a folder called <code>mlruns</code> instead; Mistake 3 shows what current MLflow says about that.</p>
+
+                <h3>Logging Runs</h3>
+                <p>Each <code>with mlflow.start_run(...)</code> block is one run. Inside it, log the settings with <code>log_params</code>, the results with <code>log_metrics</code>, and anything else useful as a <strong>tag</strong>. Logging <code>model.get_params()</code> records every hyperparameter, including the defaults you never typed, which are exactly the ones you forget.</p>
+
+                <pre><code class="language-python">from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+candidates = {
+    "logreg": LogisticRegression(max_iter=1000),
+    "hgb": HistGradientBoostingClassifier(random_state=42),
+}
+
+for name, model in candidates.items():
+    with mlflow.start_run(run_name=name):
+        scores = cross_val_score(build_pipeline(model), X_train, y_train, cv=cv, scoring="roc_auc")
+        mlflow.log_params(model.get_params())
+        mlflow.set_tags({"estimator": type(model).__name__, "data_sha256": data_hash})
+        mlflow.log_metrics({"cv_auc": scores.mean(), "cv_auc_std": scores.std()})
+        print(f"{name:7s} CV AUC {scores.mean():.3f} ± {scores.std():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>logreg  CV AUC 0.832 ± 0.023
+hgb     CV AUC 0.861 ± 0.013</code></pre>
+                </div>
+
+                <p>The tracking store now holds both runs. Query them like a table: <code>search_runs</code> returns a pandas DataFrame with one row per run and columns named <code>params.*</code>, <code>metrics.*</code> and <code>tags.*</code>.</p>
+
+                <pre><code class="language-python">runs = mlflow.search_runs(experiment_names=["churn-lesson"], order_by=["metrics.cv_auc DESC"])
+print(runs[["tags.mlflow.runName", "tags.estimator", "metrics.cv_auc", "params.max_iter"]].round(4).to_string(index=False))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>tags.mlflow.runName                 tags.estimator  metrics.cv_auc params.max_iter
+                hgb HistGradientBoostingClassifier          0.8615             100
+             logreg             LogisticRegression          0.8324            1000</code></pre>
+                </div>
+
+                <p>Parameters are stored as text (<code>params.max_iter</code> is <code>"1000"</code> for one model and <code>"100"</code> for the other), metrics as numbers. Sorting by <code>metrics.cv_auc</code> puts gradient boosting first, as in Module 5.</p>
+
+                <h3>Logging the Model Itself</h3>
+                <p>A run can also store the fitted model as an <strong>artifact</strong>. <code>mlflow.sklearn.log_model</code> saves the pipeline (in the skops format by default for scikit-learn models, so the trusted-types list comes along), plus a description of the input columns and the package requirements. Log the final model with its test score and the model card:</p>
+
+                <pre><code class="language-python">requirements = [f"scikit-learn=={version('scikit-learn')}", f"skops=={version('skops')}"]
+
+with mlflow.start_run(run_name="final-hgb") as run:
+    mlflow.log_params(churn_model[-1].get_params())
+    mlflow.log_metric("test_auc", test_auc)
+    mlflow.set_tag("data_sha256", data_hash)
+    logged = mlflow.sklearn.log_model(
+        churn_model, name="model", input_example=X_train.head(3),
+        pip_requirements=requirements, skops_trusted_types=trusted_types,
     )
+    mlflow.log_artifact("churn_model.json")
 
-# List all models
-registry.list_models()
+print("run id:   ", run.info.run_id)
+print("model uri:", logged.model_uri)</code></pre>
+                <div class="card card-output">
+                    <h4>Output (your numbers will differ)</h4>
+                    <pre><code>run id:    a6cbe1778f25416490cbf14f5c3b1799
+model uri: models:/m-f62ff692c869475588fb8453e198f639</code></pre>
+                </div>
 
-# Load latest model
-print("\n" + "=" * 50)
-print("LOADING MODEL FROM REGISTRY")
-print("=" * 50)
-loaded_model, loaded_info = registry.load_model("random_forest_classifier", version="latest")</code></pre>
+                <p>Run IDs and model IDs are random, so yours differ from the page. Passing <code>pip_requirements</code> pins the exact versions to install when someone reuses the model; without it, MLflow tries to work them out itself, which is slower and may record more packages than you need. Anyone with access to the tracking store can now load this exact model by its URI:</p>
 
-        <h2>Data and Model Monitoring</h2>
-        
-        <div class="mermaid">
-        flowchart TB
-            A[Production Model] --> B[Monitor]
-            
-            B --> C[Data Quality]
-            C --> C1[Missing Values]
-            C --> C2[Data Types]
-            C --> C3[Value Ranges]
-            
-            B --> D[Data Drift]
-            D --> D1[Feature Distribution]
-            D --> D2[Statistical Tests]
-            D --> D3[Drift Score]
-            
-            B --> E[Model Performance]
-            E --> E1[Accuracy Metrics]
-            E --> E2[Business Metrics]
-            E --> E3[Latency]
-            
-            B --> F[System Health]
-            F --> F1[CPU/Memory]
-            F --> F2[Request Rate]
-            F --> F3[Error Rate]
-            
-            C --> G{Alert?}
-            D --> G
-            E --> G
-            F --> G
-            
-            G -->|Yes| H[Trigger Action]
-            H --> I[Retrain/Update/Scale]
-            
-            style A fill:#e3f2fd
-            style G fill:#ffccbc
-            style I fill:#c8e6c9
+                <pre><code class="language-python">from_mlflow = mlflow.sklearn.load_model(logged.model_uri)
+print(type(from_mlflow).__name__)
+print("same predictions:", np.array_equal(from_mlflow.predict_proba(X_test), churn_model.predict_proba(X_test)))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>Pipeline
+same predictions: True</code></pre>
+                </div>
+
+                <h3>The MLflow Web Page</h3>
+                <p>Everything above is also browsable. In a terminal, in your project folder (with the environment active), start the MLflow user interface:</p>
+
+                <pre><code class="language-bash">mlflow ui --backend-store-uri sqlite:///mlflow.db</code></pre>
+
+                <p>Open <code>http://127.0.0.1:5000</code> in your browser. You will see the <code>churn-lesson</code> experiment with its three runs; tick runs to compare their parameters and metrics side by side, and open <code>final-hgb</code> to find the model and <code>churn_model.json</code> under its artifacts. Press <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal to stop the server.</p>
+
+                <div class="card card-success">
+                    <h4>✅ What You Have Now</h4>
+                    <p>Seeds for randomness, a fingerprint for data, versions for the environment, logged parameters for settings, and the code in your notebook or script (in Git). All five ingredients are recorded, and the model can be reloaded safely and checked. That is reproducibility.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <h3>1. Loading a skops File Without Reviewing Its Types</h3>
+
+                <pre data-raises="UntrustedTypesFoundException"><code class="language-python">from skops.io.exceptions import UntrustedTypesFoundException
+
+sio.load("churn_model.skops")</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>UntrustedTypesFoundException: Untrusted types found in the file: ['numpy.dtype', 'sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor'].
+
+- sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor: sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor (used by HistGradientBoosting* models) stores raw node indices (left, right, feature_idx) in its nodes array that scikit-learn indexes into without bounds checking. A malicious file can set these to out-of-range values: skops loads the object successfully, but calling .predict() on it can then crash the process (segfault) or read out-of-bounds memory. If you created the file yourself or otherwise fully trust its source, you can load it with trusted=["sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor"].
+
+Only add the specific types you have reviewed and trust to the `trusted` argument; avoid passing everything reported by get_untrusted_types() just to make a file load.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the file contains types outside skops's safe list, and skops refuses to guess whether you trust them. The message even explains the specific risk of each type. <strong>Fix:</strong> call <code>get_untrusted_types</code>, review the list, and pass the types you accept explicitly with <code>trusted=[...]</code>. Do not paste <code>trusted=sio.get_untrusted_types(...)</code> as a habit: that trusts whatever any file asks for, which defeats the point.</p>
+
+                <h3>2. Saving the Classifier but Not the Pipeline</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">joblib.dump(churn_model[-1], "classifier_only.joblib")     # just the last step
+joblib.load("classifier_only.joblib").predict(X_test)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: could not convert string to float: 'Asheville'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the classifier on its own expects the <em>preprocessed</em> numbers, not raw columns like <code>home_store</code>. Without the fitted imputers, scaler and encoder, the model cannot be used, and you cannot rebuild them exactly without the original training data. If the raw data happens to be all numeric, it is worse: no error, just wrong predictions from unscaled inputs. <strong>Fix:</strong> save the whole fitted <code>Pipeline</code>; it is one object.</p>
+
+                <h3>3. Following an Old Tutorial's <code>mlruns</code> Folder</h3>
+
+                <pre data-raises="MlflowException"><code class="language-python">from mlflow.exceptions import MlflowException
+
+mlflow.set_tracking_uri("./mlruns")
+mlflow.set_experiment("churn-lesson")</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>MlflowException: The filesystem tracking backend (e.g., './mlruns') is in maintenance mode and will not receive further updates. Please migrate to a database backend (e.g., 'sqlite:///mlflow.db') to access the latest MLflow features. The `mlflow migrate-filestore` tool migrates your existing data losslessly. See https://mlflow.org/docs/latest/self-hosting/migrate-from-file-store for migration guidance. If the filesystem backend is required for your workflow, set `MLFLOW_ALLOW_FILE_STORE=true` to opt out of this exception.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> older MLflow versions stored runs as plain files in an <code>mlruns</code> folder, and many tutorials still show that. Current MLflow refuses the file store by default and points you to a database backend. <strong>Fix:</strong> use <code>mlflow.set_tracking_uri("sqlite:///mlflow.db")</code> as this lesson does. If you have an old <code>mlruns</code> folder, the message names the <code>mlflow migrate-filestore</code> tool that converts it.</p>
+
+                <h3>4. Changing a Parameter Inside a Run</h3>
+
+                <pre data-raises="MlflowException"><code class="language-python">mlflow.set_tracking_uri("sqlite:///mlflow.db")      # back to the working store after Mistake 3
+mlflow.set_experiment("churn-lesson")
+
+with mlflow.start_run(run_name="oops"):
+    mlflow.log_param("learning_rate", 0.1)
+    mlflow.log_param("learning_rate", 0.05)          # "let me just try another value"</code></pre>
+                <div class="card card-output">
+                    <h4>Error (your run ID will differ)</h4>
+                    <pre><code>MlflowException: Changing param values is not allowed. Param with key='learning_rate' was already logged with value='0.1' for run ID='876877b11e4740a9bf8f07779439b94b'. Attempted logging new value '0.05'.
+
+The cause of this error is typically due to repeated calls
+to an individual run_id event logging.
+...</code></pre>
+                </div>
+                <p><strong>What it means:</strong> a run is a record of one experiment, and MLflow will not let its settings be rewritten afterwards. That is a feature: a logged parameter can be trusted. <strong>Fix:</strong> one run per setting. Loop over the values and start a new run for each, as the project does. The failed run stays in the store, marked as failed; you can delete it in the web page.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: A Tracked, Reproducible Churn Model</h2>
+
+                <p>Put every habit together. You will compare four candidate models with cross-validation, track each in MLflow, pick the best from the tracking store, score it once on the test set, save it with skops beside a model card, and finally prove that a fresh session can rebuild the exact result from the files alone. Work in a new notebook called <code>lesson_12_1_project</code>, or a script called <code>tracked_churn.py</code>. Allow about 50 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: One configuration, one fingerprint <span class="step-time">(5 min)</span></h3>
+                    <p>Put every setting in one dictionary at the top. Changing an experiment then means changing one line, and the dictionary itself can be logged.</p>
+                    <pre><code class="language-python">import hashlib
+import json
+import numpy as np
+import pandas as pd
+import mlflow
+import skops.io as sio
+from importlib.metadata import version
+
+CONFIG = {
+    "data_file": "data/customers_churn.csv",
+    "numeric": ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+                "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user", "email_opens_90d"],
+    "categorical": ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"],
+    "target": "churned",
+    "test_size": 0.25,
+    "seed": 42,
+    "cv_folds": 5,
+    "experiment": "churn-project",
+}
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1_000_000), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+data_hash = file_sha256(CONFIG["data_file"])
+print("data fingerprint:", data_hash[:16])</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>data fingerprint: ac541c7e8691d33f</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Data, split and candidates <span class="step-time">(10 min)</span></h3>
+                    <p>Everything reads from <code>CONFIG</code>. The candidates are the models from Module 5, each with its seed.</p>
+                    <pre><code class="language-python">from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+customers = pd.read_csv(CONFIG["data_file"])
+X = customers[CONFIG["numeric"] + CONFIG["categorical"]]
+y = customers[CONFIG["target"]]
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=CONFIG["test_size"], stratify=y, random_state=CONFIG["seed"])
+
+def build_pipeline(model):
+    prep = ColumnTransformer([
+        ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), CONFIG["numeric"]),
+        ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"), OneHotEncoder(handle_unknown="ignore")),
+         CONFIG["categorical"]),
+    ])
+    return Pipeline([("prep", prep), ("model", model)])
+
+seed = CONFIG["seed"]
+candidates = {
+    "logreg": LogisticRegression(max_iter=1000),
+    "forest": RandomForestClassifier(n_estimators=200, min_samples_leaf=5, n_jobs=-1, random_state=seed),
+    "hgb": HistGradientBoostingClassifier(random_state=seed),
+    "hgb-slow": HistGradientBoostingClassifier(learning_rate=0.05, max_iter=200, min_samples_leaf=40, random_state=seed),
+}
+print(X_train.shape, list(candidates))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(4500, 16) ['logreg', 'forest', 'hgb', 'hgb-slow']</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Track every candidate <span class="step-time">(15 min)</span></h3>
+                    <p>One run per candidate, each with its full parameters, the configuration, the data fingerprint and the cross-validated AUC. The test set is not used here.</p>
+                    <pre><code class="language-python">mlflow.set_tracking_uri("sqlite:///mlflow.db")
+mlflow.set_experiment(CONFIG["experiment"])
+cv = StratifiedKFold(n_splits=CONFIG["cv_folds"], shuffle=True, random_state=seed)
+
+for name, model in candidates.items():
+    with mlflow.start_run(run_name=name):
+        scores = cross_val_score(build_pipeline(model), X_train, y_train, cv=cv, scoring="roc_auc")
+        mlflow.log_params(model.get_params())
+        mlflow.log_dict(CONFIG, "config.json")
+        mlflow.set_tags({"estimator": type(model).__name__, "data_sha256": data_hash})
+        mlflow.log_metrics({"cv_auc": scores.mean(), "cv_auc_std": scores.std()})
+        print(f"{name:8s} CV AUC {scores.mean():.4f} ± {scores.std():.4f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>logreg   CV AUC 0.8324 ± 0.0229
+forest   CV AUC 0.8678 ± 0.0199
+hgb      CV AUC 0.8615 ± 0.0132
+hgb-slow CV AUC 0.8588 ± 0.0127</code></pre>
+                    </div>
+                    <p><code>log_dict</code> stores the configuration as a JSON artifact inside each run, so every run carries the full recipe.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Pick from the tracking store, test once <span class="step-time">(10 min)</span></h3>
+                    <p>Choose the winner by querying MLflow, not by scrolling up: in a real project the runs may come from different days or people. Then refit it on the full training set and score the test set exactly once.</p>
+                    <pre><code class="language-python">from sklearn.metrics import roc_auc_score
+
+runs = mlflow.search_runs(experiment_names=[CONFIG["experiment"]], order_by=["metrics.cv_auc DESC"])
+best_name = runs.iloc[0]["tags.mlflow.runName"]
+print(runs[["tags.mlflow.runName", "metrics.cv_auc"]].round(4).to_string(index=False))
+print("best by CV:", best_name)
+
+final_model = build_pipeline(candidates[best_name]).fit(X_train, y_train)
+test_auc = roc_auc_score(y_test, final_model.predict_proba(X_test)[:, 1])
+print(f"test AUC (used once): {test_auc:.4f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>tags.mlflow.runName  metrics.cv_auc
+             forest          0.8678
+                hgb          0.8615
+           hgb-slow          0.8588
+             logreg          0.8324
+best by CV: forest
+test AUC (used once): 0.8612</code></pre>
+                    </div>
+                    <p>The random forest leads gradient boosting by about 0.006, well inside the fold-to-fold standard deviation of about 0.02: in practice the top three are tied, and you could prefer the smaller or faster one. Picking the top of the table is a rule you decided before looking, which is what keeps the choice honest. On the test set the forest scores 0.861, in line with its cross-validated estimate.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Save with skops, write the card, log the final run <span class="step-time">(10 min)</span></h3>
+                    <p>Save the model, review its untrusted types, write the model card, and log the final model and card to MLflow. The winner here is the random forest, not the gradient boosting model from the lesson, so expect a different list of types to review: a forest is built from <code>sklearn.tree._tree.Tree</code> objects. Run the first two lines, read the list, and only then write it out.</p>
+                    <pre><code class="language-python">sio.dump(final_model, "churn_final.skops")
+print("types to review:", sio.get_untrusted_types(file="churn_final.skops"))
+trusted_types = ["numpy.dtype", "sklearn.tree._tree.Tree"]      # reviewed: expected for a random forest
+
+card = {
+    "model_file": "churn_final.skops",
+    "chosen_from": list(candidates),
+    "estimator": best_name,
+    "params": {k: v for k, v in final_model[-1].get_params().items() if v is not None},
+    "config": CONFIG,
+    "data_sha256": data_hash,
+    "test_auc": round(test_auc, 4),
+    "environment": {pkg: version(pkg) for pkg in ["scikit-learn", "pandas", "numpy", "skops"]},
+    "skops_trusted_types": trusted_types,
+    "intended_use": "Rank customers for retention offers; not for decisions about individual accounts.",
+}
+with open("churn_final.json", "w") as f:
+    json.dump(card, f, indent=2)
+
+with mlflow.start_run(run_name=f"final-{best_name}"):
+    mlflow.log_params(final_model[-1].get_params())
+    mlflow.log_metric("test_auc", test_auc)
+    mlflow.set_tag("data_sha256", data_hash)
+    mlflow.log_artifact("churn_final.json")
+    mlflow.log_artifact("churn_final.skops")
+print("saved churn_final.skops and churn_final.json")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>types to review: ['numpy.dtype', 'sklearn.tree._tree.Tree']
+saved churn_final.skops and churn_final.json</code></pre>
+                    </div>
+                    <p>Here the skops file itself is logged as an artifact, which is quicker than <code>log_model</code>; the lesson showed the <code>log_model</code> route. Either way the run now holds the model, its card and its scores.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Prove it from scratch <span class="step-time">(10 min)</span></h3>
+                    <p>Pretend you are the colleague six months from now. Using only the card and the files, check the data fingerprint, load the model with the reviewed types, and recompute the score.</p>
+                    <pre><code class="language-python">with open("churn_final.json") as f:
+    card_check = json.load(f)
+
+same_data = file_sha256(card_check["config"]["data_file"]) == card_check["data_sha256"]
+model_check = sio.load(card_check["model_file"], trusted=card_check["skops_trusted_types"])
+
+cfg = card_check["config"]
+data_check = pd.read_csv(cfg["data_file"])
+_, X_te, _, y_te = train_test_split(
+    data_check[cfg["numeric"] + cfg["categorical"]], data_check[cfg["target"]],
+    test_size=cfg["test_size"], stratify=data_check[cfg["target"]], random_state=cfg["seed"])
+auc_check = roc_auc_score(y_te, model_check.predict_proba(X_te)[:, 1])
+
+print(f"""Reproducibility check
+Data unchanged      : {same_data}
+Model loaded        : {type(model_check[-1]).__name__}
+Recorded test AUC   : {card_check['test_auc']}
+Recomputed test AUC : {auc_check:.4f}
+Reproduced          : {round(auc_check, 4) == card_check['test_auc']}""")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>Reproducibility check
+Data unchanged      : True
+Model loaded        : RandomForestClassifier
+Recorded test AUC   : 0.8612
+Recomputed test AUC : 0.8612
+Reproduced          : True</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>All settings live in one <code>CONFIG</code> dictionary, and the data fingerprint starts with the same characters as the page</li>
+                        <li>MLflow holds one run per candidate with full parameters, the configuration and the cross-validated AUC</li>
+                        <li>The winner was chosen by querying the tracking store, and the test set was used once</li>
+                        <li><code>churn_final.skops</code> loads with an explicit, reviewed list of trusted types (no pickle involved)</li>
+                        <li><code>churn_final.json</code> records the data fingerprint, configuration, versions, score and intended use</li>
+                        <li>The from-scratch check prints <code>Reproduced : True</code></li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue in the project notebook, so <code>CONFIG</code>, <code>file_sha256</code>, <code>customers</code>, <code>build_pipeline</code> and the MLflow experiment already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: How Sensitive Is a Fingerprint?</h3>
+                    <p>Save two copies of the customer table with pandas: one unchanged (<code>customers.to_csv("copy_same.csv", index=False)</code>) and one where you change a single <code>tenure_months</code> value by 1. Fingerprint the original file and both copies. Which fingerprints match?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Use <code>customers.copy()</code> and <code>.loc[0, "tenure_months"] += 1</code> for the edited version. Before running, predict whether the unchanged copy matches the original.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">customers.to_csv("copy_same.csv", index=False)
+edited = customers.copy()
+edited.loc[0, "tenure_months"] += 1
+edited.to_csv("copy_edited.csv", index=False)
+
+for path in [CONFIG["data_file"], "copy_same.csv", "copy_edited.csv"]:
+    print(f"{path:26s} {file_sha256(path)[:16]}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>data/customers_churn.csv   ac541c7e8691d33f
+copy_same.csv              c730da038611ae5b
+copy_edited.csv            4ab53e1b8a298eb7</code></pre>
+                        </div>
+                        <p>Only the original matches itself. The edited copy differs, as expected, but so does the <em>unchanged</em> copy: <code>email_opens_90d</code> has gaps, so pandas reads it as floats and writes <code>6.0</code> where the original file says <code>6</code>. Same data, different bytes, different fingerprint. A hash compares bytes, not meaning: fingerprint the exact file you train from, keep that file read-only, and do not "clean up" a dataset by re-saving it without recording the new fingerprint.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Review a Different Trust List</h3>
+                    <p>Fit the <code>logreg</code> candidate in a pipeline, save it with skops, and print its untrusted types. Compare with the gradient-boosting list. Then load it, trusting only what you reviewed.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>build_pipeline(candidates["logreg"]).fit(X_train, y_train)</code>, then <code>sio.dump</code> and <code>sio.get_untrusted_types(file=...)</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">logreg_model = build_pipeline(candidates["logreg"]).fit(X_train, y_train)
+sio.dump(logreg_model, "churn_logreg.skops")
+print(sio.get_untrusted_types(file="churn_logreg.skops"))
+
+logreg_loaded = sio.load("churn_logreg.skops", trusted=["numpy.dtype"])
+print(np.array_equal(logreg_loaded.predict_proba(X_test), logreg_model.predict_proba(X_test)))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>['numpy.dtype']
+True</code></pre>
+                        </div>
+                        <p>A linear model is just arrays of numbers plus standard scikit-learn objects, so only the NumPy data type needs your approval; the gradient-boosting tree structure is not involved. The trust list depends on the model, which is why you review it per file instead of copying one list everywhere.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Ask the Tracking Store a Question</h3>
+                    <p>Using <code>mlflow.search_runs</code> with a <code>filter_string</code>, list only the runs in the project experiment whose cross-validated AUC is above 0.85, with their name, estimator and AUC.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>The filter syntax looks like SQL: <code>filter_string="metrics.cv_auc &gt; 0.85"</code>. Runs without that metric (the final run) are left out automatically.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">good = mlflow.search_runs(
+    experiment_names=[CONFIG["experiment"]],
+    filter_string="metrics.cv_auc &gt; 0.85",
+    order_by=["metrics.cv_auc DESC"],
+)
+print(good[["tags.mlflow.runName", "tags.estimator", "metrics.cv_auc"]].round(4).to_string(index=False))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>tags.mlflow.runName                 tags.estimator  metrics.cv_auc
+             forest         RandomForestClassifier          0.8678
+                hgb HistGradientBoostingClassifier          0.8615
+           hgb-slow HistGradientBoostingClassifier          0.8588</code></pre>
+                        </div>
+                        <p>Three of the four candidates clear the bar; logistic regression does not. With dozens of runs, queries like this replace scrolling through notebooks.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: From Notebook to Script (Stretch)</h3>
+                    <p>Reproducible work usually ends up as a script that anyone can run with one command. Write <code>train_churn.py</code>: it reads the settings, fingerprints the data, trains the gradient-boosting pipeline, saves it with skops and a small card, and prints the fingerprint and test AUC. Run it twice with <code>python train_churn.py</code> and check that both runs print the same numbers.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Copy the pieces from the project steps into one file. A script cannot see your notebook's variables, so it needs its own imports and its own <code>CONFIG</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre data-file="train_churn.py"><code class="language-python">"""Train the Pinecrest churn model reproducibly: python train_churn.py"""
+import hashlib
+import json
+
+import pandas as pd
+import skops.io as sio
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+CONFIG = {
+    "data_file": "data/customers_churn.csv",
+    "numeric": ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+                "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user", "email_opens_90d"],
+    "categorical": ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"],
+    "target": "churned",
+    "test_size": 0.25,
+    "seed": 42,
+}
+
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1_000_000), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def main():
+    data = pd.read_csv(CONFIG["data_file"])
+    X = data[CONFIG["numeric"] + CONFIG["categorical"]]
+    y = data[CONFIG["target"]]
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=CONFIG["test_size"], stratify=y, random_state=CONFIG["seed"])
+
+    prep = ColumnTransformer([
+        ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), CONFIG["numeric"]),
+        ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"), OneHotEncoder(handle_unknown="ignore")),
+         CONFIG["categorical"]),
+    ])
+    model = Pipeline([("prep", prep), ("model", HistGradientBoostingClassifier(random_state=CONFIG["seed"]))])
+    model.fit(X_train, y_train)
+    auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+
+    sio.dump(model, "churn_script.skops")
+    card = {"data_sha256": file_sha256(CONFIG["data_file"]), "test_auc": round(auc, 4), "config": CONFIG}
+    with open("churn_script.json", "w") as f:
+        json.dump(card, f, indent=2)
+    print(f"data {card['data_sha256'][:16]}  test AUC {auc:.4f}  saved churn_script.skops")
+
+
+if __name__ == "__main__":
+    main()</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>data ac541c7e8691d33f  test AUC 0.8598  saved churn_script.skops</code></pre>
+                        </div>
+                        <p>Every run prints the same line, because every ingredient is pinned: the data (checked by fingerprint), the seed, the settings and, as long as you keep the same environment, the library versions. The <code>if __name__ == "__main__":</code> guard lets other code import <code>file_sha256</code> from this file without training a model. A natural next step is adding the MLflow logging from the project to the script.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> A colleague emails you <code>best_model.pkl</code> "from a forum, it scores 0.95". What is the main risk of running <code>joblib.load("best_model.pkl")</code>?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Version mismatches cause warnings or odd behavior, but there is a far more serious problem with pickles from strangers. What happened in the NotReallyAModel demonstration?">
+                                A) It might have been saved with a different scikit-learn version
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A suspicious score is a reason for doubt, but loading the file does something before you ever score it. What ran in the demonstration?">
+                                B) The score might be inflated by leakage
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="A pickle can instruct Python to call any function while it is being loaded, so an untrusted file can run code with your permissions before you make a single prediction. Version mismatch and leakage are real concerns too, but secondary to that.">
+                                C) Loading it can run arbitrary code on your computer
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_rng_a = np.random.default_rng(42).random(3)
+quiz_rng_b = np.random.default_rng(42).random(3)
+quiz_rng_c = np.random.default_rng().random(3)
+print(np.array_equal(quiz_rng_a, quiz_rng_b), np.array_equal(quiz_rng_a, quiz_rng_c))</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Two generators with the same seed produce the same numbers. A generator with no seed takes fresh entropy from the operating system, so its numbers differ (with overwhelming probability).">
+                                A) <code>True False</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="default_rng() without a seed does not fall back to a fixed default. Where does it get its starting point?">
+                                B) <code>True True</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Two separate generators created with the same seed: do they start in the same state?">
+                                C) <code>False False</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> In an MLflow run, which pair is logged correctly?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Parameters are what you choose before training; metrics are what you measure after. Which one is the learning rate?">
+                                A) <code>log_metric("learning_rate", 0.05)</code> and <code>log_param("cv_auc", 0.861)</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The learning rate is a setting chosen before training, so it is a parameter. The cross-validated AUC is a result measured after training, so it is a metric. MLflow stores parameters as text and metrics as numbers you can sort and filter.">
+                                B) <code>log_param("learning_rate", 0.05)</code> and <code>log_metric("cv_auc", 0.861)</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="An artifact is a file, such as a model or a JSON card. Is a single number a file?">
+                                C) <code>log_artifact("learning_rate")</code> and <code>log_artifact("cv_auc")</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> <code>sio.get_untrusted_types(file="model.skops")</code> lists three types for a file a teammate saved. What is the right next step?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="That trusts whatever any file asks for, today and in the future. What is the point of the list, then?">
+                                A) Always call <code>sio.load(path, trusted=sio.get_untrusted_types(file=path))</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The list exists so a person can review it. Check that each type is expected for this kind of model, then write the accepted types out explicitly, so a different or tampered file stops instead of loading.">
+                                B) Check that each type is expected for this kind of model, then pass the reviewed types explicitly to <code>trusted=</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="skops was chosen precisely to avoid pickle's code-on-load risk. Is going back to pickle safer?">
+                                C) Re-save the model with <code>joblib</code>, which does not complain about types
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> Your model card records the SHA-256 fingerprint of the training file. Six months later the fingerprint of <code>customers_churn.csv</code> no longer matches. What do you know?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="A hash only compares bytes: any change, even re-saving with different number formatting, produces a different fingerprint. It tells you the file is not the one the model was trained on, not what changed or whether the change matters.">
+                                A) The file is not byte-for-byte the one the model was trained on, though the hash cannot tell you what changed
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A fingerprint compares bytes. Can it tell an important change from a harmless one?">
+                                B) The data now contains errors and the model must be retrained
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The fingerprint is computed from the data file, not the model file. Which file changed?">
+                                C) The saved model file has been tampered with
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>What about <code>mlflow.sklearn.autolog()</code>?</summary>
+                    <p>Autologging patches scikit-learn so that every <code>fit</code> logs its parameters, some training metrics and the model automatically. It is a great way to start, and a fast way to fill the tracking store with runs you did not mean to keep. This lesson logs explicitly so you see what a run contains and log the metric that matters (cross-validated AUC), which autolog cannot guess. Try autolog once in the bonus challenge and compare what it records.</p>
+                </details>
+                <details>
+                    <summary>Should I use joblib or skops?</summary>
+                    <p>For files you create and load yourself, in the same environment, joblib is convenient and common. For anything that crosses a trust boundary (shared with a team, downloaded, uploaded to a model hub, loaded by a server) prefer skops, and keep an explicit trusted-types list. MLflow already uses skops by default for scikit-learn models. For PyTorch, the equivalent habit is saving <code>state_dict</code> and loading with <code>torch.load(..., weights_only=True)</code> (Lesson 10.2).</p>
+                </details>
+                <details>
+                    <summary>Where should <code>mlflow.db</code> live, and should it go in Git?</summary>
+                    <p>Keep it in the project folder for personal work, and add <code>mlflow.db</code> and the <code>mlruns</code> artifact folder to <code>.gitignore</code>: they hold binary files and grow quickly. A team runs one shared MLflow server with a proper database and artifact storage, and everybody sets their tracking URI to it. The code you wrote today works unchanged; only the URI differs.</p>
+                </details>
+                <details>
+                    <summary>MLflow printed many INFO and WARNING lines. Did something go wrong?</summary>
+                    <p>Usually not. The first run creates database tables (INFO lines), and logging a model may warn that it could not determine your <code>pip</code> version or that an integer column cannot hold missing values. Read them once; they are notes, not errors. A red traceback that ends in an exception is an error.</p>
+                </details>
+                <details>
+                    <summary>Is this overkill for a learning project?</summary>
+                    <p>A seed, a fingerprint and a short JSON card take five minutes and make your portfolio projects far more convincing: anyone can rerun them and get your numbers. MLflow pays off as soon as you have more than a handful of experiments, which in the capstone you will.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Create a new experiment, call <code>mlflow.sklearn.autolog()</code>, and fit two of the project's candidates. Open the MLflow web page and compare what autolog recorded with what you logged by hand: which parameters, which metrics (are they training or validation scores?), which artifacts. Then turn autolog off with <code>mlflow.sklearn.autolog(disable=True)</code> and write three sentences on when you would and would not use it. For an extra step, make <code>train_churn.py</code> log to MLflow and read its settings from a <code>config.json</code> file instead of a dictionary in the code.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Pick one project from earlier in this course (for example the churn shortlist from Lesson 1.1 or the recommender from Lesson 11.2). For each of the five ingredients (code, data, environment, randomness, settings), write whether you could reproduce it today and what is missing. Then describe in your own words why loading a stranger's pickle is like running a stranger's program.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>A result is reproducible when code, data, environment, randomness and settings are all recorded</li>
+                        <li>Seeds make randomness repeatable on the same software; differences in the third decimal between seeds are noise</li>
+                        <li>A SHA-256 fingerprint proves which exact data file a model saw; <code>pip freeze</code> records the environment</li>
+                        <li>Save the whole fitted pipeline; <code>joblib</code> works but is a pickle, and loading a pickle can run arbitrary code</li>
+                        <li><code>skops.io</code> refuses unknown types until you review them and pass an explicit <code>trusted=</code> list</li>
+                        <li>MLflow records runs (params, metrics, tags, artifacts, models) in a local SQLite store and lets you query and reload them</li>
+                        <li>A model card (JSON beside the model) holds what a future reader needs, including intended use</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You proved with a harmless demo why untrusted pickles are dangerous, and switched to a safer format</li>
+                        <li>You fingerprinted data and recorded the environment for a real model</li>
+                        <li>You tracked four candidate models in MLflow and chose the winner by querying the store</li>
+                        <li>You saved a model with a model card and reproduced its test score from the files alone</li>
+                        <li>You turned a notebook workflow into a script that gives the same answer every run</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="mlops_deployment.html"><strong>Lesson 12.2: Serving and Monitoring Models</strong></a> you will put the saved churn model behind a web API with FastAPI, validate incoming requests, and watch for data drift: what happens when next quarter's customers stop looking like the ones the model was trained on. The skops file and model card from today's project are exactly what that lesson loads.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>churn_final.skops</code>, <code>churn_final.json</code> and <code>mlflow.db</code> from the project.</li>
+                    <li>Run <code>mlflow ui --backend-store-uri sqlite:///mlflow.db</code> and explore your runs in the browser.</li>
+                    <li>Add <code>mlflow.db</code>, <code>mlruns/</code> and <code>*.skops</code> to your project's <code>.gitignore</code>.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>This lesson had no new algorithm and no higher score, and it may be the one that matters most once you work with others. Anyone can get a good number once; you can now get it again, prove where it came from and hand it over safely. If MLflow's output felt noisy or the trust lists felt fussy, that is normal at first. In a week these steps will be as automatic as typing <code>random_state=42</code>.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="applications_recommendation_systems.html" class="prev-lesson">← Previous: Recommendation Systems</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="mlops_deployment.html" class="next-lesson">Next: Serving and Monitoring Models →</a>
+            </nav>
         </div>
-
-        <pre class="language-python"><code>class ModelMonitor:
-    """
-    Monitor model performance and data drift
-    """
-    
-    def __init__(self, reference_data, reference_predictions):
-        self.reference_data = reference_data
-        self.reference_predictions = reference_predictions
-        self.monitoring_results = []
-        
-    def check_data_quality(self, new_data):
-        """
-        Check data quality issues
-        """
-        issues = []
-        
-        # Check for missing values
-        missing = new_data.isnull().sum()
-        if missing.any():
-            issues.append(f"Missing values found: {missing[missing > 0].to_dict()}")
-        
-        # Check data types
-        ref_dtypes = self.reference_data.dtypes
-        new_dtypes = new_data.dtypes
-        if not ref_dtypes.equals(new_dtypes):
-            issues.append("Data type mismatch detected")
-        
-        # Check value ranges
-        for col in new_data.columns:
-            if col in self.reference_data.columns:
-                ref_min, ref_max = self.reference_data[col].min(), self.reference_data[col].max()
-                new_min, new_max = new_data[col].min(), new_data[col].max()
-                
-                if new_min < ref_min * 0.9 or new_max > ref_max * 1.1:
-                    issues.append(f"Value range drift in {col}: [{new_min:.2f}, {new_max:.2f}]")
-        
-        return issues
-    
-    def calculate_drift(self, new_data):
-        """
-        Calculate feature drift using statistical tests
-        """
-        from scipy import stats
-        
-        drift_scores = {}
-        
-        for col in new_data.columns:
-            if col in self.reference_data.columns:
-                # Kolmogorov-Smirnov test
-                ks_statistic, p_value = stats.ks_2samp(
-                    self.reference_data[col],
-                    new_data[col]
-                )
-                
-                drift_scores[col] = {
-                    'ks_statistic': ks_statistic,
-                    'p_value': p_value,
-                    'is_drifted': p_value < 0.05
-                }
-        
-        return drift_scores
-    
-    def monitor_performance(self, model, new_data, new_labels):
-        """
-        Monitor model performance on new data
-        """
-        # Make predictions
-        predictions = model.predict(new_data)
-        
-        # Calculate metrics
-        performance = {
-            'accuracy': accuracy_score(new_labels, predictions),
-            'precision': precision_score(new_labels, predictions, average='weighted'),
-            'recall': recall_score(new_labels, predictions, average='weighted'),
-            'f1': f1_score(new_labels, predictions, average='weighted')
-        }
-        
-        # Compare with baseline
-        baseline_accuracy = accuracy_score(
-            self.reference_predictions[:len(new_labels)], 
-            self.reference_predictions[:len(new_labels)]
-        )
-        
-        performance['accuracy_drop'] = baseline_accuracy - performance['accuracy']
-        
-        return performance
-    
-    def generate_monitoring_report(self, model, new_data, new_labels):
-        """
-        Generate comprehensive monitoring report
-        """
-        print("\n" + "=" * 50)
-        print("MODEL MONITORING REPORT")
-        print("=" * 50)
-        print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        # Data quality check
-        print("\n1. DATA QUALITY CHECK")
-        print("-" * 30)
-        quality_issues = self.check_data_quality(new_data)
-        if quality_issues:
-            for issue in quality_issues:
-                print(f"  ⚠️ {issue}")
-        else:
-            print("  ✅ No data quality issues detected")
-        
-        # Data drift check
-        print("\n2. DATA DRIFT ANALYSIS")
-        print("-" * 30)
-        drift_scores = self.calculate_drift(new_data)
-        drifted_features = [f for f, scores in drift_scores.items() if scores['is_drifted']]
-        
-        if drifted_features:
-            print(f"  ⚠️ Drift detected in {len(drifted_features)} features:")
-            for feature in drifted_features[:5]:  # Show top 5
-                print(f"    - {feature}: KS={drift_scores[feature]['ks_statistic']:.3f}")
-        else:
-            print("  ✅ No significant drift detected")
-        
-        # Performance monitoring
-        print("\n3. MODEL PERFORMANCE")
-        print("-" * 30)
-        performance = self.monitor_performance(model, new_data, new_labels)
-        
-        print(f"  Accuracy: {performance['accuracy']:.3f}")
-        print(f"  Precision: {performance['precision']:.3f}")
-        print(f"  Recall: {performance['recall']:.3f}")
-        print(f"  F1-Score: {performance['f1']:.3f}")
-        
-        if performance['accuracy_drop'] > 0.05:
-            print(f"  ⚠️ Performance degradation detected: {performance['accuracy_drop']:.3f}")
-        
-        # Recommendations
-        print("\n4. RECOMMENDATIONS")
-        print("-" * 30)
-        
-        if drifted_features or performance['accuracy_drop'] > 0.05:
-            print("  🔄 Consider retraining the model")
-        if quality_issues:
-            print("  🔧 Fix data quality issues before prediction")
-        if not (drifted_features or quality_issues or performance['accuracy_drop'] > 0.05):
-            print("  ✅ Model performing well, no action needed")
-        
-        return {
-            'timestamp': datetime.now(),
-            'quality_issues': quality_issues,
-            'drift_scores': drift_scores,
-            'performance': performance
-        }
-
-# Demonstrate monitoring
-print("\n" + "=" * 50)
-print("MODEL MONITORING DEMO")
-print("=" * 50)
-
-# Create reference data
-X_ref, X_new, y_ref, y_new = train_test_split(X_df, y, test_size=0.3, random_state=42)
-
-# Train reference model
-ref_model = RandomForestClassifier(n_estimators=100, random_state=42)
-ref_model.fit(X_ref, y_ref)
-ref_predictions = ref_model.predict(X_ref)
-
-# Initialize monitor
-monitor = ModelMonitor(X_ref, ref_predictions)
-
-# Simulate new data with some drift
-X_new_drifted = X_new.copy()
-X_new_drifted.iloc[:, :5] = X_new_drifted.iloc[:, :5] * 1.5  # Introduce drift
-
-# Generate monitoring report
-report = monitor.generate_monitoring_report(ref_model, X_new_drifted, y_new)</code></pre>
-
-        <h2>CI/CD Pipeline for ML</h2>
-        
-        <pre class="language-python"><code># Example CI/CD configuration (GitHub Actions)
-cicd_yaml = """
-name: ML Pipeline
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  test-and-train:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v2
-    
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.8'
-    
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
-    
-    - name: Run tests
-      run: |
-        pytest tests/
-    
-    - name: Data validation
-      run: |
-        python src/validate_data.py
-    
-    - name: Train model
-      run: |
-        python src/train_model.py
-    
-    - name: Evaluate model
-      run: |
-        python src/evaluate_model.py
-    
-    - name: Register model
-      if: github.ref == 'refs/heads/main'
-      run: |
-        python src/register_model.py
-    
-    - name: Deploy model
-      if: github.ref == 'refs/heads/main'
-      run: |
-        python src/deploy_model.py
-"""
-
-print("\n" + "=" * 50)
-print("EXAMPLE CI/CD PIPELINE")
-print("=" * 50)
-print("GitHub Actions workflow for ML pipeline:")
-print(cicd_yaml)</code></pre>
-
-        <h2>Best Practices</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 MLOps Best Practices</h3>
-            <ul>
-                <li><strong>Version Everything:</strong> Code, data, models, and configurations</li>
-                <li><strong>Automate Pipeline:</strong> From data ingestion to model deployment</li>
-                <li><strong>Monitor Continuously:</strong> Track data quality, drift, and performance</li>
-                <li><strong>Test Rigorously:</strong> Unit tests, integration tests, and model validation</li>
-                <li><strong>Document Thoroughly:</strong> Experiments, decisions, and model behavior</li>
-                <li><strong>Reproducible Results:</strong> Use seeds, log environments, containerize</li>
-                <li><strong>Feature Store:</strong> Centralize feature engineering and serving</li>
-                <li><strong>A/B Testing:</strong> Validate model improvements in production</li>
-                <li><strong>Rollback Strategy:</strong> Quick reversion to previous model versions</li>
-                <li><strong>Security:</strong> Encrypt models, secure APIs, audit access</li>
-            </ul>
-        </div>
-
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Build a Complete MLOps Pipeline</h3>
-            <p>Create an end-to-end MLOps pipeline:</p>
-            <ul>
-                <li>Set up experiment tracking with MLflow</li>
-                <li>Implement automated model training</li>
-                <li>Create model registry with versioning</li>
-                <li>Build monitoring dashboard</li>
-                <li>Deploy with API endpoint</li>
-            </ul>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: Implement Data Drift Detection</h3>
-            <p>Build a drift detection system:</p>
-            <ul>
-                <li>Collect reference data distribution</li>
-                <li>Implement statistical tests for drift</li>
-                <li>Create alerting mechanism</li>
-                <li>Automate retraining triggers</li>
-            </ul>
-        </div>
-
-        <h2>Summary</h2>
-        
-        <div class="summary-box">
-            <h3>✅ You've Learned</h3>
-            <ul>
-                <li>What MLOps is and why it's essential</li>
-                <li>The complete ML lifecycle from development to production</li>
-                <li>Experiment tracking and model versioning</li>
-                <li>Model registry and management</li>
-                <li>Data quality and drift monitoring</li>
-                <li>Performance monitoring and alerting</li>
-                <li>CI/CD pipelines for ML</li>
-                <li>Best practices for production ML systems</li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Think back to a model or experiment you built without tracking
-            anything. If you had to reproduce it exactly six months later, what would be missing — and how would MLOps
-            practices have saved you?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>MLOps applies DevOps discipline — automation, versioning, testing, monitoring — to the full ML lifecycle, not just the code.</li>
-                <li>Experiment tracking (e.g. MLflow) records parameters, metrics, and artifacts so results are reproducible and comparable.</li>
-                <li>Model versioning and a registry let you promote, roll back, and audit which model is in production.</li>
-                <li>Monitoring for data and model drift, plus CI/CD, keeps deployed models reliable as the world changes.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You now understand what it takes to run machine learning as a dependable, repeatable practice — tracking
-        experiments, versioning models, and planning the monitoring and automation that keep production models healthy.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>How is MLOps different from DevOps?</summary>
-            <p>MLOps includes everything DevOps does, plus the parts unique to ML: versioning data and models (not just
-            code), tracking experiments, and monitoring for drift where model performance decays even when the code doesn't change.</p>
-        </details>
-        <details>
-            <summary>Do small projects really need MLOps?</summary>
-            <p>Start light. Even a solo project benefits from experiment tracking and model versioning. Add heavier
-            automation, registries, and monitoring as the project's stakes and lifespan grow.</p>
-        </details>
-        <details>
-            <summary>What is model drift?</summary>
-            <p>It's when a deployed model's performance degrades because incoming data (data drift) or the underlying
-            relationships (concept drift) have changed since training. Monitoring catches it so you can retrain in time.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>With the MLOps big picture in place, the next step gets concrete — packaging and deploying a model as a live
-        service that real applications can call.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Add MLflow logging to a training script and compare two runs in the tracking UI.</li>
-            <li>Register your best run's model and note how you'd promote it from staging to production.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>MLOps is what turns clever experiments into systems people can rely on. Learning it is how you go from
-            "I trained a model" to "I run machine learning that lasts." You're stepping up to the professional level — keep going!</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="nlp_text_preprocessing.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="mlops_deployment.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -912,24 +1102,10 @@ print(cicd_yaml)</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
     <script src="js/course-enhancements.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-        mermaid.initialize({ 
-            startOnLoad: true,
-            theme: 'default',
-            themeVariables: {
-                primaryColor: '#f0f0f0',
-                primaryTextColor: '#333',
-                primaryBorderColor: '#667eea',
-                lineColor: '#667eea',
-                secondaryColor: '#e0e7ff',
-                tertiaryColor: '#fff'
-            }
-        });
-    </script>
 </body>
 </html>

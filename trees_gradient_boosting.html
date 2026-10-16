@@ -3,1276 +3,1048 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Master Gradient Boosting and XGBoost in Python. Learn boosting algorithms, hyperparameter tuning, feature importance, and practical applications.">
-    <title>Gradient Boosting & XGBoost Path - Python Machine Learning</title>
+    <meta name="description" content="Learn gradient boosting from the inside: residual fitting, learning rate and early stopping, then HistGradientBoosting, XGBoost and LightGBM on Pinecrest churn and demand data. Python Machine Learning Lesson 5.3.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Gradient Boosting - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
-    <main id="main-content">
-    <header role="banner">
-        <h1>Gradient Boosting & XGBoost</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Supervised Learning</a>
-        <span class="separator">›</span>
-        <span class="current">Gradient Boosting & XGBoost</span>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
     </nav>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Explain how boosting builds trees sequentially, each one correcting the last's errors</li>
-            <li>Train gradient boosting models with scikit-learn and XGBoost</li>
-            <li>Tune the key hyperparameters: learning rate, <code>n_estimators</code>, <code>max_depth</code>, and subsample</li>
-            <li>Use early stopping and regularization to prevent overfitting</li>
-            <li>Compare gradient boosting with random forests and know when to reach for each</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Train and tune a gradient boosting / XGBoost model on a real dataset, using early stopping and the learning-rate / estimator trade-off.</p>
-    </div>
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>🚀 Lesson 5.3: Gradient Boosting</h1>
+                <p class="lead">Build a strong model out of many weak ones, each fixing what the last ones got wrong, and learn to run the three boosting libraries that win most tabular-data problems.</p>
 
-    <h2>Sequential Learning at Its Best! 🚀</h2>
-    
-    <blockquote>
-        <p>Gradient Boosting builds powerful predictive models by sequentially combining weak learners, with each new model correcting the errors of the previous ones. XGBoost, the extreme gradient boosting implementation, has dominated machine learning competitions with its speed and performance. Master these algorithms that consistently deliver state-of-the-art results across diverse problems.</p>
-    </blockquote>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain how boosting adds small trees one after another, each fitted to the remaining errors, and how the learning rate controls the step size</li>
+                        <li>Train <code>HistGradientBoostingClassifier</code> and <code>HistGradientBoostingRegressor</code> on data with missing values and native categorical columns</li>
+                        <li>Use early stopping on a validation set to choose the number of trees without touching the test set</li>
+                        <li>Run the same model with <code>XGBClassifier</code> and <code>LGBMClassifier</code>, including their categorical and early-stopping options</li>
+                        <li>Choose between a random forest, scikit-learn's boosting and the external libraries for a given problem</li>
+                    </ul>
+                </div>
 
-    <h2>Gradient Boosting Framework</h2>
-    
-    <div class="mermaid">
-    graph TD
-        A[Gradient Boosting] --> B[Base Learners]
-        A --> C[Loss Functions]
-        A --> D[Boosting Process]
-        
-        B --> E[Decision Trees]
-        B --> F[Linear Models]
-        
-        C --> G[Regression Loss]
-        C --> H[Classification Loss]
-        C --> I[Custom Loss]
-        
-        D --> J[Sequential Training]
-        D --> K[Residual Fitting]
-        D --> L[Gradient Descent]
-        
-        J --> M[Tree 1]
-        M --> N[Tree 2]
-        N --> O[Tree n]
-        
-        O --> P[Weighted Sum]
-        P --> Q[Final Prediction]
-        
-        style A fill:#f9f,stroke:#333,stroke-width:2px
-        style D fill:#bbf,stroke:#333,stroke-width:2px
-        style Q fill:#9f9,stroke:#333,stroke-width:2px
-    </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 100 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="trees_random_forest.html">Lesson 5.2: Bagging and Random Forests</a> (and <a href="evaluation_metrics.html">Lesson 1.4</a> for ROC AUC)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A weekly demand forecaster for 24 products in 4 stores, trained on 2024 and tested on 2025</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code> and <code>data/weekly_demand.csv</code> (exercise 4 uses <code>data/transactions.csv</code>)</li>
+                </ul>
+            </header>
 
-    <h2>Understanding Gradient Boosting</h2>
-    
-    <h3>Core Concepts and Implementation</h3>
-    <pre class="language-python"><code>import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
-from sklearn.metrics import accuracy_score, mean_squared_error, r2_score
-from sklearn.datasets import make_classification, make_regression, load_breast_cancer
-from sklearn.preprocessing import StandardScaler
-import warnings
-warnings.filterwarnings('ignore')
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Many Small Corrections</a></li>
+                        <li><a href="#by-hand" class="toc-link">Boosting by Hand</a></li>
+                        <li><a href="#hgb" class="toc-link">HistGradientBoosting on Churn</a></li>
+                        <li><a href="#early-stopping" class="toc-link">Learning Rate, Trees and Early Stopping</a></li>
+                        <li><a href="#xgb-lgbm" class="toc-link">XGBoost and LightGBM</a></li>
+                        <li><a href="#choose" class="toc-link">Which Booster, and When</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: Weekly Demand Forecaster</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Many Small Corrections</h2>
 
-# Generate datasets
-np.random.seed(42)
+                <p>In Lesson 5.2 you built a random forest: hundreds of deep trees, each trained on its own random sample of customers, and averaged at the end. The trees never talk to each other. Each one is a noisy expert, and averaging cancels much of the noise. That is why a forest mostly fixes <strong>variance</strong>, the jumpiness of a single deep tree.</p>
 
-# Classification data
-X_class, y_class = make_classification(
-    n_samples=1000, n_features=20, n_informative=15,
-    n_redundant=5, n_clusters_per_class=2,
-    random_state=42
-)
+                <p><strong>Boosting</strong> works the other way round. It trains trees <em>one after another</em>. Each tree is small and weak on its own, and each one is trained on exactly what the trees before it still get wrong. Add enough of these small corrections and you get a model that can follow very detailed patterns. Boosting mostly fixes <strong>bias</strong>, the stubbornness of a model that is too simple.</p>
 
-# Regression data
-X_reg, y_reg = make_regression(
-    n_samples=1000, n_features=20, n_informative=15,
-    noise=0.1, random_state=42
-)
+                <div class="card card-info">
+                    <h4>💡 Mental Model: Putting on a Golf Green</h4>
+                    <p>A golfer rarely sinks a long putt in one stroke. The first putt gets the ball close; the second one corrects what is left; the third tidies up. Every stroke aims at the <em>remaining</em> distance, not at the original one.</p>
+                    <p>Boosting is the same. The model starts with a crude guess (the average). Tree 1 aims at the gap between that guess and the truth. Tree 2 aims at what is still left after tree 1, and so on. The <strong>learning rate</strong> is how hard you hit each putt: a gentle tap (a small learning rate) needs more strokes but rarely overshoots the hole.</p>
+                </div>
 
-class GradientBoostingAnalyzer:
-    """Comprehensive Gradient Boosting Analysis"""
-    
-    def __init__(self):
-        self.models = {}
-        self.histories = {}
-        self.predictions = {}
-        
-    def manual_gradient_boosting(self, X, y, n_estimators=10, learning_rate=0.1, max_depth=3):
-        """
-        Simplified manual implementation of gradient boosting
-        """
-        from sklearn.tree import DecisionTreeRegressor
-        
-        print("Manual Gradient Boosting Implementation")
-        print("="*50)
-        
-        # Initialize predictions with mean
-        F = np.full(len(y), np.mean(y))
-        
-        # Store trees and training progress
-        trees = []
-        train_scores = []
-        
-        for i in range(n_estimators):
-            # Calculate residuals (negative gradient)
-            residuals = y - F
-            
-            # Fit a tree to residuals
-            tree = DecisionTreeRegressor(max_depth=max_depth, random_state=i)
-            tree.fit(X, residuals)
-            
-            # Make predictions
-            predictions = tree.predict(X)
-            
-            # Update F
-            F = F + learning_rate * predictions
-            
-            # Store tree
-            trees.append(tree)
-            
-            # Calculate loss
-            mse = mean_squared_error(y, F)
-            train_scores.append(mse)
-            
-            if i % 20 == 0:
-                print(f"Iteration {i}: MSE = {mse:.4f}")
-        
-        return trees, train_scores, F
-    
-    def visualize_boosting_process(self, X, y, n_estimators=50):
-        """Visualize how boosting improves predictions iteratively"""
-        
-        # Use 1D data for visualization
-        X_1d = X[:, 0].reshape(-1, 1)
-        
-        # Train gradient boosting with different numbers of estimators
-        n_estimators_list = [1, 5, 10, 20, 50]
-        
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-        axes = axes.flatten()
-        
-        for idx, n_est in enumerate(n_estimators_list):
-            gb = GradientBoostingRegressor(
-                n_estimators=n_est,
-                learning_rate=0.1,
-                max_depth=3,
-                random_state=42
-            )
-            gb.fit(X_1d, y)
-            
-            # Sort for plotting
-            sort_idx = X_1d.flatten().argsort()
-            X_sorted = X_1d[sort_idx]
-            y_sorted = y[sort_idx]
-            y_pred_sorted = gb.predict(X_sorted)
-            
-            # Plot
-            axes[idx].scatter(X_sorted, y_sorted, alpha=0.5, s=10, label='Data')
-            axes[idx].plot(X_sorted, y_pred_sorted, 'r-', linewidth=2, 
-                          label=f'GB ({n_est} trees)')
-            axes[idx].set_xlabel('Feature')
-            axes[idx].set_ylabel('Target')
-            axes[idx].set_title(f'n_estimators = {n_est}')
-            axes[idx].legend()
-            axes[idx].grid(True, alpha=0.3)
-            
-            # Add R² score
-            r2 = r2_score(y, gb.predict(X_1d))
-            axes[idx].text(0.05, 0.95, f'R² = {r2:.3f}', 
-                          transform=axes[idx].transAxes,
-                          fontsize=11, verticalalignment='top',
-                          bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        
-        # Remove extra subplot
-        fig.delaxes(axes[5])
-        
-        plt.suptitle('Gradient Boosting: Effect of Number of Trees', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-    
-    def compare_boosting_algorithms(self, X, y, task='classification'):
-        """Compare different boosting algorithms"""
-        
-        from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
-        from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.3, random_state=42
-        )
-        
-        if task == 'classification':
-            models = {
-                'Gradient Boosting': GradientBoostingClassifier(n_estimators=100, random_state=42),
-                'AdaBoost': AdaBoostClassifier(n_estimators=100, random_state=42),
-                'Hist Gradient Boosting': HistGradientBoostingClassifier(max_iter=100, random_state=42)
-            }
-            metric = 'accuracy'
-        else:
-            models = {
-                'Gradient Boosting': GradientBoostingRegressor(n_estimators=100, random_state=42),
-                'AdaBoost': AdaBoostRegressor(n_estimators=100, random_state=42),
-                'Hist Gradient Boosting': HistGradientBoostingRegressor(max_iter=100, random_state=42)
-            }
-            metric = 'r2'
-        
-        results = {}
-        
-        for name, model in models.items():
-            # Train
-            model.fit(X_train, y_train)
-            
-            # Predict
-            y_pred_train = model.predict(X_train)
-            y_pred_test = model.predict(X_test)
-            
-            # Evaluate
-            if task == 'classification':
-                train_score = accuracy_score(y_train, y_pred_train)
-                test_score = accuracy_score(y_test, y_pred_test)
-            else:
-                train_score = r2_score(y_train, y_pred_train)
-                test_score = r2_score(y_test, y_pred_test)
-            
-            results[name] = {
-                'train_score': train_score,
-                'test_score': test_score,
-                'model': model
-            }
-            
-            self.models[name] = model
-        
-        return results
-    
-    def learning_curves_analysis(self, X, y, gb_model=None):
-        """Analyze learning curves and convergence"""
-        
-        if gb_model is None:
-            gb_model = GradientBoostingClassifier(
-                n_estimators=200,
-                learning_rate=0.1,
-                max_depth=3,
-                subsample=0.8,
-                random_state=42
-            )
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.3, random_state=42
-        )
-        
-        # Fit model
-        gb_model.fit(X_train, y_train)
-        
-        # Get staged predictions for learning curves
-        train_scores = []
-        test_scores = []
-        
-        for pred_train, pred_test in zip(
-            gb_model.staged_predict(X_train),
-            gb_model.staged_predict(X_test)
-        ):
-            if hasattr(gb_model, 'classes_'):  # Classification
-                train_scores.append(accuracy_score(y_train, pred_train))
-                test_scores.append(accuracy_score(y_test, pred_test))
-            else:  # Regression
-                train_scores.append(r2_score(y_train, pred_train))
-                test_scores.append(r2_score(y_test, pred_test))
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Learning curves
-        axes[0].plot(train_scores, label='Training Score', linewidth=2)
-        axes[0].plot(test_scores, label='Validation Score', linewidth=2)
-        axes[0].set_xlabel('Boosting Iterations')
-        axes[0].set_ylabel('Score')
-        axes[0].set_title('Learning Curves')
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3)
-        
-        # Find best iteration
-        best_iter = np.argmax(test_scores)
-        axes[0].axvline(x=best_iter, color='red', linestyle='--', 
-                       label=f'Best iteration: {best_iter}')
-        axes[0].legend()
-        
-        # Loss reduction
-        if hasattr(gb_model, 'train_score_'):
-            axes[1].plot(gb_model.train_score_, label='Training Loss', linewidth=2)
-            axes[1].set_xlabel('Boosting Iterations')
-            axes[1].set_ylabel('Loss')
-            axes[1].set_title('Training Loss Reduction')
-            axes[1].legend()
-            axes[1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Gradient Boosting Convergence Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return train_scores, test_scores, best_iter
-    
-    def feature_importance_analysis(self, model, feature_names=None):
-        """Analyze and visualize feature importance"""
-        
-        if feature_names is None:
-            feature_names = [f'Feature_{i}' for i in range(len(model.feature_importances_))]
-        
-        # Get feature importances
-        importances = model.feature_importances_
-        indices = np.argsort(importances)[::-1]
-        
-        # Select top features
-        top_n = min(20, len(importances))
-        top_indices = indices[:top_n]
-        top_features = [feature_names[i] for i in top_indices]
-        top_importances = importances[top_indices]
-        
-        # Create DataFrame
-        importance_df = pd.DataFrame({
-            'feature': feature_names,
-            'importance': importances
-        }).sort_values('importance', ascending=False)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Bar plot
-        axes[0].barh(range(top_n), top_importances)
-        axes[0].set_yticks(range(top_n))
-        axes[0].set_yticklabels(top_features)
-        axes[0].set_xlabel('Feature Importance')
-        axes[0].set_title(f'Top {top_n} Features')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Cumulative importance
-        cumsum = np.cumsum(importance_df['importance'].values)
-        axes[1].plot(cumsum / cumsum[-1], linewidth=2)
-        axes[1].axhline(y=0.8, color='r', linestyle='--', label='80% importance')
-        axes[1].axhline(y=0.95, color='g', linestyle='--', label='95% importance')
-        axes[1].set_xlabel('Number of Features')
-        axes[1].set_ylabel('Cumulative Importance')
-        axes[1].set_title('Cumulative Feature Importance')
-        axes[1].legend()
-        axes[1].grid(True, alpha=0.3)
-        
-        # Find number of features for thresholds
-        n_80 = np.argmax(cumsum / cumsum[-1] >= 0.8) + 1
-        n_95 = np.argmax(cumsum / cumsum[-1] >= 0.95) + 1
-        axes[1].text(n_80, 0.8, f'  {n_80} features', verticalalignment='center')
-        axes[1].text(n_95, 0.95, f'  {n_95} features', verticalalignment='center')
-        
-        plt.suptitle('Feature Importance Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return importance_df
+                <div class="mermaid">
+graph TD
+    A["Start: predict the average"] --> B["Measure what is still wrong"]
+    B --> C["Fit a small tree to those errors"]
+    C --> D["Add a fraction of it to the model"]
+    D --> B
+    D --> E["Stop when validation stops improving"]
+                </div>
 
-# Initialize analyzer
-analyzer = GradientBoostingAnalyzer()
+                <h3>🤔 Why This Matters</h3>
+                <p>Gradient-boosted trees are the default first choice for tabular data: rows of customers, transactions or products with a mix of numbers and categories. They handle nonlinear effects and interactions without feature engineering, they do not need scaled features, and the modern implementations handle missing values and categories directly. On the Pinecrest churn data you will see boosting beat logistic regression clearly, and in the project it cuts the demand forecast error by more than a third compared with a per-product average.</p>
+            </section>
 
-print("="*60)
-print("GRADIENT BOOSTING FUNDAMENTALS")
-print("="*60)
+            <!-- ============================================================ -->
+            <section id="by-hand" class="lesson-section">
+                <h2>✋ Boosting by Hand</h2>
 
-# Manual implementation
-print("\nManual Gradient Boosting Implementation:")
-trees, train_scores, predictions = analyzer.manual_gradient_boosting(
-    X_reg[:100], y_reg[:100], n_estimators=50
-)
+                <p>The idea is simple enough to code in a dozen lines, and doing it once by hand makes every hyperparameter in the libraries obvious. Make a wavy one-feature regression problem: 200 noisy training points, plus 1,000 fresh points from the same curve to play the role of new data.</p>
 
-# Plot training progress
-plt.figure(figsize=(10, 5))
-plt.plot(train_scores, linewidth=2)
-plt.xlabel('Iteration')
-plt.ylabel('MSE')
-plt.title('Gradient Boosting Training Progress')
-plt.grid(True, alpha=0.3)
+                <pre><code class="language-python">import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(42)
+
+def make_wave(n):
+    x = rng.uniform(0, 10, n)
+    y = 3 * np.sin(x) + 0.3 * x + rng.normal(0, 0.5, n)
+    return x.reshape(-1, 1), y
+
+X_toy, y_toy = make_wave(200)
+X_new, y_new = make_wave(1000)
+print(X_toy.shape, X_new.shape, f"noise variance {0.5 ** 2}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(200, 1) (1000, 1) noise variance 0.25</code></pre>
+                </div>
+
+                <p>The noise has a variance of 0.25, so no model can get the mean squared error (MSE) on new data below about 0.25. Keep that floor in mind. Now boost: start from the mean, then repeatedly fit a depth-2 tree to the <strong>residuals</strong> (truth minus current prediction) and add a fraction of its output.</p>
+
+                <pre><code class="language-python">def boost(learning_rate, n_trees, report=()):
+    pred = np.full(len(y_toy), y_toy.mean())       # start: the average
+    pred_new = np.full(len(y_new), y_toy.mean())
+    for m in range(1, n_trees + 1):
+        residual = y_toy - pred                       # what is still wrong
+        tree = DecisionTreeRegressor(max_depth=2, random_state=42).fit(X_toy, residual)
+        pred += learning_rate * tree.predict(X_toy)   # a small step towards the truth
+        pred_new += learning_rate * tree.predict(X_new)
+        if m in report:
+            print(f"{m:4d} trees  train MSE {np.mean((y_toy - pred) ** 2):.3f}"
+                  f"  new-data MSE {np.mean((y_new - pred_new) ** 2):.3f}")
+    return pred_new
+
+curve = boost(learning_rate=0.3, n_trees=300, report=(1, 3, 10, 30, 100, 300))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>   1 trees  train MSE 3.055  new-data MSE 2.964
+   3 trees  train MSE 1.364  new-data MSE 1.410
+  10 trees  train MSE 0.353  new-data MSE 0.476
+  30 trees  train MSE 0.156  new-data MSE 0.361
+ 100 trees  train MSE 0.075  new-data MSE 0.393
+ 300 trees  train MSE 0.010  new-data MSE 0.471</code></pre>
+                </div>
+
+                <p>Read the two columns separately. The training error falls forever: with 300 trees it is almost zero, far below the 0.25 noise floor, which means the model has started memorizing noise. The new-data error falls quickly, bottoms out around 30 trees, then creeps back up. That U-turn is overfitting, and it is why every boosting library offers <strong>early stopping</strong>: watch a validation set and stop adding trees when it stops improving.</p>
+
+                <pre><code class="language-python">import matplotlib.pyplot as plt
+
+grid = np.linspace(0, 10, 400).reshape(-1, 1)
+X_keep, y_keep = X_new, y_new
+X_new, y_new = grid, 3 * np.sin(grid.ravel()) + 0.3 * grid.ravel()   # draw the fits on a grid
+
+fig, axes = plt.subplots(1, 3, figsize=(10, 3.2), layout="constrained", sharey=True)
+for ax, n in zip(axes, [1, 10, 300]):
+    ax.scatter(X_toy, y_toy, s=8, color="gray", alpha=0.6, label="training points")
+    ax.plot(grid, boost(0.3, n), color="#667eea", linewidth=2, label="boosted model")
+    ax.set_title(f"{n} tree{'s' if n &gt; 1 else ''}")
+    ax.set_xlabel("x")
+axes[0].set_ylabel("y")
+axes[0].legend(loc="lower left", fontsize=8)
 plt.show()
 
-# Visualize boosting process
-print("\nVisualizing boosting process...")
-analyzer.visualize_boosting_process(X_reg[:200], y_reg[:200])
+X_new, y_new = X_keep, y_keep   # restore the real new data</code></pre>
 
-# Compare boosting algorithms
-print("\n" + "="*60)
-print("COMPARING BOOSTING ALGORITHMS")
-print("="*60)
+                <figure>
+                    <img src="images/trees_gradient_boosting_by_hand.png" alt="Three panels of the same noisy wave of training points. After 1 tree the model is a crude three-step staircase; after 10 trees the staircase follows the wave closely; after 300 trees the line zigzags to chase individual noisy points." width="1100" height="352" loading="lazy">
+                    <figcaption>One tree is a crude staircase, ten trees follow the wave, and 300 trees start chasing individual noisy points: the overfitting you saw in the new-data column.</figcaption>
+                </figure>
 
-results_class = analyzer.compare_boosting_algorithms(X_class, y_class, task='classification')
-print("\nClassification Results:")
-for name, metrics in results_class.items():
-    print(f"{name:25} - Train: {metrics['train_score']:.4f}, Test: {metrics['test_score']:.4f}")
+                <h3>📐 The One Formula</h3>
+                <p>After <em>m</em> trees the model is the starting guess plus a sum of shrunken trees:</p>
+                <p class="text-center"><strong>F<sub>m</sub>(x) = F<sub>m-1</sub>(x) + ν · h<sub>m</sub>(x)</strong></p>
+                <p>Here <em>h<sub>m</sub></em> is the new tree and ν (nu) is the learning rate. The word <strong>gradient</strong> comes from what the tree is fitted to. For squared error, the residual <code>y - F(x)</code> is exactly the negative gradient of the loss, so "fit the residuals" and "take a gradient-descent step" are the same thing. For other losses the libraries fit the negative gradient of <em>that</em> loss instead. For churn, the classifier works on the log-odds scale and each tree is fitted to <code>y - p</code>, the gap between the 0/1 label and the current predicted probability. Same golf, different green.</p>
 
-# Learning curves
-print("\nAnalyzing learning curves...")
-train_scores, test_scores, best_iter = analyzer.learning_curves_analysis(X_class, y_class)
-print(f"Best iteration: {best_iter}")
+                <p>The learning rate trades speed for quality. Run the same procedure with a full-strength step and with a gentle one:</p>
 
-# Feature importance
-print("\nAnalyzing feature importance...")
-gb_model = analyzer.models['Gradient Boosting']
-importance_df = analyzer.feature_importance_analysis(gb_model)</code></pre>
+                <pre><code class="language-python">for lr in [1.0, 0.05]:
+    print(f"learning rate {lr}")
+    boost(learning_rate=lr, n_trees=300, report=(10, 100, 300))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>learning rate 1.0
+  10 trees  train MSE 0.220  new-data MSE 0.449
+ 100 trees  train MSE 0.006  new-data MSE 0.508
+ 300 trees  train MSE 0.000  new-data MSE 0.520
+learning rate 0.05
+  10 trees  train MSE 2.454  new-data MSE 2.398
+ 100 trees  train MSE 0.210  new-data MSE 0.369
+ 300 trees  train MSE 0.124  new-data MSE 0.354</code></pre>
+                </div>
 
-    <h2>XGBoost: Extreme Gradient Boosting</h2>
-    
-    <h3>Advanced Implementation with XGBoost</h3>
-    <pre class="language-python"><code>import xgboost as xgb
-from xgboost import XGBClassifier, XGBRegressor
+                <p>With a step of 1.0 the model memorizes fast and its best new-data error is worse. With 0.05 it needs many more trees, but its error at 300 trees (0.354) beats the best that 0.3 ever reached. That is the general rule: <strong>a smaller learning rate with more trees usually generalizes a little better</strong>, at the cost of training time. You will pair a small learning rate with early stopping, which picks the number of trees for you.</p>
+            </section>
 
-class XGBoostAnalyzer:
-    """Comprehensive XGBoost Analysis"""
-    
-    def __init__(self):
-        self.models = {}
-        self.cv_results = {}
-        
-    def xgboost_basics(self, X, y, task='classification'):
-        """Basic XGBoost implementation"""
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.3, random_state=42
-        )
-        
-        if task == 'classification':
-            # XGBoost Classifier
-            xgb_model = XGBClassifier(
-                n_estimators=100,
-                max_depth=6,
-                learning_rate=0.3,
-                objective='binary:logistic',
-                subsample=0.8,
-                colsample_bytree=0.8,
-                random_state=42
-            )
-        else:
-            # XGBoost Regressor
-            xgb_model = XGBRegressor(
-                n_estimators=100,
-                max_depth=6,
-                learning_rate=0.3,
-                objective='reg:squarederror',
-                subsample=0.8,
-                colsample_bytree=0.8,
-                random_state=42
-            )
-        
-        # Train with evaluation
-        eval_set = [(X_train, y_train), (X_test, y_test)]
-        xgb_model.fit(
-            X_train, y_train,
-            eval_set=eval_set,
-            eval_metric='logloss' if task == 'classification' else 'rmse',
-            early_stopping_rounds=10,
-            verbose=False
-        )
-        
-        # Store model
-        self.models['xgboost'] = xgb_model
-        
-        # Get predictions
-        y_pred = xgb_model.predict(X_test)
-        
-        # Evaluate
-        if task == 'classification':
-            score = accuracy_score(y_test, y_pred)
-            print(f"XGBoost Accuracy: {score:.4f}")
-        else:
-            score = r2_score(y_test, y_pred)
-            print(f"XGBoost R² Score: {score:.4f}")
-        
-        return xgb_model, score
-    
-    def plot_training_history(self, xgb_model):
-        """Plot XGBoost training history"""
-        
-        results = xgb_model.evals_result()
-        
-        plt.figure(figsize=(10, 6))
-        
-        # Plot training and validation loss
-        epochs = len(results['validation_0']['logloss'] if 'logloss' in results['validation_0'] 
-                     else results['validation_0']['rmse'])
-        x_axis = range(0, epochs)
-        
-        for i, (dataset, metrics) in enumerate(results.items()):
-            metric_name = list(metrics.keys())[0]
-            plt.plot(x_axis, metrics[metric_name], 
-                    label=f'{dataset} {metric_name}', linewidth=2)
-        
-        plt.xlabel('Boosting Round')
-        plt.ylabel('Loss')
-        plt.title('XGBoost Training History')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Mark best iteration
-        best_iteration = xgb_model.best_iteration
-        plt.axvline(x=best_iteration, color='red', linestyle='--', 
-                   label=f'Best iteration: {best_iteration}')
-        plt.legend()
-        plt.show()
-    
-    def xgboost_cv(self, X, y, task='classification'):
-        """Cross-validation with XGBoost"""
-        
-        # Create DMatrix
-        if task == 'classification':
-            dtrain = xgb.DMatrix(X, label=y)
-            params = {
-                'objective': 'binary:logistic',
-                'max_depth': 6,
-                'learning_rate': 0.3,
-                'subsample': 0.8,
-                'colsample_bytree': 0.8,
-                'seed': 42,
-                'eval_metric': 'logloss'
-            }
-        else:
-            dtrain = xgb.DMatrix(X, label=y)
-            params = {
-                'objective': 'reg:squarederror',
-                'max_depth': 6,
-                'learning_rate': 0.3,
-                'subsample': 0.8,
-                'colsample_bytree': 0.8,
-                'seed': 42,
-                'eval_metric': 'rmse'
-            }
-        
-        # Perform cross-validation
-        cv_results = xgb.cv(
-            params,
-            dtrain,
-            num_boost_round=100,
-            nfold=5,
-            early_stopping_rounds=10,
-            seed=42,
-            verbose_eval=False
-        )
-        
-        self.cv_results = cv_results
-        
-        # Plot CV results
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Training and validation scores
-        metric = list(cv_results.columns)[0].split('-')[1]
-        
-        axes[0].plot(cv_results[f'train-{metric}-mean'], label='Train', linewidth=2)
-        axes[0].fill_between(range(len(cv_results)),
-                            cv_results[f'train-{metric}-mean'] - cv_results[f'train-{metric}-std'],
-                            cv_results[f'train-{metric}-mean'] + cv_results[f'train-{metric}-std'],
-                            alpha=0.3)
-        
-        axes[0].plot(cv_results[f'test-{metric}-mean'], label='Validation', linewidth=2)
-        axes[0].fill_between(range(len(cv_results)),
-                            cv_results[f'test-{metric}-mean'] - cv_results[f'test-{metric}-std'],
-                            cv_results[f'test-{metric}-mean'] + cv_results[f'test-{metric}-std'],
-                            alpha=0.3)
-        
-        axes[0].set_xlabel('Boosting Round')
-        axes[0].set_ylabel(metric.upper())
-        axes[0].set_title('Cross-Validation Scores')
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3)
-        
-        # Standard deviation
-        axes[1].plot(cv_results[f'train-{metric}-std'], label='Train Std', linewidth=2)
-        axes[1].plot(cv_results[f'test-{metric}-std'], label='Validation Std', linewidth=2)
-        axes[1].set_xlabel('Boosting Round')
-        axes[1].set_ylabel('Standard Deviation')
-        axes[1].set_title('Score Variability')
-        axes[1].legend()
-        axes[1].grid(True, alpha=0.3)
-        
-        plt.suptitle('XGBoost Cross-Validation Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        # Best score
-        best_score = cv_results[f'test-{metric}-mean'].min()
-        best_round = cv_results[f'test-{metric}-mean'].argmin()
-        print(f"Best CV Score: {best_score:.4f} at round {best_round}")
-        
-        return cv_results
-    
-    def xgboost_feature_importance(self, model):
-        """Visualize XGBoost feature importance"""
-        
-        # Get different types of importance
-        importance_types = ['weight', 'gain', 'cover']
-        
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        for idx, importance_type in enumerate(importance_types):
-            # Get importance scores
-            importance = model.get_booster().get_score(importance_type=importance_type)
-            
-            if importance:
-                # Sort and select top features
-                importance_sorted = sorted(importance.items(), key=lambda x: x[1], reverse=True)
-                top_n = min(15, len(importance_sorted))
-                features = [x[0] for x in importance_sorted[:top_n]]
-                scores = [x[1] for x in importance_sorted[:top_n]]
-                
-                # Plot
-                axes[idx].barh(range(top_n), scores)
-                axes[idx].set_yticks(range(top_n))
-                axes[idx].set_yticklabels(features)
-                axes[idx].set_xlabel(f'{importance_type.capitalize()} Score')
-                axes[idx].set_title(f'Feature Importance: {importance_type.capitalize()}')
-                axes[idx].grid(True, alpha=0.3)
-        
-        plt.suptitle('XGBoost Feature Importance Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-    
-    def xgboost_tree_visualization(self, model, tree_index=0):
-        """Visualize individual trees in XGBoost"""
-        
-        # Plot tree
-        fig, ax = plt.subplots(figsize=(20, 10))
-        xgb.plot_tree(model, num_trees=tree_index, ax=ax)
-        ax.set_title(f'XGBoost Tree {tree_index}', fontsize=16)
-        plt.show()
-        
-        # Plot importance
-        fig, ax = plt.subplots(figsize=(10, 8))
-        xgb.plot_importance(model, ax=ax, max_num_features=20)
-        ax.set_title('XGBoost Feature Importance', fontsize=14)
-        plt.tight_layout()
-        plt.show()
+            <!-- ============================================================ -->
+            <section id="hgb" class="lesson-section">
+                <h2>📊 HistGradientBoosting on Churn</h2>
 
-# XGBoost Analysis
-print("\n" + "="*60)
-print("XGBOOST IMPLEMENTATION")
-print("="*60)
+                <p>scikit-learn has two boosting families. <code>GradientBoostingClassifier</code> is the original, exact implementation: fine for a few thousand rows, slow beyond that. <code>HistGradientBoostingClassifier</code> (and <code>...Regressor</code>) is the modern one, and the one to use. It is fast, handles missing values on its own, and understands categorical columns. Load the churn data with all 16 usable features (the leaky <code>cancellation_reason</code> stays out, as always).</p>
 
-xgb_analyzer = XGBoostAnalyzer()
+                <pre><code class="language-python">import pandas as pd
+from sklearn.model_selection import train_test_split
 
-# Basic XGBoost
-print("\nTraining XGBoost model...")
-# Binary classification for XGBoost
-y_binary = (y_class > y_class.mean()).astype(int)
-xgb_model, score = xgb_analyzer.xgboost_basics(X_class, y_binary, task='classification')
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+           "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+           "email_opens_90d"]
+categorical = ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"]
 
-# Plot training history
-print("\nPlotting training history...")
-xgb_analyzer.plot_training_history(xgb_model)
+X = customers[numeric + categorical].copy()
+X[categorical] = X[categorical].astype("category")
+y = customers["churned"]
 
-# Cross-validation
-print("\nPerforming cross-validation...")
-cv_results = xgb_analyzer.xgboost_cv(X_class, y_binary, task='classification')
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, stratify=y, random_state=42
+)
+print(X_train.shape, X_test.shape)
+print(X_train.dtypes.astype(str).value_counts())
+print("missing in training:", X_train[["email_opens_90d", "age_group"]].isna().sum().to_dict())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(4500, 16) (1500, 16)
+int64       6
+float64     5
+category    5
+Name: count, dtype: int64
+missing in training: {'email_opens_90d': 419, 'age_group': 359}</code></pre>
+                </div>
 
-# Feature importance
-print("\nAnalyzing feature importance...")
-xgb_analyzer.xgboost_feature_importance(xgb_model)
+                <p>The one preparation step is <code>astype("category")</code>. The text columns come in as pandas strings; the <code>category</code> dtype tells the booster "these are labels, not numbers". There is no imputer and no scaler: missing values stay as they are.</p>
 
-# Tree visualization (first tree only)
-print("\nVisualizing first tree...")
-# Note: Tree visualization works best with smaller trees
-xgb_small = XGBClassifier(n_estimators=3, max_depth=3, random_state=42)
-xgb_small.fit(X_class[:100], y_binary[:100])
-xgb_analyzer.xgboost_tree_visualization(xgb_small, tree_index=0)</code></pre>
+                <pre><code class="language-python">from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.metrics import roc_auc_score, average_precision_score
 
-    <h2>Hyperparameter Tuning</h2>
-    
-    <h3>Optimizing Gradient Boosting Models</h3>
-    <pre class="language-python"><code>class GBMTuner:
-    """Hyperparameter tuning for Gradient Boosting Models"""
-    
-    def __init__(self):
-        self.best_params = {}
-        self.search_results = {}
-        
-    def parameter_importance_analysis(self, X, y, model_type='xgboost'):
-        """Analyze importance of different parameters"""
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.3, random_state=42
-        )
-        
-        # Parameters to analyze
-        param_ranges = {
-            'n_estimators': [50, 100, 200, 500],
-            'max_depth': [3, 5, 7, 10],
-            'learning_rate': [0.01, 0.05, 0.1, 0.3],
-            'subsample': [0.6, 0.7, 0.8, 0.9, 1.0],
-            'colsample_bytree': [0.6, 0.7, 0.8, 0.9, 1.0]
-        }
-        
-        # Base parameters
-        base_params = {
-            'n_estimators': 100,
-            'max_depth': 6,
-            'learning_rate': 0.1,
-            'subsample': 0.8,
-            'colsample_bytree': 0.8,
-            'random_state': 42
-        }
-        
-        results = {}
-        
-        for param_name, param_values in param_ranges.items():
-            scores = []
-            
-            for value in param_values:
-                # Update parameter
-                params = base_params.copy()
-                params[param_name] = value
-                
-                # Create and train model
-                if model_type == 'xgboost':
-                    model = XGBClassifier(**params)
-                else:
-                    model = GradientBoostingClassifier(**params)
-                
-                model.fit(X_train, y_train)
-                score = model.score(X_test, y_test)
-                scores.append(score)
-            
-            results[param_name] = {
-                'values': param_values,
-                'scores': scores,
-                'impact': max(scores) - min(scores)
-            }
-        
-        # Visualization
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-        axes = axes.flatten()
-        
-        for idx, (param_name, data) in enumerate(results.items()):
-            if idx < len(axes):
-                axes[idx].plot(data['values'], data['scores'], 'o-', linewidth=2, markersize=8)
-                axes[idx].set_xlabel(param_name)
-                axes[idx].set_ylabel('Test Accuracy')
-                axes[idx].set_title(f'{param_name}\nImpact: {data["impact"]:.3f}')
-                axes[idx].grid(True, alpha=0.3)
-                
-                # Mark best value
-                best_idx = np.argmax(data['scores'])
-                axes[idx].axvline(x=data['values'][best_idx], color='red', 
-                                 linestyle='--', alpha=0.5)
-        
-        # Remove extra subplot
-        if len(results) < len(axes):
-            fig.delaxes(axes[-1])
-        
-        plt.suptitle('Hyperparameter Sensitivity Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return results
-    
-    def grid_search_optimization(self, X, y, model_type='xgboost'):
-        """Comprehensive grid search for optimal parameters"""
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
-        
-        if model_type == 'xgboost':
-            model = XGBClassifier(random_state=42)
-            param_grid = {
-                'n_estimators': [100, 200],
-                'max_depth': [3, 5, 7],
-                'learning_rate': [0.05, 0.1, 0.2],
-                'subsample': [0.7, 0.8, 0.9],
-                'colsample_bytree': [0.7, 0.8, 0.9]
-            }
-        else:
-            model = GradientBoostingClassifier(random_state=42)
-            param_grid = {
-                'n_estimators': [100, 200],
-                'max_depth': [3, 5, 7],
-                'learning_rate': [0.05, 0.1, 0.2],
-                'subsample': [0.7, 0.8, 0.9],
-                'max_features': ['sqrt', 'log2', None]
-            }
-        
-        # Grid search
-        print(f"Performing grid search for {model_type}...")
-        grid_search = GridSearchCV(
-            model, param_grid,
-            cv=5, scoring='accuracy',
-            n_jobs=-1, verbose=1
-        )
-        
-        grid_search.fit(X_train, y_train)
-        
-        # Store results
-        self.best_params[model_type] = grid_search.best_params_
-        self.search_results[model_type] = pd.DataFrame(grid_search.cv_results_)
-        
-        # Test performance
-        y_pred = grid_search.best_estimator_.predict(X_test)
-        test_score = accuracy_score(y_test, y_pred)
-        
-        print(f"\nBest Parameters: {grid_search.best_params_}")
-        print(f"Best CV Score: {grid_search.best_score_:.4f}")
-        print(f"Test Score: {test_score:.4f}")
-        
-        return grid_search.best_estimator_
-    
-    def early_stopping_analysis(self, X, y):
-        """Analyze effect of early stopping"""
-        
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.3, random_state=42
-        )
-        
-        # Train with different early stopping rounds
-        early_stopping_rounds = [None, 5, 10, 20, 50]
-        
-        results = []
-        
-        for early_stop in early_stopping_rounds:
-            xgb_model = XGBClassifier(
-                n_estimators=500,
-                learning_rate=0.1,
-                random_state=42
-            )
-            
-            if early_stop:
-                eval_set = [(X_test, y_test)]
-                xgb_model.fit(
-                    X_train, y_train,
-                    eval_set=eval_set,
-                    early_stopping_rounds=early_stop,
-                    verbose=False
-                )
-                n_trees = xgb_model.best_ntree_limit
-            else:
-                xgb_model.fit(X_train, y_train)
-                n_trees = 500
-            
-            # Evaluate
-            y_pred = xgb_model.predict(X_test)
-            score = accuracy_score(y_test, y_pred)
-            
-            results.append({
-                'early_stopping': early_stop if early_stop else 'None',
-                'n_trees': n_trees,
-                'test_score': score
-            })
-        
-        results_df = pd.DataFrame(results)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Number of trees
-        axes[0].bar(range(len(results_df)), results_df['n_trees'])
-        axes[0].set_xticks(range(len(results_df)))
-        axes[0].set_xticklabels(results_df['early_stopping'])
-        axes[0].set_xlabel('Early Stopping Rounds')
-        axes[0].set_ylabel('Number of Trees Used')
-        axes[0].set_title('Trees vs Early Stopping')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Test scores
-        axes[1].bar(range(len(results_df)), results_df['test_score'])
-        axes[1].set_xticks(range(len(results_df)))
-        axes[1].set_xticklabels(results_df['early_stopping'])
-        axes[1].set_xlabel('Early Stopping Rounds')
-        axes[1].set_ylabel('Test Accuracy')
-        axes[1].set_title('Performance vs Early Stopping')
-        axes[1].grid(True, alpha=0.3)
-        
-        # Add value labels
-        for i, (trees, score) in enumerate(zip(results_df['n_trees'], results_df['test_score'])):
-            axes[0].text(i, trees, f'{trees}', ha='center', va='bottom')
-            axes[1].text(i, score, f'{score:.3f}', ha='center', va='bottom')
-        
-        plt.suptitle('Early Stopping Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return results_df
+hgb = HistGradientBoostingClassifier(random_state=42)
+hgb.fit(X_train, y_train)
 
-# Hyperparameter tuning
-print("\n" + "="*60)
-print("HYPERPARAMETER OPTIMIZATION")
-print("="*60)
+p_hgb = hgb.predict_proba(X_test)[:, 1]
+print(f"accuracy {hgb.score(X_test, y_test):.3f}  ROC AUC {roc_auc_score(y_test, p_hgb):.3f}"
+      f"  average precision {average_precision_score(y_test, p_hgb):.3f}")
+print("trees built:", hgb.n_iter_)
+print("treated as categorical:", list(X_train.columns[hgb.is_categorical_]))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>accuracy 0.867  ROC AUC 0.862  average precision 0.609
+trees built: 100
+treated as categorical: ['home_store', 'region', 'age_group', 'loyalty_tier', 'preferred_category']</code></pre>
+                </div>
 
-tuner = GBMTuner()
+                <p>The default <code>categorical_features="from_dtype"</code> picked up exactly the five <code>category</code> columns. Lesson 2.2's one-hot pipeline reached a test AUC of 0.863 with the same booster, so native categories give the same quality with less code. To judge 0.86, put it next to the baseline and the standard linear model from Modules 2 and 3, a logistic-regression pipeline that imputes, scales and one-hot encodes:</p>
 
-# Parameter importance
-print("\nAnalyzing parameter importance...")
-param_results = tuner.parameter_importance_analysis(X_class, y_binary, model_type='xgboost')
+                <pre><code class="language-python">from sklearn.compose import make_column_transformer
+from sklearn.dummy import DummyClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-# Grid search
-print("\nPerforming grid search...")
-best_model = tuner.grid_search_optimization(X_class[:500], y_binary[:500], model_type='xgboost')
+linear_prep = make_column_transformer(
+    (make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric),
+    (make_pipeline(SimpleImputer(strategy="most_frequent"), OneHotEncoder(handle_unknown="ignore")), categorical),
+)
+logreg = make_pipeline(linear_prep, LogisticRegression(max_iter=1000))
 
-# Early stopping analysis
-print("\nAnalyzing early stopping...")
-early_stop_results = tuner.early_stopping_analysis(X_class, y_binary)</code></pre>
+for name, model in [("baseline", DummyClassifier(strategy="most_frequent")),
+                    ("logistic regression", logreg),
+                    ("hist gradient boosting", hgb)]:
+    model.fit(X_train, y_train)
+    p = model.predict_proba(X_test)[:, 1]
+    print(f"{name:24s} ROC AUC {roc_auc_score(y_test, p):.3f}  AP {average_precision_score(y_test, p):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>baseline                 ROC AUC 0.500  AP 0.165
+logistic regression      ROC AUC 0.826  AP 0.493
+hist gradient boosting   ROC AUC 0.862  AP 0.609</code></pre>
+                </div>
 
-    <h2>Advanced Techniques</h2>
-    
-    <h3>LightGBM and CatBoost</h3>
-    <pre class="language-python"><code># Note: Install with: pip install lightgbm catboost
+                <p>Boosting wins by about 0.035 AUC and 0.12 average precision with zero preprocessing. The reason is in the data: churn risk jumps once a customer has been quiet for about 150 days (a threshold, not a straight line), it is high for both very new and very old customers (a U-shape), and support tickets matter only for customers who do not use the app (an interaction). Trees capture all three on their own; a logistic regression would need hand-made features for each (Lesson 2.3 built them and reached a test AUC of 0.880).</p>
 
-try:
-    import lightgbm as lgb
-    from lightgbm import LGBMClassifier, LGBMRegressor
-    import catboost as cb
-    from catboost import CatBoostClassifier, CatBoostRegressor
-    
-    def compare_advanced_gbm(X, y):
-        """Compare XGBoost, LightGBM, and CatBoost"""
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.3, random_state=42
-        )
-        
-        models = {
-            'XGBoost': XGBClassifier(
-                n_estimators=100, learning_rate=0.1,
-                random_state=42, verbosity=0
-            ),
-            'LightGBM': LGBMClassifier(
-                n_estimators=100, learning_rate=0.1,
-                random_state=42, verbosity=-1
-            ),
-            'CatBoost': CatBoostClassifier(
-                iterations=100, learning_rate=0.1,
-                random_seed=42, verbose=False
-            )
-        }
-        
-        results = {}
-        
-        for name, model in models.items():
-            # Train
-            start_time = pd.Timestamp.now()
-            model.fit(X_train, y_train)
-            train_time = (pd.Timestamp.now() - start_time).total_seconds()
-            
-            # Predict
-            start_time = pd.Timestamp.now()
-            y_pred = model.predict(X_test)
-            pred_time = (pd.Timestamp.now() - start_time).total_seconds()
-            
-            # Evaluate
-            accuracy = accuracy_score(y_test, y_pred)
-            
-            results[name] = {
-                'accuracy': accuracy,
-                'train_time': train_time,
-                'pred_time': pred_time
-            }
-        
-        # Create comparison DataFrame
-        comparison_df = pd.DataFrame(results).T
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # Accuracy
-        axes[0].bar(comparison_df.index, comparison_df['accuracy'])
-        axes[0].set_ylabel('Accuracy')
-        axes[0].set_title('Model Accuracy')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Training time
-        axes[1].bar(comparison_df.index, comparison_df['train_time'])
-        axes[1].set_ylabel('Time (seconds)')
-        axes[1].set_title('Training Time')
-        axes[1].grid(True, alpha=0.3)
-        
-        # Prediction time
-        axes[2].bar(comparison_df.index, comparison_df['pred_time'])
-        axes[2].set_ylabel('Time (seconds)')
-        axes[2].set_title('Prediction Time')
-        axes[2].grid(True, alpha=0.3)
-        
-        plt.suptitle('Advanced GBM Comparison', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return comparison_df
-    
-    print("\n" + "="*60)
-    print("ADVANCED GRADIENT BOOSTING COMPARISON")
-    print("="*60)
-    
-    comparison = compare_advanced_gbm(X_class, y_binary)
-    print("\nModel Comparison:")
-    print(comparison.to_string())
-    
-except ImportError:
-    print("\nLightGBM and/or CatBoost not installed.")
-    print("Install with: pip install lightgbm catboost")</code></pre>
+                <div class="card card-accent">
+                    <h4>🔑 Why "Hist"?</h4>
+                    <p>Before training, each numeric feature is cut into at most 255 <strong>bins</strong> (by quantiles), and the trees only consider split points between bins. Finding the best split then means scanning 255 bin totals instead of sorting thousands of values, which is why it is many times faster than <code>GradientBoostingClassifier</code> on large data and loses almost nothing in accuracy. Missing values get their own bin: at each split the tree learns whether "missing" should go left or right. Categories are split by grouping categories together, so <code>preferred_category</code> needs no one-hot encoding.</p>
+                </div>
+            </section>
 
-    <h2>Best Practices and Guidelines</h2>
-    
-    <pre class="language-python"><code>print("\n" + "="*60)
-print("GRADIENT BOOSTING BEST PRACTICES")
-print("="*60)
+            <!-- ============================================================ -->
+            <section id="early-stopping" class="lesson-section">
+                <h2>⏱️ Learning Rate, Trees and Early Stopping</h2>
 
-best_practices = """
-KEY GUIDELINES:
+                <p>A handful of hyperparameters do almost all the work:</p>
 
-1. PARAMETER TUNING PRIORITY:
-   First: n_estimators (with early stopping)
-   Second: max_depth (3-10 typically)
-   Third: learning_rate (0.01-0.3)
-   Fourth: subsample, colsample_bytree
-   Fifth: regularization (reg_alpha, reg_lambda)
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Parameter (HistGB name)</th><th>Default</th><th>What it controls</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>learning_rate</code></td><td>0.1</td><td>Step size ν. Smaller is steadier but needs more trees.</td></tr>
+                            <tr><td><code>max_iter</code></td><td>100</td><td>Maximum number of trees (boosting rounds).</td></tr>
+                            <tr><td><code>max_leaf_nodes</code> / <code>max_depth</code></td><td>31 / None</td><td>Size of each tree. Bigger trees model more interactions per step and overfit faster.</td></tr>
+                            <tr><td><code>min_samples_leaf</code></td><td>20</td><td>Smallest leaf. Larger values smooth the model, important when the positive class is rare.</td></tr>
+                            <tr><td><code>l2_regularization</code></td><td>0</td><td>Shrinks leaf values towards zero.</td></tr>
+                            <tr><td><code>early_stopping</code></td><td>"auto"</td><td>Hold out <code>validation_fraction</code> of the training rows and stop after <code>n_iter_no_change</code> rounds without improvement. "auto" switches it on only above 10,000 rows.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
 
-2. PREVENTING OVERFITTING:
-   • Use early stopping with validation set
-   • Limit tree depth (max_depth=3-7)
-   • Use subsample < 1.0
-   • Add regularization (L1/L2)
-   • Use colsample_bytree < 1.0
+                <p>That last row matters here: with 4,500 training rows, early stopping is <strong>off</strong> by default and the model simply builds 100 trees. Is 100 right? To find out without touching the test set, carve a validation set out of the training rows and track the loss after every tree. <code>staged_predict_proba</code> yields the predictions after 1, 2, 3, ... trees.</p>
 
-3. HANDLING IMBALANCED DATA:
-   • Use scale_pos_weight for binary classification
-   • Adjust sample_weight for multi-class
-   • Consider focal loss or custom objectives
-   • Use stratified splits for validation
+                <pre><code class="language-python">from sklearn.metrics import log_loss
 
-4. FEATURE ENGINEERING:
-   • GBM can handle raw features well
-   • Interaction features less important
-   • Categorical encoding: Label or Target encoding
-   • Missing values: XGBoost/LightGBM handle natively
+X_fit, X_val, y_fit, y_val = train_test_split(
+    X_train, y_train, test_size=0.2, stratify=y_train, random_state=42
+)
+long_run = HistGradientBoostingClassifier(learning_rate=0.1, max_iter=400, early_stopping=False,
+                                          random_state=42).fit(X_fit, y_fit)
 
-5. COMPUTATIONAL EFFICIENCY:
-   • Use histogram-based implementations (LightGBM)
-   • Enable GPU acceleration if available
-   • Use sparse matrices for high-dimensional data
-   • Consider feature selection for very wide datasets
+train_loss = [log_loss(y_fit, p) for p in long_run.staged_predict_proba(X_fit)]
+val_loss = [log_loss(y_val, p) for p in long_run.staged_predict_proba(X_val)]
+best = int(np.argmin(val_loss)) + 1
+print(f"best number of trees on validation: {best}  (val loss {min(val_loss):.4f})")
+print(f"after 100 trees: val loss {val_loss[99]:.4f};  after 400: {val_loss[-1]:.4f}")
 
-6. WHEN TO USE GRADIENT BOOSTING:
-   ✓ Tabular/structured data
-   ✓ Need high accuracy
-   ✓ Feature interactions important
-   ✓ Mixed data types
-   ✓ Competition settings
-   ✗ Real-time predictions needed
-   ✗ Limited computational resources
-   ✗ Need model interpretability
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.plot(range(1, 401), train_loss, color="gray", label="training loss")
+ax.plot(range(1, 401), val_loss, color="#667eea", linewidth=2, label="validation loss")
+ax.axvline(best, color="black", linestyle="--", linewidth=1, label=f"best: {best} trees")
+ax.set_xlabel("Number of trees")
+ax.set_ylabel("Log loss (lower is better)")
+ax.set_title("Training loss keeps falling; validation loss turns around")
+ax.legend()
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>best number of trees on validation: 27  (val loss 0.2901)
+after 100 trees: val loss 0.3026;  after 400: 0.4306</code></pre>
+                </div>
 
-7. MODEL SELECTION:
-   • XGBoost: General purpose, mature ecosystem
-   • LightGBM: Faster training, less memory
-   • CatBoost: Better with categorical features
-   • Sklearn GBM: Simple, fewer dependencies
-"""
+                <figure>
+                    <img src="images/trees_gradient_boosting_val_curve.png" alt="Line chart of log loss against the number of trees, from 1 to 400. Training loss falls steadily the whole way. Validation loss falls quickly, reaches its minimum early, marked by a dashed line, and then rises slowly." width="990" height="440" loading="lazy">
+                    <figcaption>The same U-turn as the toy example, now on real churn data: the default 100 trees are already past the best point at a learning rate of 0.1.</figcaption>
+                </figure>
 
-print(best_practices)
+                <p>You do not have to do this by hand. Turn on the built-in early stopping and the model holds out its own validation set (here 20% of the training rows) and stops when the validation loss has not improved for 20 rounds. Try three learning rates with a generous <code>max_iter</code>:</p>
 
-# Parameter guidelines
-param_guidelines = {
-    'Parameter': ['n_estimators', 'max_depth', 'learning_rate', 'subsample', 
-                 'colsample_bytree', 'reg_alpha', 'reg_lambda'],
-    'Default': [100, 6, 0.3, 1.0, 1.0, 0, 0],
-    'Typical Range': ['100-1000', '3-10', '0.01-0.3', '0.5-1.0', 
-                     '0.5-1.0', '0-10', '0-10'],
-    'Effect': ['More trees = better fit', 'Deeper = more complex',
-              'Smaller = more robust', 'Prevent overfitting',
-              'Feature sampling', 'L1 regularization', 'L2 regularization']
-}
+                <pre><code class="language-python">for lr in [0.3, 0.1, 0.03]:
+    model = HistGradientBoostingClassifier(
+        learning_rate=lr, max_iter=2000, early_stopping=True, validation_fraction=0.2,
+        n_iter_no_change=20, random_state=42,
+    ).fit(X_train, y_train)
+    auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+    print(f"learning_rate {lr:4}  trees used {model.n_iter_:4d}  test ROC AUC {auc:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>learning_rate  0.3  trees used   29  test ROC AUC 0.846
+learning_rate  0.1  trees used   56  test ROC AUC 0.867
+learning_rate 0.03  trees used  149  test ROC AUC 0.870</code></pre>
+                </div>
 
-param_df = pd.DataFrame(param_guidelines)
-print("\n" + "="*60)
-print("PARAMETER GUIDELINES")
-print("="*60)
-print(param_df.to_string(index=False))
+                <p>The toy example's lesson holds on real data: the gentle 0.03 uses the most trees and gives the best model. Early stopping chose the number of trees from the training data alone; the test set was only used once per model, to report. Note that <code>random_state</code> now matters: it decides which training rows become the internal validation set.</p>
 
-# Algorithm comparison
-comparison_data = {
-    'Algorithm': ['Random Forest', 'Gradient Boosting', 'XGBoost', 'LightGBM', 'CatBoost'],
-    'Speed': ['Medium', 'Slow', 'Medium', 'Fast', 'Medium'],
-    'Memory': ['High', 'Low', 'Medium', 'Low', 'Medium'],
-    'Accuracy': ['High', 'Very High', 'Very High', 'Very High', 'Very High'],
-    'Interpretability': ['Medium', 'Low', 'Low', 'Low', 'Low'],
-    'Handles Missing': ['No', 'No', 'Yes', 'Yes', 'Yes'],
-    'Categorical': ['Encoding needed', 'Encoding needed', 'Encoding needed', 
-                   'Can handle', 'Native support']
-}
+                <div class="card card-success">
+                    <h4>✅ A Recipe That Works Most of the Time</h4>
+                    <p>Pick a small learning rate (0.05 or 0.03), set <code>max_iter</code> high (1,000 or more), turn on early stopping, and only then tune tree size (<code>max_leaf_nodes</code>, <code>min_samples_leaf</code>) and <code>l2_regularization</code>. Lesson 6.2 automates that search with cross-validation.</p>
+                </div>
+            </section>
 
-comparison_df = pd.DataFrame(comparison_data)
-print("\n" + "="*60)
-print("GRADIENT BOOSTING VARIANTS COMPARISON")
-print("="*60)
-print(comparison_df.to_string(index=False))</code></pre>
+            <!-- ============================================================ -->
+            <section id="xgb-lgbm" class="lesson-section">
+                <h2>📦 XGBoost and LightGBM</h2>
 
-    <h2>Practice Exercises</h2>
-    
-    <h3>Exercise 1: Custom Loss Functions</h3>
-    <p>Implement gradient boosting with custom loss functions:</p>
-    <ol>
-        <li>Create Huber loss for robust regression</li>
-        <li>Implement focal loss for imbalanced classification</li>
-        <li>Design quantile loss for interval predictions</li>
-        <li>Compare with standard loss functions</li>
-    </ol>
+                <p><strong>XGBoost</strong> and <strong>LightGBM</strong> are standalone libraries that popularized fast histogram boosting; scikit-learn's HistGradientBoosting was modeled on LightGBM. Both ship scikit-learn wrappers, so the estimator API you know still applies: create, <code>fit</code>, <code>predict_proba</code>. Their names for the same ideas differ a little:</p>
 
-    <h3>Exercise 2: Ensemble Stacking</h3>
-    <p>Build stacked ensemble with gradient boosting:</p>
-    <ol>
-        <li>Train multiple GBM models with different parameters</li>
-        <li>Use predictions as features for meta-learner</li>
-        <li>Implement cross-validated stacking</li>
-        <li>Compare with single models</li>
-    </ol>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Idea</th><th>HistGradientBoosting</th><th>XGBoost</th><th>LightGBM</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Number of trees</td><td><code>max_iter</code></td><td><code>n_estimators</code></td><td><code>n_estimators</code></td></tr>
+                            <tr><td>Tree size</td><td><code>max_leaf_nodes</code></td><td><code>max_depth</code> (6)</td><td><code>num_leaves</code> (31)</td></tr>
+                            <tr><td>Smallest leaf</td><td><code>min_samples_leaf</code></td><td><code>min_child_weight</code></td><td><code>min_child_samples</code></td></tr>
+                            <tr><td>Row / column sampling</td><td><code>max_features</code> (columns)</td><td><code>subsample</code>, <code>colsample_bytree</code></td><td><code>subsample</code>, <code>colsample_bytree</code></td></tr>
+                            <tr><td>Categories</td><td><code>category</code> dtype</td><td><code>category</code> dtype + <code>enable_categorical=True</code></td><td><code>category</code> dtype</td></tr>
+                            <tr><td>Early stopping</td><td><code>early_stopping=True</code></td><td><code>early_stopping_rounds=</code> in the constructor, <code>eval_set=</code> in <code>fit</code></td><td><code>callbacks=[lgb.early_stopping(...)]</code>, <code>eval_X=</code> and <code>eval_y=</code> in <code>fit</code></td></tr>
+                        </tbody>
+                    </table>
+                </div>
 
-    <h3>Exercise 3: Time Series with GBM</h3>
-    <p>Apply gradient boosting to time series:</p>
-    <ol>
-        <li>Create lag features and rolling statistics</li>
-        <li>Implement walk-forward validation</li>
-        <li>Handle seasonality and trends</li>
-        <li>Build multi-step ahead forecasts</li>
-    </ol>
+                <p>The external libraries do not hold out a validation set for you: you pass one in (<code>eval_set</code> for XGBoost; <code>eval_X</code> and <code>eval_y</code> for LightGBM, whose older <code>eval_set</code> argument is deprecated). Use the <code>X_val</code> you carved out above, never the test set.</p>
 
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>🎯 Gradient boosting builds models sequentially to correct errors</li>
-        <li>📈 Each tree learns from the mistakes of previous trees</li>
-        <li>⚡ XGBoost adds regularization and computational optimizations</li>
-        <li>🔄 Early stopping prevents overfitting automatically</li>
-        <li>🎚️ Learning rate controls contribution of each tree</li>
-        <li>🌲 Shallow trees (depth 3-7) often work best</li>
-        <li>💾 More memory efficient than Random Forests</li>
-        <li>🏆 Dominates machine learning competitions</li>
-        <li>📊 Excellent for tabular/structured data</li>
-        <li>⚠️ Prone to overfitting without proper tuning</li>
-    </ul>
+                <pre><code class="language-python">from xgboost import XGBClassifier
 
-    <h2>Further Resources</h2>
-    <ul>
-        <li><a href="https://xgboost.readthedocs.io/">XGBoost Documentation</a></li>
-        <li><a href="https://lightgbm.readthedocs.io/">LightGBM Documentation</a></li>
-        <li><a href="https://catboost.ai/">CatBoost Documentation</a></li>
-        <li><a href="https://explained.ai/gradient-boosting/">Gradient Boosting Explained</a></li>
-        <li><a href="https://arxiv.org/abs/1603.02754">XGBoost: A Scalable Tree Boosting System</a></li>
-        <li><a href="https://papers.nips.cc/paper/6907-lightgbm-a-highly-efficient-gradient-boosting-decision-tree">LightGBM Paper</a></li>
-    </ul>
+xgb_model = XGBClassifier(
+    n_estimators=2000, learning_rate=0.03, max_depth=4,
+    enable_categorical=True, eval_metric="logloss", early_stopping_rounds=50,
+    random_state=42, verbosity=0,
+)
+xgb_model.fit(X_fit, y_fit, eval_set=[(X_val, y_val)], verbose=False)
 
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Boosting improves by relentlessly focusing on its own mistakes. How might
-            that "learn from each error" mindset apply to how you're learning machine learning itself?</p>
+p_xgb = xgb_model.predict_proba(X_test)[:, 1]
+print(f"XGBoost   best iteration {xgb_model.best_iteration:4d}  test ROC AUC {roc_auc_score(y_test, p_xgb):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>XGBoost   best iteration  218  test ROC AUC 0.864</code></pre>
+                </div>
+
+                <pre><code class="language-python">import lightgbm as lgb
+from lightgbm import LGBMClassifier
+
+lgbm_model = LGBMClassifier(
+    n_estimators=2000, learning_rate=0.03, num_leaves=15,
+    random_state=42, verbose=-1,
+)
+lgbm_model.fit(X_fit, y_fit, eval_X=X_val, eval_y=y_val, eval_metric="binary_logloss",
+               callbacks=[lgb.early_stopping(50, verbose=False)])
+
+p_lgbm = lgbm_model.predict_proba(X_test)[:, 1]
+print(f"LightGBM  best iteration {lgbm_model.best_iteration_:4d}  test ROC AUC {roc_auc_score(y_test, p_lgbm):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>LightGBM  best iteration  262  test ROC AUC 0.865</code></pre>
+                </div>
+
+                <p>Both land in the same place as scikit-learn's version. On a dataset of this size the three libraries are interchangeable in accuracy; how you set the learning rate and stop matters far more than which logo is on the package. The "may vary" label is honest: XGBoost and LightGBM use multithreaded floating-point sums, so another machine can print a different last digit, or stop one or two rounds earlier.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Old Tutorials, Old Arguments</h4>
+                    <p>Much of the XGBoost code online passes <code>early_stopping_rounds</code> and <code>eval_metric</code> to <code>fit()</code>. Current XGBoost takes them in the constructor only and raises a <code>TypeError</code> otherwise (see Common Mistakes). Likewise, LightGBM's old <code>early_stopping_rounds=</code> fit argument is gone; use the <code>lgb.early_stopping</code> callback.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="choose" class="lesson-section">
+                <h2>🧭 Which Booster, and When</h2>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Situation</th><th>Good first choice</th><th>Why</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Tabular data, any size, inside a scikit-learn workflow</td><td><code>HistGradientBoosting*</code></td><td>No extra dependency, native NaN and categories, works with pipelines, cross-validation and tuning tools</td></tr>
+                            <tr><td>Millions of rows, GPU available, or a team already using it</td><td>XGBoost or LightGBM</td><td>Mature GPU and distributed training, many extra options (custom objectives, ranking, SHAP built in)</td></tr>
+                            <tr><td>Many high-cardinality categories</td><td>LightGBM, or CatBoost</td><td>CatBoost (another library, not installed in this course) uses ordered target statistics for categories</td></tr>
+                            <tr><td>Little time to tune, want a robust baseline</td><td>Random forest</td><td>Hard to get badly wrong; boosting usually wins once tuned</td></tr>
+                            <tr><td>You must explain every coefficient to a regulator</td><td>Logistic regression</td><td>Simplicity is a feature; compare its score with boosting to know what you give up</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p>Two honest caveats. First, boosting has more knobs than a forest and overfits if you let it run unchecked; early stopping is not optional. Second, deep learning is <em>not</em> the default answer for tables like these: on tabular data, well-tuned gradient-boosted trees match or beat neural networks most of the time at a fraction of the effort. Module 10 uses neural networks where they shine: images and sequences.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Importance Describes the Model, Not the Customer</h4>
+                    <p>XGBoost and LightGBM expose <code>feature_importances_</code> (split counts or gain). Like the forest's impurity importance in Lesson 5.2, these numbers describe how <em>this model</em> used each column, and they favor features with many possible split points. They do not say that discounts <em>cause</em> churn. Module 7 shows permutation importance and SHAP, which are more trustworthy, but still describe the model.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Boosting libraries are strict about data types and have changed their APIs over the years, so most errors you meet are about one of those two things. The last mistake raises no error at all.</p>
+
+                <h3>1. Text Columns Without the category dtype</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">HistGradientBoostingClassifier().fit(customers[["tenure_months", "home_store"]], y)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: could not convert string to float: 'Bend'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> HistGradientBoosting treats a column as categorical only if its dtype is <code>category</code> (or if you list it in <code>categorical_features</code>). A plain text column is treated as a number, and "Bend" is not one. <strong>Fix:</strong> <code>X[cols] = X[cols].astype("category")</code> before splitting, as in this lesson.</p>
+
+                <h3>2. Text Columns in XGBoost</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">XGBClassifier(verbosity=0).fit(customers[["tenure_months", "home_store"]], y)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: DataFrame.dtypes for data must be int, float, bool or category. When categorical type is supplied, the experimental DMatrix parameter`enable_categorical` must be set to `True`.  Invalid columns:home_store: str</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the message is long but precise: XGBoost accepts numbers, booleans and the <code>category</code> dtype, and it names the offending column. LightGBM says the same thing in its own words (<code>pandas dtypes must be int, float or bool</code>). <strong>Fix:</strong> convert text columns to <code>category</code> and pass <code>enable_categorical=True</code>, or one-hot encode them in a pipeline.</p>
+
+                <h3>3. Early-Stopping Arguments in fit()</h3>
+
+                <pre data-raises="TypeError"><code class="language-python">XGBClassifier(n_estimators=500, enable_categorical=True, verbosity=0).fit(
+    X_fit, y_fit, eval_set=[(X_val, y_val)], early_stopping_rounds=50
+)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>TypeError: XGBClassifier.fit() got an unexpected keyword argument 'early_stopping_rounds'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> older XGBoost versions accepted <code>early_stopping_rounds</code> and <code>eval_metric</code> in <code>fit</code>, and countless tutorials still show it. Current versions only accept them as constructor settings. <strong>Fix:</strong> <code>XGBClassifier(..., early_stopping_rounds=50, eval_metric="logloss")</code>, then <code>fit(X, y, eval_set=[(X_val, y_val)])</code>.</p>
+
+                <h3>4. Early Stopping on the Test Set</h3>
+
+                <pre><code class="language-python">peeking = XGBClassifier(
+    n_estimators=2000, learning_rate=0.03, max_depth=4, enable_categorical=True,
+    eval_metric="auc", early_stopping_rounds=50, random_state=42, verbosity=0,
+)
+peeking.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
+print(f"stopped at {peeking.best_iteration} trees, the best point ON THE TEST SET")
+print(f"reported test ROC AUC {roc_auc_score(y_test, peeking.predict_proba(X_test)[:, 1]):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem; yours may vary slightly)</h4>
+                    <pre><code>stopped at 127 trees, the best point ON THE TEST SET
+reported test ROC AUC 0.872</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the number of trees was chosen by watching the test set, so the test score is now partly a training score. It looks a little better than the honest models above, and you can no longer tell how much of that is real. With many tuning rounds the bias grows. <strong>Fix:</strong> early-stop on a validation set carved from the training rows (<code>X_val</code>), or use the built-in <code>early_stopping=True</code> of HistGradientBoosting; touch the test set once, at the end.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: Weekly Demand Forecaster</h2>
+
+                <p>Pinecrest's buyers order stock weeks ahead, so they need a forecast of units sold per product, store and week. You will train on 2024 and test on all of 2025, exactly as a forecast made at the start of 2025 would be judged. Pinecrest plans prices, promotions and holiday weeks in advance, so those columns are fair inputs; the weekly temperature is used as if a reliable seasonal forecast were available (an assumption to note in your summary). Work in a new notebook, <code>lesson_5_3_project</code>. Allow about 40 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load and split by time <span class="step-time">(5 min)</span></h3>
+                    <p>Never split time-ordered data at random: the model would learn from weeks that come after the weeks it is tested on. Lesson 1.2 explains why; here the split is a single line.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.metrics import mean_absolute_error, r2_score
+
+demand = pd.read_csv("data/weekly_demand.csv")
+features = ["store", "product_id", "category", "week_of_year", "list_price",
+            "discount_pct", "price", "promo", "holiday_week", "avg_high_temp_f"]
+cat_cols = ["store", "product_id", "category"]
+
+X_d = demand[features].copy()
+X_d[cat_cols] = X_d[cat_cols].astype("category")
+is_train = demand["year"] == 2024
+
+Xd_train, Xd_test = X_d[is_train], X_d[~is_train]
+yd_train, yd_test = demand.loc[is_train, "units_sold"], demand.loc[~is_train, "units_sold"]
+print(len(Xd_train), "training weeks x products x stores;", len(Xd_test), "test")
+print(f"mean units per row: train {yd_train.mean():.1f}, test {yd_test.mean():.1f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>5088 training weeks x products x stores; 4896 test
+mean units per row: train 24.4, test 26.3</code></pre>
+                    </div>
+                    <p>2025 sells a little more than 2024: Pinecrest is growing. A model trained on 2024 has never seen 2025's level, which is part of what makes forecasting hard.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Three baselines <span class="step-time">(8 min)</span></h3>
+                    <p>A forecast must beat the simple rules a buyer would use without any model: the overall average, each product's average, and "same week last year". The error measure is the mean absolute error (MAE) in units: on average, how many units off is the forecast?</p>
+                    <pre><code class="language-python">results = {}
+results["overall mean"] = mean_absolute_error(yd_test, np.full(len(yd_test), yd_train.mean()))
+
+train_rows, test_rows = demand[is_train], demand[~is_train]
+product_mean = train_rows.groupby("product_id")["units_sold"].mean()
+results["per-product mean"] = mean_absolute_error(yd_test, test_rows["product_id"].map(product_mean))
+
+keys = ["product_id", "store", "week_of_year"]
+last_year = train_rows.groupby(keys)["units_sold"].mean()
+same_week = last_year.reindex(pd.MultiIndex.from_frame(test_rows[keys])).to_numpy()
+results["same week last year"] = mean_absolute_error(yd_test, same_week)
+
+for name, mae in results.items():
+    print(f"{name:22s} MAE {mae:6.2f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>overall mean           MAE  17.13
+per-product mean       MAE  13.42
+same week last year    MAE  13.81</code></pre>
+                    </div>
+                    <p>Knowing the product is worth a lot (17.1 down to 13.4). "Same week last year" knows the season but copies last year's noise and promotions, so it does no better.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Gradient boosting with native categories <span class="step-time">(8 min)</span></h3>
+                    <pre><code class="language-python">from sklearn.ensemble import HistGradientBoostingRegressor
+
+hgb_sq = HistGradientBoostingRegressor(random_state=42).fit(Xd_train, yd_train)
+pred_sq = hgb_sq.predict(Xd_test)
+results["boosting, squared error"] = mean_absolute_error(yd_test, pred_sq)
+
+print(f"MAE {results['boosting, squared error']:.2f}   R2 {r2_score(yd_test, pred_sq):.3f}")
+print("negative forecasts:", (pred_sq &lt; 0).sum())</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>MAE 8.16   R2 0.742
+negative forecasts: 45</code></pre>
+                    </div>
+                    <p>A big step: the error drops from 13.4 to about 8.2 units. Trees win here because the season works differently per category (snowshoes peak in winter, tents in summer), an interaction that boosting finds by itself. Be fair to linear models, though: in Lesson 3.2 a Ridge regression with hand-built interaction features reached an MAE of 7.92 on this same split. Boosting gets to about the same place with no feature work at all, which is its real advantage. One flaw remains: some forecasts are below zero, which no buyer can order.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: A loss made for counts <span class="step-time">(7 min)</span></h3>
+                    <p>Units sold are counts: never negative, and noisier when they are larger. <code>loss="poisson"</code> makes the model predict on a log scale, so every forecast is positive and effects become multiplicative ("a promotion adds 30%") instead of additive ("a promotion adds 5 units"), which suits both socks and tents.</p>
+                    <pre><code class="language-python">hgb_pois = HistGradientBoostingRegressor(loss="poisson", random_state=42).fit(Xd_train, yd_train)
+pred_pois = hgb_pois.predict(Xd_test)
+results["boosting, Poisson loss"] = mean_absolute_error(yd_test, pred_pois)
+
+print(f"MAE {results['boosting, Poisson loss']:.2f}   R2 {r2_score(yd_test, pred_pois):.3f}")
+print(f"smallest forecast {pred_pois.min():.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>MAE 8.05   R2 0.744
+smallest forecast 0.395</code></pre>
+                    </div>
+                    <p>Slightly better and, more importantly, always sensible. Choosing the loss to match the target is often worth more than tuning.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Where does the model win? <span class="step-time">(7 min)</span></h3>
+                    <p>An overall MAE hides a lot. Compare the per-product baseline with the Poisson model category by category, and draw one product's 2025 forecast.</p>
+                    <pre><code class="language-python">import matplotlib.pyplot as plt
+
+check = test_rows[["week_start", "store", "product_id", "category", "units_sold"]].copy()
+check["baseline"] = check["product_id"].map(product_mean)
+check["forecast"] = pred_pois
+by_cat = check.groupby("category").apply(
+    lambda g: pd.Series({"baseline MAE": mean_absolute_error(g["units_sold"], g["baseline"]),
+                         "boosting MAE": mean_absolute_error(g["units_sold"], g["forecast"])})
+)
+print(by_cat.round(2).sort_values("boosting MAE"))
+
+one = check[(check["product_id"] == "SNW-2001") &amp; (check["store"] == "Flagstaff")]
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.plot(pd.to_datetime(one["week_start"]), one["units_sold"], color="gray", label="actual units")
+ax.plot(pd.to_datetime(one["week_start"]), one["forecast"], color="#667eea", linewidth=2, label="boosting forecast")
+ax.axhline(product_mean["SNW-2001"], color="black", linestyle="--", linewidth=1, label="per-product mean")
+ax.set_ylabel("Units sold per week")
+ax.set_title("Snowshoes in Flagstaff, 2025: the forecast follows the season")
+ax.legend()
+plt.show()</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>              baseline MAE  boosting MAE
+category
+Snow                 13.33          4.50
+Packs                 9.16          5.45
+Climbing              9.11          5.54
+Sleeping             10.69          6.41
+Tents                11.27          6.68
+Apparel              12.59          7.88
+Accessories          13.07          8.88
+Camp Kitchen         19.31         11.10
+Footwear             18.72         12.60</code></pre>
+                    </div>
+                    <figure>
+                        <img src="images/trees_gradient_boosting_snowshoes.png" alt="Line chart of weekly snowshoe sales in Flagstaff during 2025. Actual sales are high in winter, near zero in summer and rise again in late autumn. The boosting forecast follows the same seasonal shape, while the flat per-product mean sits in between and misses both seasons." width="990" height="440" loading="lazy">
+                        <figcaption>A per-product average cannot know that nobody buys snowshoes in July; the boosted trees learned the season from the week and the temperature.</figcaption>
+                    </figure>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save the forecast and summarize <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">check[["week_start", "store", "product_id", "forecast"]].round(1).to_csv("demand_forecast_2025.csv", index=False)
+
+best = min(results, key=results.get)
+gain = 1 - results[best] / results["per-product mean"]
+print("Weekly demand forecaster (train 2024, test 2025)")
+for name, mae in sorted(results.items(), key=lambda kv: kv[1]):
+    print(f"  {name:24s} MAE {mae:6.2f}")
+print(f"Best: {best}, {gain:.0%} lower error than the per-product mean")
+print(f"Saved demand_forecast_2025.csv ({len(check):,} rows)")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>Weekly demand forecaster (train 2024, test 2025)
+  boosting, Poisson loss   MAE   8.05
+  boosting, squared error  MAE   8.16
+  per-product mean         MAE  13.42
+  same week last year      MAE  13.81
+  overall mean             MAE  17.13
+Best: boosting, Poisson loss, 40% lower error than the per-product mean
+Saved demand_forecast_2025.csv (4,896 rows)</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Training rows are all from 2024 and test rows all from 2025; nothing was shuffled across years</li>
+                        <li>You measured three baselines and know which one a model has to beat (per-product mean, about 13.4)</li>
+                        <li>The store, product and category columns are <code>category</code> dtype, with no one-hot encoding</li>
+                        <li>You compared squared-error and Poisson loss and can explain why Poisson suits unit counts</li>
+                        <li>Your per-category table shows where boosting helps most, and your chart shows one product's season</li>
+                        <li><code>demand_forecast_2025.csv</code> holds one forecast per store, product and week</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>Exercise 1 uses the toy wave from "Boosting by Hand"; exercises 2 and 3 use the churn variables from the lesson (<code>X_train</code>, <code>X_test</code>, <code>y_train</code>, <code>y_test</code>). Run them in the lesson notebook, or rerun its first churn blocks.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Stumps or Bushes?</h3>
+                    <p>Change the tree size in the boosting loop. Boost the toy wave with trees of <code>max_depth</code> 1 (a "stump", one question), 2 and 5, each with learning rate 0.1 and 200 trees, and print the new-data MSE at 50 and 200 trees. Which depth generalizes best, and why might the deepest trees do worst?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Copy the loop from <code>boost</code> and make <code>max_depth</code> a parameter. Remember the noise floor of 0.25.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for depth in [1, 2, 5]:
+    pred = np.full(len(y_toy), y_toy.mean())
+    pred_new = np.full(len(y_new), y_toy.mean())
+    for m in range(1, 201):
+        tree = DecisionTreeRegressor(max_depth=depth, random_state=42).fit(X_toy, y_toy - pred)
+        pred += 0.1 * tree.predict(X_toy)
+        pred_new += 0.1 * tree.predict(X_new)
+        if m in (50, 200):
+            print(f"depth {depth}  {m:3d} trees  new-data MSE {np.mean((y_new - pred_new) ** 2):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>depth 1   50 trees  new-data MSE 1.391
+depth 1  200 trees  new-data MSE 0.463
+depth 2   50 trees  new-data MSE 0.368
+depth 2  200 trees  new-data MSE 0.367
+depth 5   50 trees  new-data MSE 0.392
+depth 5  200 trees  new-data MSE 0.471</code></pre>
+                        </div>
+                        <p>Small trees are enough when each tree only has to make a small correction. Depth-5 trees have 32 leaves for 200 points, so each one can chase a few noisy points, and 200 of them memorize the training set. In the libraries, tree size (<code>max_depth</code>, <code>max_leaf_nodes</code>, <code>num_leaves</code>) is the second knob to tune after the learning rate. Stumps can only model one feature at a time; with one feature here that costs nothing, but on churn they could not capture the app-user-by-tickets interaction.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Tune Tree Size with Early Stopping</h3>
+                    <p>On the churn data, train <code>HistGradientBoostingClassifier(learning_rate=0.05, max_iter=2000, early_stopping=True, validation_fraction=0.2, n_iter_no_change=20, random_state=42)</code> with <code>max_leaf_nodes</code> set to 4, 8, 16 and 31. For each, print the number of trees used and the best internal validation loss. Which would you choose, judging only by the validation loss? Then print the test ROC AUC of your choice.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>After fitting, <code>model.validation_score_</code> holds one score per iteration. With the default scoring ("loss") it stores the <em>negative</em> log loss, so higher is better and the best loss is <code>-model.validation_score_.max()</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">fitted = {}
+for leaves in [4, 8, 16, 31]:
+    model = HistGradientBoostingClassifier(
+        learning_rate=0.05, max_iter=2000, max_leaf_nodes=leaves, early_stopping=True,
+        validation_fraction=0.2, n_iter_no_change=20, random_state=42,
+    ).fit(X_train, y_train)
+    fitted[leaves] = model
+    print(f"max_leaf_nodes {leaves:2d}  trees {model.n_iter_:4d}  best validation loss {-model.validation_score_.max():.4f}")
+
+choice = min(fitted, key=lambda k: -fitted[k].validation_score_.max())
+auc = roc_auc_score(y_test, fitted[choice].predict_proba(X_test)[:, 1])
+print(f"chosen: {choice} leaves, test ROC AUC {auc:.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>max_leaf_nodes  4  trees  321  best validation loss 0.2877
+max_leaf_nodes  8  trees  221  best validation loss 0.2900
+max_leaf_nodes 16  trees  157  best validation loss 0.2925
+max_leaf_nodes 31  trees   93  best validation loss 0.3005
+chosen: 4 leaves, test ROC AUC 0.874</code></pre>
+                        </div>
+                        <p>Smaller trees need more rounds; larger trees stop sooner. The choice is made on validation data only, and the test set is used once, for the chosen model. Lesson 6.2 does this search properly, with cross-validation instead of a single validation split.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Teach the Model a Rule It Must Obey</h3>
+                    <p>Pinecrest's analysts insist that, other things equal, a longer gap since the last order should never <em>lower</em> predicted churn. HistGradientBoosting can enforce that with <code>monotonic_cst={"days_since_last_order": 1}</code> (1 = increasing, -1 = decreasing). Train a constrained model, print its test ROC AUC next to the unconstrained <code>hgb</code>, then take the first test customer, vary <code>days_since_last_order</code> over 0, 60, 120, 180, 240, 300, 360 and print both models' predicted probabilities.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Build the "what if" rows with <code>pd.concat([X_test.iloc[[0]]] * 7)</code>, then overwrite the column with the seven values. Keep the categorical dtypes intact.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">mono = HistGradientBoostingClassifier(monotonic_cst={"days_since_last_order": 1},
+                                      random_state=42).fit(X_train, y_train)
+print(f"unconstrained AUC {roc_auc_score(y_test, hgb.predict_proba(X_test)[:, 1]):.3f}   "
+      f"monotonic AUC {roc_auc_score(y_test, mono.predict_proba(X_test)[:, 1]):.3f}")
+
+what_if = pd.concat([X_test.iloc[[0]]] * 7, ignore_index=True)
+what_if["days_since_last_order"] = [0, 60, 120, 180, 240, 300, 360]
+print(pd.DataFrame({
+    "days": what_if["days_since_last_order"],
+    "unconstrained": hgb.predict_proba(what_if)[:, 1].round(3),
+    "monotonic": mono.predict_proba(what_if)[:, 1].round(3),
+}).to_string(index=False))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>unconstrained AUC 0.862   monotonic AUC 0.860
+ days  unconstrained  monotonic
+    0          0.039      0.025
+   60          0.018      0.028
+  120          0.030      0.049
+  180          0.442      0.381
+  240          0.673      0.616
+  300          0.689      0.616
+  360          0.755      0.702</code></pre>
+                        </div>
+                        <p>The constrained model never goes down as the gap grows, and it costs little or nothing in AUC. Constraints like this make a model easier to defend in front of a business team, and they protect against odd wiggles where the training data is thin. They are a modeling choice, not a discovery: you are telling the model what you believe.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Boosting on Rare Fraud (Stretch)</h3>
+                    <p>Load <code>data/transactions.csv</code> (0.9% fraud). Use the nine numeric columns plus <code>category</code> (as <code>category</code> dtype), and a stratified 70/30 split with <code>random_state=42</code>. Compare a default <code>HistGradientBoostingClassifier</code> with a regularized one: <code>learning_rate=0.05, max_iter=300, max_leaf_nodes=15, min_samples_leaf=40, l2_regularization=1.0, early_stopping=True, random_state=42</code>. Report ROC AUC and average precision for both. Why would gentler, smaller trees help when there are only about 300 frauds to learn from?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>With 35,000 training rows, <code>early_stopping="auto"</code> is already on for both models. Average precision is the better yardstick when positives are this rare (Lesson 1.4).</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">tx = pd.read_csv("data/transactions.csv")
+tx_num = ["account_age_days", "amount", "hour", "items", "device_new", "billing_shipping_mismatch",
+          "country_mismatch", "card_attempts", "velocity_24h"]
+X_tx = tx[tx_num + ["category"]].copy()
+X_tx["category"] = X_tx["category"].astype("category")
+Xt_train, Xt_test, yt_train, yt_test = train_test_split(
+    X_tx, tx["is_fraud"], test_size=0.3, stratify=tx["is_fraud"], random_state=42
+)
+print("frauds in training:", yt_train.sum())
+
+for name, model in [
+    ("default", HistGradientBoostingClassifier(random_state=42)),
+    ("regularized", HistGradientBoostingClassifier(
+        learning_rate=0.05, max_iter=300, max_leaf_nodes=15, min_samples_leaf=40,
+        l2_regularization=1.0, early_stopping=True, random_state=42)),
+]:
+    model.fit(Xt_train, yt_train)
+    p = model.predict_proba(Xt_test)[:, 1]
+    print(f"{name:12s} trees {model.n_iter_:3d}  ROC AUC {roc_auc_score(yt_test, p):.3f}"
+          f"  average precision {average_precision_score(yt_test, p):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>frauds in training: 307
+default      trees  46  ROC AUC 0.841  average precision 0.415
+regularized  trees 127  ROC AUC 0.864  average precision 0.506</code></pre>
+                        </div>
+                        <p>With only about 300 positive examples, a default model can build leaves around a handful of frauds and learn their quirks. Larger <code>min_samples_leaf</code>, fewer leaves, L2 shrinkage and a smaller step all force each tree to describe broader patterns. On rare-event problems the regularized booster is usually the better starting point.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> In gradient boosting, what is each new tree trained to predict?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="That describes bagging and random forests, where trees are independent. In boosting, does a new tree know about the trees before it?">
+                                A) The original target, on a fresh bootstrap sample of the rows
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Each tree is fitted to the residuals of the current model (more generally, the negative gradient of the loss), so it aims at whatever the trees before it still get wrong.">
+                                B) What the current model still gets wrong: the residuals, or more generally the negative gradient of the loss
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Averaging earlier predictions would add nothing new. Think of the golfer: what does each putt aim at?">
+                                C) The average of the previous trees' predictions
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> The current model predicts 10 for two rows whose true values are 14 and 6. A new tree fits the residuals perfectly, and the learning rate is 0.5. What does this print?</p>
+                        <pre><code class="language-python">quiz_pred = np.array([10.0, 10.0])
+quiz_y = np.array([14.0, 6.0])
+quiz_tree_output = quiz_y - quiz_pred
+print(quiz_pred + 0.5 * quiz_tree_output)</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="That would be a learning rate of 1.0. What does multiplying the tree's output by 0.5 do?">
+                                A) <code>[14.  6.]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The tree's output is not zero: the residuals are +4 and -4. What is half of each?">
+                                B) <code>[10. 10.]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The residuals are +4 and -4. The learning rate scales them to +2 and -2, so the predictions move halfway to the truth: 12 and 8. The next tree aims at the remaining +2 and -2.">
+                                C) <code>[12.  8.]</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> With early stopping switched on, you lower <code>learning_rate</code> from 0.1 to 0.01. What should you expect?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Each tree now takes a step one tenth the size, so roughly ten times as many trees are needed before validation stops improving. Small steps usually generalize as well or slightly better, at the cost of training time.">
+                                A) Many more trees before it stops, and a similar or slightly better validation score
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Smaller steps mean each tree changes the model less. Does that make the validation loss stop improving sooner or later?">
+                                B) Fewer trees, because each tree is weaker and stops helping sooner
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Look back at the toy wave: did learning rates 1.0 and 0.05 reach the same new-data error?">
+                                C) Exactly the same model; the learning rate only changes training speed
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> You early-stop an <code>XGBClassifier</code>. Which data should go into <code>eval_set</code>?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Whatever chooses the number of trees is part of training. Would the test score still be an honest estimate afterwards?">
+                                A) The test set, so the model stops where it will be graded
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The training loss keeps falling for every extra tree. Would it ever tell the model to stop?">
+                                B) The same rows the model is fitted on
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="A validation set split off the training data reacts to overfitting the way new data would, and it keeps the test set untouched for one honest final score.">
+                                C) A validation set split off from the training data
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> Which statement about <code>HistGradientBoostingClassifier</code> is true?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Missing values get their own bin and the tree learns which way to send them, and columns with the category dtype are split as categories by default (categorical_features='from_dtype').">
+                                A) It accepts missing values as they are and treats <code>category</code>-dtype columns as categorical, with no one-hot encoding
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Trees ask questions like 'is days above 150?'. Does the answer change if you rescale the column?">
+                                B) It needs scaled features, like logistic regression
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Check the default: early_stopping='auto'. When does 'auto' switch it on?">
+                                C) It always uses early stopping, whatever the size of the data
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Is boosting always better than a random forest?</summary>
+                    <p>No, but it usually wins once tuned, especially on larger tables. On the churn data the default forest and default boosting are close; boosting pulls ahead with a smaller learning rate and early stopping. A forest is the safer choice when you have no time to tune, because extra trees never make it overfit. Always compare both on the same cross-validation folds (Lesson 6.1).</p>
+                </details>
+                <details>
+                    <summary>What happened to GradientBoostingClassifier and AdaBoost?</summary>
+                    <p>Both still exist in scikit-learn. <code>GradientBoostingClassifier</code> is the exact, non-binned version: fine for small data and for teaching, but slow on large tables and without native missing-value or category support. <code>AdaBoostClassifier</code> is the historical ancestor of boosting: instead of fitting residuals, it re-weights the rows that earlier trees misclassified. It still works, but histogram gradient boosting has replaced both in practice.</p>
+                </details>
+                <details>
+                    <summary>Do I need to scale or one-hot encode for boosting?</summary>
+                    <p>Scaling: never, for any tree model. Encoding: not for HistGradientBoosting, XGBoost or LightGBM when the column has the <code>category</code> dtype. One-hot encoding still works and is sometimes better for categories with very few rows per level; with hundreds of levels, native handling or target encoding (Lesson 2.1) is usually better.</p>
+                </details>
+                <details>
+                    <summary>Early stopping stopped after very few trees. Is that a bug?</summary>
+                    <p>Usually it means the learning rate is high, the trees are large, or the validation set is small and noisy. Lower the learning rate, raise <code>n_iter_no_change</code> (or <code>early_stopping_rounds</code>) to 30 to 50 so one noisy round does not end training, and check that the validation set has enough positive cases.</p>
+                </details>
+                <details>
+                    <summary>Why do XGBoost and LightGBM give slightly different numbers on my computer?</summary>
+                    <p>They add up floating-point numbers in parallel, and the order of those additions depends on the number of threads and the processor. Tiny differences can change a split, which can change the stopping round. Differences in the third decimal of AUC are normal; differences in the first decimal mean your data or settings differ.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>A buyer does not want the <em>average</em> week; they want enough stock not to run out. Train <code>HistGradientBoostingRegressor(loss="quantile", quantile=0.9, random_state=42)</code> on the demand data and check what share of 2025 rows sell <em>at or below</em> its forecast. It should be close to 90%. How many extra units per row does this "safety stock" forecast carry compared with the Poisson forecast? Which product categories carry the most?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain the difference between a random forest and gradient boosting to a Pinecrest store manager in three sentences, without the words "variance" or "gradient". Then write down the two numbers from today that would convince that manager the forecaster is worth using, and one assumption in the project that they should challenge.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Boosting adds small trees one at a time, each fitted to what the current model still gets wrong: F<sub>m</sub> = F<sub>m-1</sub> + ν · h<sub>m</sub></li>
+                        <li>Training error falls forever; validation error turns around. Early stopping on a validation set picks the number of trees</li>
+                        <li>A smaller learning rate with more trees usually generalizes a little better; tune tree size and regularization after that</li>
+                        <li><code>HistGradientBoosting*</code> bins features, handles NaN natively and splits <code>category</code> columns without one-hot encoding</li>
+                        <li>XGBoost and LightGBM follow the same estimator API; early stopping needs an explicit <code>eval_set</code> (never the test set) and current argument names</li>
+                        <li>Pick the loss that fits the target: Poisson for counts like units sold, quantile for "enough stock" forecasts</li>
+                        <li>On tabular data, tuned boosted trees are the usual benchmark to beat, deep learning included</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You wrote gradient boosting from scratch and watched it overfit</li>
+                        <li>You beat logistic regression on churn with zero preprocessing</li>
+                        <li>You early-stopped three different libraries the right way</li>
+                        <li>You built a demand forecaster that cuts the per-product baseline's error by about 40%</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="ensemble_methods.html"><strong>Lesson 5.4: Voting and Stacking</strong></a> you will combine different kinds of models, a logistic regression, a forest and a booster, into one. You will see when a team of models beats its best member, why the team must disagree to help, and how stacking learns whom to trust without leaking the answers.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook: the per-category table is a good template for reporting any regression model.</li>
+                    <li>Rerun the churn early-stopping block with <code>random_state=7</code>. How much do the number of trees and the test AUC move? That wobble is why Lesson 6.1 compares models with cross-validation.</li>
+                    <li>Predict, without running it: will averaging the probabilities of a logistic regression and the boosted model beat the boosted model alone? Write down your guess; Lesson 5.4 answers it.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You now know the algorithm behind a large share of the machine learning running in real businesses, and you know it from the inside: a loop of small corrections that you wrote yourself. The many knobs can feel like a lot at first. They are not a wall of magic numbers; they are the putting stroke, the size of each correction and when to stop, and you have already seen what each one does.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="trees_random_forest.html" class="prev-lesson">← Previous: Bagging and Random Forests</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="ensemble_methods.html" class="next-lesson">Next: Voting and Stacking →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Boosting fits trees sequentially, each one correcting the residual errors of the ensemble so far.</li>
-                <li>Learning rate and number of estimators trade off together — a lower rate needs more trees.</li>
-                <li>Early stopping halts training when validation performance stops improving, guarding against overfitting.</li>
-                <li>Gradient boosting often wins on tabular data but is more sensitive to tuning than a random forest.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now train, tune, and regularize a gradient boosting model — one of the strongest and most widely used tools for
-        tabular machine learning.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>Boosting versus random forest — what's the real difference?</summary>
-            <p>A random forest builds independent trees in parallel to reduce variance; boosting builds dependent trees sequentially to
-            reduce bias. Boosting often scores higher but needs more careful tuning.</p>
-        </details>
-        <details>
-            <summary>How do learning rate and n_estimators relate?</summary>
-            <p>They trade off. A smaller learning rate makes each tree contribute less, so you need more trees. A common recipe is a
-            low learning rate combined with early stopping to find the right number of trees automatically.</p>
-        </details>
-        <details>
-            <summary>XGBoost, LightGBM, or CatBoost?</summary>
-            <p>All are excellent gradient boosting libraries. LightGBM is fast on large datasets, CatBoost handles categorical features
-            gracefully, and XGBoost is a robust, well-documented default. Start with any and switch if you hit a limit.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>These ensemble skills lead into tuning hyperparameters at scale and interpreting complex models — making powerful boosters
-        both accurate and understandable.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Train a gradient boosting model with early stopping on a validation set.</li>
-            <li>Sweep the learning rate against <code>n_estimators</code> and compare the result to a random forest baseline.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Gradient boosting powers countless competition wins and production systems. Learning to tame it puts a professional-grade
-            tool in your hands — be proud of getting here, and keep pushing.</p>
-        </div>
-    </section>
-
-    <!-- Navigation at the bottom -->
-    <nav class="lesson-nav" aria-label="Lesson navigation">
-        <a href="ml_support_vector_machines.html" class="prev-lesson" aria-label="Previous lesson">Previous: Support Vector Machines</a>
-        <a href="index.html" class="home-link" aria-label="Course home">Course Home</a>
-        <a href="ml_model_selection.html" class="next-lesson" aria-label="Next lesson">Next: Model Selection & Tuning</a>
-    </nav>
-    
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1280,8 +1052,10 @@ print(comparison_df.to_string(index=False))</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>

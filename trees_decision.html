@@ -3,1069 +3,1183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Master Decision Trees in Python. Learn the algorithm, implementation, visualization, and practical applications with scikit-learn.">
-    <title>Decision Trees Path - Python Machine Learning</title>
+    <meta name="description" content="Learn how decision trees choose their questions, read the rules a tree learns from Pinecrest churn data, and prune it so it stops memorizing the training set. Python Machine Learning Lesson 5.1.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Decision Trees - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
-    <main id="main-content">
-    <header role="banner">
-        <h1>Decision Trees</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Supervised Learning</a>
-        <span class="separator">›</span>
-        <span class="current">Decision Trees</span>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
     </nav>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Explain how a decision tree splits data using impurity measures (Gini and entropy)</li>
-            <li>Train decision trees for both classification and regression</li>
-            <li>Read and visualize a tree's decision rules</li>
-            <li>Control overfitting with <code>max_depth</code>, <code>min_samples_split</code>/<code>leaf</code>, and pruning</li>
-            <li>Interpret the feature importances a tree produces</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Train and visualize a decision tree on a real dataset, then tune its depth to balance accuracy against overfitting.</p>
-    </div>
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>🌳 Lesson 5.1: Decision Trees</h1>
+                <p class="lead">Teach a model to ask yes-or-no questions, read the rules it discovers in Pinecrest's churn data, and stop it from memorizing the training set.</p>
 
-    <h2>Intuitive and Interpretable Machine Learning! 🌳</h2>
-    
-    <blockquote>
-        <p>Decision trees are one of the most intuitive machine learning algorithms, mimicking human decision-making processes. From their simple if-then structure to their powerful ensemble variants, decision trees form the foundation of many state-of-the-art algorithms. Master tree construction, pruning, and visualization to build interpretable yet powerful models.</p>
-    </blockquote>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain how a classification tree chooses each split by reducing Gini impurity, and compute the impurity of a node by hand</li>
+                        <li>Train <code>DecisionTreeClassifier</code> and <code>DecisionTreeRegressor</code>, and read their rules with <code>export_text</code> and <code>plot_tree</code></li>
+                        <li>Explain where a tree's probabilities come from and why trees do not need scaled features</li>
+                        <li>Control overfitting with <code>max_depth</code>, <code>min_samples_leaf</code>, <code>max_leaf_nodes</code> and cost-complexity pruning, chosen by cross-validation</li>
+                        <li>Read a tree's feature importances, including what they cannot tell you</li>
+                    </ul>
+                </div>
 
-    <h2>Decision Tree Fundamentals</h2>
-    
-    <div class="mermaid">
-    graph TD
-        A[Decision Trees] --> B[Tree Structure]
-        A --> C[Splitting Criteria]
-        A --> D[Tree Types]
-        
-        B --> E[Root Node]
-        B --> F[Internal Nodes]
-        B --> G[Leaf Nodes]
-        B --> H[Branches]
-        
-        C --> I[Gini Impurity]
-        C --> J[Information Gain]
-        C --> K[Gain Ratio]
-        C --> L[MSE Reduction]
-        
-        D --> M[Classification Trees]
-        D --> N[Regression Trees]
-        
-        style A fill:#f9f,stroke:#333,stroke-width:2px
-        style C fill:#bbf,stroke:#333,stroke-width:2px
-        style D fill:#fbf,stroke:#333,stroke-width:2px
-    </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 100 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="classification_svm.html">Lesson 4.3: Support Vector Machines</a>, plus cross-validation (<a href="evaluation_cross_validation.html">Lesson 1.3</a>), ROC AUC (<a href="evaluation_metrics.html">Lesson 1.4</a>) and pipelines (<a href="pipelines_composite.html">Lesson 2.2</a>)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A churn rule book: a small tree's rules and its customer segments ranked by churn rate, checked against a baseline and logistic regression</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code> (exercise 3 uses <code>data/weekly_demand.csv</code>)</li>
+                </ul>
+            </header>
 
-    <h2>Decision Tree Implementation from Scratch</h2>
-    
-    <h3>Building a Classification Tree</h3>
-    <pre class="language-python"><code>import numpy as np
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Twenty Questions for Churn</a></li>
+                        <li><a href="#first-tree" class="toc-link">Your First Tree</a></li>
+                        <li><a href="#impurity" class="toc-link">How a Tree Picks a Question</a></li>
+                        <li><a href="#predictions" class="toc-link">Predictions Come from Leaves</a></li>
+                        <li><a href="#boxes" class="toc-link">Boxes, Not Lines</a></li>
+                        <li><a href="#overfitting" class="toc-link">Growing Too Far, and Pruning</a></li>
+                        <li><a href="#importance" class="toc-link">Which Features Did the Tree Use?</a></li>
+                        <li><a href="#unstable" class="toc-link">A Tree Is Unstable</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: A Churn Rule Book</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Twenty Questions for Churn</h2>
+
+                <p>Every model so far has worked by arithmetic: logistic regression adds up weighted features, k-nearest neighbors measures distances, a support vector machine finds a separating boundary. A <strong>decision tree</strong> works the way a person sorting case files might: it asks one yes-or-no question about one feature, splits the customers into two piles, and then asks another question about each pile, until the piles are mostly one kind.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Trail Junction Signposts</h4>
+                    <p>Picture a trail map for a customer. At the trailhead a signpost asks, "Has it been more than about 170 days since your last order?" Each answer sends the customer down a different trail, where the next signpost asks a different question. After a few junctions every trail ends at a campsite, and each campsite has a sign that says what share of the customers who walked that way in the past ended up leaving. That is the whole model: <strong>signposts</strong> (questions), <strong>trails</strong> (answers) and <strong>campsites</strong> (predictions).</p>
+                    <p>Training a tree means choosing which question to post at each junction. Predicting means walking a new customer down the trails to a campsite and reading its sign.</p>
+                </div>
+
+                <p>Here is the actual tree you will grow in the next section, two questions deep ("recency" is <code>days_since_last_order</code>, "discounts" is <code>discount_share</code>, tenure is in months). The thresholds were not typed by anyone: the algorithm found them in the data.</p>
+
+                <div class="mermaid">
+graph TD
+    A["Recency 172.5 days or less?"] -->|"yes"| B["Discounts 0.35 or less?"]
+    A -->|"no"| C["Tenure 5.5 or less?"]
+    B -->|"yes"| D["6% churn"]
+    B -->|"no"| E["28% churn"]
+    C -->|"yes"| F["80% churn"]
+    C -->|"no"| G["43% churn"]
+                </div>
+
+                <div class="card card-accent">
+                    <h4>🔑 Key Terms</h4>
+                    <p><strong>Node</strong>: one point in the tree. The <strong>root</strong> is the first node, which holds every training row. An <strong>internal node</strong> asks a question (a <strong>split</strong>: one feature and one threshold). A <strong>leaf</strong> asks nothing and makes the prediction. <strong>Depth</strong>: the number of questions between the root and the deepest leaf.</p>
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>Trees matter for two reasons. A small tree is one of the few models you can print on a page and hand to a non-technical colleague: the customer-care team can follow it without knowing any math. And trees are the building block of the most successful models for tabular data: random forests (Lesson 5.2) and gradient boosting (Lesson 5.3) are both made of hundreds of trees. Understanding one tree well makes those lessons easy.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="first-tree" class="lesson-section">
+                <h2>🌱 Your First Tree</h2>
+
+                <p>Start a new notebook. Load the churn table and make the same split as Lesson 1.1, with the same ten numeric features. Then grow a tree that may ask at most two questions in a row (<code>max_depth=2</code>).</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.datasets import make_classification, load_iris, load_wine
 from sklearn.model_selection import train_test_split
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.tree import plot_tree, export_text
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.tree import DecisionTreeClassifier, export_text
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+X = customers[features]
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
 
-class DecisionTreeNode:
-    """Node class for decision tree"""
-    
-    def __init__(self, feature=None, threshold=None, left=None, right=None, 
-                 value=None, samples=None, impurity=None):
-        # For internal nodes
-        self.feature = feature          # Feature index for splitting
-        self.threshold = threshold      # Threshold value for splitting
-        self.left = left               # Left child node
-        self.right = right             # Right child node
-        
-        # For leaf nodes
-        self.value = value             # Class prediction or regression value
-        
-        # For visualization
-        self.samples = samples         # Number of samples at this node
-        self.impurity = impurity       # Impurity measure at this node
-        
-    def is_leaf(self):
-        """Check if node is a leaf"""
-        return self.value is not None
+small_tree = DecisionTreeClassifier(max_depth=2, random_state=42)
+small_tree.fit(X_train, y_train)
+print(export_text(small_tree, feature_names=features, show_weights=True))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>|--- days_since_last_order &lt;= 172.50
+|   |--- discount_share &lt;= 0.35
+|   |   |--- weights: [2845.00, 175.00] class: 0
+|   |--- discount_share &gt;  0.35
+|   |   |--- weights: [620.00, 245.00] class: 0
+|--- days_since_last_order &gt;  172.50
+|   |--- tenure_months &lt;= 5.50
+|   |   |--- weights: [31.00, 127.00] class: 1
+|   |--- tenure_months &gt;  5.50
+|   |   |--- weights: [260.00, 197.00] class: 0</code></pre>
+                </div>
 
-class DecisionTreeFromScratch:
-    """Decision Tree implementation from scratch"""
-    
-    def __init__(self, max_depth=5, min_samples_split=2, min_samples_leaf=1,
-                 criterion='gini', random_state=None):
-        self.max_depth = max_depth
-        self.min_samples_split = min_samples_split
-        self.min_samples_leaf = min_samples_leaf
-        self.criterion = criterion
-        self.random_state = random_state
-        self.root = None
-        self.n_features_ = None
-        self.n_classes_ = None
-        self.feature_names = None
-        self.class_names = None
-        
-        if random_state is not None:
-            np.random.seed(random_state)
-    
-    def fit(self, X, y, feature_names=None, class_names=None):
-        """Build decision tree"""
-        self.n_features_ = X.shape[1]
-        self.n_classes_ = len(np.unique(y))
-        self.feature_names = feature_names or [f'Feature_{i}' for i in range(self.n_features_)]
-        self.class_names = class_names or [f'Class_{i}' for i in range(self.n_classes_)]
-        
-        # Build tree recursively
-        self.root = self._build_tree(X, y, depth=0)
-        return self
-    
-    def _build_tree(self, X, y, depth):
-        """Recursively build the tree"""
-        n_samples = X.shape[0]
-        n_classes = len(np.unique(y))
-        
-        # Calculate node impurity
-        impurity = self._calculate_impurity(y)
-        
-        # Check stopping criteria
-        if (depth >= self.max_depth or 
-            n_samples < self.min_samples_split or 
-            n_classes == 1):
-            
-            # Create leaf node
-            leaf_value = self._most_common_label(y)
-            return DecisionTreeNode(value=leaf_value, samples=n_samples, 
-                                   impurity=impurity)
-        
-        # Find best split
-        best_feature, best_threshold = self._best_split(X, y)
-        
-        if best_feature is None:
-            # No valid split found
-            leaf_value = self._most_common_label(y)
-            return DecisionTreeNode(value=leaf_value, samples=n_samples, 
-                                   impurity=impurity)
-        
-        # Split data
-        left_indices = X[:, best_feature] <= best_threshold
-        right_indices = X[:, best_feature] > best_threshold
-        
-        # Check minimum samples in leaves
-        if (np.sum(left_indices) < self.min_samples_leaf or 
-            np.sum(right_indices) < self.min_samples_leaf):
-            leaf_value = self._most_common_label(y)
-            return DecisionTreeNode(value=leaf_value, samples=n_samples, 
-                                   impurity=impurity)
-        
-        # Recursively build left and right subtrees
-        left_child = self._build_tree(X[left_indices], y[left_indices], depth + 1)
-        right_child = self._build_tree(X[right_indices], y[right_indices], depth + 1)
-        
-        return DecisionTreeNode(feature=best_feature, threshold=best_threshold,
-                               left=left_child, right=right_child,
-                               samples=n_samples, impurity=impurity)
-    
-    def _best_split(self, X, y):
-        """Find best feature and threshold to split on"""
-        best_gain = -1
-        best_feature = None
-        best_threshold = None
-        
-        # Calculate parent impurity
-        parent_impurity = self._calculate_impurity(y)
-        
-        # Try all features
-        for feature_idx in range(self.n_features_):
-            feature_values = X[:, feature_idx]
-            thresholds = np.unique(feature_values)
-            
-            # Try all unique values as thresholds
-            for threshold in thresholds:
-                # Split data
-                left_mask = feature_values <= threshold
-                right_mask = feature_values > threshold
-                
-                # Skip if split doesn't divide data
-                if np.sum(left_mask) == 0 or np.sum(right_mask) == 0:
-                    continue
-                
-                # Calculate information gain
-                gain = self._information_gain(y, left_mask, right_mask, parent_impurity)
-                
-                if gain > best_gain:
-                    best_gain = gain
-                    best_feature = feature_idx
-                    best_threshold = threshold
-        
-        return best_feature, best_threshold
-    
-    def _information_gain(self, y, left_mask, right_mask, parent_impurity):
-        """Calculate information gain from split"""
-        n_total = len(y)
-        n_left = np.sum(left_mask)
-        n_right = np.sum(right_mask)
-        
-        # Calculate weighted average impurity after split
-        left_impurity = self._calculate_impurity(y[left_mask])
-        right_impurity = self._calculate_impurity(y[right_mask])
-        
-        weighted_impurity = (n_left / n_total) * left_impurity + \
-                          (n_right / n_total) * right_impurity
-        
-        # Information gain is reduction in impurity
-        return parent_impurity - weighted_impurity
-    
-    def _calculate_impurity(self, y):
-        """Calculate impurity (Gini or Entropy)"""
-        proportions = np.bincount(y.astype(int)) / len(y)
-        
-        if self.criterion == 'gini':
-            # Gini impurity: 1 - Σ(p_i^2)
-            return 1 - np.sum(proportions ** 2)
-        elif self.criterion == 'entropy':
-            # Entropy: -Σ(p_i * log2(p_i))
-            # Avoid log(0)
-            proportions = proportions[proportions > 0]
-            return -np.sum(proportions * np.log2(proportions))
-        else:
-            raise ValueError(f"Unknown criterion: {self.criterion}")
-    
-    def _most_common_label(self, y):
-        """Return most common class label"""
-        return np.bincount(y.astype(int)).argmax()
-    
-    def predict(self, X):
-        """Predict class for samples"""
-        return np.array([self._predict_sample(sample) for sample in X])
-    
-    def _predict_sample(self, sample):
-        """Predict class for a single sample"""
-        node = self.root
-        
-        while not node.is_leaf():
-            if sample[node.feature] <= node.threshold:
-                node = node.left
-            else:
-                node = node.right
-        
-        return node.value
-    
-    def print_tree(self, node=None, depth=0):
-        """Print tree structure"""
-        if node is None:
-            node = self.root
-        
-        if node.is_leaf():
-            print(f"{'  ' * depth}Predict: {self.class_names[node.value]} "
-                  f"(samples={node.samples}, impurity={node.impurity:.3f})")
-        else:
-            print(f"{'  ' * depth}If {self.feature_names[node.feature]} <= {node.threshold:.3f} "
-                  f"(samples={node.samples}, impurity={node.impurity:.3f})")
-            self.print_tree(node.left, depth + 1)
-            print(f"{'  ' * depth}Else:")
-            self.print_tree(node.right, depth + 1)
-    
-    def get_depth(self, node=None):
-        """Get tree depth"""
-        if node is None:
-            node = self.root
-        
-        if node.is_leaf():
-            return 0
-        
-        return 1 + max(self.get_depth(node.left), self.get_depth(node.right))
-    
-    def get_n_leaves(self, node=None):
-        """Get number of leaf nodes"""
-        if node is None:
-            node = self.root
-        
-        if node.is_leaf():
-            return 1
-        
-        return self.get_n_leaves(node.left) + self.get_n_leaves(node.right)
+                <p><code>export_text</code> prints the tree as indented rules. Each <code>weights</code> line is a leaf: how many training customers reached it, as <code>[stayed, churned]</code> (the order of <code>classes_</code>, 0 then 1), and the class it predicts. Read the first leaf: 3,020 customers who ordered within the last 172.5 days and rarely used discounts, of whom only 175 churned.</p>
 
-# Generate sample data
-X, y = make_classification(n_samples=200, n_features=4, n_informative=3,
-                          n_redundant=0, n_classes=3, random_state=42)
+                <p>Look at what the tree found by itself. The first question is about <strong>recency</strong>, with a threshold near 170 days. The second-level questions pick out <strong>discount reliance</strong> and <strong>very new customers</strong> (tenure of 5 months or less). Nobody told the tree to look for a cut-off; it searched every possible one and picked the best. The 158 customers in the third leaf (lapsed <em>and</em> brand new) churned at 80%.</p>
 
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, 
-                                                    random_state=42, stratify=y)
+                <div class="card card-info">
+                    <h4>💡 Why a Tree Gets random_state</h4>
+                    <p>A tree has no random sampling, but when two features would give exactly the same improvement, scikit-learn breaks the tie by visiting the features in a random order. <code>random_state=42</code> makes that order, and so the tree, the same on every run. As everywhere in this course, the value 42 does not matter; fixing it does.</p>
+                </div>
 
-# Train custom decision tree
-print("="*60)
-print("DECISION TREE FROM SCRATCH")
-print("="*60)
+                <p>The same tree as a picture. <code>plot_tree</code> draws each node as a box; <code>filled=True</code> colors it by the majority class and how pure the node is.</p>
 
-tree_custom = DecisionTreeFromScratch(max_depth=3, min_samples_split=5, 
-                                      criterion='gini', random_state=42)
-tree_custom.fit(X_train, y_train, 
-                feature_names=['Feature_A', 'Feature_B', 'Feature_C', 'Feature_D'],
-                class_names=['Class_0', 'Class_1', 'Class_2'])
+                <pre><code class="language-python">from sklearn.tree import plot_tree
 
-# Make predictions
-y_pred_custom = tree_custom.predict(X_test)
-accuracy_custom = accuracy_score(y_test, y_pred_custom)
+fig, ax = plt.subplots(figsize=(10, 5), layout="constrained")
+plot_tree(small_tree, feature_names=features, class_names=["stayed", "churned"],
+          filled=True, rounded=True, fontsize=9, ax=ax)
+ax.set_title("A depth-2 churn tree: one question at each node")
+plt.show()</code></pre>
 
-print(f"\nCustom Tree Statistics:")
-print(f"  Depth: {tree_custom.get_depth()}")
-print(f"  Number of leaves: {tree_custom.get_n_leaves()}")
-print(f"  Test Accuracy: {accuracy_custom:.3f}")
+                <figure>
+                    <img src="images/trees_decision_depth2_tree.png" alt="Diagram of the depth-2 decision tree. The root splits on days_since_last_order at 172.5. The left branch splits on discount_share at 0.35 and the right branch on tenure_months at 5.5. Each box shows the gini value, number of samples, the stayed and churned counts and the predicted class; the leaf for lapsed new customers is colored as churned." width="1100" height="550" loading="lazy">
+                    <figcaption>Every box shows its question, its Gini impurity, how many training customers reached it and their split between stayed and churned. Only the third leaf (lapsed and brand new) predicts "churned"; the threshold 0.351 prints as 0.35 in the text version.</figcaption>
+                </figure>
 
-print(f"\nTree Structure:")
-tree_custom.print_tree()
+                <p><code>class_names</code> must list the class labels in the order of <code>classes_</code> (here 0 then 1), so "stayed" comes first. Get that order wrong and every box is mislabeled with no error at all (Common Mistake 3).</p>
+            </section>
 
-# Compare with scikit-learn
-tree_sklearn = DecisionTreeClassifier(max_depth=3, min_samples_split=5,
-                                      criterion='gini', random_state=42)
-tree_sklearn.fit(X_train, y_train)
-y_pred_sklearn = tree_sklearn.predict(X_test)
-accuracy_sklearn = accuracy_score(y_test, y_pred_sklearn)
+            <!-- ============================================================ -->
+            <section id="impurity" class="lesson-section">
+                <h2>⚖️ How a Tree Picks a Question</h2>
 
-print(f"\nScikit-learn Tree Accuracy: {accuracy_sklearn:.3f}")</code></pre>
+                <p>To choose a split, the tree needs a number that says how mixed a pile of customers is. scikit-learn's default is <strong>Gini impurity</strong>:</p>
 
-    <h2>Understanding Splitting Criteria</h2>
-    
-    <h3>Gini Impurity vs Information Gain</h3>
-    <pre class="language-python"><code>class SplittingCriteriaAnalysis:
-    """Analyze different splitting criteria for decision trees"""
-    
-    def __init__(self):
-        self.criteria = ['gini', 'entropy']
-        
-    def calculate_gini(self, y):
-        """Calculate Gini impurity"""
-        if len(y) == 0:
-            return 0
-        proportions = np.bincount(y) / len(y)
-        return 1 - np.sum(proportions ** 2)
-    
-    def calculate_entropy(self, y):
-        """Calculate entropy"""
-        if len(y) == 0:
-            return 0
-        proportions = np.bincount(y) / len(y)
-        proportions = proportions[proportions > 0]
-        return -np.sum(proportions * np.log2(proportions))
-    
-    def calculate_gain_ratio(self, y, left_mask, right_mask):
-        """Calculate gain ratio (C4.5 criterion)"""
-        n_total = len(y)
-        n_left = np.sum(left_mask)
-        n_right = np.sum(right_mask)
-        
-        # Information gain
-        parent_entropy = self.calculate_entropy(y)
-        left_entropy = self.calculate_entropy(y[left_mask])
-        right_entropy = self.calculate_entropy(y[right_mask])
-        
-        info_gain = parent_entropy - \
-                   (n_left/n_total * left_entropy + n_right/n_total * right_entropy)
-        
-        # Split information
-        p_left = n_left / n_total
-        p_right = n_right / n_total
-        
-        split_info = 0
-        if p_left > 0:
-            split_info -= p_left * np.log2(p_left)
-        if p_right > 0:
-            split_info -= p_right * np.log2(p_right)
-        
-        # Gain ratio
-        if split_info == 0:
-            return 0
-        return info_gain / split_info
-    
-    def visualize_impurity_functions(self):
-        """Visualize impurity functions for binary classification"""
-        
-        # Probability range for binary classification
-        p = np.linspace(0.001, 0.999, 100)
-        
-        # Calculate impurities
-        gini = 2 * p * (1 - p)
-        entropy = -p * np.log2(p) - (1-p) * np.log2(1-p)
-        misclassification = 1 - np.maximum(p, 1-p)
-        
-        # Plot
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        ax.plot(p, gini, label='Gini Impurity', linewidth=2)
-        ax.plot(p, entropy, label='Entropy', linewidth=2)
-        ax.plot(p, misclassification, label='Misclassification Error', linewidth=2)
-        
-        ax.set_xlabel('Proportion of Class 1')
-        ax.set_ylabel('Impurity')
-        ax.set_title('Comparison of Impurity Measures (Binary Classification)')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        
-        # Mark maximum impurity point
-        ax.axvline(x=0.5, color='red', linestyle='--', alpha=0.5)
-        ax.text(0.5, 0.1, 'Maximum\nImpurity', ha='center', fontsize=9)
-        
-        plt.tight_layout()
-        plt.show()
-    
-    def compare_split_quality(self, X, y):
-        """Compare split quality using different criteria"""
-        
-        # Try different features and thresholds
-        results = []
-        
-        for feature_idx in range(X.shape[1]):
-            feature_values = X[:, feature_idx]
-            threshold = np.median(feature_values)
-            
-            left_mask = feature_values <= threshold
-            right_mask = feature_values > threshold
-            
-            if np.sum(left_mask) == 0 or np.sum(right_mask) == 0:
-                continue
-            
-            # Calculate different metrics
-            parent_gini = self.calculate_gini(y)
-            parent_entropy = self.calculate_entropy(y)
-            
-            # Gini gain
-            left_gini = self.calculate_gini(y[left_mask])
-            right_gini = self.calculate_gini(y[right_mask])
-            n_left, n_right = np.sum(left_mask), np.sum(right_mask)
-            n_total = len(y)
-            
-            gini_gain = parent_gini - \
-                       (n_left/n_total * left_gini + n_right/n_total * right_gini)
-            
-            # Information gain
-            left_entropy = self.calculate_entropy(y[left_mask])
-            right_entropy = self.calculate_entropy(y[right_mask])
-            
-            info_gain = parent_entropy - \
-                       (n_left/n_total * left_entropy + n_right/n_total * right_entropy)
-            
-            # Gain ratio
-            gain_ratio = self.calculate_gain_ratio(y, left_mask, right_mask)
-            
-            results.append({
-                'Feature': f'Feature_{feature_idx}',
-                'Threshold': threshold,
-                'Gini Gain': gini_gain,
-                'Info Gain': info_gain,
-                'Gain Ratio': gain_ratio
-            })
-        
-        results_df = pd.DataFrame(results)
-        
-        # Visualize comparison
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # Gini Gain
-        axes[0].bar(range(len(results_df)), results_df['Gini Gain'], alpha=0.7)
-        axes[0].set_xlabel('Feature')
-        axes[0].set_ylabel('Gini Gain')
-        axes[0].set_title('Gini Gain by Feature')
-        axes[0].set_xticks(range(len(results_df)))
-        axes[0].set_xticklabels(results_df['Feature'], rotation=45)
-        axes[0].grid(True, alpha=0.3)
-        
-        # Information Gain
-        axes[1].bar(range(len(results_df)), results_df['Info Gain'], 
-                   alpha=0.7, color='orange')
-        axes[1].set_xlabel('Feature')
-        axes[1].set_ylabel('Information Gain')
-        axes[1].set_title('Information Gain by Feature')
-        axes[1].set_xticks(range(len(results_df)))
-        axes[1].set_xticklabels(results_df['Feature'], rotation=45)
-        axes[1].grid(True, alpha=0.3)
-        
-        # Gain Ratio
-        axes[2].bar(range(len(results_df)), results_df['Gain Ratio'], 
-                   alpha=0.7, color='green')
-        axes[2].set_xlabel('Feature')
-        axes[2].set_ylabel('Gain Ratio')
-        axes[2].set_title('Gain Ratio by Feature')
-        axes[2].set_xticks(range(len(results_df)))
-        axes[2].set_xticklabels(results_df['Feature'], rotation=45)
-        axes[2].grid(True, alpha=0.3)
-        
-        plt.suptitle('Comparison of Splitting Criteria', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        return results_df
+                <div class="card card-info">
+                    <h4>💡 Gini Impurity in One Line</h4>
+                    <p><strong>Gini = 1 − Σ p<sub>k</sub>²</strong>, where p<sub>k</sub> is the share of class k in the node. Intuition: pick two customers from the node at random (with replacement); Gini is the chance that they belong to <em>different</em> classes. A pure node (all stayed) has Gini 0. A 50/50 node has the maximum for two classes, 0.5.</p>
+                </div>
 
-# Analyze splitting criteria
-print("\n" + "="*60)
-print("SPLITTING CRITERIA ANALYSIS")
-print("="*60)
+                <p>A good split produces children that are purer than the parent. The tree measures this as the <strong>impurity decrease</strong>: the parent's Gini minus the children's Gini, each child weighted by its share of the rows. Check the root split by hand:</p>
 
-criteria_analysis = SplittingCriteriaAnalysis()
+                <pre><code class="language-python">def gini(counts):
+    p = np.asarray(counts) / np.sum(counts)
+    return 1 - np.sum(p ** 2)
 
-# Visualize impurity functions
-print("\nVisualizing impurity functions...")
-criteria_analysis.visualize_impurity_functions()
+root = np.bincount(y_train)                                        # [stayed, churned]
+left = np.bincount(y_train[X_train["days_since_last_order"] &lt;= 172.5])
+right = root - left
+weighted = (left.sum() * gini(left) + right.sum() * gini(right)) / root.sum()
 
-# Compare split quality
-print("\nComparing split quality metrics...")
-split_comparison = criteria_analysis.compare_split_quality(X_train, y_train)
-print("\nSplit Quality Comparison:")
-print(split_comparison.to_string(index=False))</code></pre>
+print("root", root, " left", left, " right", right)
+print(f"Gini root {gini(root):.4f}  left {gini(left):.4f}  right {gini(right):.4f}")
+print(f"weighted Gini of the children {weighted:.4f}, decrease {gini(root) - weighted:.4f}")
 
-    <h2>Tree Visualization and Interpretation</h2>
-    
-    <h3>Visualizing Decision Trees</h3>
-    <pre class="language-python"><code># Load iris dataset for visualization
-iris = load_iris()
-X_iris, y_iris = iris.data[:, [2, 3]], iris.target  # Use only 2 features for visualization
+t = small_tree.tree_
+print("scikit-learn's values:", t.impurity[[0, t.children_left[0], t.children_right[0]]].round(4))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>root [3756  744]  left [3465  420]  right [291 324]
+Gini root 0.2760  left 0.1928  right 0.4986
+weighted Gini of the children 0.2346, decrease 0.0414
+scikit-learn's values: [0.276  0.1928 0.4986]</code></pre>
+                </div>
 
-# Split data
-X_train_iris, X_test_iris, y_train_iris, y_test_iris = train_test_split(
-    X_iris, y_iris, test_size=0.3, random_state=42, stratify=y_iris
-)
+                <p>Your hand calculation matches the numbers scikit-learn stored in the fitted tree (<code>tree_</code> holds the raw tree: node 0 is the root and <code>children_left</code> / <code>children_right</code> give each node's children). The left child is much purer than the root; the right child is more mixed, but it holds only 615 customers, so it counts for less.</p>
 
-class TreeVisualization:
-    """Visualize and interpret decision trees"""
-    
-    def __init__(self, tree_model, X, y, feature_names=None, class_names=None):
-        self.tree = tree_model
-        self.X = X
-        self.y = y
-        self.feature_names = feature_names or [f'Feature_{i}' for i in range(X.shape[1])]
-        self.class_names = class_names or [f'Class_{i}' for i in range(len(np.unique(y)))]
-    
-    def plot_tree_structure(self):
-        """Plot tree structure using sklearn's plot_tree"""
-        fig, ax = plt.subplots(figsize=(20, 10))
-        
-        plot_tree(self.tree, 
-                  feature_names=self.feature_names,
-                  class_names=self.class_names,
-                  filled=True,
-                  rounded=True,
-                  fontsize=10,
-                  ax=ax)
-        
-        plt.title('Decision Tree Structure', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-    
-    def plot_decision_boundary(self):
-        """Plot decision boundary for 2D data"""
-        if self.X.shape[1] != 2:
-            print("Decision boundary plot requires exactly 2 features")
-            return
-        
-        # Create mesh
-        h = 0.02
-        x_min, x_max = self.X[:, 0].min() - 1, self.X[:, 0].max() + 1
-        y_min, y_max = self.X[:, 1].min() - 1, self.X[:, 1].max() + 1
-        xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
-                            np.arange(y_min, y_max, h))
-        
-        # Predict on mesh
-        Z = self.tree.predict(np.c_[xx.ravel(), yy.ravel()])
-        Z = Z.reshape(xx.shape)
-        
-        # Plot
-        fig, ax = plt.subplots(figsize=(10, 8))
-        
-        # Decision regions
-        ax.contourf(xx, yy, Z, alpha=0.4, cmap='viridis')
-        
-        # Data points
-        scatter = ax.scatter(self.X[:, 0], self.X[:, 1], c=self.y, 
-                            cmap='viridis', edgecolor='black', s=50)
-        
-        ax.set_xlabel(self.feature_names[0])
-        ax.set_ylabel(self.feature_names[1])
-        ax.set_title('Decision Tree Decision Boundary')
-        
-        # Add legend
-        plt.colorbar(scatter, ax=ax, label='Class')
-        
-        plt.tight_layout()
-        plt.show()
-    
-    def plot_feature_importance(self):
-        """Plot feature importance"""
-        importances = self.tree.feature_importances_
-        indices = np.argsort(importances)[::-1]
-        
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        ax.bar(range(len(importances)), importances[indices], alpha=0.7)
-        ax.set_xlabel('Feature')
-        ax.set_ylabel('Importance')
-        ax.set_title('Feature Importances')
-        ax.set_xticks(range(len(importances)))
-        ax.set_xticklabels([self.feature_names[i] for i in indices], rotation=45)
-        ax.grid(True, alpha=0.3)
-        
-        # Add cumulative importance line
-        cumsum = np.cumsum(importances[indices])
-        ax2 = ax.twinx()
-        ax2.plot(range(len(importances)), cumsum, 'r-', marker='o', 
-                label='Cumulative')
-        ax2.set_ylabel('Cumulative Importance', color='r')
-        ax2.tick_params(axis='y', labelcolor='r')
-        ax2.axhline(y=0.95, color='r', linestyle='--', alpha=0.5)
-        
-        plt.tight_layout()
-        plt.show()
-        
-        return pd.DataFrame({
-            'Feature': self.feature_names,
-            'Importance': importances
-        }).sort_values('Importance', ascending=False)
-    
-    def get_decision_path(self, sample):
-        """Get decision path for a sample"""
-        decision_path = self.tree.decision_path([sample])
-        leaf = self.tree.apply([sample])[0]
-        
-        feature = self.tree.tree_.feature
-        threshold = self.tree.tree_.threshold
-        
-        node_indicator = decision_path.toarray()[0]
-        node_index = np.where(node_indicator)[0]
-        
-        print(f"Decision path for sample: {sample}")
-        print("="*50)
-        
-        for node_id in node_index:
-            if leaf == node_id:
-                print(f"→ Leaf node {node_id}: Predict {self.class_names[np.argmax(self.tree.tree_.value[node_id])]}")
-            else:
-                if sample[feature[node_id]] <= threshold[node_id]:
-                    threshold_sign = "<="
-                else:
-                    threshold_sign = ">"
-                
-                print(f"→ Node {node_id}: "
-                      f"{self.feature_names[feature[node_id]]} "
-                      f"{threshold_sign} {threshold[node_id]:.3f}")
+                <h3>🔍 Trying Every Threshold</h3>
+                <p>Why 172.5 and not 150 or 200? The tree simply tried them all. For a numeric feature it sorts the values and tests a threshold halfway between each pair of neighboring values. Do the same for recency and plot the impurity decrease for every threshold:</p>
 
-# Create and train tree for visualization
-tree_vis = DecisionTreeClassifier(max_depth=4, random_state=42)
-tree_vis.fit(X_train_iris, y_train_iris)
+                <pre><code class="language-python">recency = X_train["days_since_last_order"].to_numpy()
+thresholds = np.arange(0, 364) + 0.5
+decrease = []
+for cut in thresholds:
+    left = np.bincount(y_train[recency &lt;= cut], minlength=2)
+    right = root - left
+    weighted = (left.sum() * gini(left) + right.sum() * gini(right)) / root.sum()
+    decrease.append(gini(root) - weighted)
 
-# Visualize tree
-print("\n" + "="*60)
-print("TREE VISUALIZATION")
-print("="*60)
+best = thresholds[np.argmax(decrease)]
+print(f"best recency threshold: {best}  (impurity decrease {max(decrease):.4f})")
 
-visualizer = TreeVisualization(tree_vis, X_train_iris, y_train_iris,
-                              feature_names=['Petal Length', 'Petal Width'],
-                              class_names=iris.target_names)
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.plot(thresholds, decrease, color="#667eea", label="impurity decrease")
+ax.axvline(best, color="black", linestyle="--", linewidth=1, label=f"best threshold ({best})")
+ax.set_xlabel("Threshold on days_since_last_order")
+ax.set_ylabel("Gini decrease")
+ax.set_title("The root split is the threshold with the largest impurity decrease")
+ax.legend()
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>best recency threshold: 172.5  (impurity decrease 0.0414)</code></pre>
+                </div>
 
-# Plot tree structure
-print("\nPlotting tree structure...")
-visualizer.plot_tree_structure()
+                <figure>
+                    <img src="images/trees_decision_gini_scan.png" alt="Line chart of the Gini impurity decrease for every threshold on days since last order from 0 to 364. The curve rises slowly, peaks sharply at 172.5 days and falls again; a dashed line marks the peak." width="990" height="440" loading="lazy">
+                    <figcaption>Thresholds below about 100 days barely help; the decrease peaks at 172.5 days, where churn really changes, and then falls off.</figcaption>
+                </figure>
 
-# Plot decision boundary
-print("\nPlotting decision boundary...")
-visualizer.plot_decision_boundary()
+                <p>The tree does this scan for <strong>every feature</strong> and keeps the single best (feature, threshold) pair. You can watch that competition by growing a one-question tree (a <strong>stump</strong>) on each feature alone and reading its improvement:</p>
 
-# Feature importance
-print("\nAnalyzing feature importance...")
-importance_df = visualizer.plot_feature_importance()
-print("\nFeature Importance:")
-print(importance_df.to_string(index=False))
+                <pre><code class="language-python">rows = []
+for col in features:
+    stump = DecisionTreeClassifier(max_depth=1, random_state=42).fit(X_train[[col]], y_train)
+    s = stump.tree_
+    children = (s.n_node_samples[1] * s.impurity[1] + s.n_node_samples[2] * s.impurity[2]) / s.n_node_samples[0]
+    rows.append({"feature": col, "threshold": s.threshold[0], "decrease": s.impurity[0] - children})
 
-# Decision path for a sample
-print("\nTracing decision path for a sample...")
-sample = X_test_iris[0]
-visualizer.get_decision_path(sample)</code></pre>
+stumps = pd.DataFrame(rows).sort_values("decrease", ascending=False)
+print(stumps.round(4).to_string(index=False))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>              feature  threshold  decrease
+days_since_last_order   172.5000    0.0414
+       discount_share     0.3505    0.0142
+        tenure_months     5.5000    0.0125
+            spend_12m   443.2250    0.0114
+           orders_12m     6.5000    0.0108
+             app_user     0.5000    0.0039
+      avg_order_value    70.6050    0.0026
+  support_tickets_12m     0.5000    0.0018
+          returns_12m     2.5000    0.0010
+          return_rate     0.2415    0.0009</code></pre>
+                </div>
 
-    <h2>Tree Pruning and Regularization</h2>
-    
-    <h3>Preventing Overfitting</h3>
-    <pre class="language-python"><code>class TreePruning:
-    """Analyze tree pruning and regularization techniques"""
-    
-    def __init__(self, X_train, y_train, X_test, y_test):
-        self.X_train = X_train
-        self.y_train = y_train
-        self.X_test = X_test
-        self.y_test = y_test
-    
-    def analyze_depth_impact(self, max_depths=range(1, 21)):
-        """Analyze impact of tree depth on performance"""
-        
-        train_scores = []
-        test_scores = []
-        n_leaves = []
-        
-        for depth in max_depths:
-            tree = DecisionTreeClassifier(max_depth=depth, random_state=42)
-            tree.fit(self.X_train, self.y_train)
-            
-            train_scores.append(accuracy_score(self.y_train, tree.predict(self.X_train)))
-            test_scores.append(accuracy_score(self.y_test, tree.predict(self.X_test)))
-            n_leaves.append(tree.get_n_leaves())
-        
-        # Visualize
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Accuracy vs Depth
-        axes[0].plot(max_depths, train_scores, 'o-', label='Train', linewidth=2)
-        axes[0].plot(max_depths, test_scores, 's-', label='Test', linewidth=2)
-        axes[0].set_xlabel('Max Depth')
-        axes[0].set_ylabel('Accuracy')
-        axes[0].set_title('Accuracy vs Tree Depth')
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3)
-        
-        # Find optimal depth
-        optimal_depth = max_depths[np.argmax(test_scores)]
-        axes[0].axvline(x=optimal_depth, color='red', linestyle='--', 
-                       label=f'Optimal ({optimal_depth})')
-        
-        # Number of leaves vs Depth
-        axes[1].plot(max_depths, n_leaves, 'o-', color='green', linewidth=2)
-        axes[1].set_xlabel('Max Depth')
-        axes[1].set_ylabel('Number of Leaves')
-        axes[1].set_title('Tree Complexity vs Depth')
-        axes[1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Tree Depth Analysis', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        return optimal_depth
-    
-    def compare_regularization_parameters(self):
-        """Compare different regularization parameters"""
-        
-        params = {
-            'max_depth': [None, 3, 5, 10, 15],
-            'min_samples_split': [2, 5, 10, 20],
-            'min_samples_leaf': [1, 5, 10],
-            'max_features': [None, 'sqrt', 'log2']
-        }
-        
-        results = []
-        
-        # Test different combinations
-        for depth in params['max_depth']:
-            for min_split in params['min_samples_split']:
-                tree = DecisionTreeClassifier(
-                    max_depth=depth,
-                    min_samples_split=min_split,
-                    random_state=42
-                )
-                tree.fit(self.X_train, self.y_train)
-                
-                train_score = accuracy_score(self.y_train, tree.predict(self.X_train))
-                test_score = accuracy_score(self.y_test, tree.predict(self.X_test))
-                
-                results.append({
-                    'max_depth': depth,
-                    'min_samples_split': min_split,
-                    'train_accuracy': train_score,
-                    'test_accuracy': test_score,
-                    'overfit_gap': train_score - test_score,
-                    'n_leaves': tree.get_n_leaves()
-                })
-        
-        results_df = pd.DataFrame(results)
-        
-        # Find best parameters
-        best_idx = results_df['test_accuracy'].argmax()
-        best_params = results_df.iloc[best_idx]
-        
-        print("\nRegularization Parameter Comparison:")
-        print("="*50)
-        print(f"Best Parameters:")
-        print(f"  max_depth: {best_params['max_depth']}")
-        print(f"  min_samples_split: {best_params['min_samples_split']}")
-        print(f"  Test Accuracy: {best_params['test_accuracy']:.3f}")
-        print(f"  Overfit Gap: {best_params['overfit_gap']:.3f}")
-        
-        # Visualize top results
-        top_results = results_df.nlargest(10, 'test_accuracy')
-        
-        fig, ax = plt.subplots(figsize=(12, 6))
-        
-        x = range(len(top_results))
-        width = 0.35
-        
-        ax.bar([i - width/2 for i in x], top_results['train_accuracy'], 
-               width, label='Train', alpha=0.7)
-        ax.bar([i + width/2 for i in x], top_results['test_accuracy'], 
-               width, label='Test', alpha=0.7)
-        
-        ax.set_xlabel('Configuration')
-        ax.set_ylabel('Accuracy')
-        ax.set_title('Top 10 Regularization Configurations')
-        ax.set_xticks(x)
-        ax.set_xticklabels([f"d={row['max_depth']},s={row['min_samples_split']}" 
-                            for _, row in top_results.iterrows()], 
-                           rotation=45)
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        plt.show()
-        
-        return results_df
-    
-    def cost_complexity_pruning(self):
-        """Demonstrate cost complexity pruning (minimal cost-complexity)"""
-        
-        # Get cost complexity pruning path
-        tree = DecisionTreeClassifier(random_state=42)
-        path = tree.cost_complexity_pruning_path(self.X_train, self.y_train)
-        ccp_alphas, impurities = path.ccp_alphas, path.impurities
-        
-        # Train trees with different alpha values
-        trees = []
-        for ccp_alpha in ccp_alphas:
-            tree = DecisionTreeClassifier(random_state=42, ccp_alpha=ccp_alpha)
-            tree.fit(self.X_train, self.y_train)
-            trees.append(tree)
-        
-        # Calculate scores
-        train_scores = [accuracy_score(self.y_train, tree.predict(self.X_train)) 
-                       for tree in trees]
-        test_scores = [accuracy_score(self.y_test, tree.predict(self.X_test)) 
-                      for tree in trees]
-        n_nodes = [tree.tree_.node_count for tree in trees]
-        depths = [tree.tree_.max_depth for tree in trees]
-        
-        # Visualize
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-        
-        # Accuracy vs alpha
-        axes[0, 0].plot(ccp_alphas, train_scores, marker='o', label='Train')
-        axes[0, 0].plot(ccp_alphas, test_scores, marker='s', label='Test')
-        axes[0, 0].set_xlabel('Alpha (Cost-Complexity Parameter)')
-        axes[0, 0].set_ylabel('Accuracy')
-        axes[0, 0].set_title('Accuracy vs Alpha')
-        axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # Number of nodes vs alpha
-        axes[0, 1].plot(ccp_alphas, n_nodes, marker='o', color='green')
-        axes[0, 1].set_xlabel('Alpha')
-        axes[0, 1].set_ylabel('Number of Nodes')
-        axes[0, 1].set_title('Tree Size vs Alpha')
-        axes[0, 1].grid(True, alpha=0.3)
-        
-        # Depth vs alpha
-        axes[1, 0].plot(ccp_alphas, depths, marker='o', color='orange')
-        axes[1, 0].set_xlabel('Alpha')
-        axes[1, 0].set_ylabel('Tree Depth')
-        axes[1, 0].set_title('Tree Depth vs Alpha')
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # Impurity vs alpha
-        axes[1, 1].plot(ccp_alphas, impurities, marker='o', color='red')
-        axes[1, 1].set_xlabel('Alpha')
-        axes[1, 1].set_ylabel('Total Impurity')
-        axes[1, 1].set_title('Impurity vs Alpha')
-        axes[1, 1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Cost Complexity Pruning Analysis', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        # Find optimal alpha
-        optimal_idx = np.argmax(test_scores)
-        optimal_alpha = ccp_alphas[optimal_idx]
-        
-        print(f"\nOptimal Alpha: {optimal_alpha:.6f}")
-        print(f"Test Accuracy: {test_scores[optimal_idx]:.3f}")
-        print(f"Number of Nodes: {n_nodes[optimal_idx]}")
-        print(f"Tree Depth: {depths[optimal_idx]}")
+                <p>Recency wins by a wide margin, so it becomes the root. Then the tree repeats the whole search <em>inside each child</em>, using only the customers in that child. That is why the two second-level questions differ: among recent buyers the best question was about discounts; among lapsed buyers it was about tenure.</p>
 
-# Analyze pruning and regularization
-print("\n" + "="*60)
-print("PRUNING AND REGULARIZATION")
-print("="*60)
+                <div class="card card-warning">
+                    <h4>⚠️ Greedy, Not Optimal</h4>
+                    <p>The tree picks the best split <em>right now</em> and never reconsiders it. A split that looks weak on its own but sets up two excellent splits below it will be missed. Finding the truly best tree is computationally out of reach for real data, so every practical library grows trees greedily like this. It works remarkably well, but it is one reason trees are unstable (later in this lesson).</p>
+                </div>
 
-pruning = TreePruning(X_train, y_train, X_test, y_test)
+                <p><strong>Entropy</strong> is the other common impurity measure (<code>criterion="entropy"</code> or the equivalent <code>"log_loss"</code>): −Σ p<sub>k</sub> log₂ p<sub>k</sub>. It ranks splits almost the same way as Gini; Exercise 2 lets you check that on this data. Regression trees (<code>DecisionTreeRegressor</code>) use the same search but measure impurity as the <strong>variance</strong> of the target in the node (<code>criterion="squared_error"</code>), and each leaf predicts the mean of its training rows.</p>
+            </section>
 
-# Analyze depth impact
-print("\nAnalyzing impact of tree depth...")
-optimal_depth = pruning.analyze_depth_impact()
-print(f"Optimal depth: {optimal_depth}")
+            <!-- ============================================================ -->
+            <section id="predictions" class="lesson-section">
+                <h2>🎲 Predictions Come from Leaves</h2>
 
-# Compare regularization parameters
-print("\nComparing regularization parameters...")
-reg_results = pruning.compare_regularization_parameters()
+                <p>A tree's churn probability for a customer is simply the share of churners among the training customers in the leaf the customer lands in. <code>apply</code> tells you which leaf each row reaches:</p>
 
-# Cost complexity pruning
-print("\nDemonstrating cost complexity pruning...")
-pruning.cost_complexity_pruning()</code></pre>
+                <pre><code class="language-python">leaf_of = small_tree.apply(X_test)
+proba = small_tree.predict_proba(X_test)[:, 1]
 
-    <h2>Practice Exercises</h2>
-    
-    <h3>Exercise 1: Custom Splitting Criterion</h3>
-    <p>Implement a decision tree with a custom splitting criterion:</p>
-    <ol>
-        <li>Create a weighted Gini impurity that considers class imbalance</li>
-        <li>Implement Chi-square test for categorical features</li>
-        <li>Add support for missing values handling</li>
-        <li>Compare performance with standard criteria</li>
-    </ol>
+per_leaf = pd.DataFrame({"leaf": leaf_of, "p_churn": proba, "churned": y_test.to_numpy()})
+print(per_leaf.groupby("leaf").agg(customers=("churned", "size"),
+                                   predicted=("p_churn", "first"),
+                                   actual=("churned", "mean")).round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>      customers  predicted  actual
+leaf                              
+2          1011      0.058   0.057
+3           286      0.283   0.308
+5            42      0.804   0.786
+6           161      0.431   0.429</code></pre>
+                </div>
 
-    <h3>Exercise 2: Tree Ensemble</h3>
-    <p>Build a simple ensemble of decision trees:</p>
-    <ol>
-        <li>Implement bagging (bootstrap aggregating)</li>
-        <li>Create a voting classifier with multiple trees</li>
-        <li>Add feature randomness (random subspace)</li>
-        <li>Compare with a single deep tree</li>
-    </ol>
+                <p>Four leaves, so only four different probabilities exist: every one of the 1,500 test customers gets one of those four numbers. (Leaf ids are node numbers in the full tree, which is why they skip.) On the test customers the actual churn rates are close to the training proportions, which is a good sign that these four groups are real.</p>
 
-    <h3>Exercise 3: Interpretability Tools</h3>
-    <p>Create advanced interpretation tools:</p>
-    <ol>
-        <li>Extract and visualize all decision rules</li>
-        <li>Calculate feature interaction strengths</li>
-        <li>Generate natural language explanations</li>
-        <li>Create counterfactual explanations</li>
-    </ol>
+                <div class="card card-warning">
+                    <h4>⚠️ Coarse Probabilities</h4>
+                    <p>A tree with few leaves ranks customers in a few big ties. That is fine for a rule book, but poor for a shortlist of exactly 50 people. A very deep tree has the opposite problem: most of its leaves are pure, so its probabilities are almost all 0 or 1 (Common Mistake 2). The forests in Lesson 5.2 fix this by averaging many trees.</p>
+                </div>
 
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>🌳 Decision trees are intuitive and interpretable</li>
-        <li>📊 Gini impurity and entropy measure node purity</li>
-        <li>✂️ Pruning prevents overfitting</li>
-        <li>📈 Feature importance shows variable contribution</li>
-        <li>🎯 Trees can handle both classification and regression</li>
-        <li>⚖️ Regularization parameters control tree complexity</li>
-        <li>🔍 Decision paths provide transparent predictions</li>
-        <li>📉 Shallow trees often generalize better</li>
-        <li>🎨 Visualization helps understand model decisions</li>
-        <li>⚡ Trees are fast to train and predict</li>
-    </ul>
+                <h3>📏 No Scaling Needed</h3>
+                <p>A split asks "is this value above a threshold?" Rescaling a column moves the threshold but cannot change which customers fall on each side. Check it:</p>
 
-    <h2>Further Resources</h2>
-    <ul>
-        <li><a href="https://scikit-learn.org/stable/modules/tree.html">Scikit-learn Decision Trees Documentation</a></li>
-        <li><a href="https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm">Leo Breiman's Random Forests Page</a></li>
-        <li><a href="https://github.com/parrt/dtreeviz">dtreeviz - Decision Tree Visualization</a></li>
-        <li><a href="https://christophm.github.io/interpretable-ml-book/tree.html">Interpretable ML - Decision Trees</a></li>
-        <li><a href="https://arxiv.org/abs/1706.09516">Understanding Decision Trees</a></li>
-    </ul>
+                <pre><code class="language-python">from sklearn.preprocessing import StandardScaler
 
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Decision trees mirror how humans make choices through a series of yes/no
-            questions. Where in your own decisions could you sketch a "tree" to make the logic explicit?</p>
+scaler = StandardScaler().set_output(transform="pandas").fit(X_train)
+scaled_tree = DecisionTreeClassifier(max_depth=2, random_state=42).fit(scaler.transform(X_train), y_train)
+
+same = np.array_equal(scaled_tree.predict_proba(scaler.transform(X_test)), small_tree.predict_proba(X_test))
+print("identical predictions:", same)
+print("root threshold, raw vs scaled:", small_tree.tree_.threshold[0], scaled_tree.tree_.threshold[0].round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>identical predictions: True
+root threshold, raw vs scaled: 172.5 1.021</code></pre>
+                </div>
+
+                <p>Same predictions, different threshold units. Trees are also unbothered by skewed columns and outliers in the features (a customer with 10,000 days would just land on the far side of a threshold). That is part of why trees are popular for messy business tables. In scikit-learn they also accept missing values in numeric columns directly; the project uses that.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="boxes" class="lesson-section">
+                <h2>🔲 Boxes, Not Lines</h2>
+
+                <p>Every split cuts along one feature, so a tree carves the feature space into rectangles (boxes), each with its own prediction. Logistic regression draws a single straight boundary instead. Which is better depends on the true pattern. Fit both on just two features, recency and tenure, and draw the tree's boxes:</p>
+
+                <pre><code class="language-python">from sklearn.pipeline import make_pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.inspection import DecisionBoundaryDisplay
+from sklearn.metrics import roc_auc_score
+
+pair = ["days_since_last_order", "tenure_months"]
+tree_2d = DecisionTreeClassifier(max_depth=3, random_state=42).fit(X_train[pair], y_train)
+logit_2d = make_pipeline(StandardScaler(), LogisticRegression()).fit(X_train[pair], y_train)
+
+for name, model in [("logistic regression", logit_2d), ("tree, depth 3", tree_2d)]:
+    auc = roc_auc_score(y_test, model.predict_proba(X_test[pair])[:, 1])
+    print(f"{name:20s} test ROC AUC {auc:.3f}")
+
+fig, ax = plt.subplots(figsize=(9, 5), layout="constrained")
+disp = DecisionBoundaryDisplay.from_estimator(tree_2d, X_train[pair], response_method="predict_proba",
+                                              cmap="Purples", alpha=0.8, ax=ax)
+fig.colorbar(disp.surface_, ax=ax, label="predicted churn probability")
+shown = X_test[pair].assign(churned=y_test).sample(400, random_state=42)
+for value, color, label in [(0, "#999999", "stayed"), (1, "#d62728", "churned")]:
+    part = shown[shown["churned"] == value]
+    ax.scatter(part[pair[0]], part[pair[1]], s=12, color=color, label=f"{label} (test sample)")
+ax.set_title("A depth-3 tree cuts the plane into rectangles")
+ax.legend(loc="upper left")
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>logistic regression  test ROC AUC 0.704
+tree, depth 3        test ROC AUC 0.774</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/trees_decision_boxes.png" alt="Map of predicted churn probability over days since last order (horizontal) and tenure in months (vertical), drawn as rectangles in shades of purple. The dark rectangles all lie to the right of about 170 days: darkest in a thin strip at the bottom (tenure under 6 months), dark at the top (tenure above about 60 months) and lighter in between. Test customers are plotted as gray (stayed) and red (churned) dots; red dots cluster on the right side." width="990" height="550" loading="lazy">
+                    <figcaption>The tree's rectangles follow the real pattern: a jump in risk after about 170 days, and higher risk for very new and for very long-standing customers.</figcaption>
+                </figure>
+
+                <p>With only these two features, a three-question tree beats logistic regression clearly. The reason is the <strong>shape</strong> of the effects. Churn risk jumps at a recency threshold rather than rising steadily, and it is high for brand-new customers <em>and</em> for the longest-standing ones (a U-shape in tenure). A single weighted sum cannot bend like that; a tree handles both with a couple of cuts. Trees also capture <strong>interactions</strong> naturally: the tenure question only applies on the lapsed side of the tree.</p>
+
+                <div class="card card-info">
+                    <h4>💡 The Flip Side</h4>
+                    <p>Boxes are a poor way to draw a smooth diagonal trend: a tree needs a staircase of many small boxes to approximate a straight sloped line, and each step needs data. When the truth is close to linear, logistic regression often wins with less data. Neither model is "better"; they make different assumptions about the shape of the world.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="overfitting" class="lesson-section">
+                <h2>✂️ Growing Too Far, and Pruning</h2>
+
+                <p>Left alone (<code>max_depth=None</code>, the default), a tree keeps splitting until every leaf is pure or holds a single customer. It then knows the training set by heart. Lesson 1.1's Exercise 2 hinted at this; now measure it properly with 5-fold cross-validation on the training set, scoring by ROC AUC because you care about ranking customers.</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import StratifiedKFold, cross_validate, cross_val_score
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+rows = []
+for depth in [1, 2, 3, 4, 5, 6, 8, 10, None]:
+    res = cross_validate(DecisionTreeClassifier(max_depth=depth, random_state=42), X_train, y_train,
+                         cv=cv, scoring="roc_auc", return_train_score=True)
+    rows.append({"max_depth": str(depth), "train_auc": res["train_score"].mean(), "cv_auc": res["test_score"].mean()})
+
+depth_table = pd.DataFrame(rows)
+print(depth_table.round(3).to_string(index=False))
+
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.plot(depth_table["max_depth"], depth_table["train_auc"], marker="o", color="#999999", label="training folds")
+ax.plot(depth_table["max_depth"], depth_table["cv_auc"], marker="o", color="#667eea", label="validation folds (CV)")
+ax.set_xlabel("max_depth")
+ax.set_ylabel("ROC AUC")
+ax.set_title("Deeper trees memorize: training AUC climbs while validation AUC falls")
+ax.legend()
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>max_depth  train_auc  cv_auc
+        1      0.682   0.678
+        2      0.791   0.783
+        3      0.834   0.823
+        4      0.857   0.839
+        5      0.878   0.839
+        6      0.897   0.834
+        8      0.938   0.744
+       10      0.973   0.674
+     None      1.000   0.663</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/trees_decision_depth_curve.png" alt="Line chart of ROC AUC against max_depth from 1 to 10 and None. The training-fold line rises steadily to 1.0. The validation line rises to about 0.84 at depth 4 and 5, then drops steeply to about 0.66 for the unlimited tree." width="990" height="440" loading="lazy">
+                    <figcaption>Validation AUC peaks at depth 4 to 5. After that, every extra level fits noise: the training score keeps climbing while the honest score falls.</figcaption>
+                </figure>
+
+                <p>This is the bias-variance trade-off from Lesson 3.2 in its clearest form. A depth-1 tree is too simple (high bias). An unlimited tree has a perfect training score and the worst validation score (high variance): it has learned the quirks of individual customers. The useful range is in between, and only validation data can tell you where.</p>
+
+                <h3>🎛️ The Controls</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Hyperparameter</th><th>What it limits</th><th>Typical use</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>max_depth</code></td><td>Questions in a row</td><td>Simple, easy to explain; the same depth everywhere</td></tr>
+                            <tr><td><code>min_samples_leaf</code></td><td>Smallest allowed leaf</td><td>Guarantees every prediction rests on enough customers; often the best single control</td></tr>
+                            <tr><td><code>max_leaf_nodes</code></td><td>Total number of leaves</td><td>Grows the best splits first; ideal for a readable rule book</td></tr>
+                            <tr><td><code>min_impurity_decrease</code></td><td>Splits that help too little</td><td>Skips weak splits</td></tr>
+                            <tr><td><code>ccp_alpha</code></td><td>Grow fully, then prune back</td><td>Cost-complexity pruning (below)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p>Limiting the leaf size often works better than limiting depth, because it lets the tree go deep where there is plenty of data and stay shallow where there is not:</p>
+
+                <pre><code class="language-python">for leaf in [1, 10, 25, 50, 100, 200]:
+    model = DecisionTreeClassifier(min_samples_leaf=leaf, random_state=42)
+    auc = cross_val_score(model, X_train, y_train, cv=cv, scoring="roc_auc").mean()
+    n_leaves = model.fit(X_train, y_train).get_n_leaves()
+    print(f"min_samples_leaf={leaf:3d}  leaves {n_leaves:3d}  CV AUC {auc:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>min_samples_leaf=  1  leaves 523  CV AUC 0.663
+min_samples_leaf= 10  leaves 186  CV AUC 0.800
+min_samples_leaf= 25  leaves 100  CV AUC 0.831
+min_samples_leaf= 50  leaves  58  CV AUC 0.848
+min_samples_leaf=100  leaves  30  CV AUC 0.844
+min_samples_leaf=200  leaves  16  CV AUC 0.828</code></pre>
+                </div>
+
+                <p>Requiring at least 50 customers per leaf gives the best validation AUC of everything you have tried, with about 60 leaves instead of more than 500. Each leaf's churn rate is now an average over a reasonable number of people rather than over one or two.</p>
+
+                <h3>🪚 Cost-Complexity Pruning</h3>
+                <p>Pruning works the other way round: grow the full tree, then cut off branches that do not earn their keep. scikit-learn's version scores each subtree as <strong>impurity + α × (number of leaves)</strong>: every leaf has a price α, and a branch survives only if it reduces impurity by more than it costs. <code>cost_complexity_pruning_path</code> lists the α values at which branches drop off.</p>
+
+                <pre><code class="language-python">path = DecisionTreeClassifier(random_state=42).cost_complexity_pruning_path(X_train, y_train)
+print(len(path.ccp_alphas), "alphas on the pruning path; the largest few:", path.ccp_alphas[-3:].round(4))
+
+for alpha in [0.0, 0.0005, 0.001, 0.002, 0.005]:
+    model = DecisionTreeClassifier(ccp_alpha=alpha, random_state=42)
+    auc = cross_val_score(model, X_train, y_train, cv=cv, scoring="roc_auc").mean()
+    print(f"ccp_alpha={alpha:&lt;7}  leaves {model.fit(X_train, y_train).get_n_leaves():3d}  CV AUC {auc:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>231 alphas on the pruning path; the largest few: [0.0072 0.0152 0.0414]
+ccp_alpha=0.0      leaves 523  CV AUC 0.663
+ccp_alpha=0.0005   leaves  91  CV AUC 0.734
+ccp_alpha=0.001    leaves  22  CV AUC 0.826
+ccp_alpha=0.002    leaves   9  CV AUC 0.821
+ccp_alpha=0.005    leaves   5  CV AUC 0.786</code></pre>
+                </div>
+
+                <p>A small α already prunes the 523-leaf tree down to a couple of dozen leaves and lifts validation AUC from 0.66 to about 0.83. Which control you use matters less than <em>choosing its value by cross-validation</em> on the training set, never by peeking at the test set. Lesson 6.2 automates the search with <code>GridSearchCV</code>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="importance" class="lesson-section">
+                <h2>📊 Which Features Did the Tree Use?</h2>
+
+                <p>A fitted tree adds up, for each feature, the impurity decrease from every split on that feature (weighted by the rows reaching the split), and normalizes the totals to sum to 1. That is <code>feature_importances_</code>, often called <strong>impurity-based importance</strong> or MDI (mean decrease in impurity).</p>
+
+                <pre><code class="language-python">pruned = DecisionTreeClassifier(min_samples_leaf=50, random_state=42).fit(X_train, y_train)
+print(f"test ROC AUC {roc_auc_score(y_test, pruned.predict_proba(X_test)[:, 1]):.3f}, leaves {pruned.get_n_leaves()}")
+
+importance = pd.Series(pruned.feature_importances_, index=features).sort_values(ascending=False)
+print(importance.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>test ROC AUC 0.863, leaves 58
+days_since_last_order    0.450
+tenure_months            0.250
+discount_share           0.169
+app_user                 0.049
+support_tickets_12m      0.034
+return_rate              0.020
+avg_order_value          0.016
+spend_12m                0.012
+orders_12m               0.001
+returns_12m              0.000
+dtype: float64</code></pre>
+                </div>
+
+                <p>Recency, tenure and discount share dominate, the same three features that appeared in the depth-2 tree. Three cautions before you put this chart in a slide deck:</p>
+                <ul>
+                    <li><strong>A low score does not mean "no effect".</strong> <code>spend_12m</code>, <code>orders_12m</code> and <code>avg_order_value</code> carry overlapping information. Whichever one the tree happens to pick at a split takes the credit, and the others look useless even though each would work nearly as well alone.</li>
+                    <li><strong>It favors features with many distinct values.</strong> A continuous column offers thousands of thresholds, so it can win a few splits by chance. Lesson 5.2 shows a pure-noise column earning a respectable importance score.</li>
+                    <li><strong>It describes the model, not the world.</strong> "The tree relies on discount share" is a fact about this model. "Discounts cause churn" is a claim about customers that this chart cannot support. Lesson 7.1 introduces permutation importance, measured on held-out data, which fixes the first two problems but not the third.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="unstable" class="lesson-section">
+                <h2>🌬️ A Tree Is Unstable</h2>
+
+                <p>The greedy search has a cost: a small change in the training data can change an early split, and then everything below it changes too. Train three unlimited trees and three pruned trees, each on a different random 80% of the training customers, and count how often the three disagree about a test customer:</p>
+
+                <pre><code class="language-python">rng = np.random.default_rng(42)
+subsets = [rng.choice(len(X_train), size=3600, replace=False) for _ in range(3)]
+
+for label, settings in [("unlimited tree", {}), ("pruned tree (min_samples_leaf=50)", {"min_samples_leaf": 50})]:
+    preds = []
+    for rows in subsets:
+        model = DecisionTreeClassifier(random_state=42, **settings).fit(X_train.iloc[rows], y_train.iloc[rows])
+        preds.append(model.predict(X_test))
+    preds = np.array(preds)
+    disagree = (preds.min(axis=0) != preds.max(axis=0)).mean()
+    print(f"{label:34s} the three trees disagree on {disagree:.1%} of test customers")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>unlimited tree                     the three trees disagree on 24.6% of test customers
+pruned tree (min_samples_leaf=50)  the three trees disagree on 10.3% of test customers</code></pre>
+                </div>
+
+                <p>The unlimited trees, trained on heavily overlapping data, disagree about many more customers than the pruned trees do. Pruning helps, but some instability remains in any single tree. Lesson 5.2 turns this weakness into a strength: if each tree makes different mistakes, averaging many of them cancels a lot of the mistakes out. That idea is called <strong>bagging</strong>, and with one extra twist it becomes a random forest.</p>
+
+                <div class="card card-success">
+                    <h4>✅ When a Single Tree Is the Right Choice</h4>
+                    <p>Choose one small tree when people must read, check or follow the model: a triage checklist, a rule book for a call center, a quick exploration of which variables interact. Choose a forest or boosting (Lessons 5.2 and 5.3) when you need the best predictions. Many projects use both: the forest for scores, a small tree to explain the main segments.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Trees rarely crash. Most tree mistakes are silent, which makes them more dangerous.</p>
+
+                <h3>1. Judging a Tree on Its Training Data</h3>
+
+                <pre><code class="language-python">full_tree = DecisionTreeClassifier(random_state=42).fit(X_train, y_train)
+print(f"training accuracy {full_tree.score(X_train, y_train):.3f}")
+print(f"test accuracy     {full_tree.score(X_test, y_test):.3f}")
+print(f"baseline accuracy {1 - y_test.mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>training accuracy 1.000
+test accuracy     0.822
+baseline accuracy 0.835</code></pre>
+                </div>
+                <p><strong>What happened:</strong> an unlimited tree scores 100% on the rows it memorized and then does <em>worse than the do-nothing baseline</em> on new customers. <strong>Fix:</strong> never report a training score as a result. Choose the tree's size with cross-validation and confirm on the test set once.</p>
+
+                <h3>2. Ranking with an Unpruned Tree</h3>
+
+                <pre><code class="language-python">full_proba = full_tree.predict_proba(X_test)[:, 1]
+print("distinct probabilities:", np.unique(full_proba))
+print(f"test ROC AUC {roc_auc_score(y_test, full_proba):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>distinct probabilities: [0. 1.]
+test ROC AUC 0.683</code></pre>
+                </div>
+                <p><strong>What happened:</strong> every leaf of the full tree is pure, so it says "certainly churns" or "certainly stays" about every customer. You cannot pick a top 50 from a list of ties, and the AUC shows the ranking is poor. <strong>Fix:</strong> set <code>min_samples_leaf</code> (or prune) so each leaf's probability is an average over many customers, or use a forest.</p>
+
+                <h3>3. Class Names in the Wrong Order</h3>
+
+                <pre><code class="language-python">print(export_text(small_tree, feature_names=features, class_names=["churned", "stayed"]))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>|--- days_since_last_order &lt;= 172.50
+|   |--- discount_share &lt;= 0.35
+|   |   |--- class: churned
+|   |--- discount_share &gt;  0.35
+|   |   |--- class: churned
+|--- days_since_last_order &gt;  172.50
+|   |--- tenure_months &lt;= 5.50
+|   |   |--- class: stayed
+|   |--- tenure_months &gt;  5.50
+|   |   |--- class: churned</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the first leaf holds 3,020 customers of whom only 175 churned, yet it is labeled "churned", and the lapsed newcomers (80% churn) are labeled "stayed". The names were given as [churned, stayed] while <code>classes_</code> is <code>[0 1]</code> (stayed, churned), so every label is swapped. <strong>Fix:</strong> always build the names from <code>classes_</code>, for example <code>["stayed" if c == 0 else "churned" for c in model.classes_]</code>, and sanity-check one leaf's counts.</p>
+
+                <h3>4. A Depth of Zero</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">DecisionTreeClassifier(max_depth=0).fit(X_train, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>InvalidParameterError: The 'max_depth' parameter of DecisionTreeClassifier must be an int in the range [1, inf) or None. Got 0 instead.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> scikit-learn checks hyperparameters when you call <code>fit</code>. A depth of 0 would be a tree with no questions; the smallest legal tree is a stump, <code>max_depth=1</code>. (<code>InvalidParameterError</code> is a kind of <code>ValueError</code>.) <strong>Fix:</strong> use 1 or more, or <code>None</code> for no limit. If you want a "no questions" model, that is <code>DummyClassifier</code>.</p>
+
+                <h3>5. Reading a Zero Importance as "Irrelevant"</h3>
+
+                <pre><code class="language-python">print(f"importance of spend_12m in the pruned tree: {importance['spend_12m']:.3f}")
+print(customers.groupby(pd.qcut(customers["spend_12m"], 4))["churned"].mean().round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>importance of spend_12m in the pruned tree: 0.012
+spend_12m
+(55.079, 245.538]     0.241
+(245.538, 524.525]    0.229
+(524.525, 840.185]    0.115
+(840.185, 2822.81]    0.077
+Name: churned, dtype: float64</code></pre>
+                </div>
+                <p><strong>What happened:</strong> spend gets almost no importance in the tree, yet churn clearly falls as spend rises. Spend is related to churn; the tree just found other features (tenure, recency, orders) that told it the same thing first. <strong>Fix:</strong> say "the model did not need it", never "it does not matter", and check a feature's relationship with the target directly before concluding anything.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: A Churn Rule Book</h2>
+
+                <p>Pinecrest's customer-care team wants something they can pin to the wall: a short set of rules that sorts customers into risk groups, with each group's churn rate. A forest would predict a little better, but nobody can read 300 trees. Your job: build a small tree on all the useful columns, choose its size honestly, compare it with a baseline and with logistic regression, and print the rule book. Work in a new notebook called <code>lesson_5_1_project</code>. Allow about 40 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load, choose columns and split <span class="step-time">(5 min)</span></h3>
+                    <p>Use eleven numeric columns (including <code>email_opens_90d</code>, which has gaps) and four categorical ones. Leave out <code>customer_id</code>, <code>signup_date</code> (tenure already captures it), <code>region</code> (mostly implied by <code>home_store</code>) and, of course, the <code>cancellation_reason</code> leak.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+           "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user", "email_opens_90d"]
+categorical = ["home_store", "age_group", "loyalty_tier", "preferred_category"]
+
+X = customers[numeric + categorical]
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
+print(X_train.shape, X_test.shape)
+print(X_train.isna().sum()[lambda s: s &gt; 0])</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(4500, 15) (1500, 15)
+email_opens_90d    419
+age_group          359
+dtype: int64</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: A preprocessor for trees <span class="step-time">(5 min)</span></h3>
+                    <p>A tree needs no scaling and handles the gaps in numeric columns itself, so numeric columns pass straight through. Categories still have to become numbers: one-hot encode them. A missing <code>age_group</code> simply becomes its own column, <code>age_group_nan</code>. Short feature names keep the rules readable.</p>
+                    <pre><code class="language-python">from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+
+tree_prep = ColumnTransformer(
+    [("num", "passthrough", numeric),
+     ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), categorical)],
+    verbose_feature_names_out=False,
+).set_output(transform="pandas")
+
+print(tree_prep.fit(X_train).get_feature_names_out()[-8:])
+print(len(tree_prep.get_feature_names_out()), "columns after encoding")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>['preferred_category_Apparel' 'preferred_category_Camp Kitchen'
+ 'preferred_category_Climbing' 'preferred_category_Footwear'
+ 'preferred_category_Packs' 'preferred_category_Sleeping'
+ 'preferred_category_Snow' 'preferred_category_Tents']
+35 columns after encoding</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Baselines to beat <span class="step-time">(5 min)</span></h3>
+                    <p>Cross-validate a do-nothing model and a logistic regression pipeline (which needs imputing and scaling) on the training set.</p>
+                    <pre><code class="language-python">from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.dummy import DummyClassifier
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+logit_prep = ColumnTransformer([
+    ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric),
+    ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"), OneHotEncoder(handle_unknown="ignore")), categorical),
+])
+baselines = {
+    "do-nothing baseline": DummyClassifier(strategy="most_frequent"),
+    "logistic regression": make_pipeline(logit_prep, LogisticRegression(max_iter=1000)),
+}
+for name, model in baselines.items():
+    scores = cross_val_score(model, X_train, y_train, cv=cv, scoring="roc_auc")
+    print(f"{name:20s} CV ROC AUC {scores.mean():.3f} ± {scores.std():.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>do-nothing baseline  CV ROC AUC 0.500 ± 0.000
+logistic regression  CV ROC AUC 0.832 ± 0.023</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Choose the tree's size by cross-validation <span class="step-time">(10 min)</span></h3>
+                    <p>A rule book should be short, so control the number of leaves directly with <code>max_leaf_nodes</code> (the tree adds the most useful splits first). Keep <code>min_samples_leaf=30</code> so no group is tiny.</p>
+                    <pre><code class="language-python">from sklearn.tree import DecisionTreeClassifier
+
+for leaves in [4, 6, 8, 12, 16, 24, 32]:
+    model = make_pipeline(tree_prep, DecisionTreeClassifier(max_leaf_nodes=leaves, min_samples_leaf=30, random_state=42))
+    scores = cross_val_score(model, X_train, y_train, cv=cv, scoring="roc_auc")
+    print(f"max_leaf_nodes={leaves:2d}  CV ROC AUC {scores.mean():.3f} ± {scores.std():.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>max_leaf_nodes= 4  CV ROC AUC 0.783 ± 0.027
+max_leaf_nodes= 6  CV ROC AUC 0.793 ± 0.026
+max_leaf_nodes= 8  CV ROC AUC 0.820 ± 0.031
+max_leaf_nodes=12  CV ROC AUC 0.834 ± 0.017
+max_leaf_nodes=16  CV ROC AUC 0.836 ± 0.019
+max_leaf_nodes=24  CV ROC AUC 0.836 ± 0.025
+max_leaf_nodes=32  CV ROC AUC 0.840 ± 0.022</code></pre>
+                    </div>
+                    <p>The gains flatten out after about a dozen leaves while the rule book keeps getting longer. A dozen rules is about what fits on one page, and it is within one standard deviation of the best score, so take 12.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Fit once, test once <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">from sklearn.metrics import roc_auc_score
+
+rule_tree = make_pipeline(tree_prep, DecisionTreeClassifier(max_leaf_nodes=12, min_samples_leaf=30, random_state=42))
+rule_tree.fit(X_train, y_train)
+test_auc = roc_auc_score(y_test, rule_tree.predict_proba(X_test)[:, 1])
+print(f"rule tree test ROC AUC {test_auc:.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>rule tree test ROC AUC 0.837</code></pre>
+                    </div>
+                    <p>Close to the cross-validated estimate, so the choice was not lucky. Twelve readable rules rank customers about as well as a logistic regression on every column.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Print the rule book and rank the segments <span class="step-time">(10 min)</span></h3>
+                    <p>Print the rules with each leaf's training counts as [stayed, churned], then label every test customer with their leaf and rank the leaves by the churn rate actually observed in the test set. Save both for the care team.</p>
+                    <pre><code class="language-python">from sklearn.tree import export_text
+
+tree = rule_tree[-1]
+names = list(rule_tree[0].get_feature_names_out())
+rules = export_text(tree, feature_names=names, show_weights=True, decimals=2)
+print(rules)
+
+encoded_test = rule_tree[0].transform(X_test)
+segments = pd.DataFrame({"leaf": tree.apply(encoded_test), "p_churn": tree.predict_proba(encoded_test)[:, 1],
+                         "churned": y_test.to_numpy()})
+table = (segments.groupby("leaf")
+         .agg(customers=("churned", "size"), predicted=("p_churn", "first"), actual=("churned", "mean"))
+         .sort_values("predicted", ascending=False))
+print(table.round(3))
+
+with open("churn_rules.txt", "w", encoding="utf-8") as fh:
+    fh.write(rules + "\n" + table.round(3).to_string() + "\n")
+print(f"saved churn_rules.txt: {table['customers'].sum()} test customers in {len(table)} segments")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>|--- days_since_last_order &lt;= 172.50
+|   |--- discount_share &lt;= 0.35
+|   |   |--- tenure_months &lt;= 5.50
+|   |   |   |--- days_since_last_order &lt;= 122.50
+|   |   |   |   |--- weights: [480.00, 67.00] class: 0
+|   |   |   |--- days_since_last_order &gt;  122.50
+|   |   |   |   |--- weights: [47.00, 26.00] class: 0
+|   |   |--- tenure_months &gt;  5.50
+|   |   |   |--- weights: [2318.00, 82.00] class: 0
+|   |--- discount_share &gt;  0.35
+|   |   |--- tenure_months &lt;= 5.50
+|   |   |   |--- email_opens_90d &lt;= 7.50
+|   |   |   |   |--- weights: [22.00, 49.00] class: 1
+|   |   |   |--- email_opens_90d &gt;  7.50
+|   |   |   |   |--- weights: [52.00, 29.00] class: 0
+|   |   |--- tenure_months &gt;  5.50
+|   |   |   |--- app_user &lt;= 0.50
+|   |   |   |   |--- tenure_months &lt;= 72.50
+|   |   |   |   |   |--- support_tickets_12m &lt;= 2.50
+|   |   |   |   |   |   |--- weights: [189.00, 45.00] class: 0
+|   |   |   |   |   |--- support_tickets_12m &gt;  2.50
+|   |   |   |   |   |   |--- weights: [26.00, 26.00] class: 0
+|   |   |   |   |--- tenure_months &gt;  72.50
+|   |   |   |   |   |--- weights: [61.00, 64.00] class: 1
+|   |   |   |--- app_user &gt;  0.50
+|   |   |   |   |--- weights: [270.00, 32.00] class: 0
+|--- days_since_last_order &gt;  172.50
+|   |--- tenure_months &lt;= 5.50
+|   |   |--- weights: [31.00, 127.00] class: 1
+|   |--- tenure_months &gt;  5.50
+|   |   |--- tenure_months &lt;= 61.50
+|   |   |   |--- weights: [200.00, 85.00] class: 0
+|   |   |--- tenure_months &gt;  61.50
+|   |   |   |--- weights: [60.00, 112.00] class: 1
+
+      customers  predicted  actual
+leaf                              
+5            42      0.804   0.786
+17           25      0.690   0.640
+8            69      0.651   0.580
+16           44      0.512   0.409
+20           10      0.500   0.700
+18           27      0.358   0.630
+22           24      0.356   0.500
+7            92      0.298   0.315
+19           70      0.192   0.143
+21          179      0.122   0.089
+12          110      0.106   0.182
+14          808      0.034   0.037
+saved churn_rules.txt: 1500 test customers in 12 segments</code></pre>
+                    </div>
+                    <p>Read the rules from the top: the tree reuses the recency, discount and tenure questions from the start of the lesson, and deeper down it finds an interaction: support tickets come up only for customers who do not use the app. In the table, the riskiest segment (lapsed and new, leaf 5) churned at 79% among customers the tree never saw, and the large safe segment (leaf 14, 808 customers) at under 4%. The big segments hold up well; the smallest ones (10 to 30 test customers) wobble, which is a reminder to report each segment's size next to its rate.</p>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Your split has 4,500 training and 1,500 test customers, and <code>cancellation_reason</code> is not in <code>X</code></li>
+                        <li>The tree's preprocessor one-hot encodes the categories and passes numeric columns (with their gaps) straight through</li>
+                        <li>You cross-validated a baseline and logistic regression on the training set before fitting the tree</li>
+                        <li>You chose <code>max_leaf_nodes</code> with cross-validation, not with the test set</li>
+                        <li>You scored the final tree on the test set exactly once</li>
+                        <li><code>churn_rules.txt</code> holds the rules and the segment table ranked by churn rate</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>Try each one before opening the solution. These continue in the project notebook, so <code>X_train</code>, <code>tree_prep</code>, <code>cv</code> and friends already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Impurity by Hand</h3>
+                    <p>Write a function <code>entropy(counts)</code> that returns −Σ p log₂ p (skip zero counts). Then compute the Gini impurity and the entropy of three nodes from the depth-2 tree: <code>[2845, 175]</code>, <code>[31, 127]</code> and a perfectly mixed <code>[100, 100]</code>. Which node is purest?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Turn the counts into proportions with <code>counts / counts.sum()</code>. For entropy, keep only proportions above zero before taking <code>np.log2</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">def gini(counts):
+    p = np.asarray(counts) / np.sum(counts)
+    return 1 - np.sum(p ** 2)
+
+def entropy(counts):
+    p = np.asarray(counts) / np.sum(counts)
+    p = p[p &gt; 0]
+    return -np.sum(p * np.log2(p))
+
+for node in [[2845, 175], [31, 127], [100, 100]]:
+    print(f"{str(node):12s} gini {gini(node):.3f}  entropy {entropy(node):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>[2845, 175]  gini 0.109  entropy 0.319
+[31, 127]    gini 0.315  entropy 0.714
+[100, 100]   gini 0.500  entropy 1.000</code></pre>
+                        </div>
+                        <p>The first node (94% stayed) is purest on both measures. The 50/50 node hits the maximum of each: 0.5 for Gini and 1.0 for entropy. Both measures agree on the order; they just use different scales.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Gini or Entropy?</h3>
+                    <p>Cross-validate the project's preprocessor plus <code>DecisionTreeClassifier(max_depth=4, random_state=42)</code> with <code>criterion="gini"</code> and with <code>criterion="entropy"</code>. Print each mean CV ROC AUC. Does the choice matter here?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Loop over the two criterion strings and build the pipeline inside the loop with <code>make_pipeline(tree_prep, DecisionTreeClassifier(...))</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for criterion in ["gini", "entropy"]:
+    model = make_pipeline(tree_prep, DecisionTreeClassifier(criterion=criterion, max_depth=4, random_state=42))
+    scores = cross_val_score(model, X_train, y_train, cv=cv, scoring="roc_auc")
+    print(f"{criterion:8s} CV ROC AUC {scores.mean():.3f} ± {scores.std():.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>gini     CV ROC AUC 0.837 ± 0.016
+entropy  CV ROC AUC 0.841 ± 0.014</code></pre>
+                        </div>
+                        <p>The difference is far smaller than the fold-to-fold spread. That is the usual finding: the size controls (depth, leaf size, pruning) matter much more than the impurity measure. Keep the default and spend your tuning effort elsewhere.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: A Regression Tree for Snow Gear</h3>
+                    <p>Load <code>data/weekly_demand.csv</code> and keep the <code>Snow</code> category. Predict <code>units_sold</code> from <code>avg_high_temp_f</code> alone with <code>DecisionTreeRegressor(max_depth=2, random_state=42)</code>, training on 2024 and testing on 2025. Print the rules with <code>export_text</code> and compare the test mean absolute error with a <code>DummyRegressor</code> that predicts the 2024 mean.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Split by the <code>year</code> column, not with <code>train_test_split</code>: the past should predict the future. <code>mean_absolute_error</code> lives in <code>sklearn.metrics</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.tree import DecisionTreeRegressor
+from sklearn.dummy import DummyRegressor
+from sklearn.metrics import mean_absolute_error
+
+demand = pd.read_csv("data/weekly_demand.csv")
+snow = demand[demand["category"] == "Snow"]
+snow_train, snow_test = snow[snow["year"] == 2024], snow[snow["year"] == 2025]
+
+snow_tree = DecisionTreeRegressor(max_depth=2, random_state=42).fit(snow_train[["avg_high_temp_f"]], snow_train["units_sold"])
+print(export_text(snow_tree, feature_names=["avg_high_temp_f"]))
+
+mean_model = DummyRegressor().fit(snow_train[["avg_high_temp_f"]], snow_train["units_sold"])
+for name, model in [("mean of 2024", mean_model), ("regression tree", snow_tree)]:
+    mae = mean_absolute_error(snow_test["units_sold"], model.predict(snow_test[["avg_high_temp_f"]]))
+    print(f"{name:16s} test MAE {mae:.2f} units")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>|--- avg_high_temp_f &lt;= 48.65
+|   |--- avg_high_temp_f &lt;= 31.30
+|   |   |--- value: [60.90]
+|   |--- avg_high_temp_f &gt;  31.30
+|   |   |--- value: [32.45]
+|--- avg_high_temp_f &gt;  48.65
+|   |--- avg_high_temp_f &lt;= 60.90
+|   |   |--- value: [12.64]
+|   |--- avg_high_temp_f &gt;  60.90
+|   |   |--- value: [1.75]
+
+mean of 2024     test MAE 13.40 units
+regression tree  test MAE 6.48 units</code></pre>
+                        </div>
+                        <p>Each leaf predicts the average units sold for its temperature band: a staircase from many units in cold weeks to almost none in hot ones. Four numbers cut the error substantially compared with the yearly mean. A regression tree's prediction can never go above the highest leaf or below the lowest one, so it cannot extrapolate to a colder winter than any it has seen.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: A Monotonic Constraint (Stretch)</h3>
+                    <p>The care team will not accept a rule that says "waiting longer since your last order makes you <em>less</em> likely to churn". Using the ten numeric features from the start of the lesson, fit <code>DecisionTreeClassifier(min_samples_leaf=50, random_state=42)</code> twice: once as is, and once with <code>monotonic_cst</code> set so that the predicted churn probability can only rise with <code>days_since_last_order</code>. Compare cross-validated ROC AUC, and count how many of the first 200 test customers would see their predicted risk go <em>down</em> somewhere as their recency rises from 0 to 364 days.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>monotonic_cst</code> takes one integer per feature: 1 for "increasing", -1 for "decreasing", 0 for "no constraint". To test it, repeat each customer's row 365 times (<code>sample.loc[sample.index.repeat(365)]</code>), set the recency column to 0..364, reshape the predictions to 200 rows of 365 and look for a negative <code>np.diff</code> along each row.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">ten = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+       "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+cst = [1 if col == "days_since_last_order" else 0 for col in ten]
+
+plain = DecisionTreeClassifier(min_samples_leaf=50, random_state=42)
+monotone = DecisionTreeClassifier(min_samples_leaf=50, monotonic_cst=cst, random_state=42)
+for name, model in [("unconstrained", plain), ("monotonic recency", monotone)]:
+    scores = cross_val_score(model, X_train[ten], y_train, cv=cv, scoring="roc_auc")
+    print(f"{name:18s} CV ROC AUC {scores.mean():.3f}")
+
+sample = X_test[ten].iloc[:200]
+probe = sample.loc[sample.index.repeat(365)].copy()
+probe["days_since_last_order"] = np.tile(np.arange(365), len(sample))
+for name, model in [("unconstrained", plain), ("monotonic recency", monotone)]:
+    p = model.fit(X_train[ten], y_train).predict_proba(probe)[:, 1].reshape(len(sample), 365)
+    goes_down = (np.diff(p, axis=1) &lt; 0).any(axis=1)
+    print(f"{name:18s} risk drops somewhere for {goes_down.sum()} of {len(sample)} customers")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>unconstrained      CV ROC AUC 0.848
+monotonic recency  CV ROC AUC 0.844
+unconstrained      risk drops somewhere for 80 of 200 customers
+monotonic recency  risk drops somewhere for 0 of 200 customers</code></pre>
+                        </div>
+                        <p>Without the constraint, 80 of the 200 customers have some stretch where waiting longer makes the tree <em>less</em> worried about them, a quirk of noisy splits deep in the tree. The constraint removes every one of those for a tiny change in AUC (0.848 to 0.844). Constraints like this are a cheap way to build trust in a model, and gradient boosting (Lesson 5.3) supports them too. Note that <code>monotonic_cst</code> works only for features without missing values, which is why this exercise uses the ten complete columns.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> A node holds 80 customers who stayed and 20 who churned. What is its Gini impurity?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="0.2 is the share of churners. Gini is 1 minus the sum of the squared shares of both classes.">
+                                A) 0.20
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The shares are 0.8 and 0.2, so Gini = 1 - (0.64 + 0.04) = 0.32. A pure node would be 0 and a 50/50 node 0.5.">
+                                B) 0.32
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="0.5 is the maximum Gini for two classes, reached only when the classes are split 50/50.">
+                                C) 0.50
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_X = pd.DataFrame({"days": [10, 20, 200, 300]})
+quiz_y = [0, 0, 1, 1]
+quiz_tree = DecisionTreeClassifier(max_depth=1, random_state=42).fit(quiz_X, quiz_y)
+print(quiz_tree.tree_.threshold[0])</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="132.5 is the average of all four values. The tree does not cut at the mean; where does it place candidate thresholds?">
+                                A) <code>132.5</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Thresholds lie between neighboring values, not on them. Which two neighbors separate the classes?">
+                                B) <code>20.0</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Candidate thresholds are midpoints between neighboring sorted values. The only split that separates the classes perfectly falls between 20 and 200, at their midpoint 110.0, not at the overall mean of 132.5.">
+                                C) <code>110.0</code>, the midpoint between 20 and 200
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> As <code>max_depth</code> grows from 4 to unlimited on the churn data, what happens?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Each extra level fits the training data more closely, reaching a perfect training score, while the cross-validated AUC drops from about 0.84 to about 0.66: classic overfitting (high variance).">
+                                A) Training AUC rises toward 1.0 while cross-validated AUC falls
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="More capacity always helps on the training rows. Does it help on rows the tree has not seen?">
+                                B) Both training and cross-validated AUC keep rising
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Look at the depth curve: what did the training line do as the tree grew?">
+                                C) Both fall, because deep trees are harder to train
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> You standardize every feature with <code>StandardScaler</code> before fitting a decision tree. What changes?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Scaling helps models that add up weighted features or measure distances. What does a tree's split compare?">
+                                A) The tree gets more accurate, because scaled features are easier to split
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="A split compares a value with a threshold. Scaling moves the threshold into new units but sends exactly the same rows left and right, so the predictions are identical.">
+                                B) The thresholds change units, but the predictions stay the same
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Rescaling preserves the order of values within each column. Which rows fall below any given cut-off?">
+                                C) The tree chooses different features, because the ranges are now equal
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> In a pruned churn tree, <code>orders_12m</code> has a feature importance of 0.000. What is the most accurate conclusion?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Importance is computed from this model's splits only. Could another, overlapping feature have taken the splits instead?">
+                                A) Order count has no relationship with churn
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Impurity-based importance describes a model; it says nothing about cause and effect in either direction.">
+                                B) Increasing order count would not reduce churn
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Importance only measures how much this tree used the feature. Overlapping features such as spend or tenure may carry the same information, so the tree never needed orders. That says nothing about whether orders relate to churn or cause it.">
+                                C) This tree did not split on order count; other features may carry the same information
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Can a scikit-learn tree split on a category such as <code>home_store</code> directly?</summary>
+                    <p>Not on text: categorical columns must be encoded first, as in the project. With one-hot encoding the tree asks "is the store Bend?" one store at a time, which works well for a handful of categories. For columns with many categories, consider <code>OrdinalEncoder</code> (fine for trees, which only use order to split) or the native categorical support in <code>HistGradientBoostingClassifier</code>, which you meet in Lesson 5.3.</p>
+                </details>
+                <details>
+                    <summary>How does a tree handle the missing values in <code>email_opens_90d</code>?</summary>
+                    <p>During training, at each split the tree tries sending the rows with a missing value left and right, and keeps whichever direction gives the larger impurity decrease. At prediction time missing values follow that learned direction. If a feature had no missing values during training, missing values at prediction time go to the child with more samples. This works for numeric features with the default <code>splitter="best"</code>.</p>
+                </details>
+                <details>
+                    <summary>Is a decision tree the same thing as the flowcharts in business rules engines?</summary>
+                    <p>It produces the same kind of object: nested if-then rules. The difference is where the rules come from. A rules engine runs rules a person wrote; a decision tree learns them from labeled examples and tells you how well they work on new data. Exporting a small tree into a rules engine is a common way to deploy one.</p>
+                </details>
+                <details>
+                    <summary>Should I tune <code>max_depth</code> or <code>min_samples_leaf</code>?</summary>
+                    <p>Either works; tune one or two of them, not all five at once. <code>min_samples_leaf</code> is a good default choice for predictions because every leaf then rests on enough customers. <code>max_leaf_nodes</code> is best when you need a fixed-size, readable tree. Whatever you pick, choose its value with cross-validation on the training set.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Write your own <code>best_split(X, y)</code> function that loops over every feature and every midpoint threshold, computes the impurity decrease with your <code>gini</code> function, and returns the best (feature, threshold). Check that it picks <code>days_since_last_order</code> at 172.5 on <code>X_train</code>. Then make it recursive, stopping at depth 2, and compare your four leaves with <code>export_text</code>. For speed, sort each column once and update the class counts as the threshold moves, instead of recounting.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain the trail-junction signposts to someone who has never seen a decision tree, using one real rule from your rule book. Then describe, in two or three sentences, why an unlimited tree scores perfectly on training data and badly on test data. Which control would you reach for first, and why?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>A decision tree asks one yes-or-no question per node and predicts from the leaf a row lands in</li>
+                        <li>Each split is the (feature, threshold) pair with the largest weighted impurity decrease; Gini = 1 − Σ p², entropy is a close alternative</li>
+                        <li>Trees grow greedily, one best split at a time, and repeat the search inside each child</li>
+                        <li>Predicted probabilities are leaf proportions: few leaves give coarse ties, pure leaves give useless 0s and 1s</li>
+                        <li>Trees need no scaling, handle thresholds, U-shapes and interactions naturally, and draw boxes rather than lines</li>
+                        <li>Unlimited trees overfit badly; control size with <code>max_depth</code>, <code>min_samples_leaf</code>, <code>max_leaf_nodes</code> or <code>ccp_alpha</code>, chosen by cross-validation</li>
+                        <li><code>feature_importances_</code> describes the model's splits, favors high-cardinality features and says nothing about causes</li>
+                        <li>Single trees are unstable: small data changes can change the whole tree</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You computed a split's impurity decrease by hand and matched scikit-learn's numbers</li>
+                        <li>You watched a tree discover the recency, discount and tenure effects in Pinecrest's data by itself</li>
+                        <li>You measured overfitting with cross-validation and pruned a 523-leaf tree to something useful</li>
+                        <li>You built a twelve-rule churn rule book that ranks customers about as well as logistic regression</li>
+                        <li>You learned to distrust a perfect training score and a zero importance</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="trees_random_forest.html"><strong>Lesson 5.2: Bagging and Random Forests</strong></a> you will turn the instability you just measured into an advantage. You will train many deep trees on bootstrap samples of the customers, average them (bagging), add random feature choices at each split (a random forest), and get smooth, reliable probabilities and a free validation score from the "out-of-bag" customers.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook: Lesson 5.2 starts from the same columns and split.</li>
+                    <li>Rerun the "A Tree Is Unstable" block with <code>min_samples_leaf=100</code>. Does the disagreement keep shrinking? What do you give up?</li>
+                    <li>Without running it, predict what fraction of distinct customers a sample of 4,500 rows drawn <em>with replacement</em> from 4,500 contains. Lesson 5.2 opens with the answer.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You can now open up a model and read every decision it makes, which is rarer than it sounds. More importantly, you saw a model score 100% and recognized it as a warning, not a triumph. If impurity math felt fiddly, that is fine: what matters is the picture of a tree trying every question and keeping the one that best separates the piles. Everything in the next three lessons is built from exactly that move.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="classification_svm.html" class="prev-lesson">← Previous: Support Vector Machines</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="trees_random_forest.html" class="next-lesson">Next: Bagging and Random Forests →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Trees split data recursively to reduce impurity, measured by Gini or entropy.</li>
-                <li>They capture nonlinear relationships and mixed feature types without needing feature scaling.</li>
-                <li>Unconstrained trees overfit; depth limits, minimum leaf sizes, and pruning keep them in check.</li>
-                <li>Trees are highly interpretable — you can read the exact path from root to prediction.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now build, visualize, and tune a decision tree, and read its rules directly — one of the most interpretable models
-        in all of machine learning.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>Should I use Gini or entropy for splitting?</summary>
-            <p>They usually produce very similar trees. Gini is slightly faster and is the default; entropy is grounded in information
-            theory. In practice the choice rarely changes results much.</p>
-        </details>
-        <details>
-            <summary>Do I need to scale features for a decision tree?</summary>
-            <p>No. Splits are based on thresholds within each feature, so rescaling a feature doesn't change where the splits fall.</p>
-        </details>
-        <details>
-            <summary>Why does my tree get near-perfect training accuracy but poor test accuracy?</summary>
-            <p>It overfit — it grew deep enough to memorize the training data. Limit <code>max_depth</code>, raise the minimum samples
-            per leaf, or prune the tree to make it generalize.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>A single tree tends to overfit, which is exactly what motivates ensembles. Next you'll combine many trees — random forests
-        and gradient boosting — to get far more accurate and stable models.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Train a decision tree and visualize its structure to read the decision rules.</li>
-            <li>Vary <code>max_depth</code> and watch training accuracy versus test accuracy diverge, then inspect the feature importances.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>The humble decision tree is the seed of the most powerful models in tabular ML. Understand it well and the ensembles
-            ahead will click right into place. You're building on solid ground.</p>
-        </div>
-    </section>
-
-    <!-- Navigation -->
-    <nav class="lesson-nav">
-        <a href="ml_linear_logistic_regression.html" class="prev-lesson">← Previous: Linear/Logistic Regression</a>
-        <a href="index.html" class="home-link">Course Home</a>
-        <a href="ml_random_forests.html" class="next-lesson">Next: Random Forests →</a>
-    </nav>
-    
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1073,8 +1187,10 @@ pruning.cost_complexity_pruning()</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>

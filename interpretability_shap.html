@@ -3,989 +3,939 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about SHAP (SHapley Additive exPlanations) for unified model interpretability based on game theory.">
-    <title>SHAP - Model Interpretability - Python Machine Learning</title>
+    <meta name="description" content="Explain individual churn predictions with SHAP values: the Shapley idea by hand, TreeExplainer on gradient boosting, waterfall, beeswarm and scatter plots, and reason codes for a call list. Python Machine Learning Lesson 7.2.">
+    <meta name="author" content="Ray de la Paz">
+    <title>SHAP Values - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#interpretability">Interpretability</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#interpretability">Interpretability</a></li>
-            <li aria-current="page">SHAP</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>🎮 SHAP: Game Theory for Model Interpretability</h1>
+        <div class="container">
+            <header>
+                <h1>🎲 Lesson 7.2: SHAP Values</h1>
+                <p class="lead">Answer the question every flagged customer raises, "why this person?", by splitting each prediction into a fair share for every feature.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Explain Shapley values and how they fairly attribute a prediction across features</li>
-                <li>Use <code>TreeExplainer</code> for fast, exact SHAP values on tree-based models</li>
-                <li>Use <code>KernelExplainer</code> to explain any model when no fast explainer exists</li>
-                <li>Read SHAP visualizations — force, waterfall, summary, and dependence plots</li>
-                <li>Combine local explanations into global feature-importance insights</li>
-                <li>Apply SHAP to debug models and detect unexpected or biased behavior</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Explain a trained model with SHAP end to end — a waterfall plot for one prediction and a summary plot for global importance — and interpret what drives the model overall.</p>
-        </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>SHAP (SHapley Additive exPlanations) is a unified framework for interpreting model predictions based on game theory. It assigns each feature an importance value for a particular prediction, providing both local and global interpretability. SHAP values represent the contribution of each feature to the difference between the actual prediction and the expected prediction. This method is theoretically grounded, providing consistent and locally accurate explanations.</p>
-        </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain the Shapley idea (average contribution over every order in which features join) and compute it by hand for a tiny model</li>
+                        <li>Compute SHAP values for a gradient-boosting model with <code>shap.TreeExplainer</code> and check that they add up to the prediction</li>
+                        <li>Read waterfall, beeswarm and scatter plots, including the units (log-odds) they are drawn in</li>
+                        <li>Use a model-agnostic explainer on a pipeline, and turn SHAP values into plain-language reason codes</li>
+                    </ul>
+                </div>
 
-        <h2>SHAP Framework Overview</h2>
-        
-        <div class="mermaid">
-        flowchart TB
-            A[Model Prediction] --> B[SHAP Framework]
-            
-            B --> C[TreeExplainer]
-            C --> C1[Random Forest]
-            C --> C2[XGBoost]
-            C --> C3[LightGBM]
-            
-            B --> D[DeepExplainer]
-            D --> D1[Neural Networks]
-            D --> D2[TensorFlow/PyTorch]
-            
-            B --> E[KernelExplainer]
-            E --> E1[Any Model]
-            E --> E2[Model-agnostic]
-            
-            B --> F[LinearExplainer]
-            F --> F1[Linear Models]
-            F --> F2[Logistic Regression]
-            
-            C --> G[SHAP Values]
-            D --> G
-            E --> G
-            F --> G
-            
-            G --> H[Visualizations]
-            H --> H1[Waterfall]
-            H --> H2[Force Plot]
-            H --> H3[Summary Plot]
-            H --> H4[Dependence Plot]
-            
-            style A fill:#e3f2fd
-            style G fill:#fff9c4
-            style H fill:#c8e6c9
-        </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 95 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="model_interpretation.html">Lesson 7.1: Interpreting Models</a></li>
+                    <li><span class="meta-label">🛠️ You will build</span> A call list for the retention team: the 20 riskiest customers, each with its top three reasons in plain words</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code></li>
+                </ul>
+            </header>
 
-        <h2>Shapley Values Concept</h2>
-        
-        <div class="mermaid">
-        graph LR
-            A[Shapley Values] --> B[Game Theory]
-            B --> C[Players = Features]
-            B --> D[Payout = Prediction]
-            
-            E[Properties] --> F[Efficiency]
-            E --> G[Symmetry]
-            E --> H[Dummy]
-            E --> I[Additivity]
-            
-            F --> J[Sum equals prediction]
-            G --> K[Equal features = Equal values]
-            H --> L[No effect = Zero value]
-            I --> M[Combined games]
-            
-            style A fill:#f0f4c3
-            style E fill:#e3f2fd
-        </div>
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Splitting a Prediction Fairly</a></li>
+                        <li><a href="#by-hand" class="toc-link">Shapley Values by Hand</a></li>
+                        <li><a href="#tree" class="toc-link">SHAP for the Churn Model</a></li>
+                        <li><a href="#one-customer" class="toc-link">Why This Customer?</a></li>
+                        <li><a href="#global" class="toc-link">From Many Explanations to the Big Picture</a></li>
+                        <li><a href="#agnostic" class="toc-link">Any Model: the Permutation Explainer</a></li>
+                        <li><a href="#limits" class="toc-link">What SHAP Does Not Tell You</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: Reasons for the Call List</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
 
-        <h2>Setting Up Environment</h2>
-        
-        <pre class="language-python"><code>import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Splitting a Prediction Fairly</h2>
+
+                <p>In Lesson 7.1 you learned what the churn model relies on <em>overall</em>. Now a customer-care agent opens the call list, sees that a customer has a 97% churn risk, and asks: "What should I talk about?" Global importance cannot answer that. This customer might be flagged for a long silence, another for heavy discount use and support complaints. You need a <strong>local</strong> explanation: one that splits <em>this</em> prediction into parts.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: Splitting a Team Bonus</h4>
+                    <p>A team of three wins a bonus. How much did each person contribute? Asking "what would the team have earned without Ana?" is unfair when people work together, because the answer depends on who else is in the room. The economist Lloyd Shapley's answer (1953): imagine the team members arriving one at a time, in every possible order. Each time someone arrives, credit them with how much the result went up. Average each person's credit over all the orders. That average is their <strong>Shapley value</strong>, and it is the only split that satisfies a short list of fairness rules, including "the shares add up to the whole bonus".</p>
+                    <p>For a prediction, the players are the features, and the "bonus" is how far this customer's prediction is from the model's average prediction. <strong>SHAP</strong> (SHapley Additive exPlanations) is the library and method that computes these shares for machine-learning models.</p>
+                </div>
+
+                <div class="mermaid">
+graph TD
+    A["Average prediction: base value"] --> B["+ share of days_since_last_order"]
+    B --> C["+ share of discount_share"]
+    C --> D["+ shares of every other feature"]
+    D --> E["= this customer's prediction"]
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>SHAP gives every prediction a breakdown that adds up exactly, so "why" becomes a table you can check. Averaged over many customers, the same numbers become a global picture that shows both how much each feature matters and in which direction. It has become the most widely used explanation method for tabular models, so you will meet its plots in reports and dashboards. Knowing what they mean, and what they do not, protects you from both overtrusting and dismissing them.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="by-hand" class="lesson-section">
+                <h2>✋ Shapley Values by Hand</h2>
+
+                <p>The idea is easiest to see on a model small enough to read. Here is a hand-written risk score with three features and one interaction: a long silence is worse for customers without the app.</p>
+
+                <pre><code class="language-python">import itertools
+
+def toy_risk(days, disc, app):
+    risk = 0.10
+    if days &gt; 150:
+        risk += 0.30
+    if disc &gt; 0.35:
+        risk += 0.15
+    if days &gt; 150 and app == 0:
+        risk += 0.10
+    return risk
+
+reference = {"days": 40, "disc": 0.15, "app": 1}   # a typical customer
+customer = {"days": 240, "disc": 0.45, "app": 0}   # the customer to explain
+names = list(customer)
+
+def value(present):
+    """Risk when the features in `present` take the customer's values and the rest the reference's."""
+    return toy_risk(**{n: customer[n] if n in present else reference[n] for n in names})
+
+shares = dict.fromkeys(names, 0.0)
+orders = list(itertools.permutations(names))
+for order in orders:
+    present = set()
+    for name in order:
+        before = value(present)
+        present.add(name)
+        shares[name] += value(present) - before
+shares = {n: round(s / len(orders), 3) for n, s in shares.items()}
+
+print("orders tried:", len(orders))
+print("reference risk:", value(set()), " customer risk:", value(set(names)))
+print("Shapley values:", shares, " sum:", round(sum(shares.values()), 3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>orders tried: 6
+reference risk: 0.1  customer risk: 0.65
+Shapley values: {'days': 0.35, 'disc': 0.15, 'app': 0.05}  sum: 0.55</code></pre>
+                </div>
+
+                <p>Walk through what happened. The customer's risk (0.65) is 0.55 above the reference (0.10), and the three shares add up to exactly 0.55. Discount reliance gets its 0.15: it adds that amount whenever it arrives. The interesting part is the 0.10 interaction bonus. It only appears once <em>both</em> the long silence and "no app" are present, so whichever of the two arrives second gets it. Over all six orders, each arrives second half the time, so the 0.10 is split evenly: days gets 0.30 + 0.05 and app gets 0.05.</p>
+
+                <p>The <code>shap</code> library computes the same thing. Its <code>Exact</code> explainer tries every subset, just like the loop, so on this tiny model it must agree:</p>
+
+                <pre><code class="language-python">import numpy as np
 import shap
-from sklearn.datasets import load_boston, load_breast_cancer, load_iris
+
+toy_model = lambda rows: np.array([toy_risk(*row) for row in rows])
+toy_explainer = shap.explainers.Exact(toy_model, np.array([[40, 0.15, 1]]))
+print(toy_explainer(np.array([[240, 0.45, 0]])).values.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>[[0.35 0.15 0.05]]</code></pre>
+                </div>
+
+                <div class="card card-accent">
+                    <h4>🔑 Key Terms</h4>
+                    <p><strong>Base value</strong> (or expected value): the model's average output over a background set of customers; the starting point of every explanation. <strong>SHAP value</strong>: one feature's share of the gap between the base value and this prediction. <strong>Additivity</strong>: base value + all SHAP values = the prediction, exactly. <strong>Background data</strong>: the customers that define "a typical value" when a feature is left out (here, the single reference customer).</p>
+                </div>
+
+                <p>The catch is cost. With 11 features there are 39,916,800 orders, and real models cannot be read like <code>toy_risk</code>. SHAP's contribution was to find fast exact algorithms for some model families (trees, linear models) and good approximations for the rest.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="tree" class="lesson-section">
+                <h2>🌲 SHAP for the Churn Model</h2>
+
+                <p>Rebuild Lesson 7.1's gradient-boosting model: same 11 features, same split.</p>
+
+                <pre><code class="language-python">import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.linear_model import LogisticRegression, LinearRegression
-import xgboost as xgb
-from sklearn.neural_network import MLPClassifier
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.metrics import roc_auc_score
 
-# Initialize JavaScript for SHAP plots
-shap.initjs()
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+            "email_opens_90d"]
+X = customers[features].astype(float)
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
-np.random.seed(42)
+hgb = HistGradientBoostingClassifier(random_state=42).fit(X_train, y_train)
+print(f"test ROC AUC {roc_auc_score(y_test, hgb.predict_proba(X_test)[:, 1]):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>test ROC AUC 0.865</code></pre>
+                </div>
 
-print("SHAP - SHapley Additive exPlanations")
-print("=" * 60)
-print(f"SHAP version: {shap.__version__}")</code></pre>
+                <p><code>shap.TreeExplainer</code> computes exact SHAP values for tree ensembles in a fraction of a second per customer, by walking the trees instead of trying feature orders. Calling the explainer on a DataFrame returns an <code>Explanation</code> object that holds the values, the base value and the feature data together.</p>
 
-        <h2>SHAP for Tree-based Models</h2>
-        
-        <pre class="language-python"><code>class SHAPTreeExplainer:
-    """
-    SHAP explanations for tree-based models
-    """
-    
-    def __init__(self):
-        self.model = None
-        self.explainer = None
-        self.shap_values = None
-        self.X_train = None
-        self.X_test = None
-        
-    def prepare_data(self):
-        """
-        Prepare breast cancer dataset
-        """
-        # Load data
-        data = load_breast_cancer()
-        X = pd.DataFrame(data.data, columns=data.feature_names)
-        y = data.target
-        
-        # Split data
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
-        
-        print(f"Data prepared: {len(self.X_train)} training, {len(self.X_test)} test samples")
-        print(f"Features: {len(X.columns)}")
-        
-        return self.X_train, self.X_test, self.y_train, self.y_test
-    
-    def train_model(self, model_type='random_forest'):
-        """
-        Train tree-based model
-        """
-        print(f"\nTraining {model_type} model...")
-        
-        if model_type == 'random_forest':
-            self.model = RandomForestClassifier(
-                n_estimators=100,
-                max_depth=10,
-                random_state=42
-            )
-        elif model_type == 'xgboost':
-            self.model = xgb.XGBClassifier(
-                n_estimators=100,
-                max_depth=5,
-                random_state=42
-            )
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
-        
-        # Train model
-        self.model.fit(self.X_train, self.y_train)
-        
-        # Evaluate
-        train_score = self.model.score(self.X_train, self.y_train)
-        test_score = self.model.score(self.X_test, self.y_test)
-        
-        print(f"Train accuracy: {train_score:.3f}")
-        print(f"Test accuracy: {test_score:.3f}")
-        
-        return self.model
-    
-    def explain_with_shap(self):
-        """
-        Generate SHAP explanations
-        """
-        print("\nGenerating SHAP explanations...")
-        
-        # Create TreeExplainer
-        self.explainer = shap.TreeExplainer(self.model)
-        
-        # Calculate SHAP values
-        self.shap_values = self.explainer.shap_values(self.X_test)
-        
-        # For binary classification, get values for positive class
-        if len(self.shap_values) == 2:
-            self.shap_values = self.shap_values[1]
-        
-        print(f"SHAP values shape: {self.shap_values.shape}")
-        
-        return self.shap_values
-    
-    def visualize_explanations(self):
-        """
-        Create various SHAP visualizations
-        """
-        print("\nCreating SHAP visualizations...")
-        
-        # 1. Summary plot - feature importance
-        plt.figure(figsize=(10, 6))
-        shap.summary_plot(self.shap_values, self.X_test, plot_type="bar")
-        plt.title("SHAP Feature Importance (mean |SHAP value|)")
-        plt.tight_layout()
-        plt.show()
-        
-        # 2. Summary plot - detailed view
-        plt.figure(figsize=(10, 6))
-        shap.summary_plot(self.shap_values, self.X_test)
-        plt.title("SHAP Summary Plot")
-        plt.tight_layout()
-        plt.show()
-        
-        # 3. Waterfall plot for single prediction
-        instance_idx = 0
-        shap.plots.waterfall(
-            shap.Explanation(
-                values=self.shap_values[instance_idx],
-                base_values=self.explainer.expected_value,
-                data=self.X_test.iloc[instance_idx],
-                feature_names=self.X_test.columns.tolist()
-            )
-        )
-        plt.title(f"SHAP Waterfall Plot - Instance {instance_idx}")
-        plt.tight_layout()
-        plt.show()
-        
-        # 4. Force plot for single prediction
-        shap.force_plot(
-            self.explainer.expected_value,
-            self.shap_values[instance_idx],
-            self.X_test.iloc[instance_idx],
-            matplotlib=True
-        )
-        plt.title(f"SHAP Force Plot - Instance {instance_idx}")
-        plt.tight_layout()
-        plt.show()
-        
-    def dependence_plots(self):
-        """
-        Create SHAP dependence plots
-        """
-        print("\nCreating dependence plots...")
-        
-        # Get top 4 important features
-        feature_importance = np.abs(self.shap_values).mean(axis=0)
-        top_features_idx = np.argsort(feature_importance)[-4:]
-        top_features = self.X_test.columns[top_features_idx]
-        
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-        axes = axes.ravel()
-        
-        for idx, feature in enumerate(top_features):
-            shap.dependence_plot(
-                feature, 
-                self.shap_values, 
-                self.X_test,
-                ax=axes[idx],
-                show=False
-            )
-            axes[idx].set_title(f'SHAP Dependence: {feature}')
-        
-        plt.suptitle('SHAP Dependence Plots for Top Features', fontsize=14)
-        plt.tight_layout()
-        plt.show()
+                <pre><code class="language-python">explainer = shap.TreeExplainer(hgb)
+sv = explainer(X_test)
 
-# Demonstrate SHAP for tree models
-print("\n" + "=" * 60)
-print("SHAP FOR TREE-BASED MODELS")
-print("=" * 60)
+print(type(sv).__name__, sv.values.shape)
+print(f"base value: {sv.base_values[0]:.3f}")
 
-tree_explainer = SHAPTreeExplainer()
+raw_score = hgb.decision_function(X_test)
+gap = np.abs(sv.base_values + sv.values.sum(axis=1) - raw_score).max()
+print(f"largest additivity gap over 1,500 customers: {gap:.1e}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>Explanation (1500, 11)
+base value: -2.951
+largest additivity gap over 1,500 customers: 1.5e-14</code></pre>
+                </div>
 
-# Prepare data
-X_train, X_test, y_train, y_test = tree_explainer.prepare_data()
+                <p>One row of 11 SHAP values per test customer. The additivity gap is at the level of floating-point rounding: base value plus the shares reproduces the model's output for every customer. But notice <em>which</em> output: <code>decision_function</code>, not <code>predict_proba</code>.</p>
 
-# Train Random Forest
-model = tree_explainer.train_model('random_forest')
+                <div class="card card-warning">
+                    <h4>⚠️ The Units Are Log-Odds</h4>
+                    <p>A gradient-boosting classifier adds up its trees in <strong>log-odds</strong> and only at the end squashes the total into a probability with the logistic (sigmoid) function. TreeExplainer explains the sum before the squash, so SHAP values here are in log-odds. The base value, -2.95, is the average log-odds over the training customers. Squashed, it is about 5%, not the 16.5% churn rate, because the average of squashed numbers is not the squash of the average. Positive SHAP values push towards churn, negative ones away, and you can compare their sizes, but you cannot add them to a probability.</p>
+                </div>
 
-# Generate SHAP explanations
-shap_values = tree_explainer.explain_with_shap()
+                <pre><code class="language-python">from scipy.special import expit   # the logistic function: log-odds to probability
 
-# Visualize
-tree_explainer.visualize_explanations()
-tree_explainer.dependence_plots()</code></pre>
+print(f"base value as a probability: {expit(sv.base_values[0]):.3f}")
+print(f"average predicted probability: {hgb.predict_proba(X_train)[:, 1].mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>base value as a probability: 0.050
+average predicted probability: 0.166</code></pre>
+                </div>
+            </section>
 
-        <h2>SHAP for Any Model (KernelExplainer)</h2>
-        
-        <pre class="language-python"><code>class SHAPKernelExplainer:
-    """
-    Model-agnostic SHAP explanations using KernelExplainer
-    """
-    
-    def __init__(self):
-        self.models = {}
-        self.explainers = {}
-        self.shap_values = {}
-        
-    def train_diverse_models(self, X_train, X_test, y_train, y_test):
-        """
-        Train different types of models
-        """
-        print("\n" + "=" * 60)
-        print("TRAINING DIVERSE MODELS")
-        print("=" * 60)
-        
-        # Define models
-        models = {
-            'Logistic Regression': LogisticRegression(max_iter=1000, random_state=42),
-            'Neural Network': MLPClassifier(
-                hidden_layer_sizes=(50, 30),
-                max_iter=500,
-                random_state=42
-            ),
-            'XGBoost': xgb.XGBClassifier(
-                n_estimators=50,
-                max_depth=4,
-                random_state=42
-            )
-        }
-        
-        # Train each model
-        for name, model in models.items():
-            print(f"\nTraining {name}...")
-            model.fit(X_train, y_train)
-            score = model.score(X_test, y_test)
-            print(f"  Test accuracy: {score:.3f}")
-            self.models[name] = model
-        
-        return self.models
-    
-    def explain_with_kernel_shap(self, X_train, X_test, sample_size=100):
-        """
-        Generate SHAP explanations using KernelExplainer
-        """
-        print("\n" + "=" * 60)
-        print("KERNEL SHAP EXPLANATIONS")
-        print("=" * 60)
-        
-        # Use a sample of training data as background
-        background = shap.sample(X_train, sample_size)
-        
-        for name, model in self.models.items():
-            print(f"\nExplaining {name}...")
-            
-            # Create KernelExplainer
-            if hasattr(model, 'predict_proba'):
-                explainer = shap.KernelExplainer(
-                    lambda x: model.predict_proba(x)[:, 1],
-                    background
-                )
-            else:
-                explainer = shap.KernelExplainer(
-                    model.predict,
-                    background
-                )
-            
-            # Calculate SHAP values for a subset of test data
-            test_subset = X_test.iloc[:10]  # Use subset for speed
-            shap_values = explainer.shap_values(test_subset)
-            
-            self.explainers[name] = explainer
-            self.shap_values[name] = shap_values
-            
-            print(f"  SHAP values calculated for {len(test_subset)} instances")
-        
-        return self.shap_values
-    
-    def compare_model_explanations(self, X_test, instance_idx=0):
-        """
-        Compare SHAP explanations across different models
-        """
-        print("\n" + "=" * 60)
-        print("COMPARING MODEL EXPLANATIONS")
-        print("=" * 60)
-        
-        fig, axes = plt.subplots(1, len(self.models), figsize=(15, 5))
-        
-        for idx, (name, shap_vals) in enumerate(self.shap_values.items()):
-            # Get SHAP values for specific instance
-            instance_shap = shap_vals[instance_idx]
-            
-            # Get feature names
-            features = X_test.columns
-            
-            # Sort by importance
-            importance_order = np.argsort(np.abs(instance_shap))[::-1][:10]
-            
-            # Plot
-            y_pos = np.arange(len(importance_order))
-            axes[idx].barh(y_pos, instance_shap[importance_order])
-            axes[idx].set_yticks(y_pos)
-            axes[idx].set_yticklabels([features[i] for i in importance_order], fontsize=8)
-            axes[idx].set_xlabel('SHAP Value')
-            axes[idx].set_title(f'{name}')
-            axes[idx].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
-            
-            # Color bars
-            colors = ['green' if x > 0 else 'red' for x in instance_shap[importance_order]]
-            for i, (bar, color) in enumerate(zip(axes[idx].patches, colors)):
-                bar.set_facecolor(color)
-        
-        plt.suptitle(f'SHAP Values Comparison - Instance {instance_idx}', fontsize=14)
-        plt.tight_layout()
-        plt.show()
+            <!-- ============================================================ -->
+            <section id="one-customer" class="lesson-section">
+                <h2>🙋 Why This Customer?</h2>
 
-# Demonstrate Kernel SHAP
-kernel_explainer = SHAPKernelExplainer()
+                <p>Take the riskiest customer in the test set. <code>X_test</code> keeps the original row numbers, so you can look up the customer ID.</p>
 
-# Train diverse models
-models = kernel_explainer.train_diverse_models(X_train, X_test, y_train, y_test)
+                <pre><code class="language-python">proba = hgb.predict_proba(X_test)[:, 1]
+i = int(proba.argmax())
+row_id = X_test.index[i]
+print(customers.loc[row_id, "customer_id"], f"churn probability {proba[i]:.3f}")
 
-# Generate explanations
-shap_values_dict = kernel_explainer.explain_with_kernel_shap(X_train, X_test, sample_size=50)
+why = pd.DataFrame({"value": X_test.iloc[i], "shap": sv.values[i]}).sort_values("shap", ascending=False)
+print(why.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>C104051 churn probability 0.972
+                         value   shap
+days_since_last_order  364.000  3.095
+discount_share           0.432  1.827
+support_tickets_12m      3.000  0.767
+app_user                 0.000  0.316
+orders_12m               2.000  0.267
+return_rate              0.051  0.157
+spend_12m              223.780  0.110
+email_opens_90d          6.000  0.084
+avg_order_value        111.890  0.061
+returns_12m              0.000 -0.032
+tenure_months           65.000 -0.149</code></pre>
+                </div>
 
-# Compare explanations
-kernel_explainer.compare_model_explanations(X_test, instance_idx=0)</code></pre>
+                <p>This customer has not ordered for 364 days (the maximum), relies on discounts for 43% of their spend, filed three support tickets and does not use the app. The SHAP values rank those exactly as an experienced agent might: silence first (+3.10 log-odds), discounts second (+1.83), complaints third (+0.77). A long tenure (65 months) pulls slightly the other way. The waterfall plot draws the same table as a staircase from the base value to the prediction:</p>
 
-        <h2>Global Interpretability with SHAP</h2>
-        
-        <pre class="language-python"><code>class SHAPGlobalInterpretability:
-    """
-    Global model interpretability using SHAP
-    """
-    
-    def __init__(self, model, X_train, X_test):
-        self.model = model
-        self.X_train = X_train
-        self.X_test = X_test
-        self.explainer = None
-        self.shap_values = None
-        
-    def calculate_global_importance(self):
-        """
-        Calculate global feature importance
-        """
-        print("\n" + "=" * 60)
-        print("GLOBAL FEATURE IMPORTANCE")
-        print("=" * 60)
-        
-        # Create explainer
-        self.explainer = shap.TreeExplainer(self.model)
-        
-        # Calculate SHAP values for all test instances
-        self.shap_values = self.explainer.shap_values(self.X_test)
-        
-        # Handle multi-class output
-        if isinstance(self.shap_values, list):
-            self.shap_values = self.shap_values[1]  # Use positive class for binary
-        
-        # Calculate mean absolute SHAP values
-        mean_abs_shap = np.mean(np.abs(self.shap_values), axis=0)
-        
-        # Create importance dataframe
-        importance_df = pd.DataFrame({
-            'feature': self.X_test.columns,
-            'importance': mean_abs_shap
-        }).sort_values('importance', ascending=False)
-        
-        print("\nTop 10 Most Important Features:")
-        print(importance_df.head(10).to_string(index=False))
-        
-        return importance_df
-    
-    def interaction_effects(self):
-        """
-        Analyze feature interactions using SHAP
-        """
-        print("\n" + "=" * 60)
-        print("FEATURE INTERACTION ANALYSIS")
-        print("=" * 60)
-        
-        # Calculate interaction values
-        shap_interaction = self.explainer.shap_interaction_values(self.X_test.iloc[:50])
-        
-        # Handle multi-class
-        if isinstance(shap_interaction, list):
-            shap_interaction = shap_interaction[1]
-        
-        # Get mean absolute interaction effects
-        mean_interaction = np.abs(shap_interaction).mean(axis=0)
-        
-        # Find top interactions
-        feature_names = self.X_test.columns
-        interactions = []
-        
-        for i in range(len(feature_names)):
-            for j in range(i+1, len(feature_names)):
-                interactions.append({
-                    'feature_1': feature_names[i],
-                    'feature_2': feature_names[j],
-                    'interaction_strength': mean_interaction[i, j]
-                })
-        
-        interaction_df = pd.DataFrame(interactions).sort_values(
-            'interaction_strength', ascending=False
-        )
-        
-        print("\nTop 10 Feature Interactions:")
-        print(interaction_df.head(10).to_string(index=False))
-        
-        # Visualize interaction matrix
-        self.plot_interaction_matrix(mean_interaction, feature_names)
-        
-        return interaction_df
-    
-    def plot_interaction_matrix(self, interaction_matrix, feature_names):
-        """
-        Plot feature interaction heatmap
-        """
-        # Select top features for visualization
-        n_features = min(15, len(feature_names))
-        top_features_idx = np.argsort(interaction_matrix.sum(axis=1))[-n_features:]
-        
-        # Create subset matrix
-        subset_matrix = interaction_matrix[top_features_idx][:, top_features_idx]
-        subset_names = [feature_names[i] for i in top_features_idx]
-        
-        # Plot heatmap
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(
-            subset_matrix,
-            xticklabels=subset_names,
-            yticklabels=subset_names,
-            annot=False,
-            cmap='YlOrRd',
-            cbar_kws={'label': 'Interaction Strength'}
-        )
-        plt.title('SHAP Feature Interaction Matrix')
-        plt.xlabel('Feature')
-        plt.ylabel('Feature')
-        plt.xticks(rotation=45, ha='right')
-        plt.yticks(rotation=0)
-        plt.tight_layout()
-        plt.show()
-    
-    def cohort_analysis(self):
-        """
-        Analyze SHAP values for different cohorts
-        """
-        print("\n" + "=" * 60)
-        print("COHORT ANALYSIS")
-        print("=" * 60)
-        
-        # Get predictions
-        predictions = self.model.predict(self.X_test)
-        
-        # Split into cohorts based on prediction
-        correct_idx = np.where(predictions == self.y_test)[0]
-        incorrect_idx = np.where(predictions != self.y_test)[0]
-        
-        # Calculate mean SHAP values for each cohort
-        correct_shap_mean = np.mean(np.abs(self.shap_values[correct_idx]), axis=0)
-        incorrect_shap_mean = np.mean(np.abs(self.shap_values[incorrect_idx]), axis=0)
-        
-        # Compare cohorts
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-        
-        # Top features for correct predictions
-        top_correct_idx = np.argsort(correct_shap_mean)[-10:]
-        axes[0].barh(range(10), correct_shap_mean[top_correct_idx])
-        axes[0].set_yticks(range(10))
-        axes[0].set_yticklabels([self.X_test.columns[i] for i in top_correct_idx])
-        axes[0].set_xlabel('Mean |SHAP Value|')
-        axes[0].set_title(f'Correct Predictions (n={len(correct_idx)})')
-        
-        # Top features for incorrect predictions
-        top_incorrect_idx = np.argsort(incorrect_shap_mean)[-10:]
-        axes[1].barh(range(10), incorrect_shap_mean[top_incorrect_idx])
-        axes[1].set_yticks(range(10))
-        axes[1].set_yticklabels([self.X_test.columns[i] for i in top_incorrect_idx])
-        axes[1].set_xlabel('Mean |SHAP Value|')
-        axes[1].set_title(f'Incorrect Predictions (n={len(incorrect_idx)})')
-        
-        plt.suptitle('Feature Importance by Prediction Cohort', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        print(f"Correct predictions: {len(correct_idx)}/{len(predictions)}")
-        print(f"Incorrect predictions: {len(incorrect_idx)}/{len(predictions)}")
+                <pre><code class="language-python">import matplotlib.pyplot as plt
 
-# Global interpretability demonstration
-print("\n" + "=" * 60)
-print("GLOBAL INTERPRETABILITY WITH SHAP")
-print("=" * 60)
+plt.figure()
+shap.plots.waterfall(sv[i], max_display=8, show=False)
+plt.gcf().set_size_inches(9, 5)
+plt.title("Why customer C104051 is flagged (log-odds)")
+plt.tight_layout()
+plt.show()</code></pre>
 
-# Use the Random Forest model from earlier
-global_interpreter = SHAPGlobalInterpretability(model, X_train, X_test)
+                <figure>
+                    <img src="images/interpretability_shap_waterfall.png" alt="SHAP waterfall plot for customer C104051. Starting from a base value of -2.951 log-odds, days_since_last_order adds 3.1, discount_share adds 1.83, support_tickets_12m adds 0.77, and smaller contributions from app_user, orders_12m, return_rate and others lead to a final value of 3.552 log-odds." width="990" height="550" loading="lazy">
+                    <figcaption>Read from the bottom: start at the average, add each feature's share, end at this customer's score. Red bars push towards churn, blue bars away.</figcaption>
+                </figure>
 
-# Calculate global importance
-importance_df = global_interpreter.calculate_global_importance()
+                <p>To speak in probabilities, squash the end points. The model moves this customer from a typical 5% to 97%; most of that journey is the long silence and the discounts.</p>
 
-# Analyze interactions
-interaction_df = global_interpreter.interaction_effects()
+                <pre><code class="language-python">start = sv.base_values[i]
+end = start + sv.values[i].sum()
+print(f"log-odds {start:.2f} -&gt; {end:.2f}")
+print(f"probability {expit(start):.3f} -&gt; {expit(end):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>log-odds -2.95 -&gt; 3.55
+probability 0.050 -&gt; 0.972</code></pre>
+                </div>
+            </section>
 
-# Cohort analysis
-global_interpreter.cohort_analysis()</code></pre>
+            <!-- ============================================================ -->
+            <section id="global" class="lesson-section">
+                <h2>🐝 From Many Explanations to the Big Picture</h2>
 
-        <h2>SHAP for Time Series and Advanced Applications</h2>
-        
-        <div class="mermaid">
-        flowchart TB
-            A[Advanced SHAP] --> B[Time Series]
-            A --> C[Deep Learning]
-            A --> D[NLP]
-            
-            B --> B1[DeepExplainer]
-            B --> B2[GradientExplainer]
-            
-            C --> C1[Layer Attribution]
-            C --> C2[Neuron Importance]
-            
-            D --> D1[Token Attribution]
-            D --> D2[Transformer Models]
-            
-            E[Extensions] --> F[SHAP + LIME]
-            E --> G[Counterfactuals]
-            E --> H[Causal SHAP]
-            
-            style A fill:#e3f2fd
-            style E fill:#fff9c4
+                <p>You have 1,500 local explanations. Averaging their sizes gives a global importance; plotting them all shows direction and shape too. Start with the numbers: the mean absolute SHAP value per feature.</p>
+
+                <pre><code class="language-python">mean_abs = pd.Series(np.abs(sv.values).mean(axis=0), index=features).sort_values(ascending=False)
+print(mean_abs.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>days_since_last_order    0.903
+tenure_months            0.802
+discount_share           0.742
+email_opens_90d          0.278
+orders_12m               0.278
+app_user                 0.273
+support_tickets_12m      0.267
+return_rate              0.193
+spend_12m                0.171
+avg_order_value          0.137
+returns_12m              0.043
+dtype: float64</code></pre>
+                </div>
+
+                <p>The top three are the same three features as Lesson 7.1's permutation importance, though tenure and discounts swap places. Below them, the two methods disagree a little, and that is expected: they measure different things. Mean |SHAP| measures how much a feature <em>moves predictions</em>; permutation importance measures how much the <em>score</em> depends on it. A feature can move predictions a lot without improving the ranking, for example when another feature carries the same information.</p>
+
+                <p>The <strong>beeswarm</strong> plot shows every customer as a dot: position is the SHAP value, color is the feature's value (red high, blue low).</p>
+
+                <pre><code class="language-python">plt.figure()
+shap.plots.beeswarm(sv, max_display=11, show=False)
+plt.gcf().set_size_inches(9, 6)
+plt.title("SHAP values for 1,500 test customers")
+plt.tight_layout()
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/interpretability_shap_beeswarm.png" alt="SHAP beeswarm plot. For days_since_last_order, red dots for long gaps sit far to the right, up to about 3 log-odds, and blue dots for recent orders cluster just left of zero. For discount_share, high values push right. For tenure_months, both very low and very high tenure appear on the right. app_user high values push left." width="990" height="660" loading="lazy">
+                    <figcaption>Red dots on the right mean "high values raise churn risk". Recency and discount reliance have long red tails; the effect is concentrated in a minority of customers.</figcaption>
+                </figure>
+
+                <p>Three things to read from it. Recency's red tail is long while its blue mass is near zero: most customers ordered recently and get a small negative share, a few silent ones get a large positive one (the threshold again). Discount reliance looks the same. App users (red) sit left of zero: the app is associated with lower risk.</p>
+
+                <h3>Scatter Plots: Shape and Interactions</h3>
+                <p>A SHAP scatter plot puts a feature's value on the x-axis and its SHAP value on the y-axis, one dot per customer. Coloring by a second feature reveals interactions. In 7.1 you found that support tickets matter for non-app users only; here it is in one picture. Each plain <code>plt.figure()</code> or <code>plt.subplots()</code> before a SHAP plot starts a fresh figure, so plots do not draw on top of each other.</p>
+
+                <pre><code class="language-python">fig, axes = plt.subplots(1, 2, figsize=(10, 4), layout="constrained")
+shap.plots.scatter(sv[:, "days_since_last_order"], ax=axes[0], show=False)
+shap.plots.scatter(sv[:, "support_tickets_12m"], color=sv[:, "app_user"], ax=axes[1], show=False)
+axes[0].set_title("Threshold: long silences add risk")
+axes[1].set_title("Tickets add more risk without the app")
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/interpretability_shap_scatter.png" alt="Two SHAP scatter plots. Left: SHAP value of days_since_last_order is slightly negative below about 130 days and jumps to between 1 and 3 above about 150 days. Right: SHAP value of support_tickets_12m against ticket count, colored by app_user; for non-app users the values rise with more tickets, for app users (red) they rise less." width="1100" height="440" loading="lazy">
+                    <figcaption>Left: the recency threshold seen through 1,500 explanations. Right: at the same ticket count, non-app users (blue) usually get a larger push than app users (red), an interaction.</figcaption>
+                </figure>
+
+                <p>The same interaction in numbers, the average SHAP value of support tickets by ticket count and app use:</p>
+
+                <pre><code class="language-python">tickets = pd.DataFrame({
+    "tickets": X_test["support_tickets_12m"].clip(upper=4),
+    "app_user": X_test["app_user"],
+    "shap": sv[:, "support_tickets_12m"].values,
+})
+print(tickets.pivot_table(index="tickets", columns="app_user", values="shap", aggfunc="mean").round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>app_user   0.0   1.0
+tickets
+0.0      -0.39 -0.23
+1.0       0.09  0.07
+2.0       0.35  0.23
+3.0       0.78  0.46
+4.0       0.92  0.40</code></pre>
+                </div>
+
+                <p>(Ticket counts above 4 are grouped with 4 because there are few of them.) For non-app users (column 0.0) each extra ticket adds risk, reaching about +0.9 log-odds at four or more; for app users (column 1.0) the rise is roughly half as large. A logistic regression without a crossed term would give one slope to both groups.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="agnostic" class="lesson-section">
+                <h2>🧰 Any Model: the Permutation Explainer</h2>
+
+                <p>TreeExplainer only works on tree models it recognizes, and not on a <code>Pipeline</code> (see Common Mistakes). For anything else, SHAP has model-agnostic explainers. They treat the model as a function, try many feature subsets, and fill "missing" features with values from a <strong>background sample</strong>. The <code>PermutationExplainer</code> is a good default: it walks through random feature orders, like the toy loop above, and is exact in its additivity.</p>
+
+                <p>Here it explains the logistic-regression pipeline from Lesson 7.1, in probability units, for the same customer. A background of 100 training customers keeps it fast; a larger one is more precise and slower.</p>
+
+                <pre><code class="language-python">from sklearn.pipeline import make_pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+
+logreg = make_pipeline(SimpleImputer(strategy="median"), StandardScaler(), LogisticRegression())
+logreg.fit(X_train, y_train)
+
+def churn_probability(rows):
+    return logreg.predict_proba(pd.DataFrame(rows, columns=features))[:, 1]
+
+background = X_train.sample(100, random_state=42)
+perm_explainer = shap.PermutationExplainer(churn_probability, background, seed=42)
+lr_sv = perm_explainer(X_test.iloc[[i]])
+
+lr_why = pd.Series(lr_sv.values[0], index=features).sort_values(ascending=False)
+print(f"base {lr_sv.base_values[0]:.3f} + shares {lr_sv.values[0].sum():.3f} = {churn_probability(X_test.iloc[[i]])[0]:.3f}")
+print(lr_why.round(3).head(5))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>base 0.157 + shares 0.791 = 0.948
+days_since_last_order    0.506
+discount_share           0.113
+support_tickets_12m      0.104
+orders_12m               0.037
+app_user                 0.028
+dtype: float64</code></pre>
+                </div>
+
+                <p>Two differences from the tree explanation. The units are now probabilities, because the function you passed returns probabilities, so the shares add up to the predicted probability. And the logistic model also blames the long silence and the discounts first: two different models, the same story for this customer. When models disagree about a customer, that is worth investigating before anyone acts on either explanation.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Which Explainer?</h4>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr><th>Model</th><th>Explainer</th><th>Speed</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Tree ensembles (HistGradientBoosting, random forest, XGBoost, LightGBM)</td><td><code>shap.TreeExplainer(model)</code></td><td>Fast, exact</td></tr>
+                                <tr><td>Linear models on numeric features</td><td><code>shap.LinearExplainer(model, background)</code></td><td>Fast, exact</td></tr>
+                                <tr><td>Anything else, including pipelines</td><td><code>shap.PermutationExplainer(function, background)</code></td><td>Slow: explain hundreds of rows, not millions</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p><code>shap.Explainer(model, background)</code> picks one for you, but naming it yourself makes the units and the cost explicit.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="limits" class="lesson-section">
+                <h2>🧱 What SHAP Does Not Tell You</h2>
+
+                <ul>
+                    <li><strong>It explains the model, not the world.</strong> "Discount reliance adds 1.8 log-odds for this customer" says what the model does with that number. It does not say that lowering this customer's discounts would keep them.</li>
+                    <li><strong>"Missing" has to be defined.</strong> A SHAP value compares the customer with a background. Change the background (all customers, only loyal ones) and the shares change. TreeExplainer's default uses the training data stored in the trees.</li>
+                    <li><strong>Correlated features share credit.</strong> As with permutation importance, <code>spend_12m</code>, <code>orders_12m</code> and <code>avg_order_value</code> can split one underlying fact between them. Sum their SHAP values when you want the group's effect.</li>
+                    <li><strong>A clean explanation of a bad model is still a bad model.</strong> Check performance first.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <h3>1. Handing a Pipeline to TreeExplainer</h3>
+
+                <pre data-raises="Exception"><code class="language-python">shap.TreeExplainer(logreg)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>InvalidModelError: Model type not yet supported by TreeExplainer: &lt;class 'sklearn.pipeline.Pipeline'&gt;</code></pre>
+                </div>
+                <p><strong>What it means:</strong> TreeExplainer reads the internal structure of tree models. A <code>Pipeline</code> (or any non-tree model) has no trees to read. <strong>Fix:</strong> for a tree model inside a pipeline, explain the last step on the transformed data (<code>pipe[-1]</code> and <code>pipe[:-1].transform(X)</code>); for anything else, use <code>PermutationExplainer</code> with a function that calls the whole pipeline.</p>
+
+                <h3>2. A Random Forest Explains Both Classes</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">from sklearn.ensemble import RandomForestClassifier
+
+forest = RandomForestClassifier(n_estimators=100, min_samples_leaf=5, random_state=42, n_jobs=-1)
+forest.fit(X_train, y_train)
+forest_sv = shap.TreeExplainer(forest)(X_test.iloc[:200])
+print(forest_sv.values.shape)
+shap.plots.waterfall(forest_sv[0], show=False)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>(200, 11, 2)
+ValueError: The waterfall plot can currently only plot a single explanation, but a matrix of explanations (shape (11, 2)) was passed! Perhaps try `shap.plots.waterfall(shap_values[0])` or for multi-output models, try `shap.plots.waterfall(shap_values[0, 0])`.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> a random forest's SHAP values are in probability units and come for <em>each class</em>, so the shape is (rows, features, 2) instead of (rows, features). <strong>Fix:</strong> pick the churn class, <code>forest_sv[0, :, 1]</code>. Always print <code>.values.shape</code> before plotting a new model's explanation.</p>
+
+                <h3>3. Adding Log-Odds to a Probability</h3>
+
+                <pre><code class="language-python">wrong = proba.mean() + sv.values[i].sum()
+right = expit(sv.base_values[i] + sv.values[i].sum())
+print(f"wrong: {wrong:.2f}   right: {right:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>wrong: 6.65   right: 0.972</code></pre>
+                </div>
+                <p><strong>What happened:</strong> SHAP values from TreeExplainer on a boosting classifier are log-odds. Adding them to an average probability gives a "probability" above 6. Less extreme customers give answers that look plausible and are still wrong. <strong>Fix:</strong> add SHAP values to the base value, in log-odds, then convert with <code>expit</code>. Compare sizes and signs of SHAP values freely; do not mix units.</p>
+
+                <h3>4. Calling a Top SHAP Feature "the Cause"</h3>
+                <p>An agent reads "discount_share +1.83" and offers the customer <em>fewer</em> discounts. <strong>What is wrong:</strong> the model associates discount reliance with churn; nobody tested what happens when discounts change. <strong>Fix:</strong> phrase reasons as "flagged because", not "leaving because", and use them to start a conversation, not to prescribe a treatment.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: Reasons for the Call List</h2>
+
+                <p>The retention team will call the 20 riskiest test customers. Each agent wants three reasons per customer, in words, not log-odds. You will explain the model, pick the 20, translate their top SHAP values into short phrases, and save <code>call_list_reasons.csv</code>. Work in a new notebook called <code>lesson_7_2_project</code>. Allow about 45 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load, split, train <span class="step-time">(5 min)</span></h3>
+                    <p>Keep the test rows with their IDs by splitting the whole table, as in Lesson 1.1's project.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+import shap
+from scipy.special import expit
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import HistGradientBoostingClassifier
+
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+            "email_opens_90d"]
+train, test = train_test_split(customers, test_size=0.25, stratify=customers["churned"], random_state=42)
+X_train, X_test = train[features].astype(float), test[features].astype(float)
+
+model = HistGradientBoostingClassifier(random_state=42).fit(X_train, train["churned"])
+print(len(train), len(test), test["customer_id"].iloc[0])</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>4500 1500 C102112</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Pick the 20 and explain them <span class="step-time">(5 min)</span></h3>
+                    <p>Only the 20 rows need explaining. Keep their probabilities and SHAP values side by side.</p>
+                    <pre><code class="language-python">test = test.assign(churn_probability=model.predict_proba(X_test)[:, 1])
+top20 = test.nlargest(20, "churn_probability")
+
+explanation = shap.TreeExplainer(model)(top20[features].astype(float))
+shap_table = pd.DataFrame(explanation.values, columns=features, index=top20["customer_id"])
+print(shap_table[["days_since_last_order", "discount_share", "tenure_months"]].head().round(2))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>             days_since_last_order  discount_share  tenure_months
+customer_id
+C104051                       3.10            1.83          -0.15
+C105889                       2.21            1.73           1.42
+C104116                       2.81            1.78           0.90
+C104809                       2.79           -0.31           1.10
+C100543                       2.66            1.77           1.04</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Write a phrase for each feature <span class="step-time">(15 min)</span></h3>
+                    <p>A reason code is a sentence template filled with the customer's real value. Write one per feature. Keep them neutral and factual: they describe the account, not the person.</p>
+                    <pre><code class="language-python">phrases = {
+    "days_since_last_order": "no order in {:.0f} days",
+    "discount_share": "{:.0%} of spend on discounted items",
+    "tenure_months": "member for {:.0f} months",
+    "support_tickets_12m": "{:.0f} support tickets this year",
+    "app_user": "does not use the app",
+    "email_opens_90d": "opened {:.0f} emails in 90 days",
+    "orders_12m": "only {:.0f} orders this year",
+    "return_rate": "{:.0%} of spend refunded",
+    "returns_12m": "{:.0f} orders with returns",
+    "spend_12m": "spent ${:,.0f} this year",
+    "avg_order_value": "average order ${:,.0f}",
+}
+
+def top_reasons(customer_id, n=3):
+    shares = shap_table.loc[customer_id]
+    values = top20.set_index("customer_id").loc[customer_id, features]
+    reasons = []
+    for feature in shares[shares &gt; 0].sort_values(ascending=False).index[:n]:
+        value = values[feature]
+        text = "email opens unknown" if pd.isna(value) else phrases[feature].format(value)
+        reasons.append(text)
+    return reasons
+
+first = top20["customer_id"].iloc[0]
+print(first, top_reasons(first))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>C104051 ['no order in 364 days', '43% of spend on discounted items', '3 support tickets this year']</code></pre>
+                    </div>
+                    <p>Only features with a <em>positive</em> share become reasons: the agent wants what raised the risk. <code>email_opens_90d</code> can be missing, so the function handles <code>NaN</code> instead of printing "opened nan emails".</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Build the call list <span class="step-time">(10 min)</span></h3>
+                    <pre><code class="language-python">rows = []
+for cid, p in zip(top20["customer_id"], top20["churn_probability"]):
+    reasons = top_reasons(cid) + ["", "", ""]
+    rows.append({"customer_id": cid, "churn_probability": round(p, 3),
+                 "reason_1": reasons[0], "reason_2": reasons[1], "reason_3": reasons[2]})
+call_list = pd.DataFrame(rows)
+
+pd.set_option("display.width", 150)
+print(call_list.head(5).to_string(index=False))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>customer_id  churn_probability             reason_1                         reason_2                    reason_3
+    C104051              0.972 no order in 364 days 43% of spend on discounted items 3 support tickets this year
+    C105889              0.970 no order in 185 days 47% of spend on discounted items         member for 4 months
+    C104116              0.965 no order in 226 days 45% of spend on discounted items        member for 94 months
+    C104809              0.961 no order in 201 days             member for 82 months         email opens unknown
+    C100543              0.955 no order in 182 days 53% of spend on discounted items        member for 86 months</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Summarize and save <span class="step-time">(10 min)</span></h3>
+                    <p>Which feature is the most common top reason across the 20? This tells the team what most calls will be about. Then save the list without the outcome column (agents must not see it, and in real use it would not exist yet).</p>
+                    <pre><code class="language-python">top_feature = shap_table.idxmax(axis=1)
+print(top_feature.value_counts())
+
+call_list.to_csv("call_list_reasons.csv", index=False)
+really_churned = test.set_index("customer_id").loc[call_list["customer_id"], "churned"].sum()
+print(f"saved call_list_reasons.csv ({len(call_list)} rows); {really_churned} of 20 really churned")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>days_since_last_order    16
+discount_share            4
+Name: count, dtype: int64
+saved call_list_reasons.csv (20 rows); 16 of 20 really churned</code></pre>
+                    </div>
+                    <p>Sixteen of the 20 calls will open with a long silence and four with heavy discount use, so the team should prepare a "we miss you" offer and a conversation about value rather than price. The last line peeks at the answers only to grade the list, as in Lesson 1.1: in production nobody would know yet.</p>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>The 20 customers are the highest predicted probabilities in the test set</li>
+                        <li>SHAP values come from <code>shap.TreeExplainer</code> on the fitted model, and you know they are log-odds</li>
+                        <li>Every feature has a neutral, factual phrase, and missing values are handled</li>
+                        <li>Only positive SHAP values become reasons</li>
+                        <li><code>call_list_reasons.csv</code> holds IDs, probabilities and three reasons, and no outcome column</li>
+                        <li>You can say which reason dominates the list and what the team should prepare for</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue in the project notebook, so <code>model</code>, <code>X_test</code>, <code>test</code> and <code>phrases</code> already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: The Safest Customer</h3>
+                    <p>Find the test customer with the <em>lowest</em> churn probability and print the three features that push their risk down the most (the most negative SHAP values) with their values.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>test["churn_probability"].idxmin()</code> gives the row label; <code>X_test.loc[[label]]</code> keeps it a one-row DataFrame for the explainer.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">label = test["churn_probability"].idxmin()
+safe = shap.TreeExplainer(model)(X_test.loc[[label]])
+protect = pd.DataFrame({"value": X_test.loc[label], "shap": safe.values[0]}).nsmallest(3, "shap")
+print(test.loc[label, "customer_id"], round(test.loc[label, "churn_probability"], 4))
+print(protect.round(3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>C101889 0.0002
+                 value   shap
+orders_12m       14.00 -2.144
+spend_12m      1788.34 -0.833
+tenure_months    28.00 -0.597</code></pre>
+                        </div>
+                        <p>Fourteen orders this year, high spend and a mid-range tenure pull this customer's risk far below the base value. Notice that the protective reasons are not simply the riskiest customer's reasons reversed: frequent buying matters most here. Protective factors are useful too, for example to decide whom <em>not</em> to call.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: The Tenure U-Shape in SHAP Values</h3>
+                    <p>Explain the whole test set. Group the SHAP values of <code>tenure_months</code> by tenure band (0 to 6, 6 to 24, 24 to 72, 72 to 96 months) with <code>pd.cut</code> and print the mean per band. Does it show the same U-shape as Lesson 7.1's partial dependence?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>pd.cut(X_test["tenure_months"], [0, 6, 24, 72, 96], include_lowest=True)</code>, then a groupby with <code>observed=True</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">all_sv = shap.TreeExplainer(model)(X_test)
+band = pd.cut(X_test["tenure_months"], [0, 6, 24, 72, 96], include_lowest=True)
+tenure_shap = pd.Series(all_sv[:, "tenure_months"].values, index=X_test.index)
+print(tenure_shap.groupby(band, observed=True).agg(["size", "mean"]).round(3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>               size   mean
+tenure_months
+(-0.001, 6.0]   304  1.297
+(6.0, 24.0]     216 -0.560
+(24.0, 72.0]    646 -0.739
+(72.0, 96.0]    334  0.561</code></pre>
+                        </div>
+                        <p>Yes: new customers and the longest-standing ones get positive tenure shares, the middle bands negative ones. SHAP and partial dependence are different calculations that tell the same story here, which makes the U-shape a robust property of the model.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Find the Strongest Interaction</h3>
+                    <p>TreeExplainer can split each SHAP value further into a main effect and pairwise interaction effects: <code>explainer.shap_interaction_values(X)</code> returns an array of shape (rows, features, features). Compute it for the first 300 test customers, average the absolute values over customers, and print the three feature pairs with the largest interaction (off the diagonal).</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Set the diagonal to zero with <code>np.fill_diagonal</code>, then turn the matrix into a long Series with <code>pd.DataFrame(...).stack()</code>. Each pair appears twice (a,b and b,a), so keep pairs where the first name sorts before the second.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">inter = shap.TreeExplainer(model).shap_interaction_values(X_test.iloc[:300])
+strength = np.abs(inter).mean(axis=0)
+np.fill_diagonal(strength, 0)
+pairs = pd.DataFrame(strength, index=features, columns=features).stack()
+pairs = pairs[[a &lt; b for a, b in pairs.index]]
+print(inter.shape)
+print(pairs.sort_values(ascending=False).head(3).round(3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>(300, 11, 11)
+days_since_last_order  tenure_months          0.073
+app_user               support_tickets_12m    0.061
+discount_share         tenure_months          0.061
+dtype: float64</code></pre>
+                        </div>
+                        <p>The pairs at the top are the ones where "it depends" is strongest in the model. Interaction values are slow (they grow with the square of the number of features), which is why you computed them for 300 customers, not 1,500.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Do Two Good Models Give the Same Reasons? (Stretch)</h3>
+                    <p>Train <code>RandomForestClassifier(n_estimators=200, min_samples_leaf=5, random_state=42)</code> on the same data. For the 20 call-list customers, compare the top reason (the feature with the largest positive SHAP value) from the forest with the boosting model's. In how many of the 20 do they agree? Remember the forest's SHAP values have a class dimension.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Random forests in scikit-learn accept missing values. Take <code>forest_sv.values[:, :, 1]</code> for the churn class, then <code>idxmax(axis=1)</code> on a DataFrame, as in Step 5.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.ensemble import RandomForestClassifier
+
+forest = RandomForestClassifier(n_estimators=200, min_samples_leaf=5, random_state=42, n_jobs=-1)
+forest.fit(X_train, train["churned"])
+forest_sv = shap.TreeExplainer(forest)(top20[features].astype(float))
+forest_top = pd.DataFrame(forest_sv.values[:, :, 1], columns=features, index=top20["customer_id"]).idxmax(axis=1)
+
+agree = (forest_top == top_feature).sum()
+print(f"top reason agrees for {agree} of 20 customers")
+print(pd.crosstab(top_feature, forest_top))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>top reason agrees for 20 of 20 customers
+col_0                  days_since_last_order  discount_share
+row_0
+days_since_last_order                     16               0
+discount_share                             0               4</code></pre>
+                        </div>
+                        <p>Two models with similar accuracy agree on the main reason for all 20 of these customers: for the most extreme cases, the story is clear. For less extreme customers the top reasons are often closer in size, and the two models can disagree; try the check on customers ranked 200 to 300. A reason that flips between equally good models is a weak basis for a conversation; one that holds across models is a stronger one.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> In the toy model, a 0.10 bonus applies only when the silence is long <em>and</em> the customer has no app. How do Shapley values divide that bonus between the two features?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Over all orders of arrival, each of the two features is the second to arrive half the time, and the second one unlocks the bonus. Averaging gives each an equal 0.05.">
+                                A) Equally, 0.05 each, because each feature completes the pair in half of the arrival orders
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Shapley values average over every arrival order. Who is second to arrive, and how often?">
+                                B) All of it to days, because days is the more important feature
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Shapley values always add up to the full gap between the reference and the customer. Can a 0.10 bonus vanish?">
+                                C) Neither gets it: interactions are left out of Shapley values
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> For the gradient-boosting churn model, what do <code>sv.base_values[i] + sv.values[i].sum()</code> add up to?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The base value is -2.95, which is not a probability. Which model output can be negative?">
+                                A) The predicted churn probability
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="SHAP explains the model's output, which knows nothing about the true outcome.">
+                                B) The customer's true label, 0 or 1
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="TreeExplainer explains the boosting model's raw output, the log-odds returned by decision_function. Apply expit to turn the sum into a probability.">
+                                C) The model's raw score in log-odds, <code>decision_function</code> for that customer
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> In a beeswarm plot, the red dots for <code>days_since_last_order</code> sit far to the right of zero. What does that mean?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The plot shows what the model does with each value. Does a model output prove cause and effect?">
+                                A) Long silences cause customers to churn
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Color is the feature value (red is high) and position is the SHAP value. Red dots on the right mean that for customers with long gaps, the feature pushes the prediction strongly towards churn.">
+                                B) For customers with high values (long gaps), this feature pushes the predicted risk up a lot
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Color shows the feature's value, not the outcome. Which axis shows the push on the prediction?">
+                                C) The red customers are the ones who really churned
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> You want SHAP values for a <code>Pipeline</code> that one-hot encodes categories and ends in an SVM. Which approach works?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="A model-agnostic explainer only needs a function from raw rows to predictions and a background sample, so it works on any pipeline. It is slower, so explain a modest number of rows.">
+                                A) <code>shap.PermutationExplainer</code> with a function that calls the pipeline and a background sample
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="TreeExplainer reads tree structures. Does an SVM have trees?">
+                                B) <code>shap.TreeExplainer(pipeline)</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Is there a reason SHAP would need to know how a model works internally if it can call the model?">
+                                C) None: SHAP only works for tree models
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> <code>spend_12m</code> has a small mean |SHAP|, but spend is clearly related to churn. What is the most likely reason?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="TreeExplainer is exact for the model it explains. Look at the data instead: what is spend made of?">
+                                A) TreeExplainer made an approximation error
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The model reached a high AUC with these features. Is the problem the model, or how credit is shared?">
+                                B) The model is broken and should be retrained
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="spend_12m equals orders times average order value, so the model can use the other two instead and the credit is spread across the group. Sum the group's SHAP values to see the combined effect.">
+                                C) Spend overlaps with orders and average order value, so the credit is shared across the three
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Can I get SHAP values in probabilities for the boosting model?</summary>
+                    <p>Not additively from TreeExplainer's default. Either convert the end points with <code>expit</code>, as in this lesson, or use a model-agnostic explainer on <code>predict_proba</code> (slower). Probability-unit shares are easier to read but depend on the order you think about features in, because the squash is not linear; log-odds shares are the honest additive ones.</p>
+                </details>
+                <details>
+                    <summary>Should I explain the training set or the test set?</summary>
+                    <p>For understanding how the model behaves on new customers, the test set (or new data). Training-set explanations include the patterns the model memorized. For a production call list, you explain whichever customers you are about to act on.</p>
+                </details>
+                <details>
+                    <summary>What about categorical features like <code>home_store</code>?</summary>
+                    <p>With one-hot encoding, each category column gets its own SHAP value; sum the columns of one feature to get its total share. With a model-agnostic explainer on a pipeline that takes the raw columns, you get one share per original feature directly.</p>
+                </details>
+                <details>
+                    <summary>Is SHAP safe to show to customers?</summary>
+                    <p>Treat it as internal decision support. Explanations can reveal how a model works (which someone could game) and can sound like accusations if phrased carelessly. If explanations are owed to customers by law or policy, involve the people responsible for that, and use plain, neutral language like the reason codes in the project.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Sum the SHAP values of <code>orders_12m</code>, <code>spend_12m</code> and <code>avg_order_value</code> into one "purchase volume" share for every test customer. Compare the mean absolute value of the group with the three single ones. Does the group effect resemble what you found with grouped permutation importance in Lesson 7.1?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain the team-bonus idea to a friend who has never heard of Shapley values, using the toy churn score. Then write how you would word the three reasons for customer C104051 if an agent were going to read them aloud on a call, and what you would make sure the agent does <em>not</em> say.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>A Shapley value is a feature's average contribution over every order in which features could join; interaction effects are split fairly</li>
+                        <li>SHAP values add up: base value + all shares = the model output being explained</li>
+                        <li><code>shap.TreeExplainer</code> is fast and exact for tree models; for gradient-boosting classifiers its units are log-odds</li>
+                        <li>Waterfall plots explain one prediction; beeswarm and mean |SHAP| summarize many; scatter plots show shapes and interactions</li>
+                        <li>Model-agnostic explainers (<code>PermutationExplainer</code>) work on any function, including pipelines, at a higher cost</li>
+                        <li>SHAP explains the model's behavior, not causes; correlated features share credit</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You computed Shapley values by hand and matched the library</li>
+                        <li>You explained a real churn prediction and checked its additivity</li>
+                        <li>You read the recency threshold and the ticket-app interaction from SHAP plots</li>
+                        <li>You explained a pipeline with a model-agnostic explainer</li>
+                        <li>You turned SHAP values into neutral reason codes for a call list</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="interpretability_lime.html"><strong>Lesson 7.3: LIME and Fairness Checks</strong></a> you will meet a different way to explain one prediction: fit a small, simple model that imitates the big one near a single customer. You will build it by hand, use the <code>lime</code> library, compare it with SHAP, and then check whether the churn model treats different age groups fairly.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook; Lesson 7.3 explains the same customer, C104051, with LIME.</li>
+                    <li>Look at the call list and think about who is <em>not</em> on it. Would you expect the list to look the same for younger and older customers? Write down a guess.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You just used an idea from cooperative game theory to explain a machine-learning model, checked it to the last decimal, and turned it into something a customer-care agent can use. That chain from math to a sentence on a call list is exactly what makes a model trustworthy in practice. If log-odds still feel slippery, that is fine: keep converting the end points with <code>expit</code> until it becomes second nature.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="model_interpretation.html" class="prev-lesson">← Previous: Interpreting Models</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="interpretability_lime.html" class="next-lesson">Next: LIME and Fairness Checks →</a>
+            </nav>
         </div>
-
-        <pre class="language-python"><code>class AdvancedSHAPTechniques:
-    """
-    Advanced SHAP techniques and applications
-    """
-    
-    @staticmethod
-    def shap_for_regression():
-        """
-        SHAP for regression problems
-        """
-        print("\n" + "=" * 60)
-        print("SHAP FOR REGRESSION")
-        print("=" * 60)
-        
-        # Generate regression data
-        from sklearn.datasets import make_regression
-        X, y = make_regression(n_samples=1000, n_features=10, 
-                              n_informative=5, noise=0.1, random_state=42)
-        
-        X = pd.DataFrame(X, columns=[f'feature_{i}' for i in range(10)])
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
-        
-        # Train model
-        model = RandomForestRegressor(n_estimators=100, random_state=42)
-        model.fit(X_train, y_train)
-        
-        # SHAP explanation
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_test)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-        
-        # Feature importance
-        shap.summary_plot(shap_values, X_test, plot_type="bar", show=False)
-        plt.sca(axes[0])
-        plt.title('SHAP Feature Importance - Regression')
-        
-        # Dependence plot for top feature
-        top_feature = X_test.columns[np.argmax(np.abs(shap_values).mean(axis=0))]
-        shap.dependence_plot(top_feature, shap_values, X_test, ax=axes[1], show=False)
-        axes[1].set_title(f'SHAP Dependence - {top_feature}')
-        
-        plt.tight_layout()
-        plt.show()
-        
-        print("Regression SHAP analysis complete")
-    
-    @staticmethod
-    def monitoring_shap_drift():
-        """
-        Monitor SHAP value drift over time
-        """
-        print("\n" + "=" * 60)
-        print("SHAP VALUE DRIFT MONITORING")
-        print("=" * 60)
-        
-        # Simulate time periods
-        np.random.seed(42)
-        
-        # Generate data for different time periods
-        periods = ['Month 1', 'Month 2', 'Month 3']
-        drift_data = []
-        
-        for i, period in enumerate(periods):
-            # Simulate slight distribution shift
-            X = np.random.randn(100, 5) + i * 0.2
-            X = pd.DataFrame(X, columns=[f'feat_{j}' for j in range(5)])
-            
-            # Simple model
-            model = RandomForestClassifier(n_estimators=50, random_state=42)
-            y = (X['feat_0'] + X['feat_1'] > 0).astype(int)
-            model.fit(X, y)
-            
-            # Calculate SHAP values
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(X)
-            
-            if isinstance(shap_values, list):
-                shap_values = shap_values[1]
-            
-            # Store mean absolute SHAP values
-            mean_shap = np.mean(np.abs(shap_values), axis=0)
-            drift_data.append({
-                'period': period,
-                'mean_shap': mean_shap
-            })
-        
-        # Visualize drift
-        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-        
-        # Feature importance over time
-        features = [f'feat_{i}' for i in range(5)]
-        x = np.arange(len(features))
-        width = 0.25
-        
-        for i, data in enumerate(drift_data):
-            axes[0].bar(x + i * width, data['mean_shap'], width, 
-                       label=data['period'], alpha=0.8)
-        
-        axes[0].set_xlabel('Feature')
-        axes[0].set_ylabel('Mean |SHAP Value|')
-        axes[0].set_title('Feature Importance Drift Over Time')
-        axes[0].set_xticks(x + width)
-        axes[0].set_xticklabels(features)
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3)
-        
-        # Drift magnitude
-        drift_magnitudes = []
-        for i in range(1, len(drift_data)):
-            drift = np.abs(drift_data[i]['mean_shap'] - drift_data[i-1]['mean_shap'])
-            drift_magnitudes.append(drift)
-        
-        for i, drift in enumerate(drift_magnitudes):
-            axes[1].plot(features, drift, marker='o', label=f'{periods[i]} to {periods[i+1]}')
-        
-        axes[1].set_xlabel('Feature')
-        axes[1].set_ylabel('Drift Magnitude')
-        axes[1].set_title('SHAP Value Drift Between Periods')
-        axes[1].legend()
-        axes[1].grid(True, alpha=0.3)
-        
-        plt.suptitle('SHAP-based Drift Detection', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        print("Drift monitoring can help detect model degradation")
-        print("Large changes in SHAP values indicate distribution shift")
-    
-    @staticmethod
-    def shap_feature_selection(X_train, y_train, threshold=0.01):
-        """
-        Feature selection using SHAP values
-        """
-        print("\n" + "=" * 60)
-        print("SHAP-BASED FEATURE SELECTION")
-        print("=" * 60)
-        
-        # Train initial model
-        model = RandomForestClassifier(n_estimators=100, random_state=42)
-        model.fit(X_train, y_train)
-        
-        # Calculate SHAP values
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_train)
-        
-        if isinstance(shap_values, list):
-            shap_values = shap_values[1]
-        
-        # Calculate feature importance
-        feature_importance = np.mean(np.abs(shap_values), axis=0)
-        
-        # Select features above threshold
-        max_importance = np.max(feature_importance)
-        selected_features = feature_importance > (threshold * max_importance)
-        
-        print(f"Original features: {X_train.shape[1]}")
-        print(f"Selected features: {np.sum(selected_features)}")
-        print(f"Removed features: {X_train.shape[1] - np.sum(selected_features)}")
-        
-        # Return selected feature indices
-        selected_idx = np.where(selected_features)[0]
-        selected_names = X_train.columns[selected_idx]
-        
-        print("\nSelected features:")
-        for name, importance in zip(selected_names, feature_importance[selected_idx]):
-            print(f"  {name}: {importance:.4f}")
-        
-        return selected_idx, selected_names
-
-# Demonstrate advanced techniques
-advanced = AdvancedSHAPTechniques()
-
-# Regression example
-advanced.shap_for_regression()
-
-# Drift monitoring
-advanced.monitoring_shap_drift()
-
-# Feature selection
-selected_idx, selected_features = advanced.shap_feature_selection(
-    X_train, y_train, threshold=0.05
-)</code></pre>
-
-        <h2>Best Practices</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 SHAP Best Practices</h3>
-            <ul>
-                <li><strong>Choose Right Explainer:</strong> TreeExplainer for trees, DeepExplainer for neural nets</li>
-                <li><strong>Background Data:</strong> Use representative sample for KernelExplainer</li>
-                <li><strong>Sample Size:</strong> Balance between accuracy and computation time</li>
-                <li><strong>Interaction Effects:</strong> Check for feature interactions in complex models</li>
-                <li><strong>Consistency Checks:</strong> Verify that SHAP values sum to prediction difference</li>
-                <li><strong>Visualization Choice:</strong> Use appropriate plots for your audience</li>
-                <li><strong>Global vs Local:</strong> Combine both for complete understanding</li>
-                <li><strong>Model Comparison:</strong> Use same background data for fair comparison</li>
-                <li><strong>Performance:</strong> Cache SHAP values for large datasets</li>
-                <li><strong>Interpretation:</strong> Consider domain context when interpreting values</li>
-            </ul>
-        </div>
-
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: SHAP for Model Debugging</h3>
-            <p>Use SHAP to debug a poorly performing model:</p>
-            <ul>
-                <li>Identify biased features using SHAP</li>
-                <li>Compare SHAP values for misclassified instances</li>
-                <li>Detect data leakage through unexpected importance</li>
-                <li>Improve model based on insights</li>
-            </ul>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: Production SHAP Pipeline</h3>
-            <p>Build a production-ready SHAP explanation system:</p>
-            <ul>
-                <li>Implement efficient SHAP calculation</li>
-                <li>Create API for real-time explanations</li>
-                <li>Build monitoring dashboard with SHAP metrics</li>
-                <li>Set up automated reporting</li>
-            </ul>
-        </div>
-
-        <h2>Summary</h2>
-        
-        <div class="summary-box">
-            <h3>✅ You've Learned</h3>
-            <ul>
-                <li>SHAP theory based on Shapley values from game theory</li>
-                <li>Different SHAP explainers for various model types</li>
-                <li>Creating and interpreting SHAP visualizations</li>
-                <li>Global interpretability through SHAP aggregation</li>
-                <li>Feature interaction analysis</li>
-                <li>Advanced applications including drift detection</li>
-                <li>SHAP-based feature selection</li>
-                <li>Best practices for reliable explanations</li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> SHAP borrows the idea of a "fair payout" from game theory to
-            split credit among features. Where else in life do you have to fairly divide credit among contributors — and
-            does the Shapley idea (average contribution across all orderings) feel fair to you?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>SHAP uses Shapley values from cooperative game theory to fairly attribute each prediction to its features, with strong consistency guarantees.</li>
-                <li><code>TreeExplainer</code> computes exact SHAP values quickly for tree models; <code>KernelExplainer</code> approximates them for any model.</li>
-                <li>SHAP unifies local and global interpretability — the same values power both single-prediction plots and dataset-wide summaries.</li>
-                <li>Force, waterfall, summary, and dependence plots turn SHAP values into clear, decision-ready visuals.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now explain a model both locally (why this prediction) and globally (what matters overall) with a
-        single, theoretically grounded framework — and use SHAP plots to debug and communicate model behavior.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>How is SHAP different from LIME?</summary>
-            <p>LIME fits a quick local surrogate and can be unstable. SHAP is grounded in Shapley values with fairness and
-            consistency guarantees, and its values aggregate into trustworthy global importance — at a higher compute cost.</p>
-        </details>
-        <details>
-            <summary>Why is KernelExplainer so slow?</summary>
-            <p>It estimates Shapley values by sampling many feature coalitions and querying the model for each. Use a
-            small background dataset and, whenever your model is tree-based, prefer the exact and far faster TreeExplainer.</p>
-        </details>
-        <details>
-            <summary>Do SHAP values prove causation?</summary>
-            <p>No. They explain how the <em>model</em> uses each feature, not the real-world cause. A feature with high SHAP
-            impact may be a proxy or correlate, so pair SHAP with domain knowledge before drawing conclusions.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>With interpretability tools in hand, the focus shifts from understanding models to operating them reliably —
-        the practices that take a model from a notebook to dependable production.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Generate a SHAP summary plot and compare its ranking to the model's built-in feature importances.</li>
-            <li>Use a waterfall plot to explain a prediction the model got wrong and hypothesize why.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>You've just connected Nobel-Prize-winning game theory to everyday model debugging — a beautiful example of
-            deep ideas made practical. Keep asking "why did the model do that?" and SHAP will keep giving you answers.</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="interpretability_lime.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="future_automl.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -993,24 +943,10 @@ selected_idx, selected_features = advanced.shap_feature_selection(
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
     <script src="js/course-enhancements.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-        mermaid.initialize({ 
-            startOnLoad: true,
-            theme: 'default',
-            themeVariables: {
-                primaryColor: '#f0f0f0',
-                primaryTextColor: '#333',
-                primaryBorderColor: '#667eea',
-                lineColor: '#667eea',
-                secondaryColor: '#e0e7ff',
-                tertiaryColor: '#fff'
-            }
-        });
-    </script>
 </body>
 </html>

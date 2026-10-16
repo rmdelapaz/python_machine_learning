@@ -3,1394 +3,968 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Master model interpretation and explainability in machine learning. Learn SHAP, LIME, permutation importance, and build transparent ML systems.">
-    <title>Model Interpretation & Explainability - Python Machine Learning</title>
+    <meta name="description" content="Explain what a churn model learned with coefficients, permutation importance, and partial dependence and ICE plots, and learn what these tools can and cannot tell you. Python Machine Learning Lesson 7.1.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Interpreting Models - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
-    <main id="main-content">
-    <header role="banner">
-        <h1>Model Interpretation & Explainability: Understanding the Black Box</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Advanced Topics</a>
-        <span class="separator">›</span>
-        <span class="current">Model Interpretation & Explainability</span>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
     </nav>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Distinguish global interpretability (overall model behavior) from local interpretability (a single prediction)</li>
-            <li>Rank feature contributions using permutation importance and tree-based feature importances</li>
-            <li>Explain individual predictions with SHAP values and LIME</li>
-            <li>Read partial dependence (PDP) and ICE plots to see how a feature drives predictions</li>
-            <li>Communicate model behavior to stakeholders and check for bias and fairness</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Take a trained black-box model (random forest or gradient boosting) and produce a full explainability report using permutation importance, SHAP, and partial dependence plots.</p>
-    </div>
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>🔍 Lesson 7.1: Interpreting Models</h1>
+                <p class="lead">A model that ranks customers well is useful; a model whose reasoning you can check is trustworthy. Learn three tools that show what a model learned, and the limits of each.</p>
 
-    <h2>Opening the Black Box: Why Explainability Matters 🔍</h2>
-    
-    <blockquote>
-        <p>"With great power comes great responsibility." As machine learning models become more complex and powerful, understanding their decisions becomes crucial. From regulatory compliance to debugging models, from building trust to discovering insights, interpretability is no longer optional—it's essential for responsible AI deployment.</p>
-    </blockquote>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Read the coefficients of a scaled logistic regression as odds ratios, and say when they mislead</li>
+                        <li>Compute permutation importance on the test set with <code>permutation_importance</code> and explain why impurity-based importance can fool you</li>
+                        <li>Draw partial dependence and ICE plots with <code>PartialDependenceDisplay</code> and read thresholds, curves and interactions from them</li>
+                        <li>State what feature importance does and does not mean: it describes the model, not the causes of churn</li>
+                    </ul>
+                </div>
 
-    <h2>The Landscape of Model Interpretability</h2>
-    
-    <div class="mermaid">
-    graph TD
-        A[Model Interpretability] --> B[Global Interpretability]
-        A --> C[Local Interpretability]
-        
-        B --> D[Feature Importance]
-        B --> E[Partial Dependence]
-        B --> F[Model-Specific Methods]
-        
-        C --> G[LIME]
-        C --> H[SHAP]
-        C --> I[Counterfactuals]
-        
-        D --> J[Permutation Importance]
-        D --> K[Drop-Column Importance]
-        
-        E --> L[PDP Plots]
-        E --> M[ICE Plots]
-        
-        F --> N[Tree Visualization]
-        F --> O[Linear Coefficients]
-        
-        style A fill:#667eea,color:#fff
-        style B fill:#51cf66
-        style C fill:#4ecdc4
-    </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 95 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="hyperparameter_tuning.html">Lesson 6.2: Hyperparameter Tuning</a>; you should be comfortable with pipelines (<a href="pipelines_composite.html">Lesson 2.2</a>) and gradient boosting (<a href="trees_gradient_boosting.html">Lesson 5.3</a>)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A churn-drivers briefing for Pinecrest's retention team: ranked drivers, grouped importance and the risk curves behind them</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code></li>
+                </ul>
+            </header>
 
-    <pre class="language-python"><code># Essential imports for model interpretation
-import numpy as np
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#why" class="toc-link">Why Explain a Model?</a></li>
+                        <li><a href="#setup" class="toc-link">Two Models to Explain</a></li>
+                        <li><a href="#coefficients" class="toc-link">Reading Coefficients</a></li>
+                        <li><a href="#impurity" class="toc-link">The Built-in Importance Trap</a></li>
+                        <li><a href="#permutation" class="toc-link">Permutation Importance</a></li>
+                        <li><a href="#pdp" class="toc-link">Partial Dependence and ICE</a></li>
+                        <li><a href="#limits" class="toc-link">What These Tools Cannot Tell You</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: The Churn-Drivers Briefing</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="why" class="lesson-section">
+                <h2>🧭 Why Explain a Model?</h2>
+
+                <p>By now you can build a churn model for Pinecrest Outfitters that ranks customers far better than chance. Before the retention team acts on it, three people will ask you questions. The marketing manager asks, "What is driving churn?" The data scientist next to you asks, "Is the model using anything it should not, like a leaked column?" And a customer-care agent looking at one flagged customer asks, "Why this person?"</p>
+
+                <p>The first two questions are about the model as a whole: these are <strong>global</strong> explanations. The third is about one prediction: a <strong>local</strong> explanation. This lesson covers the global tools and one local view (ICE curves). Lessons 7.2 and 7.3 go deeper into local explanations with SHAP and LIME.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Recipe, the Taste Test and the Dial</h4>
+                    <p>Think of the model as a dish. <strong>Coefficients</strong> are reading the recipe: you can only do it when the recipe is short and written down, which is true for linear models. <strong>Permutation importance</strong> is a taste test: swap one ingredient for a random one and see how much worse the dish gets. It works on any dish, even one from a kitchen you cannot see into. <strong>Partial dependence</strong> is a dial: turn one ingredient up and down while keeping everything else, and watch how the taste changes.</p>
+                </div>
+
+                <div class="mermaid">
+graph TD
+    A["What do you want to explain?"] --> B["The whole model (global)"]
+    A --> C["One prediction (local)"]
+    B --> D["Coefficients, permutation, PDP"]
+    C --> E["ICE now; SHAP, LIME next"]
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>Explanations catch bugs that scores hide. A leaked column (Lesson 1.2's <code>cancellation_reason</code>) shows up as one feature with absurd importance. A model that leans on a proxy for a protected attribute shows up too. And a briefing that says "customers who have not ordered in about five months are where churn jumps" is something a retention team can act on; "AUC 0.86" is not.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="setup" class="lesson-section">
+                <h2>📂 Two Models to Explain</h2>
+
+                <p>You will explain two models trained on the same 11 numeric features: a logistic regression inside a pipeline (imputer, scaler, model) and a <code>HistGradientBoostingClassifier</code>, which handles the missing <code>email_opens_90d</code> values on its own. Using the same features for both makes the comparison fair. The categorical columns are left out to keep the explanations readable; the FAQ at the end shows how to explain a pipeline that includes them.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor
-from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
-from sklearn.datasets import load_breast_cancer, load_boston, make_classification
-import warnings
-warnings.filterwarnings('ignore')
-
-# Set visualization style
-plt.style.use('seaborn-v0_8-whitegrid')
-sns.set_palette("husl")
-
-print("="*60)
-print("MODEL INTERPRETABILITY: UNDERSTANDING PREDICTIONS")
-print("="*60)
-
-# Load dataset for demonstrations
-data = load_breast_cancer()
-X = pd.DataFrame(data.data, columns=data.feature_names)
-y = data.target
-
-# Create meaningful feature names (shortened for visualization)
-feature_names_short = [name.split(' ')[0] for name in data.feature_names]
-X.columns = feature_names_short
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
-
-print(f"Dataset: Breast Cancer Classification")
-print(f"Shape: {X.shape}")
-print(f"Features: {X.columns.tolist()[:5]}...")
-print(f"Classes: {data.target_names}")
-
-# Train multiple models for comparison
-models = {
-    'Logistic Regression': LogisticRegression(max_iter=1000, random_state=42),
-    'Random Forest': RandomForestClassifier(n_estimators=100, random_state=42),
-    'Gradient Boosting': GradientBoostingRegressor(n_estimators=100, random_state=42)
-}
-
-fitted_models = {}
-for name, model in models.items():
-    if name == 'Gradient Boosting':
-        model.fit(X_train, y_train)
-    else:
-        model.fit(X_train, y_train)
-    fitted_models[name] = model
-    print(f"✓ Trained {name}")</code></pre>
-
-    <h2>Global Interpretability: Understanding Overall Model Behavior</h2>
-    
-    <h3>1. Permutation Importance</h3>
-    <pre class="language-python"><code>from sklearn.inspection import permutation_importance
-from sklearn.metrics import accuracy_score
-
-print("\n" + "="*60)
-print("1. PERMUTATION IMPORTANCE")
-print("="*60)
-
-def calculate_permutation_importance(model, X, y, n_repeats=10):
-    """
-    Calculate feature importance by permuting each feature
-    and measuring the decrease in model performance
-    """
-    
-    # Baseline score
-    baseline_score = model.score(X, y) if hasattr(model, 'score') else \
-                    accuracy_score(y, model.predict(X))
-    
-    importances = []
-    
-    for col_idx, col in enumerate(X.columns):
-        scores = []
-        
-        for _ in range(n_repeats):
-            # Create a copy and permute the column
-            X_permuted = X.copy()
-            X_permuted[col] = np.random.permutation(X_permuted[col].values)
-            
-            # Calculate score with permuted feature
-            if hasattr(model, 'score'):
-                permuted_score = model.score(X_permuted, y)
-            else:
-                permuted_score = accuracy_score(y, model.predict(X_permuted))
-            
-            # Calculate importance as decrease in performance
-            importance = baseline_score - permuted_score
-            scores.append(importance)
-        
-        importances.append({
-            'feature': col,
-            'importance': np.mean(scores),
-            'std': np.std(scores)
-        })
-    
-    return pd.DataFrame(importances).sort_values('importance', ascending=False)
-
-# Calculate permutation importance for Random Forest
-rf_model = fitted_models['Random Forest']
-
-print("Calculating permutation importance...")
-perm_importance = calculate_permutation_importance(rf_model, X_test, y_test)
-
-print("\nTop 10 Most Important Features (Permutation):")
-print(perm_importance.head(10).to_string(index=False))
-
-# Visualize permutation importance
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-
-# Plot 1: Bar plot of importance
-top_features = perm_importance.head(10)
-axes[0].barh(range(len(top_features)), top_features['importance'].values)
-axes[0].set_yticks(range(len(top_features)))
-axes[0].set_yticklabels(top_features['feature'].values)
-axes[0].set_xlabel('Importance (Performance Decrease)')
-axes[0].set_title('Permutation Feature Importance')
-axes[0].invert_yaxis()
-
-# Add error bars
-axes[0].errorbar(top_features['importance'].values, 
-                range(len(top_features)),
-                xerr=top_features['std'].values,
-                fmt='none', color='black', alpha=0.5)
-
-# Plot 2: Compare with built-in feature importance
-if hasattr(rf_model, 'feature_importances_'):
-    builtin_importance = pd.DataFrame({
-        'feature': X.columns,
-        'importance': rf_model.feature_importances_
-    }).sort_values('importance', ascending=False).head(10)
-    
-    axes[1].barh(range(len(builtin_importance)), builtin_importance['importance'].values)
-    axes[1].set_yticks(range(len(builtin_importance)))
-    axes[1].set_yticklabels(builtin_importance['feature'].values)
-    axes[1].set_xlabel('Importance (Gini/Entropy)')
-    axes[1].set_title('Built-in Feature Importance (Tree-based)')
-    axes[1].invert_yaxis()
-
-plt.tight_layout()
-plt.show()
-
-print("\n💡 Insight: Permutation importance is model-agnostic and captures")
-print("   feature interactions, while built-in importance may miss them.")</code></pre>
-
-    <h3>2. Partial Dependence Plots (PDP)</h3>
-    <pre class="language-python"><code>from sklearn.inspection import PartialDependenceDisplay
-import matplotlib.pyplot as plt
-
-print("\n" + "="*60)
-print("2. PARTIAL DEPENDENCE PLOTS")
-print("="*60)
-
-def create_partial_dependence_plots(model, X, features, feature_names=None):
-    """
-    Create partial dependence plots to show the marginal effect
-    of features on the predicted outcome
-    """
-    
-    if feature_names is None:
-        feature_names = X.columns
-    
-    # Create figure
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    axes = axes.flatten()
-    
-    for idx, feature in enumerate(features[:4]):
-        ax = axes[idx]
-        
-        # Calculate partial dependence manually
-        feature_idx = list(X.columns).index(feature)
-        x_values = np.linspace(X[feature].min(), X[feature].max(), 100)
-        
-        # Create dataset with feature values varying
-        pd_values = []
-        for val in x_values:
-            X_temp = X.copy()
-            X_temp[feature] = val
-            
-            # Get average prediction
-            if hasattr(model, 'predict_proba'):
-                preds = model.predict_proba(X_temp)[:, 1]
-            else:
-                preds = model.predict(X_temp)
-            
-            pd_values.append(preds.mean())
-        
-        # Plot
-        ax.plot(x_values, pd_values, 'b-', linewidth=2)
-        ax.set_xlabel(feature)
-        ax.set_ylabel('Partial Dependence')
-        ax.set_title(f'Partial Dependence of {feature}')
-        ax.grid(True, alpha=0.3)
-        
-        # Add rug plot for data distribution
-        ax.plot(X[feature].values, [ax.get_ylim()[0]] * len(X), '|', 
-               alpha=0.1, color='gray')
-    
-    plt.suptitle('Partial Dependence Plots - Random Forest', fontsize=14)
-    plt.tight_layout()
-    plt.show()
-
-# Select important features for PDP
-top_features_for_pdp = perm_importance.head(4)['feature'].tolist()
-
-print(f"Creating PDPs for features: {top_features_for_pdp}")
-create_partial_dependence_plots(rf_model, X_test, top_features_for_pdp)
-
-# Using sklearn's built-in PDP (if available)
-try:
-    from sklearn.inspection import plot_partial_dependence
-    
-    fig, ax = plt.subplots(figsize=(12, 8))
-    display = plot_partial_dependence(
-        rf_model, X_test, features=top_features_for_pdp[:4],
-        kind="both", subsample=50, n_jobs=-1,
-        grid_resolution=50, ax=ax
-    )
-    plt.suptitle('Partial Dependence and Individual Conditional Expectation')
-    plt.tight_layout()
-    plt.show()
-    
-    print("\n💡 ICE plots (light lines) show individual predictions,")
-    print("   PDP (dark line) shows the average effect.")
-except:
-    print("\nNote: Built-in PDP not available in this sklearn version")</code></pre>
-
-    <h2>Local Interpretability: Understanding Individual Predictions</h2>
-    
-    <h3>3. LIME (Local Interpretable Model-agnostic Explanations)</h3>
-    <pre class="language-python"><code># Note: Requires installation: pip install lime
-print("\n" + "="*60)
-print("3. LIME - LOCAL EXPLANATIONS")
-print("="*60)
-
-# Simplified LIME implementation for demonstration
-class SimpleLIME:
-    """
-    Simplified LIME implementation for educational purposes
-    """
-    
-    def __init__(self, model, num_features=10, num_samples=5000):
-        self.model = model
-        self.num_features = num_features
-        self.num_samples = num_samples
-    
-    def explain_instance(self, instance, X_train, feature_names=None):
-        """
-        Explain a single prediction using local linear approximation
-        """
-        if feature_names is None:
-            feature_names = [f'Feature_{i}' for i in range(len(instance))]
-        
-        # Generate perturbed samples around the instance
-        np.random.seed(42)
-        perturbations = []
-        predictions = []
-        weights = []
-        
-        for _ in range(self.num_samples):
-            # Create perturbation
-            perturbation = instance.copy()
-            
-            # Randomly change some features
-            num_changes = np.random.randint(1, len(instance))
-            features_to_change = np.random.choice(len(instance), num_changes, replace=False)
-            
-            for feat_idx in features_to_change:
-                # Sample from training data distribution
-                perturbation[feat_idx] = np.random.choice(X_train.iloc[:, feat_idx])
-            
-            perturbations.append(perturbation)
-            
-            # Get prediction for perturbation
-            if hasattr(self.model, 'predict_proba'):
-                pred = self.model.predict_proba(perturbation.values.reshape(1, -1))[0, 1]
-            else:
-                pred = self.model.predict(perturbation.values.reshape(1, -1))[0]
-            predictions.append(pred)
-            
-            # Calculate weight based on distance to original instance
-            distance = np.linalg.norm(perturbation - instance)
-            weight = np.exp(-distance**2 / 2)  # Gaussian kernel
-            weights.append(weight)
-        
-        # Convert to arrays
-        X_perturbed = np.array(perturbations)
-        y_perturbed = np.array(predictions)
-        weights = np.array(weights)
-        
-        # Fit weighted linear model
-        from sklearn.linear_model import Ridge
-        
-        # Create binary features (different from original or not)
-        X_binary = (X_perturbed != instance.values).astype(int)
-        
-        # Fit weighted Ridge regression
-        linear_model = Ridge(alpha=1.0)
-        linear_model.fit(X_binary, y_perturbed, sample_weight=weights)
-        
-        # Get feature importance from linear model
-        importances = pd.DataFrame({
-            'feature': feature_names,
-            'importance': linear_model.coef_
-        }).sort_values('importance', key=abs, ascending=False)
-        
-        # Get prediction for original instance
-        if hasattr(self.model, 'predict_proba'):
-            original_pred = self.model.predict_proba(instance.values.reshape(1, -1))[0, 1]
-        else:
-            original_pred = self.model.predict(instance.values.reshape(1, -1))[0]
-        
-        return {
-            'prediction': original_pred,
-            'intercept': linear_model.intercept_,
-            'importances': importances.head(self.num_features)
-        }
-
-# Create LIME explainer
-lime_explainer = SimpleLIME(rf_model, num_features=10)
-
-# Explain a specific instance
-instance_idx = 0
-instance = X_test.iloc[instance_idx]
-true_label = y_test[instance_idx]
-
-print(f"Explaining prediction for instance {instance_idx}")
-print(f"True label: {true_label} ({'benign' if true_label == 1 else 'malignant'})")
-
-explanation = lime_explainer.explain_instance(instance, X_train, X.columns)
-
-print(f"Predicted probability: {explanation['prediction']:.3f}")
-print(f"\nTop features influencing this prediction:")
-print(explanation['importances'].to_string(index=False))
-
-# Visualize LIME explanation
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-
-# Plot 1: Feature contributions
-top_lime = explanation['importances'].head(10)
-colors = ['green' if x > 0 else 'red' for x in top_lime['importance']]
-
-axes[0].barh(range(len(top_lime)), top_lime['importance'].values, color=colors)
-axes[0].set_yticks(range(len(top_lime)))
-axes[0].set_yticklabels(top_lime['feature'].values)
-axes[0].set_xlabel('Contribution to Prediction')
-axes[0].set_title(f'LIME Explanation for Instance {instance_idx}')
-axes[0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
-axes[0].invert_yaxis()
-
-# Plot 2: Feature values
-feature_values = pd.DataFrame({
-    'feature': top_lime['feature'].values,
-    'value': [instance[feat] for feat in top_lime['feature']],
-    'percentile': [(instance[feat] > X_train[feat]).mean() * 100 
-                  for feat in top_lime['feature']]
-})
-
-axes[1].barh(range(len(feature_values)), feature_values['percentile'].values)
-axes[1].set_yticks(range(len(feature_values)))
-axes[1].set_yticklabels([f"{feat}\n({val:.2f})" 
-                         for feat, val in zip(feature_values['feature'], 
-                                             feature_values['value'])])
-axes[1].set_xlabel('Percentile in Training Data')
-axes[1].set_title('Feature Values (Percentiles)')
-axes[1].invert_yaxis()
-
-plt.tight_layout()
-plt.show()
-
-print("\n💡 Green bars increase prediction probability,")
-print("   red bars decrease it.")</code></pre>
-
-    <h3>4. SHAP (SHapley Additive exPlanations)</h3>
-    <pre class="language-python"><code># Note: Requires installation: pip install shap
-print("\n" + "="*60)
-print("4. SHAP VALUES - GAME THEORY FOR ML")
-print("="*60)
-
-# Simplified SHAP implementation
-class SimplifiedSHAP:
-    """
-    Simplified SHAP implementation for demonstration
-    Shows the core concept of Shapley values
-    """
-    
-    def __init__(self, model, background_data, n_samples=100):
-        self.model = model
-        self.background_data = background_data
-        self.n_samples = n_samples
-    
-    def calculate_shap_values(self, instance):
-        """
-        Calculate approximate SHAP values for a single instance
-        """
-        n_features = len(instance)
-        shap_values = np.zeros(n_features)
-        
-        # For each feature
-        for feature_idx in range(n_features):
-            marginal_contributions = []
-            
-            # Sample random coalitions
-            for _ in range(self.n_samples):
-                # Random coalition (subset of features)
-                coalition = np.random.choice([True, False], n_features)
-                coalition[feature_idx] = False  # Feature not in coalition
-                
-                # Prediction without feature
-                X_without = self._create_instance(instance, coalition, feature_idx, False)
-                if hasattr(self.model, 'predict_proba'):
-                    pred_without = self.model.predict_proba(X_without)[0, 1]
-                else:
-                    pred_without = self.model.predict(X_without)[0]
-                
-                # Prediction with feature
-                coalition[feature_idx] = True
-                X_with = self._create_instance(instance, coalition, feature_idx, True)
-                if hasattr(self.model, 'predict_proba'):
-                    pred_with = self.model.predict_proba(X_with)[0, 1]
-                else:
-                    pred_with = self.model.predict(X_with)[0]
-                
-                # Marginal contribution
-                marginal_contribution = pred_with - pred_without
-                marginal_contributions.append(marginal_contribution)
-            
-            # Average marginal contribution is the SHAP value
-            shap_values[feature_idx] = np.mean(marginal_contributions)
-        
-        return shap_values
-    
-    def _create_instance(self, instance, coalition, feature_idx, include_feature):
-        """
-        Create an instance with features from coalition
-        """
-        X = instance.copy()
-        
-        # Replace non-coalition features with background values
-        for idx in range(len(instance)):
-            if not coalition[idx]:
-                # Use mean from background data
-                X[idx] = self.background_data.iloc[:, idx].mean()
-        
-        if include_feature:
-            X[feature_idx] = instance[feature_idx]
-        else:
-            X[feature_idx] = self.background_data.iloc[:, feature_idx].mean()
-        
-        return X.values.reshape(1, -1)
-
-# Calculate SHAP values
-shap_explainer = SimplifiedSHAP(rf_model, X_train, n_samples=50)
-
-# Explain multiple instances
-n_explain = 5
-shap_values_list = []
-predictions_list = []
-
-print(f"Calculating SHAP values for {n_explain} instances...")
-
-for i in range(n_explain):
-    instance = X_test.iloc[i]
-    shap_vals = shap_explainer.calculate_shap_values(instance)
-    shap_values_list.append(shap_vals)
-    
-    if hasattr(rf_model, 'predict_proba'):
-        pred = rf_model.predict_proba(instance.values.reshape(1, -1))[0, 1]
-    else:
-        pred = rf_model.predict(instance.values.reshape(1, -1))[0]
-    predictions_list.append(pred)
-
-shap_values_array = np.array(shap_values_list)
-
-# Visualize SHAP values
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-
-# Plot 1: Waterfall plot for single instance
-instance_idx = 0
-shap_vals = shap_values_array[instance_idx]
-feature_order = np.argsort(np.abs(shap_vals))[::-1][:10]
-
-axes[0, 0].barh(range(len(feature_order)), shap_vals[feature_order])
-axes[0, 0].set_yticks(range(len(feature_order)))
-axes[0, 0].set_yticklabels([X.columns[i] for i in feature_order])
-axes[0, 0].set_xlabel('SHAP Value')
-axes[0, 0].set_title(f'SHAP Values for Instance {instance_idx}')
-axes[0, 0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
-axes[0, 0].invert_yaxis()
-
-# Plot 2: Global feature importance (mean absolute SHAP)
-mean_abs_shap = np.mean(np.abs(shap_values_array), axis=0)
-feature_importance_shap = pd.DataFrame({
-    'feature': X.columns,
-    'importance': mean_abs_shap
-}).sort_values('importance', ascending=False).head(10)
-
-axes[0, 1].barh(range(len(feature_importance_shap)), 
-               feature_importance_shap['importance'].values)
-axes[0, 1].set_yticks(range(len(feature_importance_shap)))
-axes[0, 1].set_yticklabels(feature_importance_shap['feature'].values)
-axes[0, 1].set_xlabel('Mean |SHAP Value|')
-axes[0, 1].set_title('Global Feature Importance (SHAP)')
-axes[0, 1].invert_yaxis()
-
-# Plot 3: SHAP summary plot (simplified)
-top_features_idx = feature_importance_shap['feature'].apply(
-    lambda x: list(X.columns).index(x)).values[:5]
-
-for idx, feat_idx in enumerate(top_features_idx):
-    y_pos = np.ones(n_explain) * idx + np.random.normal(0, 0.02, n_explain)
-    colors = X_test.iloc[:n_explain, feat_idx].values
-    
-    scatter = axes[1, 0].scatter(shap_values_array[:, feat_idx], y_pos, 
-                                 c=colors, cmap='coolwarm', alpha=0.7, s=50)
-
-axes[1, 0].set_yticks(range(len(top_features_idx)))
-axes[1, 0].set_yticklabels([X.columns[i] for i in top_features_idx])
-axes[1, 0].set_xlabel('SHAP Value')
-axes[1, 0].set_title('SHAP Summary Plot')
-axes[1, 0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
-plt.colorbar(scatter, ax=axes[1, 0], label='Feature Value')
-
-# Plot 4: Force plot visualization (simplified)
-instance_idx = 0
-shap_vals = shap_values_array[instance_idx]
-base_value = X_train.mean().values  # Simplified base value
-
-# Sort features by SHAP value
-sorted_idx = np.argsort(shap_vals)[::-1]
-cumsum = np.cumsum(shap_vals[sorted_idx])
-
-axes[1, 1].bar(range(len(sorted_idx[:10])), shap_vals[sorted_idx[:10]])
-axes[1, 1].set_xticks(range(len(sorted_idx[:10])))
-axes[1, 1].set_xticklabels([X.columns[i] for i in sorted_idx[:10]], rotation=45, ha='right')
-axes[1, 1].set_ylabel('SHAP Value')
-axes[1, 1].set_title(f'Force Plot - Instance {instance_idx}')
-axes[1, 1].axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-
-plt.tight_layout()
-plt.show()
-
-print("\n💡 SHAP values provide consistent, theoretically grounded")
-print("   feature attributions based on game theory.")</code></pre>
-
-    <h2>Model-Specific Interpretation Methods</h2>
-    
-    <pre class="language-python"><code>print("\n" + "="*60)
-print("5. MODEL-SPECIFIC INTERPRETATION")
-print("="*60)
-
-# 1. Linear Model Coefficients
-print("\n1. Linear Model Interpretation")
-print("-" * 40)
-
-# Scale data for linear model
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
-
-# Train logistic regression
-lr_model = LogisticRegression(max_iter=1000, random_state=42)
-lr_model.fit(X_train_scaled, y_train)
-
-# Get coefficients
-coefficients = pd.DataFrame({
-    'feature': X.columns,
-    'coefficient': lr_model.coef_[0],
-    'abs_coefficient': np.abs(lr_model.coef_[0])
-}).sort_values('abs_coefficient', ascending=False)
-
-print("Top 10 Most Important Features (Linear Model):")
-print(coefficients.head(10)[['feature', 'coefficient']].to_string(index=False))
-
-# Visualize coefficients
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-
-# Plot 1: Coefficients
-top_coef = coefficients.head(15)
-colors = ['green' if x > 0 else 'red' for x in top_coef['coefficient']]
-
-axes[0].barh(range(len(top_coef)), top_coef['coefficient'].values, color=colors)
-axes[0].set_yticks(range(len(top_coef)))
-axes[0].set_yticklabels(top_coef['feature'].values)
-axes[0].set_xlabel('Coefficient Value')
-axes[0].set_title('Logistic Regression Coefficients')
-axes[0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
-axes[0].invert_yaxis()
-
-# Plot 2: Odds ratios
-top_coef['odds_ratio'] = np.exp(top_coef['coefficient'])
-axes[1].barh(range(len(top_coef)), top_coef['odds_ratio'].values)
-axes[1].set_yticks(range(len(top_coef)))
-axes[1].set_yticklabels(top_coef['feature'].values)
-axes[1].set_xlabel('Odds Ratio')
-axes[1].set_title('Odds Ratios (exp(coefficient))')
-axes[1].axvline(x=1, color='black', linestyle='-', linewidth=0.5)
-axes[1].invert_yaxis()
-
-plt.tight_layout()
-plt.show()
-
-print("\n💡 Positive coefficients increase the probability of positive class,")
-print("   Odds ratio > 1 means feature increases odds of positive class.")
-
-# 2. Decision Tree Visualization
-print("\n2. Decision Tree Interpretation")
-print("-" * 40)
-
-from sklearn.tree import DecisionTreeClassifier, plot_tree
-
-# Train a simple decision tree
-dt_model = DecisionTreeClassifier(max_depth=3, random_state=42)
-dt_model.fit(X_train, y_train)
-
-# Visualize tree
-fig, ax = plt.subplots(figsize=(20, 10))
-plot_tree(dt_model, 
-          feature_names=X.columns,
-          class_names=['Malignant', 'Benign'],
-          filled=True,
-          rounded=True,
-          fontsize=10,
-          ax=ax)
-plt.title('Decision Tree Visualization (Max Depth = 3)')
-plt.show()
-
-# Extract decision rules
-def extract_rules(tree, feature_names):
-    """Extract decision rules from tree"""
-    tree_ = tree.tree_
-    feature_name = [
-        feature_names[i] if i != -2 else "undefined!"
-        for i in tree_.feature
-    ]
-    
-    rules = []
-    
-    def recurse(node, depth, parent_rule=""):
-        if tree_.feature[node] != -2:
-            name = feature_name[node]
-            threshold = tree_.threshold[node]
-            
-            # Left child (<=)
-            left_rule = f"{parent_rule} & " if parent_rule else ""
-            left_rule += f"({name} <= {threshold:.2f})"
-            recurse(tree_.children_left[node], depth + 1, left_rule)
-            
-            # Right child (>)
-            right_rule = f"{parent_rule} & " if parent_rule else ""
-            right_rule += f"({name} > {threshold:.2f})"
-            recurse(tree_.children_right[node], depth + 1, right_rule)
-        else:
-            # Leaf node
-            value = tree_.value[node][0]
-            class_prediction = np.argmax(value)
-            confidence = value[class_prediction] / value.sum()
-            
-            rules.append({
-                'rule': parent_rule,
-                'class': class_prediction,
-                'samples': int(tree_.n_node_samples[node]),
-                'confidence': confidence
-            })
-    
-    recurse(0, 1)
-    return rules
-
-# Extract and display rules
-rules = extract_rules(dt_model, X.columns)
-rules_df = pd.DataFrame(rules).sort_values('samples', ascending=False).head(5)
-
-print("\nTop 5 Decision Rules by Sample Coverage:")
-for idx, row in rules_df.iterrows():
-    class_name = 'Benign' if row['class'] == 1 else 'Malignant'
-    print(f"\nRule: {row['rule']}")
-    print(f"  → Predicts: {class_name}")
-    print(f"  → Samples: {row['samples']}")
-    print(f"  → Confidence: {row['confidence']:.2%}")</code></pre>
-
-    <h2>Advanced Interpretation Techniques</h2>
-    
-    <pre class="language-python"><code>print("\n" + "="*60)
-print("6. ADVANCED INTERPRETATION TECHNIQUES")
-print("="*60)
-
-# 1. Anchors: High-Precision Rules
-print("\n1. Anchor Explanations")
-print("-" * 40)
-
-class SimpleAnchorExplainer:
-    """
-    Find minimal sufficient conditions (anchors) for predictions
-    """
-    
-    def __init__(self, model, precision_threshold=0.95):
-        self.model = model
-        self.precision_threshold = precision_threshold
-    
-    def find_anchor(self, instance, X_data, max_features=5):
-        """
-        Find minimal set of features that anchor the prediction
-        """
-        # Get original prediction
-        original_pred = self.model.predict(instance.values.reshape(1, -1))[0]
-        
-        # Start with empty anchor
-        anchor_features = []
-        anchor_conditions = {}
-        
-        # Greedily add features
-        remaining_features = list(X_data.columns)
-        
-        for _ in range(max_features):
-            best_feature = None
-            best_precision = 0
-            best_condition = None
-            
-            for feature in remaining_features:
-                # Create condition based on instance value
-                feature_value = instance[feature]
-                
-                # For numerical features, use range
-                if X_data[feature].dtype in ['float64', 'int64']:
-                    std = X_data[feature].std()
-                    condition = (X_data[feature] >= feature_value - 0.1*std) & \
-                               (X_data[feature] <= feature_value + 0.1*std)
-                else:
-                    condition = X_data[feature] == feature_value
-                
-                # Combine with existing anchor conditions
-                combined_condition = condition
-                for anchor_feat, anchor_cond in anchor_conditions.items():
-                    combined_condition = combined_condition & anchor_cond
-                
-                # Test precision
-                matching_samples = X_data[combined_condition]
-                if len(matching_samples) > 0:
-                    predictions = self.model.predict(matching_samples)
-                    precision = (predictions == original_pred).mean()
-                    
-                    if precision > best_precision:
-                        best_precision = precision
-                        best_feature = feature
-                        best_condition = condition
-            
-            # Add best feature to anchor
-            if best_precision >= self.precision_threshold:
-                anchor_features.append(best_feature)
-                anchor_conditions[best_feature] = best_condition
-                break
-            elif best_feature:
-                anchor_features.append(best_feature)
-                anchor_conditions[best_feature] = best_condition
-                remaining_features.remove(best_feature)
-        
-        return {
-            'features': anchor_features,
-            'precision': best_precision,
-            'coverage': len(X_data[combined_condition]) / len(X_data),
-            'prediction': original_pred
-        }
-
-# Find anchors for an instance
-anchor_explainer = SimpleAnchorExplainer(rf_model, precision_threshold=0.9)
-instance_idx = 0
-instance = X_test.iloc[instance_idx]
-
-anchor_result = anchor_explainer.find_anchor(instance, X_train, max_features=3)
-
-print(f"Anchor Explanation for Instance {instance_idx}:")
-print(f"Prediction: {anchor_result['prediction']}")
-print(f"Anchor features: {anchor_result['features']}")
-print(f"Precision: {anchor_result['precision']:.2%}")
-print(f"Coverage: {anchor_result['coverage']:.2%}")
-
-# 2. Counterfactual Explanations
-print("\n2. Counterfactual Explanations")
-print("-" * 40)
-
-class CounterfactualExplainer:
-    """
-    Find minimal changes to flip the prediction
-    """
-    
-    def __init__(self, model):
-        self.model = model
-    
-    def find_counterfactual(self, instance, X_train, desired_class=None, max_changes=3):
-        """
-        Find minimal changes to achieve desired prediction
-        """
-        # Get original prediction
-        original_pred = self.model.predict(instance.values.reshape(1, -1))[0]
-        
-        if desired_class is None:
-            desired_class = 1 - original_pred  # Flip the prediction
-        
-        # Find nearest neighbors with desired class
-        from sklearn.neighbors import NearestNeighbors
-        
-        # Get samples with desired class
-        desired_samples = X_train[self.model.predict(X_train) == desired_class]
-        
-        if len(desired_samples) == 0:
-            return None
-        
-        # Find nearest neighbor
-        nn = NearestNeighbors(n_neighbors=1)
-        nn.fit(desired_samples)
-        
-        distances, indices = nn.kneighbors(instance.values.reshape(1, -1))
-        nearest = desired_samples.iloc[indices[0, 0]]
-        
-        # Find minimal changes
-        differences = pd.DataFrame({
-            'feature': X_train.columns,
-            'original': instance.values,
-            'counterfactual': nearest.values,
-            'change': nearest.values - instance.values,
-            'abs_change': np.abs(nearest.values - instance.values)
-        }).sort_values('abs_change', ascending=False)
-        
-        # Select top changes
-        top_changes = differences[differences['abs_change'] > 0].head(max_changes)
-        
-        return {
-            'original_prediction': original_pred,
-            'desired_prediction': desired_class,
-            'changes': top_changes,
-            'distance': distances[0, 0]
-        }
-
-# Find counterfactual
-cf_explainer = CounterfactualExplainer(rf_model)
-cf_result = cf_explainer.find_counterfactual(instance, X_train, max_changes=3)
-
-if cf_result:
-    print(f"Counterfactual Explanation for Instance {instance_idx}:")
-    print(f"Original prediction: {cf_result['original_prediction']}")
-    print(f"Desired prediction: {cf_result['desired_prediction']}")
-    print(f"\nMinimal changes needed:")
-    print(cf_result['changes'][['feature', 'original', 'counterfactual', 'change']].to_string(index=False))
-
-# 3. Prototype and Criticism Selection
-print("\n3. Prototypes and Criticisms")
-print("-" * 40)
-
-def select_prototypes_criticisms(X, y, model, n_prototypes=5, n_criticisms=5):
-    """
-    Select representative examples (prototypes) and 
-    edge cases (criticisms) for interpretation
-    """
-    from sklearn.metrics.pairwise import euclidean_distances
-    
-    # Get model predictions
-    predictions = model.predict(X)
-    
-    # For each class, find prototypes
-    prototypes = {}
-    criticisms = {}
-    
-    for class_label in np.unique(y):
-        # Get samples of this class
-        class_mask = (y == class_label)
-        class_samples = X[class_mask]
-        class_indices = np.where(class_mask)[0]
-        
-        if len(class_samples) < n_prototypes + n_criticisms:
-            continue
-        
-        # Calculate centroid
-        centroid = class_samples.mean(axis=0).values.reshape(1, -1)
-        
-        # Find prototypes (closest to centroid)
-        distances_to_centroid = euclidean_distances(class_samples, centroid).flatten()
-        prototype_indices = class_indices[np.argsort(distances_to_centroid)[:n_prototypes]]
-        
-        # Find criticisms (furthest from centroid but still correctly classified)
-        correct_predictions = predictions[class_mask] == class_label
-        correct_indices = class_indices[correct_predictions]
-        
-        if len(correct_indices) > 0:
-            distances_correct = distances_to_centroid[correct_predictions]
-            criticism_indices = correct_indices[np.argsort(distances_correct)[-n_criticisms:]]
-        else:
-            criticism_indices = []
-        
-        prototypes[class_label] = prototype_indices
-        criticisms[class_label] = criticism_indices
-    
-    return prototypes, criticisms
-
-# Select prototypes and criticisms
-prototypes, criticisms = select_prototypes_criticisms(
-    X_test, y_test, rf_model, n_prototypes=3, n_criticisms=3
-)
-
-print("Prototypes and Criticisms:")
-for class_label in [0, 1]:
-    class_name = 'Benign' if class_label == 1 else 'Malignant'
-    print(f"\n{class_name} Class:")
-    
-    if class_label in prototypes:
-        print(f"  Prototypes (typical examples): {prototypes[class_label]}")
-        print(f"  Criticisms (edge cases): {criticisms[class_label]}")
-
-# Visualize prototypes and criticisms
-from sklearn.decomposition import PCA
-
-pca = PCA(n_components=2)
-X_pca = pca.fit_transform(X_test)
-
-fig, ax = plt.subplots(figsize=(10, 8))
-
-# Plot all points
-scatter = ax.scatter(X_pca[:, 0], X_pca[:, 1], 
-                    c=y_test, cmap='coolwarm', alpha=0.3, s=20)
-
-# Highlight prototypes
-for class_label, proto_indices in prototypes.items():
-    if len(proto_indices) > 0:
-        ax.scatter(X_pca[proto_indices, 0], X_pca[proto_indices, 1],
-                  c='green', s=200, marker='^', 
-                  edgecolors='black', linewidth=2,
-                  label=f'Prototypes (Class {class_label})')
-
-# Highlight criticisms
-for class_label, crit_indices in criticisms.items():
-    if len(crit_indices) > 0:
-        ax.scatter(X_pca[crit_indices, 0], X_pca[crit_indices, 1],
-                  c='red', s=200, marker='s',
-                  edgecolors='black', linewidth=2,
-                  label=f'Criticisms (Class {class_label})')
-
-ax.set_xlabel('First Principal Component')
-ax.set_ylabel('Second Principal Component')
-ax.set_title('Prototypes and Criticisms in PCA Space')
-ax.legend()
-plt.colorbar(scatter, label='Class')
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.dummy import DummyClassifier
+from sklearn.metrics import roc_auc_score
+
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+            "email_opens_90d"]
+
+X = customers[features].astype(float)
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
+
+baseline = DummyClassifier().fit(X_train, y_train)
+logreg = make_pipeline(SimpleImputer(strategy="median"), StandardScaler(), LogisticRegression())
+logreg.fit(X_train, y_train)
+hgb = HistGradientBoostingClassifier(random_state=42).fit(X_train, y_train)
+
+for name, model in [("baseline", baseline), ("logistic regression", logreg), ("gradient boosting", hgb)]:
+    auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+    print(f"{name:20s} test ROC AUC {auc:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>baseline             test ROC AUC 0.500
+logistic regression  test ROC AUC 0.828
+gradient boosting    test ROC AUC 0.865</code></pre>
+                </div>
+
+                <p>Both models clearly beat the baseline's 0.500, and boosting beats logistic regression. Keep that gap in mind: by the end of the lesson you will be able to point at the patterns the linear model cannot represent.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Why <code>.astype(float)</code>?</h4>
+                    <p>Most columns here are whole numbers stored as <code>int64</code>. Models do not care, but scikit-learn's partial dependence tools refuse integer columns, because building a grid of in-between values would silently round them. Converting once, at the start, avoids the error you will see in Common Mistakes.</p>
+                </div>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Explain the Model You Trust</h4>
+                    <p>Explanations describe a model, good or bad. Explaining a model that barely beats the baseline tells you about noise. Always check performance on held-out data first, as you just did, and explain on the <strong>test</strong> set where you can.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="coefficients" class="lesson-section">
+                <h2>📜 Reading Coefficients</h2>
+
+                <p>A logistic regression adds up weighted features to get the <strong>log-odds</strong> of churn. Because the pipeline scaled every feature, each weight answers the same question: "if this feature goes up by one standard deviation and the others stay the same, how much do the log-odds change?" Exponentiating a weight turns it into an <strong>odds ratio</strong>, which is easier to say out loud.</p>
+
+                <p>One formula is worth knowing: odds ratio = e<sup>coef</sup>. A coefficient of 0.69 gives an odds ratio of about 2, so the odds of churn double. A coefficient of -0.69 halves them. Zero means no change.</p>
+
+                <pre><code class="language-python">coefs = pd.Series(logreg[-1].coef_[0], index=features)
+table = pd.DataFrame({"coef": coefs, "odds_ratio": np.exp(coefs)}).sort_values("coef")
+print(table.round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>                       coef  odds_ratio
+orders_12m            -0.32        0.73
+app_user              -0.29        0.75
+email_opens_90d       -0.28        0.75
+tenure_months         -0.13        0.88
+spend_12m             -0.12        0.89
+returns_12m           -0.03        0.97
+avg_order_value       -0.01        0.99
+return_rate            0.08        1.09
+support_tickets_12m    0.40        1.50
+discount_share         0.68        1.97
+days_since_last_order  0.89        2.43</code></pre>
+                </div>
+
+                <p>Read the top and the bottom of the table. One standard deviation more days since the last order multiplies the odds of churn by about 2.4; a standard deviation more discount reliance by about 2. App users have lower odds (0.75 per standard deviation of a 0/1 column, which is clumsy to say; the next block fixes that). <code>logreg[-1]</code> is the last step of the pipeline, the fitted <code>LogisticRegression</code>.</p>
+
+                <p>"Per standard deviation" is precise but not friendly. To speak in natural units, divide each coefficient by the scaler's standard deviation for that column. Then multiply by a step that means something to the business:</p>
+
+                <pre><code class="language-python">scale = pd.Series(logreg[1].scale_, index=features)
+per_unit = coefs / scale
+
+print(f"days_since_last_order: sd = {scale['days_since_last_order']:.1f} days")
+print(f"odds ratio per 30 more days without an order: {np.exp(30 * per_unit['days_since_last_order']):.2f}")
+print(f"odds ratio for an app user vs a non-user:     {np.exp(per_unit['app_user']):.2f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>days_since_last_order: sd = 87.2 days
+odds ratio per 30 more days without an order: 1.36
+odds ratio for an app user vs a non-user:     0.55</code></pre>
+                </div>
+
+                <p>Now the sentence writes itself: every extra month without an order multiplies the odds of churn by about 1.4, and app users have roughly half the odds of non-users, other features held fixed.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Three Ways Coefficients Mislead</h4>
+                    <ul>
+                        <li><strong>A straight line cannot bend.</strong> <code>tenure_months</code> gets a small weight. As you will see below, churn is high for brand-new <em>and</em> for very long-standing customers; a single slope averages the two ends and lands near zero.</li>
+                        <li><strong>Overlapping features share credit unpredictably.</strong> <code>spend_12m</code> is exactly orders times average order value. The model can put weight on any of the three, so a small coefficient on one of them does not mean "unimportant".</li>
+                        <li><strong>"Holding the others fixed" may be impossible.</strong> You cannot raise spend while holding orders and order value constant. The coefficient answers a question about customers who do not exist.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="impurity" class="lesson-section">
+                <h2>🪤 The Built-in Importance Trap</h2>
+
+                <p>Tree ensembles such as random forests come with a <code>feature_importances_</code> attribute. It is computed during training from how much each feature's splits reduced impurity (Lesson 5.1), so it is called <strong>impurity-based importance</strong> or MDI (mean decrease in impurity). It is free, fast and tempting. It also has two known flaws: it is measured on the <em>training</em> data, and it favors features with many distinct values, because they offer many split points to overfit with.</p>
+
+                <p>A simple experiment exposes it. Add a column of pure random noise, fit a forest, and see where the noise ranks.</p>
+
+                <pre><code class="language-python">from sklearn.ensemble import RandomForestClassifier
+from sklearn.inspection import permutation_importance
+
+rng = np.random.default_rng(42)
+X_train_noise = X_train.assign(random_noise=rng.normal(size=len(X_train)))
+X_test_noise = X_test.assign(random_noise=rng.normal(size=len(X_test)))
+
+forest = RandomForestClassifier(n_estimators=200, random_state=42, n_jobs=-1)
+forest.fit(X_train_noise, y_train)
+
+mdi = pd.Series(forest.feature_importances_, index=X_train_noise.columns)
+perm = permutation_importance(forest, X_test_noise, y_test, scoring="roc_auc",
+                              n_repeats=10, random_state=42, n_jobs=-1)
+compare = pd.DataFrame({"impurity (train)": mdi,
+                        "permutation (test)": perm.importances_mean}).sort_values("impurity (train)", ascending=False)
+print(compare.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>                       impurity (train)  permutation (test)
+days_since_last_order             0.218               0.152
+discount_share                    0.130               0.080
+tenure_months                     0.125               0.057
+spend_12m                         0.091               0.001
+avg_order_value                   0.086               0.004
+random_noise                      0.083               0.005
+return_rate                       0.079               0.006
+email_opens_90d                   0.072               0.010
+orders_12m                        0.041               0.003
+support_tickets_12m               0.041               0.012
+app_user                          0.018               0.009
+returns_12m                       0.016               0.001</code></pre>
+                </div>
+
+                <p>By impurity, the forest says random noise is about as important as <code>return_rate</code> and far more important than <code>app_user</code> or <code>support_tickets_12m</code>. That is nonsense: the noise column has nothing to do with churn. The forest used it to memorize training customers, and impurity importance rewards memorizing. The permutation column, measured on test customers, puts the noise near zero where it belongs. (Random forests in scikit-learn accept missing values, which is why <code>email_opens_90d</code> could stay as it is.)</p>
+
+                <div class="card card-success">
+                    <h4>✅ Rule of Thumb</h4>
+                    <p>Use <code>feature_importances_</code> for a quick look during development, never for a conclusion. For anything you will tell someone else, use permutation importance on held-out data.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="permutation" class="lesson-section">
+                <h2>🔀 Permutation Importance</h2>
+
+                <p>The idea fits in one sentence: <strong>shuffle one column of the test set, so it no longer lines up with the right customers, and measure how much the score drops.</strong> If the model relied on that column, scrambling it hurts. If the model ignored it, nothing changes. The model is never retrained; it is only asked to predict on damaged data. That is why the method works for any model, from logistic regression to a neural network.</p>
+
+                <div class="diagram">
+                    <svg viewBox="0 0 440 200" width="440" height="200" role="img" aria-label="Permutation importance in three steps: score the model on the test set, shuffle one column and score again, then the importance is the drop in score.">
+                        <rect x="10" y="20" width="120" height="120" rx="8" class="svg-box"/>
+                        <text x="70" y="44" text-anchor="middle" class="svg-text">Test set</text>
+                        <text x="70" y="72" text-anchor="middle" class="svg-muted svg-mono">days  disc  app</text>
+                        <text x="70" y="92" text-anchor="middle" class="svg-muted svg-mono">  12  0.10   1</text>
+                        <text x="70" y="112" text-anchor="middle" class="svg-muted svg-mono"> 240  0.45   0</text>
+                        <text x="70" y="160" text-anchor="middle" class="svg-text">AUC 0.865</text>
+                        <rect x="160" y="20" width="120" height="120" rx="8" class="svg-box-3"/>
+                        <text x="220" y="44" text-anchor="middle" class="svg-text">Shuffle "days"</text>
+                        <text x="220" y="72" text-anchor="middle" class="svg-text svg-mono">days  disc  app</text>
+                        <text x="220" y="92" text-anchor="middle" class="svg-text svg-mono"> 240  0.10   1</text>
+                        <text x="220" y="112" text-anchor="middle" class="svg-text svg-mono">  12  0.45   0</text>
+                        <text x="220" y="160" text-anchor="middle" class="svg-text">AUC 0.725</text>
+                        <rect x="310" y="45" width="120" height="70" rx="8" class="svg-solid"/>
+                        <text x="370" y="74" text-anchor="middle" class="svg-on-color">Importance</text>
+                        <text x="370" y="96" text-anchor="middle" class="svg-on-color">0.865 - 0.725</text>
+                        <line x1="132" y1="80" x2="152" y2="80" class="svg-line-accent" marker-end="url(#pi-arrow)"/>
+                        <line x1="282" y1="80" x2="302" y2="80" class="svg-line-accent" marker-end="url(#pi-arrow)"/>
+                        <text x="220" y="190" text-anchor="middle" class="svg-muted">Repeat with new shuffles; report mean and spread</text>
+                        <defs>
+                            <marker id="pi-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" class="svg-arrow"/>
+                            </marker>
+                        </defs>
+                    </svg>
+                </div>
+
+                <p><code>sklearn.inspection.permutation_importance</code> does this for every column, <code>n_repeats</code> times each with different shuffles, and returns the mean and standard deviation of the drops. Use the metric you care about: here ROC AUC, because the retention team ranks customers.</p>
+
+                <pre><code class="language-python">result = permutation_importance(hgb, X_test, y_test, scoring="roc_auc", n_repeats=10, random_state=42)
+importance = pd.DataFrame({"mean": result.importances_mean, "std": result.importances_std},
+                          index=features).sort_values("mean", ascending=False)
+print(importance.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>                        mean    std
+days_since_last_order  0.140  0.012
+discount_share         0.088  0.006
+tenure_months          0.064  0.009
+app_user               0.019  0.003
+support_tickets_12m    0.015  0.003
+email_opens_90d        0.009  0.004
+orders_12m             0.006  0.005
+return_rate            0.004  0.003
+avg_order_value        0.003  0.001
+returns_12m           -0.000  0.001
+spend_12m             -0.004  0.002</code></pre>
+                </div>
+
+                <p>Shuffling <code>days_since_last_order</code> costs the model 0.14 of AUC, which takes it most of the way from 0.86 toward the baseline. Discount reliance and tenure follow. Then there is a long tail of features worth a hundredth of AUC or less. A slightly negative value, like <code>spend_12m</code>'s, means shuffling made no real difference and chance went the other way; read it as zero.</p>
+
+                <p>A chart with the spread makes the ranking easier to present. <code>result.importances</code> holds all ten drops per feature:</p>
+
+                <pre><code class="language-python">import matplotlib.pyplot as plt
+
+order = importance.index[::-1]
+drops = pd.DataFrame(result.importances.T, columns=features)[order]
+
+fig, ax = plt.subplots(figsize=(9, 4.5), layout="constrained")
+ax.boxplot(drops.to_numpy(), orientation="horizontal", tick_labels=order)
+ax.axvline(0, color="black", linestyle="--", linewidth=1)
+ax.set_xlabel("Drop in test ROC AUC when the column is shuffled (10 repeats)")
+ax.set_title("Gradient boosting relies on recency, discounts and tenure")
 plt.show()</code></pre>
 
-    <h2>Interactive Interpretation Dashboard</h2>
-    
-    <pre class="language-python"><code>print("\n" + "="*60)
-print("7. BUILDING AN INTERPRETATION DASHBOARD")
-print("="*60)
+                <figure>
+                    <img src="images/model_interpretation_permutation.png" alt="Horizontal box plots of permutation importance for 11 features. days_since_last_order has the largest drop in ROC AUC, about 0.14, then discount_share about 0.09 and tenure_months about 0.06. All other features sit close to zero." width="990" height="495" loading="lazy">
+                    <figcaption>Three features carry most of the model's skill; the boxes show how much each estimate wobbles across shuffles.</figcaption>
+                </figure>
 
-class ModelInterpretationDashboard:
-    """
-    Comprehensive dashboard for model interpretation
-    """
-    
-    def __init__(self, model, X_train, y_train, X_test, y_test, feature_names=None):
-        self.model = model
-        self.X_train = X_train
-        self.y_train = y_train
-        self.X_test = X_test
-        self.y_test = y_test
-        self.feature_names = feature_names or X_train.columns
-        
-    def generate_report(self, instance_idx=0):
-        """
-        Generate comprehensive interpretation report
-        """
-        instance = self.X_test.iloc[instance_idx]
-        true_label = self.y_test[instance_idx]
-        
-        # Prediction
-        if hasattr(self.model, 'predict_proba'):
-            pred_proba = self.model.predict_proba(instance.values.reshape(1, -1))[0]
-            pred_class = np.argmax(pred_proba)
-        else:
-            pred_class = self.model.predict(instance.values.reshape(1, -1))[0]
-            pred_proba = [1-pred_class, pred_class]
-        
-        report = {
-            'instance_id': instance_idx,
-            'true_label': true_label,
-            'predicted_label': pred_class,
-            'prediction_probability': pred_proba,
-            'interpretations': {}
-        }
-        
-        # 1. Feature importance (global)
-        if hasattr(self.model, 'feature_importances_'):
-            report['interpretations']['global_importance'] = pd.DataFrame({
-                'feature': self.feature_names,
-                'importance': self.model.feature_importances_
-            }).sort_values('importance', ascending=False).head(10)
-        
-        # 2. LIME explanation (local)
-        lime_exp = SimpleLIME(self.model, num_features=5)
-        lime_result = lime_exp.explain_instance(instance, self.X_train, self.feature_names)
-        report['interpretations']['lime'] = lime_result
-        
-        # 3. Counterfactual
-        cf_exp = CounterfactualExplainer(self.model)
-        cf_result = cf_exp.find_counterfactual(instance, self.X_train, max_changes=3)
-        report['interpretations']['counterfactual'] = cf_result
-        
-        # 4. Similar examples
-        from sklearn.neighbors import NearestNeighbors
-        nn = NearestNeighbors(n_neighbors=5)
-        nn.fit(self.X_train)
-        distances, indices = nn.kneighbors(instance.values.reshape(1, -1))
-        
-        report['interpretations']['similar_examples'] = {
-            'indices': indices[0],
-            'distances': distances[0],
-            'labels': self.y_train[indices[0]]
-        }
-        
-        return report
-    
-    def visualize_report(self, report):
-        """
-        Create visualization of interpretation report
-        """
-        fig = plt.figure(figsize=(16, 12))
-        
-        # Title
-        fig.suptitle(f"Model Interpretation Dashboard - Instance {report['instance_id']}", 
-                    fontsize=16, fontweight='bold')
-        
-        # Grid layout
-        gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
-        
-        # 1. Prediction summary
-        ax1 = fig.add_subplot(gs[0, :])
-        ax1.axis('off')
-        
-        summary_text = f"""
-        True Label: {report['true_label']} | Predicted: {report['predicted_label']}
-        Confidence: {report['prediction_probability'][report['predicted_label']]:.2%}
-        Model: {self.model.__class__.__name__}
-        """
-        ax1.text(0.5, 0.5, summary_text, ha='center', va='center',
-                fontsize=14, bbox=dict(boxstyle="round,pad=0.5", facecolor="lightblue"))
-        
-        # 2. LIME explanation
-        ax2 = fig.add_subplot(gs[1, 0])
-        lime_imp = report['interpretations']['lime']['importances'].head(5)
-        colors = ['green' if x > 0 else 'red' for x in lime_imp['importance']]
-        ax2.barh(range(len(lime_imp)), lime_imp['importance'].values, color=colors)
-        ax2.set_yticks(range(len(lime_imp)))
-        ax2.set_yticklabels(lime_imp['feature'].values)
-        ax2.set_xlabel('LIME Importance')
-        ax2.set_title('Local Explanation (LIME)')
-        ax2.axvline(x=0, color='black', linestyle='-', linewidth=0.5)
-        ax2.invert_yaxis()
-        
-        # 3. Global importance
-        if 'global_importance' in report['interpretations']:
-            ax3 = fig.add_subplot(gs[1, 1])
-            global_imp = report['interpretations']['global_importance'].head(5)
-            ax3.barh(range(len(global_imp)), global_imp['importance'].values)
-            ax3.set_yticks(range(len(global_imp)))
-            ax3.set_yticklabels(global_imp['feature'].values)
-            ax3.set_xlabel('Feature Importance')
-            ax3.set_title('Global Feature Importance')
-            ax3.invert_yaxis()
-        
-        # 4. Counterfactual changes
-        if report['interpretations']['counterfactual']:
-            ax4 = fig.add_subplot(gs[1, 2])
-            cf_changes = report['interpretations']['counterfactual']['changes'].head(3)
-            
-            y_pos = range(len(cf_changes))
-            ax4.barh(y_pos, cf_changes['change'].values)
-            ax4.set_yticks(y_pos)
-            ax4.set_yticklabels(cf_changes['feature'].values)
-            ax4.set_xlabel('Required Change')
-            ax4.set_title('Counterfactual: Changes to Flip Prediction')
-            ax4.invert_yaxis()
-        
-        # 5. Similar examples
-        ax5 = fig.add_subplot(gs[2, :])
-        similar = report['interpretations']['similar_examples']
-        
-        similar_text = "Similar Training Examples:\n"
-        for i, (idx, dist, label) in enumerate(zip(similar['indices'][:3], 
-                                                   similar['distances'][:3],
-                                                   similar['labels'][:3])):
-            similar_text += f"  {i+1}. Index {idx}: Label={label}, Distance={dist:.2f}\n"
-        
-        ax5.text(0.1, 0.5, similar_text, va='center', fontsize=11,
-                bbox=dict(boxstyle="round,pad=0.5", facecolor="lightyellow"))
-        ax5.axis('off')
-        ax5.set_title('Nearest Neighbors in Training Set', fontsize=12)
-        
-        plt.tight_layout()
-        plt.show()
+                <h3>Same Features, Different Model, Different Story</h3>
+                <p>Permutation importance describes <em>a model</em>. Run it on the logistic regression and compare:</p>
 
-# Create and display dashboard
-dashboard = ModelInterpretationDashboard(
-    rf_model, X_train, y_train, X_test, y_test
+                <pre><code class="language-python">lr_result = permutation_importance(logreg, X_test, y_test, scoring="roc_auc", n_repeats=10, random_state=42)
+side_by_side = pd.DataFrame({"boosting": result.importances_mean,
+                             "logistic": lr_result.importances_mean}, index=features)
+print(side_by_side.sort_values("boosting", ascending=False).round(3).head(6))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>                       boosting  logistic
+days_since_last_order     0.140     0.150
+discount_share            0.088     0.092
+tenure_months             0.064     0.003
+app_user                  0.019     0.010
+support_tickets_12m       0.015     0.021
+email_opens_90d           0.009     0.010</code></pre>
+                </div>
+
+                <p>The boosting model gets about 0.06 of AUC from tenure; the logistic regression almost nothing. That is the coefficient warning from earlier, now measured: a straight line cannot use a U-shaped effect, so the linear model leaves that information on the table. This is a large part of the AUC gap between the two models.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Correlated Features Split the Credit</h4>
+                    <p>Shuffling <code>spend_12m</code> costs nothing, yet spending clearly relates to churn. The reason: the model can rebuild spend from <code>orders_12m</code> and <code>avg_order_value</code>, which are still intact. When features overlap, each one alone looks unimportant. The fix is to shuffle a related group <em>together</em>, which you will do in the project.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="pdp" class="lesson-section">
+                <h2>🎛️ Partial Dependence and ICE</h2>
+
+                <p>Importance says <em>how much</em> a feature matters. It does not say <em>how</em>: does more discount reliance raise or lower risk, steadily or suddenly? A <strong>partial dependence plot</strong> (PDP) turns the dial. For each value on a grid, say 30 days since the last order, it sets that column to 30 for <em>every</em> customer, predicts, and averages. Repeat for 60, 90 and so on, and you get a curve: the model's average answer as one feature changes and everything else stays as it was.</p>
+
+                <p>An <strong>ICE curve</strong> (individual conditional expectation) is the same thing for one customer, without the averaging. The PDP is the average of all the ICE curves. Plotting both shows whether the average hides customers who react differently.</p>
+
+                <pre><code class="language-python">from sklearn.inspection import PartialDependenceDisplay
+
+fig, axes = plt.subplots(1, 3, figsize=(10, 3.8), layout="constrained")
+PartialDependenceDisplay.from_estimator(
+    hgb, X_test, ["days_since_last_order", "tenure_months", "discount_share"],
+    kind="both", subsample=80, grid_resolution=40, random_state=42, ax=axes,
+    ice_lines_kw={"alpha": 0.15}, pd_line_kw={"color": "#667eea", "linewidth": 3},
 )
+for ax in axes:
+    ax.set_ylim(0, 1)
+axes[0].set_ylabel("Predicted churn probability")
+fig.suptitle("Partial dependence (thick) and ICE curves for 80 test customers")
+plt.show()</code></pre>
 
-# Generate report for a specific instance
-instance_to_explain = 0
-report = dashboard.generate_report(instance_to_explain)
+                <figure>
+                    <img src="images/model_interpretation_pdp_ice.png" alt="Three partial dependence plots with ICE curves. Churn probability is flat and low up to about 120 days since the last order, then climbs steeply and stays high. For tenure, probability is high for the newest customers, low in the middle and rises again for the longest tenures. For discount share, probability is flat until about 0.3, then rises." width="1100" height="418" loading="lazy">
+                    <figcaption>Three shapes a straight line cannot draw: a threshold in recency, a U in tenure, a kink in discount reliance.</figcaption>
+                </figure>
 
-print(f"Generated interpretation report for instance {instance_to_explain}")
-print(f"True label: {report['true_label']}")
-print(f"Predicted: {report['predicted_label']} (confidence: {report['prediction_probability'][report['predicted_label']]:.2%})")
+                <p>Each panel tells a story a coefficient could not:</p>
+                <ul>
+                    <li><strong>Recency is a threshold.</strong> Up to roughly four months without an order, risk barely moves. Somewhere after that it jumps.</li>
+                    <li><strong>Tenure is a U.</strong> Brand-new customers and the longest-standing ones are riskier than the middle. This is the effect the logistic regression could not use.</li>
+                    <li><strong>Discount reliance has a kink.</strong> Flat until about 0.3, then rising.</li>
+                </ul>
 
-# Visualize the report
-dashboard.visualize_report(report)</code></pre>
+                <p>The plots are the clearest way to see shapes; numbers are better for a briefing. The function <code>partial_dependence</code> returns the values behind a curve. <code>method="brute"</code> makes it average real predicted probabilities, like the plot:</p>
 
-    <h2>Best Practices for Model Interpretation</h2>
-    
-    <pre class="language-python"><code>print("\n" + "="*60)
-print("BEST PRACTICES FOR MODEL INTERPRETATION")
-print("="*60)
+                <pre><code class="language-python">from sklearn.inspection import partial_dependence
 
-best_practices = """
-1. **Choose the Right Method for Your Needs:**
-   - Global understanding: Feature importance, PDP plots
-   - Individual predictions: LIME, SHAP, Counterfactuals
-   - Model debugging: Prototypes, criticisms, anchor explanations
-   
-2. **Validate Interpretations:**
-   - Check consistency across different methods
-   - Verify with domain experts
-   - Test on known edge cases
-   
-3. **Consider Your Audience:**
-   - Technical stakeholders: SHAP values, feature importance
-   - Business users: Simple rules, counterfactuals
-   - End users: Similar examples, simple explanations
-   
-4. **Be Aware of Limitations:**
-   - Correlation vs causation
-   - Approximation errors in local methods
-   - Computational cost for large datasets
-   
-5. **Combine Multiple Approaches:**
-   - No single method tells the complete story
-   - Use global + local methods together
-   - Cross-validate findings
-   
-6. **Document and Version:**
-   - Track interpretation methods used
-   - Version control interpretation code
-   - Document assumptions and limitations
-   
-7. **Interactive Exploration:**
-   - Build dashboards for stakeholders
-   - Allow exploration of different instances
-   - Provide multiple views of the same prediction
-"""
+pd_days = partial_dependence(hgb, X_test, ["days_since_last_order"], method="brute",
+                             custom_values={"days_since_last_order": [15, 60, 120, 150, 180, 240, 300]})
+for days, p in zip(pd_days["grid_values"][0], pd_days["average"][0]):
+    print(f"{days:5.0f} days -&gt; average predicted churn {p:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>   15 days -&gt; average predicted churn 0.077
+   60 days -&gt; average predicted churn 0.077
+  120 days -&gt; average predicted churn 0.095
+  150 days -&gt; average predicted churn 0.214
+  180 days -&gt; average predicted churn 0.390
+  240 days -&gt; average predicted churn 0.443
+  300 days -&gt; average predicted churn 0.490</code></pre>
+                </div>
 
-print(best_practices)
+                <p>The average predicted risk roughly quadruples between 120 and 180 days. That is a concrete, checkable statement for the retention team: "reach out before a customer passes about four months without an order".</p>
 
-# Create a comparison table of methods
-comparison_df = pd.DataFrame({
-    'Method': ['Permutation Importance', 'PDP/ICE', 'LIME', 'SHAP', 
-               'Counterfactuals', 'Anchors', 'Prototypes'],
-    'Scope': ['Global', 'Global', 'Local', 'Both', 'Local', 'Local', 'Global'],
-    'Model-Agnostic': ['Yes', 'Yes', 'Yes', 'Yes*', 'Yes', 'Yes', 'Yes'],
-    'Speed': ['Slow', 'Medium', 'Fast', 'Slow', 'Fast', 'Medium', 'Fast'],
-    'Interpretability': ['High', 'High', 'High', 'Medium', 'Very High', 'High', 'Very High'],
-    'Best For': ['Feature ranking', 'Feature effects', 'Single predictions',
-                'Detailed attribution', 'What-if analysis', 'Rule extraction', 'Examples']
+                <h3>Interactions: When One Feature Changes Another's Effect</h3>
+                <p>A PDP averages over everybody, so it can hide groups that behave in opposite ways. The ICE lines hint at this when they fan out. A direct check: compute the partial dependence of support tickets separately for app users and non-users.</p>
+
+                <pre><code class="language-python">for flag, label in [(0, "non-app users"), (1, "app users")]:
+    group = X_test[X_test["app_user"] == flag]
+    pd_tickets = partial_dependence(hgb, group, ["support_tickets_12m"], method="brute",
+                                    custom_values={"support_tickets_12m": [0, 1, 2, 3, 4, 5]})
+    print(f"{label:14s}", pd_tickets["average"][0].round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>non-app users  [0.137 0.2   0.234 0.288 0.296 0.438]
+app users      [0.087 0.098 0.107 0.11  0.081 0.145]</code></pre>
+                </div>
+
+                <p>For non-app users, each extra support ticket raises predicted churn; for app users, tickets barely matter. An average over both groups would show a mild slope that describes neither. This is an <strong>interaction</strong>, and it is one reason gradient boosting beats logistic regression here: trees capture "it depends" naturally.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ The PDP Can Invent Customers</h4>
+                    <p>Setting <code>spend_12m</code> to $2,500 for a customer with one order and a $60 average order value creates a customer who cannot exist. When the feature on the dial is strongly tied to others, the PDP averages predictions on impossible rows. Check the curve against real data (a groupby of the actual churn rate by bins) before you trust the edges of the plot.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="limits" class="lesson-section">
+                <h2>🧱 What These Tools Cannot Tell You</h2>
+
+                <p>Every tool in this lesson answers a question about the <strong>model</strong>: what it relies on and how its predictions move. None of them answers a question about the <strong>world</strong>: what would happen if Pinecrest changed something.</p>
+
+                <p>App users churn less, and the model uses that. It does not follow that pushing every customer to install the app will reduce churn. Perhaps engaged customers install the app <em>and</em> stay, for the same underlying reason. Only an experiment (offer the app to a random half) can tell the difference. The same goes for discounts: high discount reliance predicts churn, but cutting discounts might make churn worse.</p>
+
+                <div class="card card-success">
+                    <h4>✅ How to Phrase a Finding</h4>
+                    <p>Say "the model relies most on recency" or "customers with long gaps since their last order are predicted to churn more". Do not say "recency causes churn". The first two are what you measured; the third needs an experiment.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <h3>1. Integer Columns in a Partial Dependence Plot</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">raw = customers[features].iloc[:300]
+PartialDependenceDisplay.from_estimator(hgb, raw, ["tenure_months"])</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: The column 0 contains integer data. Partial dependence plots are not supported for integer data: this can lead to implicit rounding with NumPy arrays or even errors with newer pandas versions. Please convert numerical features to floating point dtypes ahead of time to avoid problems.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the grid would include values like 41.6 months, which an integer column cannot hold, so scikit-learn refuses rather than round silently. <strong>Fix:</strong> convert numeric features to float when you build <code>X</code>, as this lesson does with <code>.astype(float)</code>, and train and explain on the same <code>X</code>.</p>
+
+                <h3>2. Asking a Pipeline for <code>coef_</code></h3>
+
+                <pre data-raises="AttributeError"><code class="language-python">logreg.coef_</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>AttributeError: 'Pipeline' object has no attribute 'coef_'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the pipeline is a container; the coefficients live on its last step. <strong>Fix:</strong> <code>logreg[-1].coef_</code> (or <code>logreg.named_steps["logisticregression"].coef_</code>). The same goes for the scaler: <code>logreg[1].scale_</code>.</p>
+
+                <h3>3. Measuring Importance on the Training Data</h3>
+
+                <pre><code class="language-python">train_result = permutation_importance(hgb, X_train, y_train, scoring="roc_auc", n_repeats=10, random_state=42)
+check = pd.DataFrame({"train": train_result.importances_mean, "test": result.importances_mean}, index=features)
+print(check.loc[["email_opens_90d", "return_rate", "avg_order_value", "spend_12m"]].round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>                 train   test
+email_opens_90d  0.026  0.009
+return_rate      0.022  0.004
+avg_order_value  0.019  0.003
+spend_12m        0.014 -0.004</code></pre>
+                </div>
+                <p><strong>What happened:</strong> on the training customers, these features look several times more important than on the test customers. The model memorized a little noise in them, and shuffling breaks the memorized patterns. On new customers that noise does not help, so the test numbers are the honest ones. <strong>Fix:</strong> compute permutation importance on held-out data.</p>
+
+                <h3>4. Treating Importance as a Lever</h3>
+                <p>A briefing says "app usage is a top-5 churn driver, so the app campaign will cut churn". <strong>What is wrong:</strong> importance shows what the model uses to <em>predict</em>, not what changes the outcome. <strong>Fix:</strong> report it as association, and propose a randomized test if someone wants to act on it.</p>
+
+                <h3>5. Trusting <code>feature_importances_</code></h3>
+                <p>The noise experiment earlier is the whole story: impurity importance ranked a random column above real features. <strong>Fix:</strong> use permutation importance on held-out data, and add a random column as a sanity check when you are unsure.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: The Churn-Drivers Briefing</h2>
+
+                <p>Pinecrest's retention team meets on Monday and wants one page: what drives the churn model, how sure you are, and at what point each driver starts to matter. You will produce a ranked table, an importance for groups of related features, and the turning points from partial dependence, saved as <code>churn_drivers.csv</code>. Work in a new notebook called <code>lesson_7_1_project</code>. Allow about 45 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load, split and train <span class="step-time">(5 min)</span></h3>
+                    <p>Start from scratch so the notebook stands alone. Train the gradient-boosting model and confirm it beats the baseline.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.metrics import roc_auc_score
+from sklearn.inspection import permutation_importance, partial_dependence
+
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+            "email_opens_90d"]
+X = customers[features].astype(float)
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
+
+model = HistGradientBoostingClassifier(random_state=42).fit(X_train, y_train)
+test_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+print(f"test ROC AUC {test_auc:.3f} (baseline 0.500)")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>test ROC AUC 0.865 (baseline 0.500)</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Rank single features <span class="step-time">(5 min)</span></h3>
+                    <p>Compute permutation importance on the test set with 10 repeats. Keep the mean and the standard deviation: the spread is how sure you are.</p>
+                    <pre><code class="language-python">perm = permutation_importance(model, X_test, y_test, scoring="roc_auc", n_repeats=10, random_state=42)
+drivers = pd.DataFrame({"auc_drop": perm.importances_mean, "auc_drop_std": perm.importances_std},
+                       index=features).sort_values("auc_drop", ascending=False)
+print(drivers.head(6).round(3))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>                       auc_drop  auc_drop_std
+days_since_last_order     0.140         0.012
+discount_share            0.088         0.006
+tenure_months             0.064         0.009
+app_user                  0.019         0.003
+support_tickets_12m       0.015         0.003
+email_opens_90d           0.009         0.004</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Shuffle related features together <span class="step-time">(15 min)</span></h3>
+                    <p>Single-feature shuffles understate overlapping features. Write a small function that shuffles a whole <em>group</em> of columns with the same random order, so the group's rows stay consistent with each other but no longer match the customers. Then measure three groups the team will recognize.</p>
+                    <pre><code class="language-python">def group_importance(model, X, y, columns, n_repeats=10, seed=42):
+    rng = np.random.default_rng(seed)
+    base = roc_auc_score(y, model.predict_proba(X)[:, 1])
+    drops = []
+    for _ in range(n_repeats):
+        shuffled = X.copy()
+        order = rng.permutation(len(X))
+        shuffled[columns] = X[columns].to_numpy()[order]
+        drops.append(base - roc_auc_score(y, model.predict_proba(shuffled)[:, 1]))
+    return np.mean(drops), np.std(drops)
+
+groups = {
+    "purchase volume": ["orders_12m", "spend_12m", "avg_order_value"],
+    "returns": ["returns_12m", "return_rate"],
+    "engagement": ["app_user", "email_opens_90d", "support_tickets_12m"],
+}
+for name, cols in groups.items():
+    mean, std = group_importance(model, X_test, y_test, cols)
+    single = drivers.loc[cols, "auc_drop"].sum()
+    print(f"{name:16s} group drop {mean:.3f} +/- {std:.3f}   (sum of single drops {single:.3f})")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>purchase volume  group drop 0.010 +/- 0.004   (sum of single drops 0.004)
+returns          group drop 0.002 +/- 0.002   (sum of single drops 0.004)
+engagement       group drop 0.035 +/- 0.005   (sum of single drops 0.044)</code></pre>
+                    </div>
+                    <p>Shuffled together, the three purchase-volume columns matter more than the sum of their single-column drops suggests, because none of them can cover for the others any more. Engagement as a group is a real, if modest, driver. Returns stay minor.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Find the turning points <span class="step-time">(10 min)</span></h3>
+                    <p>For the top three single drivers, compute the partial dependence on a grid of real values (the 5th to 95th percentile of the test data) and report where the average predicted risk is lowest and highest.</p>
+                    <pre><code class="language-python">rows = []
+for feature in drivers.index[:3]:
+    grid = np.unique(np.quantile(X_test[feature].dropna(), np.linspace(0.05, 0.95, 19)).round(3))
+    pd_result = partial_dependence(model, X_test, [feature], method="brute", custom_values={feature: grid})
+    values, risk = pd_result["grid_values"][0], pd_result["average"][0]
+    rows.append({"feature": feature,
+                 "lowest_risk_at": values[risk.argmin()], "lowest_risk": risk.min(),
+                 "highest_risk_at": values[risk.argmax()], "highest_risk": risk.max()})
+turning = pd.DataFrame(rows).set_index("feature")
+print(turning.round(3))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>                       lowest_risk_at  lowest_risk  highest_risk_at  highest_risk
+feature
+days_since_last_order          18.000        0.072          293.050         0.490
+discount_share                  0.074        0.088            0.501         0.363
+tenure_months                  25.000        0.070            2.000         0.277</code></pre>
+                    </div>
+                    <p>Read the tenure row with the PDP in mind: the lowest risk is in the middle of the range, and the highest is at the newest end, the U-shape again.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Save the briefing <span class="step-time">(10 min)</span></h3>
+                    <p>Join the tables, save them, and print a summary that carries its own caveat.</p>
+                    <pre><code class="language-python">briefing = drivers.join(turning)
+briefing.round(3).to_csv("churn_drivers.csv")
+
+top = drivers.index[0]
+print(f"""Churn-drivers briefing
+Model test ROC AUC      : {test_auc:.3f} (baseline 0.500)
+Top driver              : {top} (AUC drop {drivers.loc[top, 'auc_drop']:.3f} +/- {drivers.loc[top, 'auc_drop_std']:.3f})
+Risk on the {top} dial : {turning.loc[top, 'lowest_risk']:.2f} to {turning.loc[top, 'highest_risk']:.2f}
+Features near zero      : {', '.join(drivers.index[drivers['auc_drop'] &lt; 0.005])}
+Saved                   : churn_drivers.csv ({len(briefing)} rows)
+Caveat                  : these describe what the model uses, not what causes churn.""")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>Churn-drivers briefing
+Model test ROC AUC      : 0.865 (baseline 0.500)
+Top driver              : days_since_last_order (AUC drop 0.140 +/- 0.012)
+Risk on the days_since_last_order dial : 0.07 to 0.49
+Features near zero      : return_rate, avg_order_value, returns_12m, spend_12m
+Saved                   : churn_drivers.csv (11 rows)
+Caveat                  : these describe what the model uses, not what causes churn.</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>The model's test ROC AUC (0.865) is reported next to the baseline before any explanation</li>
+                        <li>Permutation importance was computed on the test set, with a mean and a standard deviation for each feature</li>
+                        <li>Your <code>group_importance</code> function shuffles a group of columns with one shared random order</li>
+                        <li>The purchase-volume group shows more importance than its single columns suggest, and you can say why</li>
+                        <li>Turning points come from partial dependence on a grid of real (percentile) values</li>
+                        <li><code>churn_drivers.csv</code> is saved, and the summary states that the drivers are not causes</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue in the project notebook, so <code>model</code>, <code>X_test</code>, <code>drivers</code> and the imports already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Another Yardstick</h3>
+                    <p>Recompute permutation importance with <code>scoring="average_precision"</code> instead of ROC AUC. Does the top three change? Why might a retention team that only calls the riskiest customers prefer this metric?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Change one argument. Average precision (Lesson 1.4) focuses on how well the model finds the positive class at the top of the ranking.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">perm_ap = permutation_importance(model, X_test, y_test, scoring="average_precision",
+                                 n_repeats=10, random_state=42)
+ap_rank = pd.Series(perm_ap.importances_mean, index=features).sort_values(ascending=False)
+print(ap_rank.head(5).round(3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>days_since_last_order    0.280
+discount_share           0.149
+tenure_months            0.135
+support_tickets_12m      0.035
+app_user                 0.030
+dtype: float64</code></pre>
+                        </div>
+                        <p>The same three features lead, in the same order. The drops are bigger in absolute terms because average precision moves more than AUC when the top of the ranking gets worse. Importance always depends on the metric: choose the one that matches the decision.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Remove a Redundant Feature</h3>
+                    <p>Retrain the model without <code>spend_12m</code>. Compare the test AUC with the full model's, and print the new permutation importance of <code>orders_12m</code> and <code>avg_order_value</code>. What does this tell you about the near-zero importance <code>spend_12m</code> had?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Build a list <code>reduced = [f for f in features if f != "spend_12m"]</code> and fit on <code>X_train[reduced]</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">reduced = [f for f in features if f != "spend_12m"]
+model_reduced = HistGradientBoostingClassifier(random_state=42).fit(X_train[reduced], y_train)
+auc_reduced = roc_auc_score(y_test, model_reduced.predict_proba(X_test[reduced])[:, 1])
+print(f"AUC with spend {test_auc:.3f}, without {auc_reduced:.3f}")
+
+perm_reduced = permutation_importance(model_reduced, X_test[reduced], y_test, scoring="roc_auc",
+                                      n_repeats=10, random_state=42)
+new = pd.Series(perm_reduced.importances_mean, index=reduced)
+print(pd.DataFrame({"before": drivers["auc_drop"], "after": new}).loc[["orders_12m", "avg_order_value"]].round(3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>AUC with spend 0.865, without 0.867
+                 before  after
+orders_12m        0.006  0.009
+avg_order_value   0.003  0.002</code></pre>
+                        </div>
+                        <p>The AUC barely moves, so <code>spend_12m</code> added almost nothing the other two did not already carry. Near-zero importance meant "replaceable", not "unrelated to churn". Removing a redundant feature also makes the remaining importances easier to read.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Check a Curve Against Reality</h3>
+                    <p>The PDP says risk jumps after about four months without an order. Check this against the data itself: bin <code>days_since_last_order</code> in the <em>test</em> set at 0, 30, 90, 150, 250 and 365 days with <code>pd.cut</code>, and print the actual churn rate and the model's average predicted probability per bin.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Build a small DataFrame with the bin, <code>y_test</code> and the predicted probabilities, then <code>groupby("bin", observed=True).mean()</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">check = pd.DataFrame({
+    "bin": pd.cut(X_test["days_since_last_order"], [0, 30, 90, 150, 250, 365], include_lowest=True),
+    "actual": y_test,
+    "predicted": model.predict_proba(X_test)[:, 1],
 })
+print(check.groupby("bin", observed=True).agg(customers=("actual", "size"), actual=("actual", "mean"),
+                                               predicted=("predicted", "mean")).round(3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>                customers  actual  predicted
+bin
+(-0.001, 30.0]        486   0.103      0.086
+(30.0, 90.0]          555   0.092      0.077
+(90.0, 150.0]         210   0.133      0.128
+(150.0, 250.0]        137   0.416      0.396
+(250.0, 365.0]        112   0.554      0.522</code></pre>
+                        </div>
+                        <p>The real churn rate jumps between the 91 to 150 and the 151 to 250 day bins, and the model's average prediction tracks it closely. The PDP's threshold is not an artifact of the plot: the data agree. (A PDP and a groupby answer slightly different questions: the groupby lets the other features vary along with recency, the PDP holds them fixed. When they agree, you can be more confident.)</p>
+                    </details>
+                </div>
 
-print("\nInterpretation Methods Comparison:")
-print(comparison_df.to_string(index=False))
-print("\n* SHAP has model-specific optimizations for tree-based models")</code></pre>
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Permutation Importance by Hand (Stretch)</h3>
+                    <p>Without <code>permutation_importance</code>, compute the importance of <code>discount_share</code>: 10 times, shuffle that one column of <code>X_test</code> with <code>rng.permutation</code>, rescore, and average the AUC drops. Use <code>np.random.default_rng(0)</code>. Is your number close to the library's (0.088)? Why will it not match to the last digit?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>It is the <code>group_importance</code> function from Step 3 with a one-column group. The library uses its own random number stream.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">rng = np.random.default_rng(0)
+drops = []
+for _ in range(10):
+    shuffled = X_test.copy()
+    shuffled["discount_share"] = rng.permutation(X_test["discount_share"].to_numpy())
+    drops.append(test_auc - roc_auc_score(y_test, model.predict_proba(shuffled)[:, 1]))
+print(f"by hand: {np.mean(drops):.3f} +/- {np.std(drops):.3f}")
+print(f"library: {drivers.loc['discount_share', 'auc_drop']:.3f} +/- {drivers.loc['discount_share', 'auc_drop_std']:.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>by hand: 0.083 +/- 0.005
+library: 0.088 +/- 0.006</code></pre>
+                        </div>
+                        <p>The two agree within their spread. They differ in the third decimal because the shuffles are different random orders. That spread is exactly why you report a standard deviation, and why a difference of 0.002 between two features is not a ranking you should defend.</p>
+                    </details>
+                </div>
+            </section>
 
-    <h2>Practice Exercises</h2>
-    
-    <h3>Exercise 1: Custom Interpretation Framework</h3>
-    <p>Build a comprehensive interpretation framework that:</p>
-    <ol>
-        <li>Automatically selects appropriate interpretation methods based on model type</li>
-        <li>Generates both global and local explanations</li>
-        <li>Provides confidence intervals for interpretations</li>
-        <li>Detects and warns about potential interpretation issues</li>
-        <li>Exports interpretations in multiple formats (JSON, HTML, PDF)</li>
-    </ol>
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
 
-    <h3>Exercise 2: Fairness and Bias Detection</h3>
-    <p>Create tools to detect and explain bias:</p>
-    <ol>
-        <li>Implement disparate impact analysis</li>
-        <li>Create fairness-aware SHAP values</li>
-        <li>Build counterfactual fairness explanations</li>
-        <li>Visualize bias across different demographic groups</li>
-    </ol>
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> A scaled logistic regression gives <code>discount_share</code> a coefficient of 0.65. What does that mean?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Coefficients act on the log-odds, not on the probability directly. What does exponentiating do?">
+                                A) One more standard deviation of discount share raises the churn probability by 0.65
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The coefficient is a change in log-odds per standard deviation, other features held fixed. e to the 0.65 is about 1.9, so the odds of churn almost double.">
+                                B) One more standard deviation of discount share multiplies the odds of churn by about 1.9, other features held fixed
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A model fitted on observational data describes associations. What would you need to show cause and effect?">
+                                C) Cutting discounts will reduce churn
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-    <h3>Exercise 3: Real-time Interpretation API</h3>
-    <p>Develop a production-ready interpretation service:</p>
-    <ol>
-        <li>REST API for model predictions with explanations</li>
-        <li>Caching for expensive computations</li>
-        <li>Batch processing capabilities</li>
-        <li>Monitoring and logging of interpretation requests</li>
-        <li>A/B testing different explanation methods</li>
-    </ol>
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> A random forest's <code>feature_importances_</code> ranks a column of random noise above <code>app_user</code>. What is the best explanation?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The noise was generated independently of everything. Could it really carry information about churn?">
+                                A) The noise accidentally contains real churn signal
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="app_user does matter on test data. Which data is impurity importance computed on?">
+                                B) <code>app_user</code> is irrelevant to churn
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Impurity importance is measured during training and rewards features with many distinct values that the trees can use to memorize training rows. Permutation importance on test data puts the noise near zero.">
+                                C) Impurity importance is computed on training data and favors many-valued features the trees can overfit with
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>🌍 <strong>Global vs Local:</strong> Understand overall patterns and individual predictions</li>
-        <li>📊 <strong>Multiple Methods:</strong> No single technique tells the complete story</li>
-        <li>🎯 <strong>Permutation Importance:</strong> Model-agnostic feature importance</li>
-        <li>📈 <strong>PDP/ICE:</strong> Visualize feature effects on predictions</li>
-        <li>🔍 <strong>LIME:</strong> Fast local explanations via linear approximation</li>
-        <li>🎮 <strong>SHAP:</strong> Game-theoretic approach with solid foundations</li>
-        <li>🔄 <strong>Counterfactuals:</strong> What needs to change for different outcome</li>
-        <li>⚓ <strong>Anchors:</strong> Sufficient conditions for predictions</li>
-        <li>👥 <strong>Prototypes:</strong> Representative examples aid understanding</li>
-        <li>⚖️ <strong>Trust:</strong> Interpretability builds confidence in ML systems</li>
-    </ul>
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> Shuffling <code>spend_12m</code> alone changes the test AUC by almost nothing, but <code>spend_12m</code> equals orders times average order value. What should you conclude?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="The model can rebuild spend from the two intact columns, so shuffling spend alone costs little. Shuffle the related columns together to see what the information is worth.">
+                                A) The information is redundant: the model can recover it from other columns, so measure the group together
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="What happens to the other two columns while spend_12m is shuffled?">
+                                B) Spending has nothing to do with churn
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The method treats all models alike. What is special about this particular feature?">
+                                C) Permutation importance does not work for gradient boosting
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-    <h2>Summary</h2>
-    <p>Model interpretation and explainability are critical for deploying machine learning responsibly. From understanding global patterns to explaining individual predictions, the techniques covered here provide the tools to open the black box of complex models. Remember that interpretation is not just about satisfying curiosity—it's about building trust, ensuring fairness, meeting regulatory requirements, and ultimately creating ML systems that work reliably in the real world. As models become more complex, the ability to explain their decisions becomes not just valuable, but essential.</p>
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> What does this code compute?</p>
+                        <pre><code class="language-python">quiz_pd = partial_dependence(model, X_test, ["tenure_months"], method="brute",
+                             custom_values={"tenure_months": [3, 40, 90]})</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Does partial dependence look only at customers who really have that tenure?">
+                                A) The actual churn rate of customers with tenure 3, 40 and 90 months
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="For each grid value it sets tenure_months to that value for every test customer, predicts, and averages the predicted probabilities. The other features keep their real values.">
+                                B) For each of 3, 40 and 90, the average predicted churn probability when every test customer's tenure is set to that value
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Partial dependence never retrains anything. What does it do with the fitted model?">
+                                C) Three models retrained on customers with those tenures
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Imagine a model decision that would affect a real person — a loan approval,
-            a medical flag, a hiring screen. What exactly would you need to be able to explain about that prediction before you would
-            feel comfortable deploying the model?</p>
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> The partial dependence of support tickets is nearly flat overall, but ICE curves fan out: some rise steeply, others stay flat. What is the most likely reason?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="A flat average can hide two groups moving in different directions. Is that a bug?">
+                                A) The plot is broken because ICE and PDP should agree
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The steep ICE curves show that for some customers the model's prediction moves a lot. Is the feature really unused?">
+                                B) Support tickets are unimportant for every customer
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Diverging ICE curves signal an interaction: the effect of tickets depends on another feature. Here tickets raise risk for non-app users but not for app users, and the average blurs the two.">
+                                C) An interaction: the effect of tickets depends on another feature, such as app use
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Should I compute permutation importance on the test set or a validation set?</summary>
+                    <p>On data the model did not train on. While you are still choosing features or models, use a validation set or cross-validation folds, so the test set stays untouched for the final score (Lesson 1.2). For the final explanation of a finished model, the test set is fine, because you are describing, not tuning.</p>
+                </details>
+                <details>
+                    <summary>How many repeats do I need?</summary>
+                    <p>Enough that the standard deviation is small compared with the gaps between features you care about. Five to ten is common. If two features are within one standard deviation of each other, do not claim one is more important than the other.</p>
+                </details>
+                <details>
+                    <summary>Can I use these tools on a pipeline with one-hot encoding?</summary>
+                    <p>Yes, and that is a strength. Call <code>permutation_importance</code> on the whole pipeline with the raw <code>X</code>: it shuffles the original <code>home_store</code> column, not each one-hot column separately, so you get one importance per business feature.</p>
+                </details>
+                <details>
+                    <summary>The PDP is in probability here, but sometimes I see negative values on the y-axis. Why?</summary>
+                    <p>For gradient boosting with the default <code>method="auto"</code>, <code>partial_dependence</code> uses a fast tree-based shortcut that works on the model's raw score (log-odds), which can be negative. <code>method="brute"</code>, used in this lesson, averages real predicted probabilities. The shapes are similar; the units differ.</p>
+                </details>
+                <details>
+                    <summary>Is a simple, interpretable model better than a black box I explain afterwards?</summary>
+                    <p>Sometimes. If a logistic regression is nearly as good, its coefficients are an explanation you get for free, and regulators often prefer that. Here boosting is clearly better because the true effects bend and interact, and the tools in this module make its behavior visible. Try the simple model first, and keep it if the gap is small.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Add <code>cancellation_reason</code> (the leaked column from Lesson 1.2) to the features with a one-hot encoder in a pipeline, retrain, and compute permutation importance on the raw columns. How does the leak show up, and how could a routine importance check in your workflow have caught it before deployment?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Write the three sentences you would say to Pinecrest's retention team about what drives the churn model. Then write the one sentence you would add so that nobody leaves the meeting thinking the model has found the causes of churn.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Global explanations describe the whole model; local ones explain a single prediction</li>
+                        <li>Scaled logistic-regression coefficients are changes in log-odds per standard deviation; <code>np.exp</code> turns them into odds ratios</li>
+                        <li>Coefficients miss curves and interactions, and overlapping features share credit unpredictably</li>
+                        <li>Impurity-based <code>feature_importances_</code> is computed on training data and can rank pure noise above real features</li>
+                        <li>Permutation importance measures the drop in a held-out score when one column (or a group) is shuffled; it works for any model</li>
+                        <li>Partial dependence shows how the average prediction changes along one feature; ICE curves show it per customer and reveal interactions</li>
+                        <li>All of these describe the model, not cause and effect in the world</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You turned coefficients into plain-language odds statements</li>
+                        <li>You exposed the impurity-importance trap with a noise column</li>
+                        <li>You measured which features the churn model relies on, with error bars, and why the linear model falls behind</li>
+                        <li>You found a threshold, a U-shape and an interaction from partial dependence and ICE curves</li>
+                        <li>You wrote a grouped-importance function and produced a churn-drivers briefing</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="interpretability_shap.html"><strong>Lesson 7.2: SHAP Values</strong></a> you will move from "what does the model rely on overall" to "why did it flag <em>this</em> customer". SHAP splits each prediction into exact contributions from every feature, using an idea from game theory, and its summary plots combine importance and direction in one picture.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook: Lesson 7.2 explains the same gradient-boosting model.</li>
+                    <li>Pick the riskiest test customer (<code>model.predict_proba(X_test)[:, 1].argmax()</code>) and look at their feature values. Guess which three features push their risk up most; you will check your guess in 7.2.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You can now open a model up and check its reasoning, which many people who train models never do. If the difference between "the model uses this" and "this causes that" still feels slippery, that is normal: experienced analysts mix them up in meetings every week. Noticing it is the skill, and you have started practicing it.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="hyperparameter_tuning.html" class="prev-lesson">← Previous: Hyperparameter Tuning</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="interpretability_shap.html" class="next-lesson">Next: SHAP Values →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Interpretability comes in two scopes: <strong>global</strong> (how the model behaves overall) and <strong>local</strong> (why it made one specific prediction).</li>
-                <li>Model-agnostic tools — permutation importance, SHAP, LIME, and partial dependence plots — work on any trained estimator.</li>
-                <li>SHAP values are additive and fairly distribute a prediction's value across its features.</li>
-                <li>Explainability supports trust, debugging, fairness, and regulatory compliance — not just curiosity.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now open a black-box model and explain both its overall logic and its individual decisions — turning an opaque
-        predictor into something a team, an auditor, and an end user can actually trust.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>What's the difference between a global and a local explanation?</summary>
-            <p>A global explanation describes the model's overall behavior across the whole dataset (which features matter most, in general).
-            A local explanation focuses on one specific prediction and shows why that particular case came out the way it did.</p>
-        </details>
-        <details>
-            <summary>Should I use SHAP or LIME?</summary>
-            <p>LIME is fast and intuitive but its local approximations can be unstable. SHAP has stronger theoretical guarantees
-            (it is additive and consistent) but costs more compute. For careful analysis, prefer SHAP; for a quick look, LIME is fine.</p>
-        </details>
-        <details>
-            <summary>Does high feature importance mean that feature causes the outcome?</summary>
-            <p>No. Importance measures predictive contribution and association, not causation. A feature can be important because it
-            correlates with the real cause. Treat importance as a clue to investigate, not proof of cause and effect.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Once you can explain a model, the next step is deploying and monitoring it responsibly — carrying that same transparency
-        into production so the system stays trustworthy over time.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Run permutation importance on a model you trained and note which features dominate.</li>
-            <li>Generate a SHAP summary plot and pick one feature whose direction of effect surprised you.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>A model you can explain is a model people can trust. Learning to open the black box makes you exactly the kind of
-            practitioner teams and stakeholders rely on. Keep going.</p>
-        </div>
-    </section>
-
-    <!-- Navigation -->
-    <nav class="lesson-nav" aria-label="Lesson navigation">
-        <a href="ensemble_methods.html" class="prev-lesson">Previous: Advanced Ensemble Methods</a>
-        <a href="index.html" class="home-link">Course Home</a>
-        <a href="mlops_intro.html" class="next-lesson">Next: MLOps Introduction</a>
-    </nav>
-    
-    <script src="js/clipboard.js"></script>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1398,6 +972,10 @@ print("\n* SHAP has model-specific optimizations for tree-based models")</code><
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>

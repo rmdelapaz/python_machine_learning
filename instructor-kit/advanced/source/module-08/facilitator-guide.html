@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facilitator Guide: Session 8</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">contains answers &amp; timing · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Facilitator Guide</div>
+    <h1>Session 8: CNNs and Sequence Models</h1>
+    <p class="sub">How to teach Session 8 of Advanced Machine Learning. Convolutions and pooling, built up from a hand-applied filter to a CNN that beats a dense network on Fashion-MNIST with the same loop; then sequences: naive forecasts, windows split by time, an RNN opened up, an LSTM forecaster that beats "same day last week" by a third, and attention built by hand. Includes a CPU-time plan (what to start early, what trains through the break, a checkpoint fallback) for the first session where training takes real time.</p>
+    <div class="meta-row">
+      <span class="chip"><b>2</b> lessons</span>
+      <span class="chip"><b>3 hrs</b> session</span>
+      <span class="chip">Lessons <b>10.3–10.4</b></span>
+      <span class="chip">Session <b>8</b> of 13</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>How to Use This Guide</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Same rhythm for both lessons: frame → live demo → guided lab → start the lesson's project. Exercises, quiz and journal are homework.</li>
+  <li>Type, do not paste, except the training helpers (they come from <code class="inline">training.py</code>, made as Session 7 homework). Every output below was produced by the code above it (Python 3.12, PyTorch 2.14.1, torchvision, scikit-learn 1.9.1 on 4 CPU threads).</li>
+  <li>Outputs marked "yours may vary slightly" are PyTorch results: repeatable on one machine, possibly different in the last digits elsewhere. Compare trends and rankings.</li>
+  <li>The lessons are the reference: keep <code class="inline">deep_learning_cnn.html</code> and <code class="inline">deep_learning_rnn.html</code> open for the pictures (filter maps, the CNN diagram, the confusion matrix, the 28-day chart, the holiday-season chart). Labs live in <code class="inline">labs/module-08/</code>.</li>
+  <li>This is the session where training takes real time on a CPU. The CPU-time plan below says what to start early, what runs during the break, and what to load from a checkpoint.</li>
+</ul>
+<div class="note warn"><div class="t">The #1 risk of Session 8: waiting for training</div>
+<p>Ten epochs of CNN training in the demo, four more in the project, two GRUs in a lab: on a slow laptop the room spends its time watching progress lines. The plan: start every training cell, then TALK over it (each demo step says what to discuss while it runs); load the kit's checkpoint the moment a laptop falls behind; and launch the project's training right before the break so it finishes while people get coffee. The second risk is the opposite of Session 7's: a room that now believes networks always win. Protect the end of 10.4's project (on learners' own time, so make the point in the demo): with the same information, default gradient boosting on a few lag columns ($616) sits between the weekday-only LSTM ($702) and the calendar-aware one ($515). The information fed in mattered more than the architecture.</p>
+</div>
+
+  <div class="sec"><h2>Before the Session</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ <b>Fashion-MNIST on every laptop</b> (about 30 MB in <code class="inline">data/FashionMNIST</code>). It was on Session 7's bring list. On the projector machine, check that <code class="inline">datasets.FashionMNIST("data", download=True)</code> finds the files without downloading. Bring a USB stick with a copy of the <code class="inline">FashionMNIST</code> folder for anyone who did not download it.</li>
+  <li>☐ <b>Fixtures:</b> <code class="inline">labs/module-08/_fixtures/</code> must hold <code class="inline">fashion_dense.pt</code> and <code class="inline">fashion_small_cnn.pt</code> (about 0.4 MB each; the lesson's two models). Hand the folder out with the starters. To rebuild: <code class="inline">python labs/module-08/l10_3-cnn/prepare_fashion_checkpoints.py</code> (prints 0.840 and 0.864).</li>
+  <li>☐ <b>Run the kit check once:</b> <code class="inline">python3 labs/check_labs.py module-08</code> (8 files, about 2 minutes).</li>
+  <li>☐ <b>Pre-run both lesson notebooks</b> on the projector machine the day before, all the way through the projects. Keep the outputs: on the slide or a second screen they are your answer when a live run is slow. Keep <code class="inline">fashion_cnn.pt</code> and <code class="inline">sales_lstm.pt</code> from the rehearsal.</li>
+  <li>☐ <b>Downloads for next week (announce today):</b> Session 9 (Lesson 10.5) needs EuroSAT in <code class="inline">data/eurosat/</code> (94 MB, about 186 MB unpacked) and the pretrained ResNet-18 (45 MB) and MobileNetV3-small (10 MB) weights in PyTorch's cache. Too big for venue Wi-Fi: the bring list gives the one-line command for home. Prepare a USB stick with <code class="inline">eurosat/</code> and the two <code class="inline">.pth</code> files as the fallback Session 9 offers.</li>
+  <li>☐ <b>Board:</b> the shape formula out = (n + 2p - k) / s + 1 and the parameter formula; the CNN pipeline (conv → ReLU → pool, twice, flatten, dense); for 10.4, a row of boxes for a 28-day window with an arrow to day 29, and "$1,072" in a box.</li>
+</ul>
+<div class="blk lab"><div class="h">CPU-time plan (4 threads, measured on the build machine with other jobs running; a quiet modern laptop is similar, an older one up to twice as slow)</div>
+<table class="timing">
+<thead><tr><th>What</th><th>Measured</th><th>Plan</th></tr></thead>
+<tbody>
+<tr><td>Loading Fashion-MNIST and <code class="inline">import torch</code> (demo Step 1)</td><td>about 5 s</td><td>Learners run it during the warm-up.</td></tr>
+<tr><td>10.3 dense baseline, 5 epochs on 20,000 images (Step 9)</td><td>about 9 s</td><td>Live; talk over it.</td></tr>
+<tr><td>10.3 SmallCNN, 5 epochs (Step 10)</td><td>about 22 s</td><td>Start it, then discuss where the parameters live. Laptops still running after a minute: load <code class="inline">_fixtures/fashion_small_cnn.pt</code> (Step 11's fallback) and continue.</td></tr>
+<tr><td>10.3 project FashionCNN, 4 epochs (Step 3)</td><td>about 45 s (up to 2 min on older laptops)</td><td>Launch right before the break; it finishes during it. Anyone whose run fails: use the rehearsal's <code class="inline">fashion_cnn.pt</code> from the shared folder for Steps 4 to 6 at home.</td></tr>
+<tr><td>10.4 LSTM, 15 epochs on 2,812 windows (Step 9)</td><td>about 9 s</td><td>Live.</td></tr>
+<tr><td>10.4 project calendar LSTM (Step 3) and boosting (Step 5)</td><td>about 11 s and 6 s</td><td>Step 3 in the room; Step 5 at home.</td></tr>
+<tr><td>Labs: edge race 30 s, shift test 20 s (loads the fixtures, no training), transactions GRU 30 s, attention 3 s</td><td></td><td>All live; under 90 s each.</td></tr>
+</tbody>
+</table>
+<p><b>GPU note.</b> Nobody needs a GPU today, and every number in this kit comes from the CPU code. A learner with a CUDA laptop may try the lesson's GPU card at home (move the model once, every batch in the loops); in the room, stay on the CPU so results match the pages and the neighbors. GPU arithmetic is not bit-identical to CPU arithmetic, so even a correct GPU run differs in the last digits.</p>
+</div>
+<div class="blk warn"><div class="h">Known environment traps</div>
+<table class="timing">
+<thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td>The first cell starts downloading Fashion-MNIST</td><td>The data is not in this project's <code class="inline">data/</code> (often: JupyterLab started in another folder)</td><td><code class="inline">print(Path.cwd())</code>. Start from <code class="inline">pinecrest-ml</code>; copy the <code class="inline">FashionMNIST</code> folder from the USB stick into <code class="inline">data/</code>.</td></tr>
+<tr><td><code class="inline">RuntimeError: Given groups=1, weight of size [16, 1, 3, 3], expected input[1, 64, 28, 28] to have 1 channels</code></td><td>A batch built by hand without the channel axis</td><td><code class="inline">.unsqueeze(1)</code>: (64, 1, 28, 28).</td></tr>
+<tr><td><code class="inline">RuntimeError: mat1 and mat2 shapes cannot be multiplied (64x1568 and 25088x10)</code></td><td>First Linear sized for 28 × 28 maps</td><td>Trace a dummy batch; use the flattened size you see.</td></tr>
+<tr><td>Training takes many minutes</td><td>Battery saver, the full 60,000 images, or training inside an evaluation loop</td><td>Plug in; check the <code class="inline">Subset(..., range(20_000))</code>; load the checkpoint and move on.</td></tr>
+<tr><td><code class="inline">FileNotFoundError</code> for <code class="inline">_fixtures/fashion_small_cnn.pt</code></td><td>The <code class="inline">_fixtures</code> folder was not copied with the starters</td><td>Copy <code class="inline">labs/module-08/_fixtures/</code> from the shared folder.</td></tr>
+<tr><td><code class="inline">ValueError: RNN input dtype (torch.float64) does not match weight dtype (torch.float32)</code></td><td>Windows built from NumPy without a dtype</td><td><code class="inline">torch.tensor(np.array(X), dtype=torch.float32)</code>.</td></tr>
+</tbody>
+</table>
+</div>
+
+  <div class="sec"><h2>Session 8 Agenda (3 hours)</h2><span class="rule"></span></div>
+  <table class="timing">
+    <thead><tr><th>Clock</th><th>Minutes</th><th>Segment</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="t">0:00</td><td class="t">10</td><td>Warm-up</td><td>Five retrieval questions on 10.1 and 10.2 while everyone's first cell loads Fashion-MNIST; homework check.</td></tr>
+      <tr><td class="t">0:10</td><td class="t">10</td><td><b>10.3</b> Frame and mental model</td><td>A stencil and a flashlight; why a dense network wastes an image's structure.</td></tr>
+      <tr><td class="t">0:20</td><td class="t">30</td><td><b>10.3</b> Live demo</td><td>Fashion-MNIST, a convolution by hand, edge filters on a boot, Conv2d shapes and parameters, tracing SmallCNN, dense baseline vs CNN (trained live, checkpoint as fallback), per-class accuracy.</td></tr>
+      <tr><td class="t">0:50</td><td class="t">20</td><td><b>10.3</b> Guided lab</td><td><code class="inline">labs/module-08/l10_3-cnn/edge_features_starter.py</code> (12 min), then <code class="inline">labs/module-08/l10_3-cnn/shift_test_starter.py</code> in pairs (8 min).</td></tr>
+      <tr><td class="t">1:10</td><td class="t">10</td><td><b>10.3</b> Start the lesson project</td><td>A better clothing classifier, Steps 1 to 3; Step 3's training runs through the break.</td></tr>
+      <tr><td class="t">1:20</td><td class="t">10</td><td>Break</td><td>The FashionCNN trains on every laptop (about a minute, longer on older machines).</td></tr>
+      <tr><td class="t">1:30</td><td class="t">10</td><td><b>10.4</b> Frame and mental model</td><td>The store manager's notebook and the binder; check the project training finished.</td></tr>
+      <tr><td class="t">1:40</td><td class="t">30</td><td><b>10.4</b> Live demo</td><td>Daily sales, naive forecasts, windows, an RNN cell by hand, LSTM and GRU, scaling, the LSTM forecaster, attention by hand, the silent mistakes.</td></tr>
+      <tr><td class="t">2:10</td><td class="t">25</td><td><b>10.4</b> Guided lab</td><td><code class="inline">labs/module-08/l10_4-sequences/transactions_gru_starter.py</code> (15 min), then <code class="inline">labs/module-08/l10_4-sequences/attention_lookup_starter.py</code> (10 min).</td></tr>
+      <tr><td class="t">2:35</td><td class="t">15</td><td><b>10.4</b> Start the lesson project</td><td>A calendar-aware forecaster, Steps 1 to 3; Steps 4 to 7 go home.</td></tr>
+      <tr><td class="t">2:50</td><td class="t">10</td><td>Wrap-up</td><td>Exit ticket (3 questions), homework, bring list for Session 9 (downloads at home).</td></tr>
+      <tr><td class="t"><b>Total</b></td><td class="t"><b>180</b></td><td></td><td>Ends at 3:00.</td></tr>
+    </tbody>
+  </table>
+<p><b>In the room.</b> The lesson pages estimate 110 + 115 = 225 minutes for a solo learner; the room has 150. So the room does the mental model, the live demo (with training started early or loaded from a checkpoint), one or two guided kit labs and the first project steps. The lessons' Common Mistakes are folded into the demos and the two debug handouts.</p>
+<p><b>Goes home (2 to 3 hours).</b> 10.3 project Steps 4 to 6 (test once, class by class; save and reload; predictions and summary); 10.4 project Steps 4 to 7 (per store and special days, the boosting challenger, the holiday chart, save and summarize); Exercises 1 to 3 of each lesson (Exercise 4 is a stretch); both Quick Quizzes; both journals; the second halves of the shift and attention labs; the Session 9 downloads.</p>
+<p><b>Protect, in this order:</b> the dense-vs-CNN comparison with the same seed and loop (10.3 Steps 9 to 12); naive forecasts and the time split (10.4 Steps 4 and 5); the LSTM against $1,072 (Step 9); the three silent mistakes (Step 12). <b>Cut first:</b> 10.3 Step 5 (edge filters on a boot: show the page's picture), then 10.4 Step 6's manual loop (say "same numbers, step by step"), then 10.4 Step 11 (PyTorch's attention function).</p>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">0:00</span><h3>Warm-up: Retrieval on 10.1 and 10.2</h3><span class="dur">10 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Timing</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">2m</td><td>Everyone opens <code class="inline">lesson_10_3</code> and runs the Fashion-MNIST cell (demo Step 1's code is on the slide); it loads while they think</td></tr>
+<tr><td class="t">5m</td><td>Five questions; learners answer in the workbook's Warm-up box</td></tr>
+<tr><td class="t">3m</td><td>Reveal; homework check: who has <code class="inline">training.py</code>? Who has Fashion-MNIST in <code class="inline">data/</code>?</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Questions and answers</div>
+<ol class="steps">
+  <li><b>W1.</b> What does this print? (Lesson 10.2) <pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> torch
+print(torch.tensor(np.zeros(<span class="s">3</span>)).dtype, torch.tensor(np.zeros(<span class="s">3</span>), dtype=torch.float32).dtype)</pre> <b>Answer:</b> <code class="inline">torch.float64 torch.float32</code>: torch.tensor keeps NumPy's float64; layers want float32, so convert as you create.</li>
+  <li><b>W2.</b> Put the four lines of the batch loop in order: loss.backward(), optimizer.step(), optimizer.zero_grad(), loss = loss_fn(model(xb), yb). (10.2) <b>Answer:</b> optimizer.zero_grad(), loss = loss_fn(model(xb), yb), loss.backward(), optimizer.step().</li>
+  <li><b>W3.</b> Your binary model ends with nn.Linear(32, 1) and trains with BCEWithLogitsLoss. Where does the sigmoid go? (10.2) <b>Answer:</b> Inside the loss during training; apply torch.sigmoid yourself only to report probabilities. Today's ten-class models follow the same rule with softmax and CrossEntropyLoss.</li>
+  <li><b>W4.</b> A model with dropout gives a different score for the same customer on every call, inside with torch.no_grad(). Why? (10.2) <b>Answer:</b> It is still in training mode: no_grad() stops gradient tracking but does not switch dropout off. Call model.eval().</li>
+  <li><b>W5.</b> On the churn table the PyTorch network scored test AUC 0.846 and gradient boosting 0.850. What was the verdict, and what kind of data should change it? (10.1, 10.2) <b>Answer:</b> Recommend boosting: a tie within the wobble, with far fewer choices. Images, sequences and text are where networks earn their keep: today's session.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Bridge to today</div>
+<p>Say: "Last week a network tied gradient boosting on a table and we recommended boosting. Today the data has structure a network can exploit: pixels that belong together, and days that come in order. Same training loop as 10.2; what changes is the architecture, and that is exactly the point."</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Lesson Plans</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">10.3</span><h3>Convolutional Neural Networks</h3><span class="dur">70 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Explain what a convolution filter and a pooling layer compute, and why sharing one small filter across the whole image suits pictures</li>
+  <li>Predict the output shape and the parameter count of <code class="inline">nn.Conv2d</code> and <code class="inline">nn.MaxPool2d</code> layers</li>
+  <li>Build a CNN as an <code class="inline">nn.Module</code> and train it on Fashion-MNIST with a validation set and a fixed seed</li>
+  <li>Compare it with a dense-network baseline using test accuracy, per-class accuracy and a confusion matrix</li>
+  <li>Save trained weights with <code class="inline">state_dict</code> and reload them safely with <code class="inline">weights_only=True</code></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: a stencil and a flashlight; local connectivity and weight sharing</td></tr>
+<tr><td class="t">30m</td><td>Live demo: data, a convolution by hand, Conv2d shapes and parameters, tracing SmallCNN, dense vs CNN, per-class accuracy, two silent traps</td></tr>
+<tr><td class="t">20m</td><td>Guided lab: <code class="inline">edge_features_starter.py</code>, then <code class="inline">shift_test_starter.py</code> in pairs</td></tr>
+<tr><td class="t">10m</td><td>Start the project: Steps 1 to 3 (Step 3 trains through the break)</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>Say: "Picture a 3 × 3 stencil cut to match one pattern: dark on the left, bright on the right. Slide it across the photo one step at a time and write down how well each patch matches. You get a new image, bright wherever that pattern appears: a feature map. The stencil is a filter, the sliding is a convolution. A layer holds many stencils, and training learns their patterns: edges first, then corners and stripes, then collars and soles."</p>
+<p>Then the two ideas on the board: <b>local connectivity</b> (each output looks at a small window) and <b>weight sharing</b> (the same stencil at every position, so a pattern learned once is found anywhere, for 9 weights plus a bias). Contrast: "A dense network flattens the image into 784 unrelated numbers; if a sneaker moves three pixels, every input changes." Today's shift lab tests how far that promise really goes.</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>Notebook <code class="inline">lesson_10_3</code>. Steps 1 to 8 are instant; Steps 9 and 10 train (start them and talk); Step 11 has the checkpoint fallback for slow laptops.</p>
+<ol class="steps">
+  <li><b>Load Fashion-MNIST (2m).</b> "Seventy thousand small grayscale photos of clothing in ten classes. It is already in your <code class="inline">data/</code> folder, so <code class="inline">download=True</code> just finds it."
+<pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+<span class="k">from</span> torch.utils.data <span class="k">import</span> DataLoader, Subset
+<span class="k">from</span> torchvision <span class="k">import</span> datasets, transforms
+
+train_full = datasets.FashionMNIST(<span class="s">"data"</span>, train=<span class="k">True</span>, download=<span class="k">True</span>, transform=transforms.ToTensor())
+test_set = datasets.FashionMNIST(<span class="s">"data"</span>, train=<span class="k">False</span>, download=<span class="k">True</span>, transform=transforms.ToTensor())
+
+print(len(train_full), len(test_set))
+print(train_full.classes)</pre>
+<pre class="out">60000 10000
+['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']</pre>
+Anyone whose cell starts downloading: let it run (about 30 MB) or pair them up; this is why it was homework.</li>
+  <li><b>One image is (channels, height, width) (2m).</b> "Channel first, always. A batch adds a dimension in front: (64, 1, 28, 28). Most CNN errors are shape errors."
+<pre class="code">image, label = train_full[<span class="s">0</span>]
+print(image.shape, image.dtype)
+print(<span class="s">f"pixel values {image.min():.1f} to {image.max():.1f}; label {label} = {train_full.classes[label]}"</span>)</pre>
+<pre class="out">torch.Size([1, 28, 28]) torch.float32
+pixel values 0.0 to 1.0; label 9 = Ankle boot</pre></li>
+  <li><b>Three sets, and a fair headline metric (2m).</b> "20,000 to train, 5,000 other training images to watch progress, the official 10,000 locked away."
+<pre class="code">train_set = Subset(train_full, range(<span class="s">20_000</span>))
+val_set = Subset(train_full, range(<span class="s">55_000</span>, <span class="s">60_000</span>))
+
+print(len(train_set), len(val_set), len(test_set))
+print(torch.bincount(train_full.targets[:<span class="s">20_000</span>]))</pre>
+<pre class="out">20000 5000 10000
+tensor([1935, 2025, 1982, 2011, 1967, 2010, 2068, 2003, 1971, 2028])</pre>
+About 2,000 per class: chance is 10%, and accuracy is a fair headline here, unlike churn.</li>
+  <li><b>A convolution by hand (3m).</b> "A 3 × 3 stencil for 'dark on the left, bright on the right'. Slide it, multiply, add." Ask for the value where the window straddles the edge before running (27).
+<pre class="code"><span class="k">import</span> torch.nn.functional <span class="k">as</span> F
+
+x = torch.tensor([[<span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">9</span>, <span class="s">9</span>]] * <span class="s">5</span>, dtype=torch.float32)
+vertical_edge = torch.tensor([[-<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>]] * <span class="s">3</span>, dtype=torch.float32)
+
+out = F.conv2d(x.reshape(<span class="s">1</span>, <span class="s">1</span>, <span class="s">5</span>, <span class="s">5</span>), vertical_edge.reshape(<span class="s">1</span>, <span class="s">1</span>, <span class="s">3</span>, <span class="s">3</span>))
+print(out.squeeze())</pre>
+<pre class="out">tensor([[ 0., 27., 27.],
+        [ 0., 27., 27.],
+        [ 0., 27., 27.]])</pre>
+The output is 3 × 3: a 3-wide window fits three positions across five pixels.</li>
+  <li><b>Two edge filters on a real boot (2m).</b> "<code class="inline">padding=1</code> keeps 28 × 28. Two filters, two output channels." Show the lesson page's three-panel picture.
+<pre class="code">first_of_each = [int((train_full.targets == c).nonzero()[<span class="s">0</span>]) <span class="k">for</span> c <span class="k">in</span> range(<span class="s">10</span>)]
+boot = train_full[first_of_each[<span class="s">9</span>]][<span class="s">0</span>].unsqueeze(<span class="s">0</span>)    <span class="c"># shape (1, 1, 28, 28)</span>
+edge_filters = torch.stack([vertical_edge, vertical_edge.T]).unsqueeze(<span class="s">1</span>)
+print(boot.shape, edge_filters.shape)
+
+edges = F.conv2d(boot, edge_filters, padding=<span class="s">1</span>)
+print(edges.shape)</pre>
+<pre class="out">torch.Size([1, 1, 28, 28]) torch.Size([2, 1, 3, 3])
+torch.Size([1, 2, 28, 28])</pre></li>
+  <li><b>Conv2d: shapes and the parameter bargain (3m).</b> "Sixteen learnable 3 × 3 filters: 160 parameters. A dense layer with the same outputs: almost ten million."
+<pre class="code">conv1 = nn.Conv2d(in_channels=<span class="s">1</span>, out_channels=<span class="s">16</span>, kernel_size=<span class="s">3</span>, padding=<span class="s">1</span>)
+batch = torch.zeros(<span class="s">64</span>, <span class="s">1</span>, <span class="s">28</span>, <span class="s">28</span>)
+
+print(<span class="s">"weight"</span>, tuple(conv1.weight.shape), <span class="s">" bias"</span>, tuple(conv1.bias.shape))
+print(<span class="s">"after conv:"</span>, tuple(conv1(batch).shape))
+print(<span class="s">"after pool:"</span>, tuple(nn.MaxPool2d(<span class="s">2</span>)(conv1(batch)).shape))
+print(<span class="s">"conv parameters:"</span>, sum(p.numel() <span class="k">for</span> p <span class="k">in</span> conv1.parameters()))
+print(<span class="s">f"dense layer with the same output size: {784 * 16 * 28 * 28 + 16 * 28 * 28:,}"</span>)</pre>
+<pre class="out">weight (16, 1, 3, 3)  bias (16,)
+after conv: (64, 16, 28, 28)
+after pool: (64, 16, 14, 14)
+conv parameters: 160
+dense layer with the same output size: 9,847,040</pre>
+Write the two formulas on the board: out = (n + 2p - k) / s + 1, and out_channels × (in_channels × k × k) + out_channels.</li>
+  <li><b>Trace a dummy batch through SmallCNN (3m).</b> "The most useful CNN debugging habit: push zeros through and print every shape."
+<pre class="code"><span class="k">class</span> SmallCNN(nn.Module):
+    <span class="k">def</span> __init__(self):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(<span class="s">1</span>, <span class="s">16</span>, kernel_size=<span class="s">3</span>, padding=<span class="s">1</span>), nn.ReLU(), nn.MaxPool2d(<span class="s">2</span>),
+            nn.Conv2d(<span class="s">16</span>, <span class="s">32</span>, kernel_size=<span class="s">3</span>, padding=<span class="s">1</span>), nn.ReLU(), nn.MaxPool2d(<span class="s">2</span>),
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(), nn.Linear(<span class="s">32</span> * <span class="s">7</span> * <span class="s">7</span>, <span class="s">64</span>), nn.ReLU(), nn.Linear(<span class="s">64</span>, <span class="s">10</span>),
+        )
+
+    <span class="k">def</span> forward(self, x):
+        <span class="k">return</span> self.classifier(self.features(x))
+
+torch.manual_seed(<span class="s">42</span>)
+cnn = SmallCNN()
+
+x = torch.zeros(<span class="s">64</span>, <span class="s">1</span>, <span class="s">28</span>, <span class="s">28</span>)
+<span class="k">for</span> layer <span class="k">in</span> list(cnn.features) + list(cnn.classifier):
+    x = layer(x)
+    print(<span class="s">f"{layer.__class__.__name__:10s} {tuple(x.shape)}"</span>)</pre>
+<pre class="out">Conv2d     (64, 16, 28, 28)
+ReLU       (64, 16, 28, 28)
+MaxPool2d  (64, 16, 14, 14)
+Conv2d     (64, 32, 14, 14)
+ReLU       (64, 32, 14, 14)
+MaxPool2d  (64, 32, 7, 7)
+Flatten    (64, 1568)
+Linear     (64, 64)
+ReLU       (64, 64)
+Linear     (64, 10)</pre>
+The trace gives the first Linear its 32 × 7 × 7 = 1,568 inputs. No softmax at the end: CrossEntropyLoss applies it.</li>
+  <li><b>The same helpers as 10.2 (1m).</b> Type <code class="inline">train_one_epoch</code>, <code class="inline">accuracy</code> and <code class="inline">fit</code> (or paste from <code class="inline">training.py</code>, made as 10.2 homework). Nothing prints.
+<pre class="code">val_loader = DataLoader(val_set, batch_size=<span class="s">1000</span>)
+test_loader = DataLoader(test_set, batch_size=<span class="s">1000</span>)
+
+<span class="k">def</span> train_one_epoch(model, loader, optimizer, loss_fn):
+    model.train()
+    total_loss, n = <span class="s">0.0</span>, <span class="s">0</span>
+    <span class="k">for</span> xb, yb <span class="k">in</span> loader:
+        optimizer.zero_grad()
+        loss = loss_fn(model(xb), yb)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item() * len(yb)
+        n += len(yb)
+    <span class="k">return</span> total_loss / n
+
+<span class="k">def</span> accuracy(model, loader):
+    model.eval()
+    correct, n = <span class="s">0</span>, <span class="s">0</span>
+    <span class="k">with</span> torch.no_grad():
+        <span class="k">for</span> xb, yb <span class="k">in</span> loader:
+            correct += (model(xb).argmax(dim=<span class="s">1</span>) == yb).sum().item()
+            n += len(yb)
+    <span class="k">return</span> correct / n
+
+<span class="k">def</span> fit(model, epochs=<span class="s">5</span>, lr=<span class="s">1e-3</span>):
+    torch.manual_seed(<span class="s">42</span>)
+    train_loader = DataLoader(train_set, batch_size=<span class="s">64</span>, shuffle=<span class="k">True</span>)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    loss_fn = nn.CrossEntropyLoss()
+    <span class="k">for</span> epoch <span class="k">in</span> range(<span class="s">1</span>, epochs + <span class="s">1</span>):
+        loss = train_one_epoch(model, train_loader, optimizer, loss_fn)
+        print(<span class="s">f"epoch {epoch}: train loss {loss:.3f}  validation accuracy {accuracy(model, val_loader):.3f}"</span>)</pre></li>
+  <li><b>The dense baseline (start it, then talk) (3m).</b> Start the cell, then talk over it: "Same loop, five epochs, a network that flattens every image to 784 numbers." It takes 10 to 20 seconds on a laptop.
+<pre class="code">torch.manual_seed(<span class="s">42</span>)
+mlp = nn.Sequential(nn.Flatten(), nn.Linear(<span class="s">28</span> * <span class="s">28</span>, <span class="s">128</span>), nn.ReLU(), nn.Linear(<span class="s">128</span>, <span class="s">10</span>))
+print(<span class="s">f"dense network parameters: {sum(p.numel() for p in mlp.parameters()):,}"</span>)
+
+fit(mlp)</pre>
+<p style="font-size:.8rem;margin:.3rem 0 0;color:#666"><i>Output (yours may vary slightly)</i></p>
+<pre class="out">dense network parameters: 101,770
+epoch 1: train loss 0.697  validation accuracy 0.818
+epoch 2: train loss 0.474  validation accuracy 0.811
+epoch 3: train loss 0.429  validation accuracy 0.849
+epoch 4: train loss 0.394  validation accuracy 0.860
+epoch 5: train loss 0.369  validation accuracy 0.854</pre>
+Training output is "yours may vary slightly": same seed and thread count repeat exactly; another processor can change the last digits.</li>
+  <li><b>The CNN, same everything except the model (4m).</b> "Only the architecture changes." Start it, and while it trains (20 to 40 seconds) ask where its 105,866 parameters live (almost all in the dense head; the convolutions use 4,800).
+<pre class="code">torch.manual_seed(<span class="s">42</span>)
+cnn = SmallCNN()
+print(<span class="s">f"CNN parameters: {sum(p.numel() for p in cnn.parameters()):,}"</span>)
+
+fit(cnn)</pre>
+<p style="font-size:.8rem;margin:.3rem 0 0;color:#666"><i>Output (yours may vary slightly)</i></p>
+<pre class="out">CNN parameters: 105,866
+epoch 1: train loss 0.759  validation accuracy 0.803
+epoch 2: train loss 0.463  validation accuracy 0.830
+epoch 3: train loss 0.397  validation accuracy 0.859
+epoch 4: train loss 0.357  validation accuracy 0.878
+epoch 5: train loss 0.329  validation accuracy 0.873</pre>
+Slow laptops: do not wait. Load the kit's checkpoint (next step) and move on; the numbers are the same.</li>
+  <li><b>Open the test set once (2m).</b> "Validation says the CNN is ahead. Now, once, the test set."
+<pre class="code"><span class="k">for</span> name, model <span class="k">in</span> [(<span class="s">"dense network"</span>, mlp), (<span class="s">"CNN"</span>, cnn)]:
+    print(<span class="s">f"{name:14s} test accuracy {accuracy(model, test_loader):.3f}"</span>)</pre>
+<pre class="out">dense network  test accuracy 0.840
+CNN            test accuracy 0.864</pre>
+Fallback for any laptop that could not train in time (the kit's <code class="inline">_fixtures/</code> hold exactly these two models):
+&lt;pre class="code"&gt;path = &lt;span class="s"&gt;"labs/module-08/_fixtures/"&lt;/span&gt;
+mlp.load_state_dict(torch.load(path + &lt;span class="s"&gt;"fashion_dense.pt"&lt;/span&gt;, weights_only=&lt;span class="k"&gt;True&lt;/span&gt;))
+cnn.load_state_dict(torch.load(path + &lt;span class="s"&gt;"fashion_small_cnn.pt"&lt;/span&gt;, weights_only=&lt;span class="k"&gt;True&lt;/span&gt;))
+&lt;span class="k"&gt;for&lt;/span&gt; name, model &lt;span class="k"&gt;in&lt;/span&gt; [(&lt;span class="s"&gt;"dense network"&lt;/span&gt;, mlp), (&lt;span class="s"&gt;"CNN"&lt;/span&gt;, cnn)]:
+    acc = accuracy(model, test_loader)
+    print(&lt;span class="s"&gt;f"{name:14s} test accuracy {acc:.3f}  (from the checkpoint)"&lt;/span&gt;)&lt;/pre&gt;
+&lt;pre class="out"&gt;dense network  test accuracy 0.840  (from the checkpoint)
+CNN            test accuracy 0.864  (from the checkpoint)&lt;/pre&gt;</li>
+  <li><b>Which classes, not just how many (3m).</b> "An average hides where the model fails." Show the confusion matrix on the lesson page.
+<pre class="code">cnn.eval()
+<span class="k">with</span> torch.no_grad():
+    test_pred = torch.cat([cnn(xb).argmax(dim=<span class="s">1</span>) <span class="k">for</span> xb, _ <span class="k">in</span> test_loader])
+y_test = test_set.targets
+
+<span class="k">for</span> c, name <span class="k">in</span> enumerate(test_set.classes):
+    mask = y_test == c
+    print(<span class="s">f"{name:12s} {(test_pred[mask] == c).float().mean():.3f}"</span>)</pre>
+<pre class="out">T-shirt/top  0.706
+Trouser      0.978
+Pullover     0.747
+Dress        0.863
+Coat         0.846
+Sandal       0.878
+Shirt        0.720
+Sneaker      0.969
+Bag          0.971
+Ankle boot   0.958</pre>
+Trousers, bags, sneakers, boots are nearly solved; T-shirts, pullovers, coats and shirts are confused with each other: a collar a few pixels wide. Report the weakest classes.</li>
+  <li><b>Two silent traps (2m).</b> Softmax before CrossEntropyLoss, then dropout in training mode.
+<pre class="code">loss_fn = nn.CrossEntropyLoss()
+confident_logits = torch.tensor([[<span class="s">12.0</span>] + [-<span class="s">12.0</span>] * <span class="s">9</span>])    <span class="c"># very sure it is class 0</span>
+target = torch.tensor([<span class="s">0</span>])
+
+print(<span class="s">f"logits into the loss : {loss_fn(confident_logits, target):.3f}"</span>)
+print(<span class="s">f"softmax first        : {loss_fn(torch.softmax(confident_logits, dim=1), target):.3f}"</span>)
+
+torch.manual_seed(<span class="s">42</span>)
+dropout = nn.Dropout(p=<span class="s">0.5</span>)
+ones = torch.ones(<span class="s">8</span>)
+
+print(dropout(ones))
+print(dropout(ones))
+dropout.eval()
+print(dropout(ones))</pre>
+<pre class="out">logits into the loss : 0.000
+softmax first        : 1.461
+tensor([2., 2., 2., 2., 0., 2., 0., 0.])
+tensor([2., 2., 2., 2., 0., 0., 2., 0.])
+tensor([1., 1., 1., 1., 1., 1., 1., 1.])</pre>
+A perfect answer keeps a loss of 1.46 when softmax is applied twice; dropout changes the output on every call until <code class="inline">eval()</code>.</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>The channel axis.</b> <code class="inline">RuntimeError: Given groups=1, weight of size [16, 1, 3, 3], expected input[1, 64, 28, 28] to have 1 channels, but got 64 channels instead</code> Coach: "How many dimensions does a batch of images need, and in what order?" (batch, channels, height, width); <code class="inline">.unsqueeze(1)</code>.</li>
+  <li><b>The first Linear sized on paper.</b> <code class="inline">RuntimeError: mat1 and mat2 shapes cannot be multiplied (64x1568 and 25088x10)</code> Coach: "Trace a dummy batch through <code class="inline">features</code> and read the size." The message always shows the actual size first.</li>
+  <li><b>Probabilities into CrossEntropyLoss, or predictions in training mode.</b> Both silent (demo Step 13): a softmax layer before the loss keeps even a perfect answer at a loss of 1.461; dropout and batch norm in training mode make predictions noisy and worse. Coach: "What does your last layer output: logits or probabilities? Which mode is the model in right now?"</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (12m, everyone):</b> <code class="inline">labs/module-08/l10_3-cnn/edge_features_starter.py</code>; reference <code class="inline">labs/module-08/l10_3-cnn/edge_features_solution.py</code>. Learners build a classic computer-vision pipeline from the lesson's two edge filters (edge strength and brightness pooled over a 4 × 4 grid: 48 numbers per image, then logistic regression) and race it against SmallCNN at 1,000, 5,000 and 20,000 training images. The CNN code is given.</li>
+  <li><b>Expected, Lab A:</b> hand-made + logistic regression 0.795 / 0.819 / 0.827; SmallCNN (3 epochs) 0.676 / 0.782 / 0.863. <b>Debrief (2m):</b> "With little data the person's two filters win: they carry knowledge the CNN must learn from examples. With 20,000 images the learned filters overtake them. That is the whole case for deep learning on images, and also the case for transfer learning next week: what if someone else already learned the filters from a million images?"</li>
+  <li><b>Lab B (8m, pairs; finish at home):</b> <code class="inline">labs/module-08/l10_3-cnn/shift_test_starter.py</code>; reference <code class="inline">labs/module-08/l10_3-cnn/shift_test_solution.py</code>. Load the lesson's two models from <code class="inline">_fixtures/</code> (no training), shift the test images 1 to 4 pixels right and down, and watch both accuracies.</li>
+  <li><b>Expected, Lab B:</b> shifted right by 1 / 2 / 3 / 4 pixels: dense 0.756 / 0.552 / 0.355 / 0.252, CNN 0.838 / 0.743 / 0.471 / 0.301 (down: dense 0.778 / 0.708 / 0.661 / 0.553, CNN 0.821 / 0.770 / 0.726 / 0.592). Worst CNN classes at 2 pixels: Dress, T-shirt/top, Coat. <b>Debrief:</b> the CNN is more tolerant at every shift but not shift-proof: the convolutions find a pattern anywhere, the Flatten + Linear head still reads where. Augmentation (the lesson's Exercise 4) is how you teach it more.</li>
+  <li><b>Circulate for:</b> <code class="inline">torch.roll</code> instead of a zero-filled shift (pixels wrap around from the other side: ask what appears at the left edge); forgetting <code class="inline">eval()</code> after loading (harmless for these two models, which have no dropout, but the habit matters); in Lab A, <code class="inline">.abs()</code> forgotten (edge responses cancel out when averaged).</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-08/l10_3-cnn/debug_cnn.py</code>: two shape errors and two silent bugs; fixed it prints 0.747 twice.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The lesson project is <b>a better clothing classifier</b>: batch normalization and dropout, the best epoch kept on validation, a per-class report, saved and reloaded weights. New notebook <code class="inline">lesson_10_3_project</code>. In the room: Steps 1 to 3, timed so Step 3's training runs during the break.</p>
+<ul class="tick">
+  <li>Step 1: the three sets. <b>Done</b> = <code class="inline">20000 5000 10000</code>.</li>
+  <li>Step 2: <code class="inline">FashionCNN</code>, traced before training. <b>Done</b> = <code class="inline">parameters: 421,834 · features out: (2, 64, 7, 7) · logits out  : (2, 10)</code>.</li>
+  <li>Step 3 (launch right before the break): four epochs, keeping the best. <b>Done</b> = <code class="inline">kept epoch 4 (validation accuracy 0.903)</code> (yours may vary slightly).</li>
+  <li><b>Goes home:</b> Step 4 (test once: 0.892; hardest class Shirt 0.632), Step 5 (save, reload with <code class="inline">weights_only=True</code>, 18 tensors including batch-norm statistics), Step 6 (predictions and summary). Anyone whose training did not finish can load the rehearsal's <code class="inline">fashion_cnn.pt</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these out loud:</p>
+<ul class="tick">
+  <li>Shape of <code class="inline">nn.Conv2d(1, 8, kernel_size=5)</code> on (4, 1, 28, 28)? <b>Answer:</b> (4, 8, 24, 24): 28 - 5 + 1.</li>
+  <li>Parameters of <code class="inline">nn.Conv2d(16, 32, kernel_size=3)</code>? <b>Answer:</b> 32 × (16 × 9) + 32 = 4,640.</li>
+  <li>Why does the CNN beat the dense network with about the same number of parameters? <b>Answer:</b> small filters reused at every position: patterns learned once, found anywhere.</li>
+  <li>Why call <code class="inline">model.eval()</code> before testing a model with batch norm and dropout? <b>Answer:</b> dropout off, batch norm uses its stored training statistics.</li>
+</ul>
+<p>Workbook self-check, items Q1 to Q6.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q1</b> <span data-sc="1"><code class="inline">(8, 16, 16, 16)</code></span>; <b>Q2</b> <span data-sc="2">A) 224</span>; <b>Q3</b> <span data-sc="3">C) It keeps the height and width unchanged: (n + 2 - 3) / 1 + 1 = n</span>; <b>Q4</b> <span data-sc="4"><code class="inline">tensor([[ 5.,  7.],         [13., 15.]])</code></span>; <b>Q5</b> <span data-sc="5">D) The <code class="inline">Flatten</code> + <code class="inline">Linear</code> head reads WHERE each feature map lit up, so positions still matter</span>; <b>Q6</b> <span data-sc="6">B) 3136 (64 × 7 × 7)</span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> hand out the CNN pipeline card (conv → ReLU → pool, twice, flatten, dense, logits) with the shape after each layer, and ask struggling learners to say the next shape before every line of the trace. In Lab A they may skip TODO 1 by copying <code class="inline">hand_features</code> from the solution and spend the time on the race and its explanation.</p>
+<p><b>Stretch:</b> the lesson's Exercise 4 (augmentation: in a short run it HURTS, 0.874 vs 0.892: an honest result to explain) and Bonus Challenge (global average pooling); or retrain SmallCNN on shifted copies and repeat the shift test.</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">10.4</span><h3>Sequence Models</h3><span class="dur">80 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Measure naive and seasonal-naive forecasts and a gradient-boosting model on lag features, and use them as the yardsticks any sequence model must beat</li>
+  <li>Turn a time series into sliding windows with a time-based train/test split, and explain why a random split leaks</li>
+  <li>Explain how a recurrent cell carries a hidden state through a sequence, and why LSTMs and GRUs add gates</li>
+  <li>Build, train and evaluate an LSTM forecaster in PyTorch, reporting the error in dollars</li>
+  <li>Describe attention as a soft lookup, compute it by hand, and say when a transformer is (and is not) worth it</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: the notebook (hidden state) and the binder (attention); check the project training finished</td></tr>
+<tr><td class="t">30m</td><td>Live demo: data, naive forecasts and the time split, windows, the RNN loop, gates, scaling, the LSTM, attention by hand, three silent mistakes</td></tr>
+<tr><td class="t">25m</td><td>Guided lab: <code class="inline">transactions_gru_starter.py</code>, then <code class="inline">attention_lookup_starter.py</code></td></tr>
+<tr><td class="t">15m</td><td>Start the project: Steps 1 to 3</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>Say: "A store manager reads the till report every evening. They do not memorize every number; they keep a short notebook of impressions, update it each evening with the same habits, and guess tomorrow from the notebook alone. That notebook is a recurrent network's hidden state. An LSTM is a manager with a better notebook: it decides what to erase, what to write and what to read out, so a note from four weeks ago can survive. Attention is a different manager: every report goes in a binder, and each evening they flip to the pages that look most relevant to tomorrow."</p>
+<p>Then the discipline, which matters more than the architecture: <b>split by time</b>, <b>beat the naive forecasts</b>, <b>report in dollars</b>. "A deep model that cannot beat 'same as last week' is not worth deploying, and in forecasting that happens more often than tutorials admit."</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>Notebook <code class="inline">lesson_10_4</code>. Training happens only in Step 9 (about 10 seconds). The LSTM numbers are the course's reference: the project and the capstone come back to them.</p>
+<ol class="steps">
+  <li><b>Three years of daily sales (2m).</b> "One row per store per day; the managers want tomorrow's number."
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+
+print(torch.__version__)
+
+sales = pd.read_csv(<span class="s">"data/daily_store_sales.csv"</span>, parse_dates=[<span class="s">"date"</span>])
+print(sales.shape)
+print(sales.head(<span class="s">4</span>))</pre>
+<pre class="out">2.14.1+cpu
+(4384, 6)
+        date      store    sales  transactions  promo event
+0 2023-01-01  Asheville  4838.69            69      0   NaN
+1 2023-01-01       Bend  4533.55            65      0   NaN
+2 2023-01-01      Boise  6026.92            80      0   NaN
+3 2023-01-01  Flagstaff  4217.59            59      0   NaN</pre>
+First line may differ: any recent 2.x PyTorch works (yours may vary slightly).</li>
+  <li><b>Wide table, trends, the weekly cycle (2m).</b> "Boise and Flagstaff grow, Bend is flat, Asheville declines; Saturday sells almost twice Tuesday."
+<pre class="code">wide = sales.pivot(index=<span class="s">"date"</span>, columns=<span class="s">"store"</span>, values=<span class="s">"sales"</span>)
+print(wide.shape)
+print(wide.groupby(wide.index.year).mean().round(<span class="s">0</span>))
+
+weekday_order = [<span class="s">"Monday"</span>, <span class="s">"Tuesday"</span>, <span class="s">"Wednesday"</span>, <span class="s">"Thursday"</span>, <span class="s">"Friday"</span>, <span class="s">"Saturday"</span>, <span class="s">"Sunday"</span>]
+by_weekday = sales.groupby(sales[<span class="s">"date"</span>].dt.day_name())[<span class="s">"sales"</span>].mean().reindex(weekday_order)
+print(by_weekday.round(<span class="s">0</span>))</pre>
+<pre class="out">(1096, 4)
+store  Asheville    Bend   Boise  Flagstaff
+date                                       
+2023      4596.0  5158.0  6831.0     4970.0
+2024      4649.0  5235.0  7821.0     5744.0
+2025      4380.0  5527.0  8342.0     6561.0
+date
+Monday       4807.0
+Tuesday      4437.0
+Wednesday    4684.0
+Thursday     4894.0
+Friday       6226.0
+Saturday     8481.0
+Sunday       7210.0
+Name: sales, dtype: float64</pre></li>
+  <li><b>How much does today tell you? (1m).</b> Ask the room to guess which lag correlates most before running.
+<pre class="code"><span class="k">for</span> lag <span class="k">in</span> [<span class="s">1</span>, <span class="s">2</span>, <span class="s">7</span>, <span class="s">14</span>]:
+    print(<span class="s">f"Boise: correlation with {lag:2d} days earlier: {wide['Boise'].autocorr(lag):.3f}"</span>)</pre>
+<pre class="out">Boise: correlation with  1 days earlier: 0.673
+Boise: correlation with  2 days earlier: 0.238
+Boise: correlation with  7 days earlier: 0.748
+Boise: correlation with 14 days earlier: 0.732</pre>
+Lag 7 is strongest (same weekday), but lag 1 is high too: recent days carry information beyond the calendar.</li>
+  <li><b>Naive forecasts first, split by time (3m).</b> "Train 2023 and 2024, test every day of 2025. Never shuffle a time series into a random split."
+<pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> mean_absolute_error
+
+is_test_day = wide.index &gt;= <span class="s">"2025-01-01"</span>
+actual_2025 = wide[is_test_day].to_numpy().ravel()
+
+baselines = {}
+<span class="k">for</span> name, lag <span class="k">in</span> [(<span class="s">"naive (yesterday)"</span>, <span class="s">1</span>), (<span class="s">"seasonal naive (same day last week)"</span>, <span class="s">7</span>)]:
+    forecast = wide.shift(lag)[is_test_day].to_numpy().ravel()
+    baselines[name] = mean_absolute_error(actual_2025, forecast)
+    print(<span class="s">f"{name:36s} MAE ${baselines[name]:,.0f}"</span>)</pre>
+<pre class="out">naive (yesterday)                    MAE $1,350
+seasonal naive (same day last week)  MAE $1,072</pre>
+Write $1,072 on the board: the number every model must beat, in dollars.</li>
+  <li><b>From a series to windows (2m).</b> "An example is a window of recent days and the day after it." Point at the overlap: that is why a random split leaks (Step 12).
+<pre class="code"><span class="k">def</span> make_windows(series, window):
+    X = np.stack([series[i:i + window] <span class="k">for</span> i <span class="k">in</span> range(len(series) - window)])
+    y = series[window:]
+    <span class="k">return</span> X, y
+
+toy_X, toy_y = make_windows(np.arange(<span class="s">10</span>), window=<span class="s">4</span>)
+print(toy_X)
+print(toy_y)</pre>
+<pre class="out">[[0 1 2 3]
+ [1 2 3 4]
+ [2 3 4 5]
+ [3 4 5 6]
+ [4 5 6 7]
+ [5 6 7 8]]
+[4 5 6 7 8 9]</pre></li>
+  <li><b>A recurrent cell, and the loop inside it (3m).</b> "The same small set of weights updates the notebook every day." Run nn.RNN, then the plain loop.
+<pre class="code">torch.manual_seed(<span class="s">42</span>)
+rnn = nn.RNN(input_size=<span class="s">1</span>, hidden_size=<span class="s">3</span>, batch_first=<span class="k">True</span>)
+
+x = torch.tensor([[[<span class="s">0.5</span>], [-<span class="s">1.0</span>], [<span class="s">2.0</span>], [<span class="s">0.0</span>]]])     <span class="c"># batch 1, 4 time steps, 1 feature</span>
+out, h_last = rnn(x)
+print(<span class="s">"input"</span>, tuple(x.shape), <span class="s">" out"</span>, tuple(out.shape), <span class="s">" h_last"</span>, tuple(h_last.shape))
+print(out[<span class="s">0</span>].detach().round(decimals=<span class="s">3</span>))
+
+h = torch.zeros(<span class="s">3</span>)
+<span class="k">with</span> torch.no_grad():
+    <span class="k">for</span> t <span class="k">in</span> range(<span class="s">4</span>):
+        h = torch.tanh(rnn.weight_ih_l0 @ x[<span class="s">0</span>, t] + rnn.bias_ih_l0 + rnn.weight_hh_l0 @ h + rnn.bias_hh_l0)
+        print(t, h.round(decimals=<span class="s">3</span>))
+
+print(<span class="s">"matches nn.RNN:"</span>, torch.allclose(h, h_last[<span class="s">0</span>, <span class="s">0</span>]))</pre>
+<p style="font-size:.8rem;margin:.3rem 0 0;color:#666"><i>Output (yours may vary slightly)</i></p>
+<pre class="out">input (1, 4, 1)  out (1, 4, 3)  h_last (1, 1, 3)
+tensor([[0.5120, 0.6430, 0.2880],
+        [0.1270, 0.2580, 0.5620],
+        [0.8690, 0.9490, 0.2260],
+        [0.6120, 0.6140, 0.4590]])
+0 tensor([0.5120, 0.6430, 0.2880])
+1 tensor([0.1270, 0.2580, 0.5620])
+2 tensor([0.8690, 0.9490, 0.2260])
+3 tensor([0.6120, 0.6140, 0.4590])
+matches nn.RNN: True</pre>
+Same numbers step by step: a recurrent layer really is a loop.</li>
+  <li><b>Gates cost parameters (2m).</b> "LSTM: forget, input and output gates around a cell state that is updated by adding and scaling, so gradients survive many steps."
+<pre class="code"><span class="k">for</span> name, layer <span class="k">in</span> [(<span class="s">"RNN"</span>, nn.RNN(<span class="s">8</span>, <span class="s">32</span>, batch_first=<span class="k">True</span>)),
+                    (<span class="s">"GRU"</span>, nn.GRU(<span class="s">8</span>, <span class="s">32</span>, batch_first=<span class="k">True</span>)),
+                    (<span class="s">"LSTM"</span>, nn.LSTM(<span class="s">8</span>, <span class="s">32</span>, batch_first=<span class="k">True</span>))]:
+    n_params = sum(p.numel() <span class="k">for</span> p <span class="k">in</span> layer.parameters())
+    print(<span class="s">f"{name:5s} {n_params:5,d} parameters"</span>)
+
+lstm = nn.LSTM(input_size=<span class="s">8</span>, hidden_size=<span class="s">32</span>, batch_first=<span class="k">True</span>)
+out, (h_n, c_n) = lstm(torch.zeros(<span class="s">64</span>, <span class="s">28</span>, <span class="s">8</span>))
+print(<span class="s">"out"</span>, tuple(out.shape), <span class="s">" h_n"</span>, tuple(h_n.shape), <span class="s">" c_n"</span>, tuple(c_n.shape))</pre>
+<pre class="out">RNN   1,344 parameters
+GRU   4,032 parameters
+LSTM  5,376 parameters
+out (64, 28, 32)  h_n (1, 64, 32)  c_n (1, 64, 32)</pre>
+GRU 3×, LSTM 4× the plain RNN's parameters: one set per gate plus the candidate.</li>
+  <li><b>Scale the target, then windows for four stores (3m).</b> "log1p so a 20% swing is the same distance in every store; standardize with the training years only."
+<pre class="code">log_sales = np.log1p(wide)
+mu = log_sales[~is_test_day].to_numpy().mean()
+sd = log_sales[~is_test_day].to_numpy().std()
+z = ((log_sales - mu) / sd).to_numpy()            <span class="c"># days x stores, about mean 0 and std 1</span>
+
+weekday = np.eye(<span class="s">7</span>)[wide.index.dayofweek]         <span class="c"># one-hot day of week, one row per day</span>
+print(round(mu, <span class="s">3</span>), round(sd, <span class="s">3</span>), z.shape, weekday.shape)
+
+<span class="k">def</span> to_dollars(z_values):
+    <span class="k">return</span> np.expm1(np.asarray(z_values) * sd + mu)
+
+WINDOW = <span class="s">28</span>
+
+<span class="k">def</span> build_windows(z, calendar, window=WINDOW):
+    <span class="s">"""Windows of `window` days for every store: (sales, next day's calendar) per step -&gt; next day's sales."""</span>
+    X, y, day, store = [], [], [], []
+    <span class="k">for</span> s <span class="k">in</span> range(z.shape[<span class="s">1</span>]):
+        <span class="k">for</span> t <span class="k">in</span> range(window, len(z)):
+            X.append(np.column_stack([z[t - window:t, s], calendar[t - window + <span class="s">1</span>:t + <span class="s">1</span>]]))
+            y.append(z[t, s])
+            day.append(t)
+            store.append(s)
+    <span class="k">return</span> (torch.tensor(np.array(X), dtype=torch.float32), torch.tensor(np.array(y), dtype=torch.float32),
+            np.array(day), np.array(store))
+
+X, y, day, store = build_windows(z, weekday)
+test_mask = is_test_day[day]
+print(<span class="s">"X"</span>, tuple(X.shape), <span class="s">" y"</span>, tuple(y.shape))
+print(<span class="s">"training windows:"</span>, (~test_mask).sum(), <span class="s">" test windows:"</span>, test_mask.sum())</pre>
+<pre class="out">8.524 0.73 (1096, 4) (1096, 7)
+X (4272, 28, 8)  y (4272,)
+training windows: 2812  test windows: 1460</pre>
+Each step sees that day's scaled sales and the NEXT day's weekday: the calendar is known in advance, not a leak.</li>
+  <li><b>The model and the training run (4m).</b> Type <code class="inline">SalesRNN</code>, then <code class="inline">train_forecaster</code>/<code class="inline">predict_dollars</code> and run (about 10 seconds).
+<pre class="code"><span class="k">class</span> SalesRNN(nn.Module):
+    <span class="k">def</span> __init__(self, n_features, hidden=<span class="s">32</span>, cell=nn.LSTM):
+        super().__init__()
+        self.rnn = cell(n_features, hidden, batch_first=<span class="k">True</span>)
+        self.head = nn.Linear(hidden, <span class="s">1</span>)
+
+    <span class="k">def</span> forward(self, x):                      <span class="c"># x: (batch, 28, n_features)</span>
+        out, _ = self.rnn(x)                   <span class="c"># out: (batch, 28, hidden)</span>
+        <span class="k">return</span> self.head(out[:, -<span class="s">1</span>]).squeeze(-<span class="s">1</span>)   <span class="c"># last step's hidden state -&gt; one number per window</span>
+
+torch.manual_seed(<span class="s">42</span>)
+model = SalesRNN(n_features=X.shape[<span class="s">2</span>])
+print(model)
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> model.parameters()), <span class="s">"parameters"</span>)
+
+<span class="k">from</span> torch.utils.data <span class="k">import</span> TensorDataset, DataLoader
+
+<span class="k">def</span> train_forecaster(model, X, y, train_mask, epochs=<span class="s">15</span>, lr=<span class="s">3e-3</span>):
+    torch.manual_seed(<span class="s">42</span>)                      <span class="c"># same batch order every run</span>
+    loader = DataLoader(TensorDataset(X[train_mask], y[train_mask]), batch_size=<span class="s">64</span>, shuffle=<span class="k">True</span>)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    loss_fn = nn.MSELoss()
+    <span class="k">for</span> epoch <span class="k">in</span> range(<span class="s">1</span>, epochs + <span class="s">1</span>):
+        model.train()
+        total = <span class="s">0.0</span>
+        <span class="k">for</span> xb, yb <span class="k">in</span> loader:
+            optimizer.zero_grad()
+            loss = loss_fn(model(xb), yb)
+            loss.backward()
+            optimizer.step()
+            total += loss.item() * len(xb)
+        <span class="k">if</span> epoch % <span class="s">5</span> == <span class="s">0</span>:
+            print(<span class="s">f"epoch {epoch:2d}  train MSE {total / len(loader.dataset):.3f}"</span>)
+    <span class="k">return</span> model
+
+<span class="k">def</span> predict_dollars(model, X):
+    model.eval()
+    <span class="k">with</span> torch.inference_mode():
+        <span class="k">return</span> to_dollars(model(X).numpy())
+
+model = train_forecaster(model, X, y, ~test_mask)
+lstm_pred = predict_dollars(model, X[test_mask])
+lstm_actual = to_dollars(y[test_mask].numpy())
+lstm_mae = mean_absolute_error(lstm_actual, lstm_pred)
+
+<span class="k">for</span> name, mae <span class="k">in</span> baselines.items():
+    print(<span class="s">f"{name:36s} MAE ${mae:,.0f}"</span>)
+print(<span class="s">f"{'LSTM (28-day window + weekday)':36s} MAE ${lstm_mae:,.0f}"</span>)</pre>
+<p style="font-size:.8rem;margin:.3rem 0 0;color:#666"><i>Output (yours may vary slightly)</i></p>
+<pre class="out">SalesRNN(
+  (rnn): LSTM(8, 32, batch_first=True)
+  (head): Linear(in_features=32, out_features=1, bias=True)
+)
+5409 parameters
+epoch  5  train MSE 0.778
+epoch 10  train MSE 0.762
+epoch 15  train MSE 0.743
+naive (yesterday)                    MAE $1,350
+seasonal naive (same day last week)  MAE $1,072
+LSTM (28-day window + weekday)       MAE $702</pre>
+$702 against $1,072. The flat training MSE is the closed days: a $0 day is 11.7 standard deviations below normal and the model cannot know it is coming. The project gives it that information.</li>
+  <li><b>Attention by hand: the binder (3m).</b> "Keys: the weekday of each past day. Query: tomorrow's weekday. A softmax turns matches into weights."
+<pre class="code"><span class="k">def</span> attend(query, keys, values, sharpness=<span class="s">5.0</span>):
+    scores = sharpness * (keys @ query)
+    weights = np.exp(scores - scores.max())
+    weights = weights / weights.sum()
+    <span class="k">return</span> weights @ values, weights
+
+t = int(np.flatnonzero(wide.index == <span class="s">"2025-03-15"</span>)[<span class="s">0</span>])        <span class="c"># a Saturday in Boise</span>
+boise = wide[<span class="s">"Boise"</span>].to_numpy()
+forecast, weights = attend(weekday[t], weekday[t - <span class="s">28</span>:t], boise[t - <span class="s">28</span>:t])
+print(wide.index[t].day_name(), <span class="s">"forecast"</span>, round(forecast), <span class="s">" actual"</span>, round(boise[t]))
+print(<span class="s">"weights on the 28 days:"</span>, weights.round(<span class="s">3</span>))
+
+attn_pred, attn_actual = [], []
+<span class="k">for</span> s, store_name <span class="k">in</span> enumerate(wide.columns):
+    values = wide[store_name].to_numpy()
+    <span class="k">for</span> t <span class="k">in</span> np.flatnonzero(is_test_day):
+        forecast, _ = attend(weekday[t], weekday[t - <span class="s">28</span>:t], values[t - <span class="s">28</span>:t])
+        attn_pred.append(forecast)
+        attn_actual.append(values[t])
+
+print(<span class="s">f"{'hand-built attention (4 same weekdays)':40s} MAE ${mean_absolute_error(attn_actual, attn_pred):,.0f}"</span>)
+print(<span class="s">f"{'seasonal naive (1 same weekday)':40s} MAE ${baselines['seasonal naive (same day last week)']:,.0f}"</span>)</pre>
+<pre class="out">Saturday forecast 8497  actual 11099
+weights on the 28 days: [0.24  0.002 0.002 0.002 0.002 0.002 0.002 0.24  0.002 0.002 0.002 0.002
+ 0.002 0.002 0.24  0.002 0.002 0.002 0.002 0.002 0.002 0.24  0.002 0.002
+ 0.002 0.002 0.002 0.002]
+hand-built attention (4 same weekdays)   MAE $979
+seasonal naive (1 same weekday)          MAE $1,072</pre>
+Four Saturdays get almost all the weight. Averaging four same weekdays ($979) beats copying one ($1,072) but loses to the LSTM, which also tracks the recent level.</li>
+  <li><b>PyTorch's attention equals the formula (1m).</b> "Transformers stack learned versions of this."
+<pre class="code"><span class="k">import</span> torch.nn.functional <span class="k">as</span> F
+
+torch.manual_seed(<span class="s">42</span>)
+q = torch.randn(<span class="s">2</span>, <span class="s">5</span>, <span class="s">16</span>)     <span class="c"># batch 2, 5 steps, 16 numbers per query</span>
+k = torch.randn(<span class="s">2</span>, <span class="s">5</span>, <span class="s">16</span>)
+v = torch.randn(<span class="s">2</span>, <span class="s">5</span>, <span class="s">16</span>)
+
+by_hand = torch.softmax(q @ k.transpose(<span class="s">1</span>, <span class="s">2</span>) / <span class="s">16</span> ** <span class="s">0.5</span>, dim=-<span class="s">1</span>) @ v
+built_in = F.scaled_dot_product_attention(q, k, v)
+print(tuple(built_in.shape), <span class="s">"same result:"</span>, torch.allclose(by_hand, built_in, atol=<span class="s">1e-6</span>))</pre>
+<pre class="out">(2, 5, 16) same result: True</pre></li>
+  <li><b>Three silent mistakes (4m).</b> No <code class="inline">batch_first</code>, a random split of windows, an error in scaled units. None raises.
+<pre class="code">time_first = nn.LSTM(input_size=<span class="s">8</span>, hidden_size=<span class="s">32</span>)           <span class="c"># batch_first defaults to False</span>
+out_wrong, _ = time_first(X[:<span class="s">64</span>])
+print(tuple(out_wrong.shape), <span class="s">"-&gt; out[:, -1] has shape"</span>, tuple(out_wrong[:, -<span class="s">1</span>].shape))
+
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+
+toy_X, toy_y = make_windows(np.arange(<span class="s">40</span>), window=<span class="s">4</span>)
+rows_train, rows_test = train_test_split(np.arange(len(toy_y)), test_size=<span class="s">0.25</span>, random_state=<span class="s">42</span>)
+seen = set(toy_X[rows_train].ravel()) | set(toy_y[rows_train])
+leaked = sum(set(toy_X[r]) | {toy_y[r]} &lt;= seen <span class="k">for</span> r <span class="k">in</span> rows_test)
+print(<span class="s">f"test windows whose inputs and target all appear in training: {leaked} of {len(rows_test)}"</span>)
+
+model.eval()
+<span class="k">with</span> torch.inference_mode():
+    scaled_pred = model(X[test_mask]).numpy()
+print(<span class="s">f"MAE in scaled log units: {mean_absolute_error(y[test_mask].numpy(), scaled_pred):.3f}"</span>)
+print(<span class="s">f"MAE in dollars         : {mean_absolute_error(to_dollars(y[test_mask].numpy()), to_dollars(scaled_pred)):,.0f}"</span>)</pre>
+<pre class="out">(64, 28, 32) -&gt; out[:, -1] has shape (64, 32)
+test windows whose inputs and target all appear in training: 8 of 9
+MAE in scaled log units: 0.222
+MAE in dollars         : 702</pre>
+8 of 9 random test windows were fully seen in training; 0.222 looks wonderful and means nothing to a manager. Split by time and report dollars.</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>Shapes and dtypes of windows.</b> A 2-D input (<code class="inline">RuntimeError: input.size(-1) must be equal to input_size. Expected 8, got 28</code>) or float64 windows (<code class="inline">ValueError: RNN input dtype (torch.float64) does not match weight dtype (torch.float32)...</code>). Coach: "Say the three dimensions: batch, time steps, features."</li>
+  <li><b>Random splits of windows.</b> The most dangerous one: no error, a too-good score (demo Step 12: 8 of 9 test windows fully seen). In <code class="inline">debug_sequence.py</code> the random split flatters Boise's MAE from $1,039 to $826. Coach: "Could you have made this forecast on the day before the target, knowing only the past?"</li>
+  <li><b>Errors in the wrong units.</b> 0.222 in scaled log units vs $702. Coach: "Would the store manager understand this number? Can you put it next to the seasonal naive forecast?"</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (15m):</b> <code class="inline">labs/module-08/l10_4-sequences/transactions_gru_starter.py</code>; reference <code class="inline">labs/module-08/l10_4-sequences/transactions_gru_solution.py</code>. A new target from the same file: tomorrow's number of transactions (staffing the tills), with a GRU. Learners write the naive yardsticks and <code class="inline">build_windows</code>; the model and loop are given. Two trainings of about 15 seconds each.</li>
+  <li><b>Expected, Lab A:</b> naive 19.09, seasonal naive 15.50, GRU weekday only 9.15, GRU with promotion and closed flags 7.56 transactions per store-day (2025 means: 61 to 116 per store). <b>Debrief:</b> "The calendar known in advance halves the seasonal naive error. Same lesson as the sales project: what you feed the model matters most."</li>
+  <li><b>Lab B (10m; finish at home):</b> <code class="inline">labs/module-08/l10_4-sequences/attention_lookup_starter.py</code>; reference <code class="inline">labs/module-08/l10_4-sequences/attention_lookup_solution.py</code>. The lesson's attention, with richer keys (weekday + promotion + closed) and a longer binder (364 days), scored separately on ordinary and special days. No training.</li>
+  <li><b>Expected, Lab B (MAE all / ordinary / special):</b> lesson attention $979 / $856 / $3,097; calendar keys over 364 days $1,039 / $1,030 / $1,198; routed (28 days for ordinary, 364 for special) $875 / $856 / $1,198. For Black Friday in Boise the query puts 0.226 weight on each of four past sale Fridays. <b>Debrief:</b> the keys decide what is found; the memory trades recency for coverage. A trained attention layer learns both.</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-08/l10_4-sequences/debug_sequence.py</code>: one loud bug and three silent ones; fixed it prints $1,039.2 against seasonal naive $1,355.6.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The lesson project is <b>a calendar-aware forecaster</b>: tomorrow's promotion and closed flags added to every step, the model checked per store and on special days, held up against a gradient-boosting model on lag features, and saved. Learners continue in <code class="inline">lesson_10_4</code> (it reuses the demo's functions). In the room: Steps 1 to 3 (15 minutes).</p>
+<ul class="tick">
+  <li>Step 1: the calendar. <b>Done</b> = <code class="inline">(1096, 9) promo days: 54  closed days: 6</code>.</li>
+  <li>Step 2: windows with 10 features per step. <b>Done</b> = <code class="inline">X (4272, 28, 10)  test windows: 1460</code>.</li>
+  <li>Step 3: train. <b>Done</b> = <code class="inline">calendar-aware LSTM MAE $515</code> (yours may vary slightly).</li>
+  <li><b>Goes home:</b> Step 4 (per store and special days: $838 on special days vs $3,194 for seasonal naive), Step 5 (default boosting on lags: $616 with the same information, $569 with the event type), Step 6 (the holiday chart), Step 7 (save <code class="inline">sales_lstm.pt</code> with mu and sd as Python floats, reload, summary).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these out loud:</p>
+<ul class="tick">
+  <li>Output shape of <code class="inline">nn.LSTM(input_size=3, hidden_size=16, batch_first=True)</code> on (10, 7, 3)? <b>Answer:</b> (10, 7, 16).</li>
+  <li>Why compare every model with the seasonal naive forecast? <b>Answer:</b> it is free and already captures the weekly cycle; a model must beat it to be worth anything.</li>
+  <li>What do the LSTM's gates and cell state fix? <b>Answer:</b> vanishing gradients over many steps.</li>
+  <li>A colleague's random split gives an MAE far below seasonal naive. Explanation? <b>Answer:</b> overlapping windows leaked the test days into training.</li>
+</ul>
+<p>Workbook self-check, items Q7 to Q12.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q7</b> <span data-sc="7"><code class="inline">(4, 10, 8) (1, 4, 8)</code></span>; <b>Q8</b> <span data-sc="8">C) 93</span>; <b>Q9</b> <span data-sc="9">A) Tomorrow = the same weekday last week</span>; <b>Q10</b> <span data-sc="10"><code class="inline">[0.498 0.003 0.498] 20.1</code></span>; <b>Q11</b> <span data-sc="11">D) Undo the standardization, then the log (expm1), and compare in dollars</span>; <b>Q12</b> <span data-sc="12">B) It runs and trains on nonsense: PyTorch reads (batch, time) as (time, batch)</span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> a card with the three shapes (series → windows (n, 28, features) → targets (n,)) and the undo chain (z → × sd + mu → expm1 → dollars). In Lab A, a struggling pair may copy <code class="inline">build_windows</code> from the demo; the new skills are the yardsticks and reading the result.</p>
+<p><b>Stretch:</b> the lesson's Exercise 4 (a tiny transformer: $514 vs the LSTM's $515 with twice the parameters) and Bonus Challenge (make the boosting comparison fair in both directions with a validation period).</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Closing</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Exit ticket (3 questions, no notes, 4 minutes)</div>
+<p>Sort the notes before Session 9: question 1 tells you whether shapes need another pass before transfer learning, where every layer of ResNet-18 is a shape question.</p>
+<ol class="steps">
+  <li>A batch (64, 1, 28, 28) goes through <code class="inline">nn.Conv2d(1, 16, kernel_size=3, padding=1)</code> and then <code class="inline">nn.MaxPool2d(2)</code>. Shape after each? <b>Answer:</b> (64, 16, 28, 28), then (64, 16, 14, 14).</li>
+  <li>Why must a time series be split by time and not at random? <b>Answer:</b> the model must be graded on days after everything it learned from, as in real use; overlapping windows in a random split put each test day's inputs and target into training, so the score is too good to be true.</li>
+  <li>With the same information, the calendar-aware LSTM forecast daily sales with MAE $515 and default gradient boosting on lag features $616 (and $569 given the event type). What do you tell the store managers? <b>Answer:</b> both are far better than "same day last week" ($1,072) and in the same league; the LSTM leads here, but boosting was simpler, faster and untuned, and the information fed in mattered more than the architecture. Start with the simpler one, keep testing both.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Homework (about 2 to 3 hours)</div>
+<ul class="tick">
+  <li><b>Finish both projects.</b> 10.3 Steps 4 to 6 (test 0.892, Shirt 0.632, <code class="inline">fashion_cnn.pt</code> reloads identically). 10.4 Steps 4 to 7 (per store and special days; boosting $616 / $569 vs LSTM $515; the holiday chart; <code class="inline">sales_lstm.pt</code>).</li>
+  <li><b>Lesson exercises.</b> 10.3: Exercises 1 to 3 (shape detective, where the parameters live, the most confident mistakes); Exercise 4 is a stretch. 10.4: Exercises 1 to 3 (hardest weekday, a GRU, how much history); Exercise 4 is a stretch.</li>
+  <li><b>Both Quick Quizzes</b> and <b>both journal entries</b> (10.4's asks for all six MAE numbers and one sentence for a store manager).</li>
+  <li><b>Labs:</b> finish <code class="inline">shift_test_starter.py</code> and <code class="inline">attention_lookup_starter.py</code>.</li>
+  <li><b>Before the Next Lesson (from 10.4):</b> keep the notebook and <code class="inline">sales_lstm.pt</code>; retrain with <code class="inline">torch.manual_seed(7)</code> and compare the wobble with the gap to seasonal naive; make sure the pretrained weights can download (the Session 9 downloads below).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Bring list for Session 9</div>
+<ul class="tick">
+  <li>A plugged-in laptop with the course environment (nothing new to install).</li>
+  <li><b>EuroSAT downloaded into data/eurosat/</b> (94 MB download, about 186 MB on disk) and <b>the ResNet-18 (45 MB) and MobileNetV3-small (10 MB) pretrained weights cached</b> in PyTorch's cache (<code class="inline">.cache/torch/hub/checkpoints</code> in your home folder). If <code class="inline">check_environment.py</code> already ends with READY for Advanced Machine Learning (the <code class="inline">--download</code> run from Session 1), you have all of it. Otherwise do it AT HOME, once, from the <code class="inline">pinecrest-ml</code> folder with the environment active: <code class="inline">python labs/module-01/l7_0-orientation/check_environment.py --download</code>, or <code class="inline">python -c "from torchvision import datasets, models; datasets.EuroSAT('data', download=True); models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1); models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1)"</code>. Venue Wi-Fi will not cope with a room doing this; anyone who cannot download gets the files from the instructor's USB stick at the start of Session 9.</li>
+  <li><b>sales_lstm.pt kept from the 10.4 project</b> (with the project notebook), and <code class="inline">fashion_cnn.pt</code> from 10.3: Lesson 10.5 contrasts training from scratch with transfer learning.</li>
+  <li>The <code class="inline">pinecrest-ml</code> folder with <code class="inline">data/</code> (Lesson 11.1 uses <code class="inline">reviews.csv</code>) and the <code class="inline">labs/</code> folder; Session 9's starters are in <code class="inline">labs/module-09/</code>.</li>
+  <li><code class="inline">training.py</code>, the workbook and the journal.</li>
+</ul>
+</div>
+
+  <div class="sec"><h2>If You Run Long or Short</h2><span class="rule"></span></div>
+<div class="blk warn"><div class="h">Running long: what to protect and what to cut first</div>
+<ul class="tick">
+  <li><b>Protect:</b> dense vs CNN on the same loop and seed (10.3 Steps 9 to 12, with the checkpoint fallback); naive forecasts, time split, the LSTM against $1,072 and the silent mistakes (10.4 Steps 4, 5, 9 and 12).</li>
+  <li><b>Cut first (saves 4m):</b> 10.3 Step 5 (edge filters on a boot): show the page's three panels.</li>
+  <li><b>Cut second (saves 3m):</b> 10.4 Step 6's plain loop (keep <code class="inline">nn.RNN</code>, say "the same numbers come out of a five-line loop").</li>
+  <li><b>Cut third (saves 8m):</b> Lab B of 10.3 (shift test) and Lab B of 10.4 (attention) move to homework; their expected outputs are in the README and the workbook.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Running short: what to add</div>
+<ul class="tick">
+  <li>10.3 Exercise 3 live (the most confident mistakes): how often is a 99% confident network wrong, and would a person hesitate on those images?</li>
+  <li>10.4 Exercise 2 (swap in a GRU: $509 vs $515, a tie with a quarter fewer parameters).</li>
+  <li>Run the routed attention from Lab B on the projector and ask how a trained attention layer could learn such a routing by itself.</li>
+</ul>
+</div>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 8 · Facilitator Guide · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

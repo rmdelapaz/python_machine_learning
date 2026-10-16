@@ -3,1000 +3,893 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about LIME (Local Interpretable Model-agnostic Explanations) for interpreting machine learning model predictions.">
-    <title>LIME - Model Interpretability - Python Machine Learning</title>
+    <meta name="description" content="Explain single churn predictions with LIME, built by hand and with the lime library, test how stable those explanations are, and run a fairness check of the churn model across age groups. Python Machine Learning Lesson 7.3.">
+    <meta name="author" content="Ray de la Paz">
+    <title>LIME and Fairness Checks - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#interpretability">Interpretability</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#interpretability">Interpretability</a></li>
-            <li aria-current="page">LIME</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>🍋 LIME: Local Interpretable Model-agnostic Explanations</h1>
+        <div class="container">
+            <header>
+                <h1>🍋 Lesson 7.3: LIME and Fairness Checks</h1>
+                <p class="lead">Explain a single prediction by fitting a small, simple model around it, learn how far to trust that explanation, and then ask a different question: does the churn model treat different groups of customers alike?</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Explain how LIME approximates any black-box model locally with a simple, interpretable surrogate</li>
-                <li>Describe the LIME algorithm: perturb, predict, weight by proximity, and fit a local linear model</li>
-                <li>Generate LIME explanations for tabular data predictions</li>
-                <li>Apply LIME to text classifiers to see which words drive a prediction</li>
-                <li>Interpret and communicate a single prediction's most influential features</li>
-                <li>Recognize LIME's limitations, including instability and the choice of neighborhood</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Train a black-box model, then use LIME to explain several individual predictions and check whether the local reasons match your domain intuition.</p>
-        </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>LIME (Local Interpretable Model-agnostic Explanations) is a technique for explaining individual predictions of any machine learning classifier or regressor. It works by approximating the model locally with an interpretable model, helping us understand why a model made a specific prediction. This is crucial for building trust in ML systems, debugging models, and meeting regulatory requirements for explainable AI.</p>
-        </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Describe LIME's recipe (perturb, predict, weight by closeness, fit a simple model) and build a basic version by hand</li>
+                        <li>Explain a prediction with <code>lime.lime_tabular.LimeTabularExplainer</code> and judge it by its fidelity score and its stability across random seeds</li>
+                        <li>Say when LIME and SHAP answer different questions, and run simple what-if checks on one customer</li>
+                        <li>Run a fairness check: compare flag rate, recall and precision across age groups and test whether a gap is larger than chance</li>
+                    </ul>
+                </div>
 
-        <h2>How LIME Works</h2>
-        
-        <div class="mermaid">
-        flowchart TB
-            A[Original Instance] --> B[Generate Perturbations]
-            B --> C[Sample Around Instance]
-            C --> D[Get Black-box Predictions]
-            D --> E[Weight by Proximity]
-            E --> F[Train Local Linear Model]
-            F --> G[Extract Feature Importance]
-            G --> H[Explanation]
-            
-            subgraph "LIME Process"
-                B
-                C
-                D
-                E
-                F
-            end
-            
-            style A fill:#e3f2fd
-            style H fill:#c8e6c9
-            style F fill:#fff9c4
-        </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 100 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="interpretability_shap.html">Lesson 7.2: SHAP Values</a> (and <a href="evaluation_metrics.html">Lesson 1.4</a> for recall and precision)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> An explanation and fairness audit of the retention campaign: LIME explanations with stability checks, and a by-age-group report with a significance test</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code></li>
+                </ul>
+            </header>
 
-        <h2>LIME Algorithm Visualization</h2>
-        
-        <div class="mermaid">
-        graph LR
-            A[Complex Model<br/>f(x)] --> B[Local Region]
-            B --> C[Linear Approximation<br/>g(x)]
-            
-            D[Instance x] --> E[Perturbed Samples]
-            E --> F[Predictions]
-            F --> G[Weighted Linear Model]
-            G --> H[Feature Contributions]
-            
-            style A fill:#ffccbc
-            style C fill:#c8e6c9
-            style H fill:#e3f2fd
-        </div>
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">A Simple Model Near One Customer</a></li>
+                        <li><a href="#by-hand" class="toc-link">LIME by Hand</a></li>
+                        <li><a href="#library" class="toc-link">The lime Library</a></li>
+                        <li><a href="#stability" class="toc-link">How Stable Is an Explanation?</a></li>
+                        <li><a href="#what-if" class="toc-link">What-If Checks and Choosing a Method</a></li>
+                        <li><a href="#fairness" class="toc-link">A Fairness Check</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: Auditing the Retention Campaign</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
 
-        <h2>Setting Up Environment</h2>
-        
-        <pre class="language-python"><code>import numpy as np
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 A Simple Model Near One Customer</h2>
+
+                <p>SHAP splits a prediction into fair shares. <strong>LIME</strong> (Local Interpretable Model-agnostic Explanations, from a 2016 paper by Ribeiro, Singh and Guestrin) takes a different route. It accepts that the churn model is complicated everywhere, but bets that it is <em>simple near any one customer</em>, simple enough that a straight-line model can imitate it there. The straight-line model is the explanation.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Earth Looks Flat From Your Street</h4>
+                    <p>The Earth is round, but a map of your neighborhood can be flat and still be accurate, because you only use it nearby. LIME draws a flat map of the model around one customer. It is useful for questions about that neighborhood ("what pushes this customer's risk around?") and misleading if you carry it across the country ("this is how the model works in general").</p>
+                </div>
+
+                <div class="mermaid">
+graph TD
+    A["Pick one customer"] --> B["Make thousands of nearby variants"]
+    B --> C["Ask the model to score each variant"]
+    C --> D["Weight variants by closeness"]
+    D --> E["Fit a small weighted linear model"]
+    E --> F["Its weights are the explanation"]
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>LIME works on anything that returns probabilities: a pipeline, a neural network, a model behind an API you cannot see into. It is also the clearest example of a general idea, explaining a complex model with a simple <strong>surrogate</strong>, and of that idea's main risk: the surrogate may not imitate the model well. Learning to check that (fidelity and stability) is the lesson's first half. The second half asks a question no explanation method answers on its own: is the model fair?</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="by-hand" class="lesson-section">
+                <h2>✋ LIME by Hand</h2>
+
+                <p>Start from Lesson 7.2's setup: the same gradient-boosting model and the same riskiest customer, C104051 (364 days without an order, 43% of spend discounted, three tickets, no app). Split the whole table so the IDs and the age groups stay with each row; you will need the age groups later.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.datasets import load_iris, load_breast_cancer, fetch_20newsgroups
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.neural_network import MLPClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.pipeline import make_pipeline
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.ensemble import HistGradientBoostingClassifier
 
-# LIME library
-import lime
-import lime.lime_tabular
-import lime.lime_text
-import lime.lime_image
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+            "email_opens_90d"]
+train, test = train_test_split(customers, test_size=0.25, stratify=customers["churned"], random_state=42)
+X_train, X_test = train[features].astype(float), test[features].astype(float)
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
-np.random.seed(42)
+model = HistGradientBoostingClassifier(random_state=42).fit(X_train, train["churned"])
+proba = model.predict_proba(X_test)[:, 1]
+i = int(proba.argmax())
+x0 = X_test.iloc[i]
+print(test["customer_id"].iloc[i], f"churn probability {proba[i]:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>C104051 churn probability 0.972</code></pre>
+                </div>
 
-print("LIME - Local Interpretable Model-agnostic Explanations")
-print("=" * 60)</code></pre>
+                <p>Now follow the recipe. Make 3,000 variants of this customer by nudging every feature by random amounts on the scale of its training standard deviation, keep them within the range seen in training, and score them with the model. Then weight each variant by how close it is (a bell-shaped kernel on the standardized distance) and fit a weighted ridge regression.</p>
 
-        <h2>LIME for Tabular Data</h2>
-        
-        <pre class="language-python"><code>class LIMETabularExplainer:
-    """
-    LIME explainer for tabular data
-    """
-    
-    def __init__(self, X_train, feature_names, class_names):
-        """
-        Initialize LIME explainer for tabular data
-        """
-        self.explainer = lime.lime_tabular.LimeTabularExplainer(
-            X_train,
-            feature_names=feature_names,
-            class_names=class_names,
-            verbose=True,
-            mode='classification'
-        )
-        self.feature_names = feature_names
-        self.class_names = class_names
-        
-    def explain_instance(self, model, instance, num_features=10):
-        """
-        Explain a single prediction
-        """
-        # Get prediction
-        prediction = model.predict([instance])[0]
-        probability = model.predict_proba([instance])[0]
-        
-        # Generate explanation
-        exp = self.explainer.explain_instance(
-            instance,
-            model.predict_proba,
-            num_features=num_features
-        )
-        
-        return exp, prediction, probability
-    
-    def visualize_explanation(self, exp, prediction, probability):
-        """
-        Visualize LIME explanation
-        """
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Get explanation data
-        exp_list = exp.as_list()
-        features = [x[0] for x in exp_list]
-        values = [x[1] for x in exp_list]
-        
-        # Feature importance plot
-        colors = ['green' if x > 0 else 'red' for x in values]
-        axes[0].barh(range(len(values)), values, color=colors)
-        axes[0].set_yticks(range(len(features)))
-        axes[0].set_yticklabels(features, fontsize=9)
-        axes[0].set_xlabel('Feature Contribution')
-        axes[0].set_title('Local Feature Importance')
-        axes[0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
-        
-        # Prediction probabilities
-        axes[1].bar(self.class_names, probability)
-        axes[1].set_xlabel('Class')
-        axes[1].set_ylabel('Probability')
-        axes[1].set_title(f'Prediction: {self.class_names[prediction]}')
-        axes[1].set_ylim([0, 1])
-        
-        # Add probability values on bars
-        for i, (name, prob) in enumerate(zip(self.class_names, probability)):
-            axes[1].text(i, prob + 0.01, f'{prob:.3f}', ha='center')
-        
-        plt.suptitle('LIME Explanation for Individual Prediction', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        return fig
+                <pre><code class="language-python">from sklearn.linear_model import Ridge
 
-# Demonstrate LIME on tabular data
-print("\n" + "=" * 60)
-print("LIME FOR TABULAR DATA - IRIS DATASET")
-print("=" * 60)
+rng = np.random.default_rng(42)
+sd = X_train.std()
 
-# Load data
-iris = load_iris()
-X, y = iris.data, iris.target
+# 1. variants near the customer, kept inside the training range
+noise = rng.normal(size=(3000, len(features)))
+variants = pd.DataFrame(x0.to_numpy() + noise * sd.to_numpy(), columns=features)
+variants = variants.clip(lower=X_train.min(), upper=X_train.max(), axis=1)
+variants["app_user"] = (variants["app_user"] &gt; 0.5).astype(float)
 
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+# 2. ask the model
+scores = model.predict_proba(variants)[:, 1]
 
-# Train a black-box model
-print("\nTraining Random Forest model...")
-rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
-rf_model.fit(X_train, y_train)
-print(f"Model accuracy: {rf_model.score(X_test, y_test):.3f}")
+# 3. weight by closeness (distance in standard deviations)
+steps = (variants - x0) / sd
+distance = np.sqrt((steps ** 2).sum(axis=1))
+width = 0.75 * np.sqrt(len(features))        # LIME's default kernel width
+weights = np.exp(-distance ** 2 / width ** 2)
 
-# Create LIME explainer
-lime_explainer = LIMETabularExplainer(
-    X_train,
-    feature_names=iris.feature_names,
-    class_names=iris.target_names
+# 4. fit a simple weighted model: its slopes are the explanation
+surrogate = Ridge(alpha=1.0).fit(steps, scores, sample_weight=weights)
+local = pd.Series(surrogate.coef_, index=features).sort_values(key=abs, ascending=False)
+print(local.round(3).head(5))
+print(f"fidelity (weighted R2): {surrogate.score(steps, scores, sample_weight=weights):.3f}")
+print(f"surrogate at the customer: {surrogate.intercept_:.3f}   model: {proba[i]:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>discount_share           0.086
+tenure_months            0.080
+app_user                -0.059
+days_since_last_order    0.050
+orders_12m              -0.016
+dtype: float64
+fidelity (weighted R2): 0.496
+surrogate at the customer: 0.897   model: 0.972</code></pre>
+                </div>
+
+                <p>Each weight is a <strong>local slope</strong>: the change in predicted probability for one standard deviation more of that feature, near this customer. The <strong>fidelity</strong> score (the surrogate's weighted R²) says how well the flat map fits the neighborhood; about 0.5 means "roughly", which is typical for a model with thresholds.</p>
+
+                <p>Now the surprise. <code>days_since_last_order</code> is <em>not</em> the top slope, even though SHAP gave it the biggest share. Both are right, because they answer different questions. SHAP asks "how much does this feature explain the gap between this customer and an average one?" (a lot: 364 days is extreme). The local slope asks "if this feature moved a little from here, how much would the risk change?" (not much: at 364 days the risk curve from Lesson 7.1 is already flat, and the variants cannot go past the training maximum). Discount reliance and tenure, by contrast, sit near steep parts of their curves.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ "Local" Depends on Choices You Made</h4>
+                    <p>The neighborhood size (the noise scale and the kernel width), the number of variants and how you treat a 0/1 column like <code>app_user</code> all change the answer. That is not a flaw of this hand-made version; the library has the same knobs with default settings. Always ask what neighborhood an explanation describes.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="library" class="lesson-section">
+                <h2>📦 The lime Library</h2>
+
+                <p>The <code>lime</code> package wraps the recipe. <code>LimeTabularExplainer</code> learns each feature's distribution from the training data. <code>explain_instance</code> needs the customer as a NumPy array and a function that takes a NumPy array and returns class probabilities. Two details: LIME cannot handle missing values in the training data, so fill them first (with training medians), and LIME passes plain arrays, so the function rebuilds a DataFrame with the feature names the model was trained on.</p>
+
+                <pre><code class="language-python">from lime.lime_tabular import LimeTabularExplainer
+
+fill = X_train.median()
+
+def predict_fn(rows):
+    return model.predict_proba(pd.DataFrame(rows, columns=features))
+
+lime_explainer = LimeTabularExplainer(
+    X_train.fillna(fill).to_numpy(), feature_names=features,
+    class_names=["stayed", "churned"], mode="classification", random_state=42,
 )
+exp = lime_explainer.explain_instance(x0.fillna(fill).to_numpy(), predict_fn, num_features=5, num_samples=5000)
 
-# Explain a test instance
-test_idx = 5
-test_instance = X_test[test_idx]
-true_label = y_test[test_idx]
+for rule, weight in exp.as_list():
+    print(f"{rule:35s} {weight:+.3f}")
+print(f"fidelity {exp.score:.3f}   surrogate prediction {exp.local_pred[0]:.3f}   model {proba[i]:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>days_since_last_order &gt; 110.00      +0.295
+discount_share &gt; 0.29               +0.238
+39.00 &lt; tenure_months &lt;= 68.00      -0.069
+support_tickets_12m &gt; 1.00          +0.066
+app_user &lt;= 0.00                    +0.060
+fidelity 0.512   surrogate prediction 0.580   model 0.972</code></pre>
+                </div>
 
-print(f"\nExplaining instance {test_idx}:")
-print(f"True label: {iris.target_names[true_label]}")
+                <p>By default LIME <strong>discretizes</strong> numeric features into quartile bins from the training data, so each feature becomes a yes/no rule like "<code>days_since_last_order &gt; 110</code>". The weight says how much being in this customer's bin, rather than another bin, moves the predicted probability. That turns the question back towards "what about this customer is unusual and risky?", which is why the ranking now resembles SHAP's: the long silence and heavy discounts lead, and a mid-range tenure pulls slightly down.</p>
 
-exp, pred, proba = lime_explainer.explain_instance(rf_model, test_instance)
-lime_explainer.visualize_explanation(exp, pred, proba)
+                <p>Look at the last line too. The surrogate predicts about 0.58 for a customer the model scores at 0.97. LIME's simple model captures the <em>direction</em> of the main pushes, not the exact prediction, and the fidelity of about 0.5 says the same. SHAP values, by contrast, add up to the model's output exactly. LIME also draws its explanation as a chart:</p>
 
-# Show the explanation in different formats
-print("\nExplanation as text:")
-for feat, imp in exp.as_list()[:5]:
-    print(f"  {feat}: {imp:.3f}")</code></pre>
+                <pre><code class="language-python">import matplotlib.pyplot as plt
 
-        <h2>LIME for Complex Models</h2>
-        
-        <pre class="language-python"><code>class ComplexModelExplainer:
-    """
-    LIME explanations for complex models
-    """
-    
-    def __init__(self):
-        self.models = {}
-        self.data = None
-        
-    def prepare_data(self):
-        """
-        Prepare breast cancer dataset
-        """
-        # Load data
-        data = load_breast_cancer()
-        X, y = data.data, data.target
-        
-        # Scale features
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_scaled, y, test_size=0.3, random_state=42
-        )
-        
-        self.data = {
-            'X_train': X_train,
-            'X_test': X_test,
-            'y_train': y_train,
-            'y_test': y_test,
-            'feature_names': data.feature_names,
-            'class_names': data.target_names,
-            'scaler': scaler
-        }
-        
-        return self.data
-    
-    def train_models(self):
-        """
-        Train different complex models
-        """
-        print("\n" + "=" * 60)
-        print("TRAINING COMPLEX MODELS")
-        print("=" * 60)
-        
-        models = {
-            'Random Forest': RandomForestClassifier(
-                n_estimators=100, 
-                max_depth=10,
-                random_state=42
-            ),
-            'Gradient Boosting': GradientBoostingClassifier(
-                n_estimators=100,
-                learning_rate=0.1,
-                random_state=42
-            ),
-            'Neural Network': MLPClassifier(
-                hidden_layer_sizes=(100, 50),
-                max_iter=500,
-                random_state=42
-            )
-        }
-        
-        for name, model in models.items():
-            print(f"\nTraining {name}...")
-            model.fit(self.data['X_train'], self.data['y_train'])
-            score = model.score(self.data['X_test'], self.data['y_test'])
-            print(f"  Accuracy: {score:.3f}")
-            self.models[name] = model
-        
-        return self.models
-    
-    def compare_explanations(self, instance_idx=0):
-        """
-        Compare LIME explanations across different models
-        """
-        print("\n" + "=" * 60)
-        print("COMPARING EXPLANATIONS ACROSS MODELS")
-        print("=" * 60)
-        
-        # Get test instance
-        test_instance = self.data['X_test'][instance_idx]
-        true_label = self.data['y_test'][instance_idx]
-        
-        # Create explainer
-        explainer = lime.lime_tabular.LimeTabularExplainer(
-            self.data['X_train'],
-            feature_names=self.data['feature_names'],
-            class_names=self.data['class_names'],
-            mode='classification'
-        )
-        
-        # Collect explanations for each model
-        explanations = {}
-        predictions = {}
-        
-        for model_name, model in self.models.items():
-            # Get explanation
-            exp = explainer.explain_instance(
-                test_instance,
-                model.predict_proba,
-                num_features=10
-            )
-            
-            # Store results
-            explanations[model_name] = exp.as_list()
-            predictions[model_name] = model.predict([test_instance])[0]
-        
-        # Visualize comparison
-        self.visualize_model_comparison(explanations, predictions, true_label)
-        
-        return explanations
-    
-    def visualize_model_comparison(self, explanations, predictions, true_label):
-        """
-        Visualize explanation comparison
-        """
-        fig, axes = plt.subplots(1, len(self.models), figsize=(15, 6))
-        
-        for idx, (model_name, exp_list) in enumerate(explanations.items()):
-            # Extract features and values
-            features = [x[0].split()[0] for x in exp_list[:8]]  # Top 8 features
-            values = [x[1] for x in exp_list[:8]]
-            
-            # Plot
-            colors = ['green' if x > 0 else 'red' for x in values]
-            axes[idx].barh(range(len(values)), values, color=colors)
-            axes[idx].set_yticks(range(len(features)))
-            axes[idx].set_yticklabels(features, fontsize=8)
-            axes[idx].set_xlabel('Contribution')
-            axes[idx].set_title(f'{model_name}\nPred: {self.data["class_names"][predictions[model_name]]}')
-            axes[idx].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
-        
-        plt.suptitle(f'Model Explanations Comparison\nTrue Label: {self.data["class_names"][true_label]}', 
-                    fontsize=14)
-        plt.tight_layout()
-        plt.show()
-    
-    def stability_analysis(self, instance_idx=0, n_runs=10):
-        """
-        Analyze stability of LIME explanations
-        """
-        print("\n" + "=" * 60)
-        print("LIME STABILITY ANALYSIS")
-        print("=" * 60)
-        
-        test_instance = self.data['X_test'][instance_idx]
-        model = self.models['Random Forest']
-        
-        # Create explainer
-        explainer = lime.lime_tabular.LimeTabularExplainer(
-            self.data['X_train'],
-            feature_names=self.data['feature_names'],
-            class_names=self.data['class_names'],
-            mode='classification'
-        )
-        
-        # Run multiple explanations
-        all_explanations = []
-        
-        for run in range(n_runs):
-            exp = explainer.explain_instance(
-                test_instance,
-                model.predict_proba,
-                num_features=10
-            )
-            
-            # Convert to dict for easier processing
-            exp_dict = {feat.split()[0]: val for feat, val in exp.as_list()}
-            all_explanations.append(exp_dict)
-        
-        # Calculate statistics
-        feature_importance_stats = {}
-        all_features = set()
-        for exp_dict in all_explanations:
-            all_features.update(exp_dict.keys())
-        
-        for feature in all_features:
-            importances = [exp.get(feature, 0) for exp in all_explanations]
-            feature_importance_stats[feature] = {
-                'mean': np.mean(importances),
-                'std': np.std(importances),
-                'min': np.min(importances),
-                'max': np.max(importances)
-            }
-        
-        # Visualize stability
-        self.visualize_stability(feature_importance_stats)
-        
-        return feature_importance_stats
-    
-    def visualize_stability(self, stats):
-        """
-        Visualize explanation stability
-        """
-        # Sort features by mean importance
-        sorted_features = sorted(stats.items(), 
-                               key=lambda x: abs(x[1]['mean']), 
-                               reverse=True)[:10]
-        
-        features = [f[0] for f in sorted_features]
-        means = [f[1]['mean'] for f in sorted_features]
-        stds = [f[1]['std'] for f in sorted_features]
-        
-        # Plot
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Mean importance with error bars
-        colors = ['green' if x > 0 else 'red' for x in means]
-        axes[0].barh(range(len(means)), means, xerr=stds, 
-                    color=colors, alpha=0.7, capsize=3)
-        axes[0].set_yticks(range(len(features)))
-        axes[0].set_yticklabels(features, fontsize=9)
-        axes[0].set_xlabel('Mean Feature Contribution')
-        axes[0].set_title('Feature Importance Stability')
-        axes[0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
-        
-        # Coefficient of variation
-        cv = [abs(std/mean) if mean != 0 else 0 
-              for mean, std in zip(means, stds)]
-        axes[1].barh(range(len(cv)), cv, color='steelblue')
-        axes[1].set_yticks(range(len(features)))
-        axes[1].set_yticklabels(features, fontsize=9)
-        axes[1].set_xlabel('Coefficient of Variation')
-        axes[1].set_title('Relative Stability (lower is more stable)')
-        
-        plt.suptitle('LIME Explanation Stability Analysis', fontsize=14)
-        plt.tight_layout()
-        plt.show()
+fig = exp.as_pyplot_figure()
+fig.set_size_inches(9, 3.8)
+plt.title("LIME explanation for customer C104051 (class: churned)")
+plt.tight_layout()
+plt.show()</code></pre>
 
-# Demonstrate complex model explanations
-complex_explainer = ComplexModelExplainer()
-data = complex_explainer.prepare_data()
-models = complex_explainer.train_models()
+                <figure>
+                    <img src="images/interpretability_lime_explanation.png" alt="LIME bar chart for customer C104051. Green bars to the right for days_since_last_order greater than 110 (about 0.30) and discount_share greater than 0.29 (about 0.24), smaller green bars for support_tickets_12m greater than 1 and app_user at or below 0, and a short red bar to the left for tenure_months between 39 and 68." width="990" height="418" loading="lazy">
+                    <figcaption>Green rules push towards churn, red ones away. Each bar is a weight in the local surrogate, in probability units.</figcaption>
+                </figure>
+            </section>
 
-# Compare explanations
-explanations = complex_explainer.compare_explanations(instance_idx=10)
+            <!-- ============================================================ -->
+            <section id="stability" class="lesson-section">
+                <h2>🎲 How Stable Is an Explanation?</h2>
 
-# Analyze stability
-stability_stats = complex_explainer.stability_analysis(instance_idx=10, n_runs=20)</code></pre>
+                <p>LIME is random: it draws variants. Rerun it with another seed and the explanation can change. That matters, because an agent reading "reason 3" on two days should not see two different reasons. Check it: explain the same customer with three seeds, first with 300 variants, then with 5,000.</p>
 
-        <h2>LIME for Text Classification</h2>
-        
-        <pre class="language-python"><code>class LIMETextExplainer:
-    """
-    LIME for text classification
-    """
-    
-    def __init__(self):
-        self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
-        self.model = None
-        self.explainer = lime.lime_text.LimeTextExplainer(class_names=['negative', 'positive'])
-        
-    def prepare_text_data(self):
-        """
-        Prepare sample text data
-        """
-        # Sample movie reviews
-        texts = [
-            "This movie was absolutely fantastic! Great acting and amazing plot.",
-            "Terrible film. Waste of time. Poor acting and boring story.",
-            "One of the best movies I've ever seen. Highly recommend!",
-            "Disappointing. Expected much better. Not worth watching.",
-            "Brilliant cinematography and outstanding performances by all actors.",
-            "Awful movie. Can't believe I sat through the whole thing.",
-            "A masterpiece! Every scene was perfectly crafted.",
-            "Boring and predictable. Save your money."
-        ]
-        
-        # Labels: 1 for positive, 0 for negative
-        labels = [1, 0, 1, 0, 1, 0, 1, 0]
-        
-        return texts, labels
-    
-    def train_text_classifier(self, texts, labels):
-        """
-        Train a simple text classifier
-        """
-        print("\n" + "=" * 60)
-        print("TRAINING TEXT CLASSIFIER")
-        print("=" * 60)
-        
-        # Create pipeline
-        self.model = make_pipeline(
-            self.vectorizer,
-            RandomForestClassifier(n_estimators=100, random_state=42)
-        )
-        
-        # Train
-        self.model.fit(texts, labels)
-        print("Text classifier trained!")
-        
-        return self.model
-    
-    def explain_text_prediction(self, text):
-        """
-        Explain a text classification
-        """
-        print("\n" + "=" * 60)
-        print("LIME TEXT EXPLANATION")
-        print("=" * 60)
-        print(f"\nText: '{text}'")
-        
-        # Get prediction
-        prediction = self.model.predict([text])[0]
-        probability = self.model.predict_proba([text])[0]
-        
-        print(f"Prediction: {'Positive' if prediction == 1 else 'Negative'}")
-        print(f"Confidence: {probability[prediction]:.3f}")
-        
-        # Generate explanation
-        exp = self.explainer.explain_instance(
-            text,
-            self.model.predict_proba,
-            num_features=10
-        )
-        
-        # Visualize
-        self.visualize_text_explanation(text, exp, prediction)
-        
-        return exp
-    
-    def visualize_text_explanation(self, text, exp, prediction):
-        """
-        Visualize text explanation
-        """
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-        
-        # Get explanation
-        exp_list = exp.as_list()
-        words = [x[0] for x in exp_list]
-        weights = [x[1] for x in exp_list]
-        
-        # Feature importance
-        colors = ['green' if prediction == 1 else 'red' if w > 0 else 'red' if prediction == 1 else 'green' 
-                  for w in weights]
-        axes[0].barh(range(len(weights)), weights, color=colors)
-        axes[0].set_yticks(range(len(words)))
-        axes[0].set_yticklabels(words)
-        axes[0].set_xlabel('Weight')
-        axes[0].set_title(f'Word Importance for {"Positive" if prediction == 1 else "Negative"} Prediction')
-        axes[0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
-        
-        # Highlighted text
-        axes[1].axis('off')
-        axes[1].set_title('Text with Important Words Highlighted')
-        
-        # Create highlighted text representation
-        text_words = text.lower().split()
-        highlighted_text = ""
-        
-        word_dict = {w.lower(): weight for w, weight in exp_list}
-        
-        y_position = 0.9
-        x_position = 0.05
-        
-        for word in text_words:
-            clean_word = word.strip('.,!?";')
-            
-            if clean_word in word_dict:
-                weight = word_dict[clean_word]
-                if abs(weight) > 0.01:  # Only highlight important words
-                    if weight > 0:
-                        color = 'green' if prediction == 1 else 'red'
-                    else:
-                        color = 'red' if prediction == 1 else 'green'
-                    
-                    axes[1].text(x_position, y_position, word + ' ', 
-                               fontsize=12, color=color, weight='bold')
-                else:
-                    axes[1].text(x_position, y_position, word + ' ', 
-                               fontsize=12, color='black')
-            else:
-                axes[1].text(x_position, y_position, word + ' ', 
-                           fontsize=12, color='black')
-            
-            x_position += 0.1
-            if x_position > 0.9:
-                x_position = 0.05
-                y_position -= 0.1
-        
-        plt.suptitle('LIME Text Classification Explanation', fontsize=14)
-        plt.tight_layout()
-        plt.show()
+                <pre><code class="language-python">for n_samples in [300, 5000]:
+    print(f"num_samples={n_samples}")
+    for seed in [1, 2, 3]:
+        explainer_s = LimeTabularExplainer(X_train.fillna(fill).to_numpy(), feature_names=features,
+                                           class_names=["stayed", "churned"], random_state=seed)
+        e = explainer_s.explain_instance(x0.fillna(fill).to_numpy(), predict_fn, num_features=3,
+                                         num_samples=n_samples)
+        print(f"  seed {seed}:", " | ".join(f"{rule} {w:+.2f}" for rule, w in e.as_list()))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>num_samples=300
+  seed 1: days_since_last_order &gt; 110.00 +0.29 | discount_share &gt; 0.29 +0.27 | 39.00 &lt; tenure_months &lt;= 68.00 -0.07
+  seed 2: days_since_last_order &gt; 110.00 +0.29 | discount_share &gt; 0.29 +0.21 | support_tickets_12m &gt; 1.00 +0.08
+  seed 3: days_since_last_order &gt; 110.00 +0.29 | discount_share &gt; 0.29 +0.25 | support_tickets_12m &gt; 1.00 +0.07
+num_samples=5000
+  seed 1: days_since_last_order &gt; 110.00 +0.30 | discount_share &gt; 0.29 +0.24 | 39.00 &lt; tenure_months &lt;= 68.00 -0.08
+  seed 2: days_since_last_order &gt; 110.00 +0.30 | discount_share &gt; 0.29 +0.24 | 39.00 &lt; tenure_months &lt;= 68.00 -0.07
+  seed 3: days_since_last_order &gt; 110.00 +0.30 | discount_share &gt; 0.29 +0.26 | 39.00 &lt; tenure_months &lt;= 68.00 -0.07</code></pre>
+                </div>
 
-# Demonstrate text explanation
-text_explainer = LIMETextExplainer()
+                <p>The top two rules hold in every run. With only 300 variants, the third reason and the weights wander from seed to seed; with 5,000 they settle. The lessons: use enough samples (the library's default is 5,000), fix <code>random_state</code> so your report is reproducible, and treat small weights, the ones that change between seeds, as noise.</p>
 
-# Prepare data
-texts, labels = text_explainer.prepare_text_data()
+                <div class="card card-success">
+                    <h4>✅ Two Checks Before You Trust a LIME Explanation</h4>
+                    <p><strong>Fidelity:</strong> is <code>exp.score</code> reasonable, and is <code>exp.local_pred</code> at least on the same side of your decision threshold as the model? <strong>Stability:</strong> do the top reasons survive a change of seed? If either check fails, report fewer reasons or switch to SHAP.</p>
+                </div>
+            </section>
 
-# Train classifier
-model = text_explainer.train_text_classifier(texts, labels)
+            <!-- ============================================================ -->
+            <section id="what-if" class="lesson-section">
+                <h2>🔮 What-If Checks and Choosing a Method</h2>
 
-# Explain predictions
-test_texts = [
-    "This movie was incredible! Best film of the year!",
-    "Boring and poorly made. Complete waste of time.",
-    "The acting was superb but the plot was confusing."
-]
+                <p>The simplest local explanation of all is to change one thing and ask the model again. If C104051 had ordered more recently, what would the model say?</p>
 
-for test_text in test_texts:
-    exp = text_explainer.explain_text_prediction(test_text)</code></pre>
+                <pre><code class="language-python">what_if = X_test.iloc[[i]].copy()
+for days in [364, 200, 150, 120, 60]:
+    what_if["days_since_last_order"] = days
+    print(f"{days:3d} days -&gt; predicted churn {model.predict_proba(what_if)[0, 1]:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>364 days -&gt; predicted churn 0.972
+200 days -&gt; predicted churn 0.899
+150 days -&gt; predicted churn 0.716
+120 days -&gt; predicted churn 0.619
+ 60 days -&gt; predicted churn 0.645</code></pre>
+                </div>
 
-        <h2>Advanced LIME Techniques</h2>
-        
-        <div class="mermaid">
-        flowchart TB
-            A[LIME Extensions] --> B[Anchors]
-            A --> C[SHAP Integration]
-            A --> D[Counterfactuals]
-            
-            B --> B1[Rule-based Explanations]
-            C --> C1[Global Interpretability]
-            D --> D1[What-if Scenarios]
-            
-            E[Best Practices] --> F[Sampling Strategy]
-            E --> G[Kernel Width]
-            E --> H[Feature Selection]
-            
-            style A fill:#e3f2fd
-            style E fill:#fff9c4
+                <p>Even with a recent order, this customer stays above 0.6: the discounts and tickets are still there. This is exactly the kind of insight a single "top reason" hides. It also shows the danger of reading explanations as instructions: "make them order" would not, according to the model, make this customer safe. And remember that what-ifs describe the <em>model's</em> answer, not what the customer would really do.</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Question</th><th>Good tool</th><th>Watch out for</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>What does the model rely on overall?</td><td>Permutation importance (7.1), mean |SHAP|</td><td>Correlated features sharing credit</td></tr>
+                            <tr><td>How does risk change along one feature?</td><td>Partial dependence and ICE (7.1), SHAP scatter</td><td>Impossible feature combinations</td></tr>
+                            <tr><td>Why this prediction, with parts that add up?</td><td>SHAP (7.2)</td><td>Units (log-odds), choice of background</td></tr>
+                            <tr><td>What moves this prediction nearby, for any model?</td><td>LIME</td><td>Fidelity, stability, neighborhood choices</td></tr>
+                            <tr><td>What would the model say if X were different?</td><td>What-if checks</td><td>Unrealistic changes; model, not reality</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="fairness" class="lesson-section">
+                <h2>⚖️ A Fairness Check</h2>
+
+                <p>Explanations tell you how a model decides. A fairness check asks whether its decisions land differently on different groups of people. Pinecrest's retention campaign offers a discount to customers the model flags, and the team can afford calls to 20% of customers. Being flagged is a benefit here: a flagged churner gets an offer, a churner who is missed does not. So a natural question is: <strong>does the model find churners equally well in every age group?</strong></p>
+
+                <p>The model never sees <code>age_group</code>. That does not settle the question, because other features can act as <strong>proxies</strong> for a group (spending patterns, app use, tenure). Not using a sensitive attribute is sometimes called "fairness through unawareness", and it guarantees nothing. You have to measure. Age is used here only to <em>audit</em> the model; it is never an input and never a target.</p>
+
+                <div class="card card-accent">
+                    <h4>🔑 Key Terms</h4>
+                    <p><strong>Flag rate</strong> (selection rate): the share of a group that the model flags. Equal flag rates is called demographic parity. <strong>Recall</strong> (true positive rate): of a group's real churners, the share that got flagged. Equal recall is called equal opportunity. <strong>Precision</strong>: of a group's flagged customers, the share who really churned. Different definitions can conflict; you choose the one that matches the harm you care about.</p>
+                </div>
+
+                <pre><code class="language-python">audit = test[["customer_id", "age_group", "churned"]].copy()
+audit["age"] = audit["age_group"].fillna("unknown")
+audit["p"] = proba
+audit["flag"] = audit["p"] &gt;= audit["p"].quantile(0.80)   # calls for the top 20%
+
+by_age = audit.groupby("age").agg(customers=("churned", "size"), churners=("churned", "sum"),
+                                  churn_rate=("churned", "mean"), flag_rate=("flag", "mean"))
+by_age["recall"] = audit[audit["churned"] == 1].groupby("age")["flag"].mean()
+by_age["precision"] = audit[audit["flag"]].groupby("age")["churned"].mean()
+print(by_age.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>         customers  churners  churn_rate  flag_rate  recall  precision
+age
+18-24          162        28       0.173      0.173   0.536      0.536
+25-34          309        55       0.178      0.184   0.564      0.544
+35-44          295        51       0.173      0.173   0.569      0.569
+45-54          255        31       0.122      0.212   0.710      0.407
+55-64          204        34       0.167      0.255   0.765      0.500
+65+            147        24       0.163      0.211   0.708      0.548
+unknown        128        25       0.195      0.211   0.680      0.630</code></pre>
+                </div>
+
+                <p>At first glance this looks worrying. The model finds 77% of churners aged 55 to 64 but only 54% of churners aged 18 to 24, a gap of 23 percentage points. Younger churners would miss out on offers. Before raising the alarm, look at the <code>churners</code> column: the recall for 18 to 24 rests on 28 people. One customer more or less moves it by almost 4 points. Is a gap this size larger than what chance alone produces with groups this small?</p>
+
+                <p>A <strong>permutation test</strong> answers that, with the same shuffling idea as permutation importance. Shuffle the age labels among the churners, so age has nothing to do with being flagged, and recompute the largest recall gap. Do that 2,000 times. If gaps as big as the real one are common under shuffling, the real gap is not evidence of unfairness.</p>
+
+                <pre><code class="language-python">def recall_gap(frame):
+    recall = frame.groupby("age")["flag"].mean()
+    return recall.max() - recall.min()
+
+churners = audit[audit["churned"] == 1]
+observed = recall_gap(churners)
+
+rng = np.random.default_rng(42)
+shuffled_gaps = np.array([recall_gap(churners.assign(age=rng.permutation(churners["age"].to_numpy())))
+                          for _ in range(2000)])
+print(f"observed recall gap: {observed:.3f}")
+print(f"typical gap by chance (median): {np.median(shuffled_gaps):.3f}")
+print(f"share of shuffles with a gap at least as large: {(shuffled_gaps &gt;= observed).mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>observed recall gap: 0.229
+typical gap by chance (median): 0.223
+share of shuffles with a gap at least as large: 0.473</code></pre>
+                </div>
+
+                <p>Shuffled labels produce a gap this large about half the time. With seven groups of 24 to 55 churners, a spread of over 20 points between the best and worst group is simply what noise looks like. The honest conclusion is: <strong>no evidence that recall differs by age group, and not enough data to rule out a moderate difference.</strong> That second half matters. "We found no problem" is not "we showed there is none".</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ What a Fairness Check Can and Cannot Do</h4>
+                    <ul>
+                        <li>It measures outcomes for the groups you chose, with the definition you chose. Other groups and definitions can tell a different story.</li>
+                        <li>Small groups give noisy numbers in both directions: they can fake a gap and hide a real one. Report group sizes and uncertainty, and repeat the audit as more data arrives.</li>
+                        <li>A gap is a question, not a verdict. The next step is to look at why (which features, which proxies) and whether the business decision itself, not only the model, is fair.</li>
+                        <li>Using sensitive attributes even for auditing needs care: collect them only with a clear purpose and permission, store them separately, and never feed them to the model as a shortcut.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <h3>1. Missing Values in LIME's Training Data</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">broken = LimeTabularExplainer(X_train.to_numpy(), feature_names=features, random_state=42)
+broken.explain_instance(x0.fillna(fill).to_numpy(), predict_fn)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Domain error in arguments. The `scale` parameter must be positive for all distributions, and many distributions have restrictions on shape parameters. Please see the `scipy.stats.truncnorm` documentation for details.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> <code>email_opens_90d</code> has gaps, so LIME's summary statistics for it are <code>NaN</code>, and drawing random variants from a distribution with an undefined spread fails deep inside SciPy. The message does not mention missing values, which makes it hard to diagnose. <strong>Fix:</strong> fill missing values (training medians) in the data you give the explainer, and in the row you explain.</p>
+
+                <h3>2. Giving LIME Labels Instead of Probabilities</h3>
+
+                <pre data-raises="NotImplementedError"><code class="language-python">lime_explainer.explain_instance(x0.fillna(fill).to_numpy(),
+                                lambda rows: model.predict(pd.DataFrame(rows, columns=features)))</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>NotImplementedError: LIME does not currently support classifier models without probability scores. If this conflicts with your use case, please let us know: https://github.com/datascienceinc/lime/issues/16</code></pre>
+                </div>
+                <p><strong>What it means:</strong> LIME fits a regression to the model's <em>scores</em>; 0/1 labels carry almost no information near one customer. <strong>Fix:</strong> pass a function that returns <code>predict_proba</code> output, one column per class.</p>
+
+                <h3>3. Passing a pandas Row</h3>
+
+                <pre data-raises="KeyError"><code class="language-python">lime_explainer.explain_instance(x0.fillna(fill), predict_fn)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>KeyError: 0</code></pre>
+                </div>
+                <p><strong>What it means:</strong> LIME indexes the row by position (<code>row[0]</code>), and a pandas Series with feature names as its index has no label <code>0</code>. <strong>Fix:</strong> pass <code>.to_numpy()</code>.</p>
+
+                <h3>4. Reporting Weights From Too Few Samples</h3>
+                <p>You saw it in the stability section: with 300 variants the third reason changed with the seed. <strong>Fix:</strong> keep <code>num_samples</code> at 5,000 or more for anything you report, fix <code>random_state</code>, and check the top reasons with a second seed.</p>
+
+                <h3>5. "We Removed Age, So the Model Is Fair"</h3>
+                <p>The churn model never saw age, yet its recall differs by age group (by chance, here, but you only know that because you measured). <strong>Fix:</strong> audit outcomes by group, even for features the model does not use.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: Auditing the Retention Campaign</h2>
+
+                <p>Before the campaign launches, Pinecrest's analytics lead asks for an audit: are the explanations agents will see reliable, and does the targeting treat age groups alike? You will explain three flagged customers with LIME, test the stability of each explanation, check flag rates by age with a permutation test, and save a short audit table. Work in a new notebook called <code>lesson_7_3_project</code>. Allow about 50 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Train and flag the top 20% <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import HistGradientBoostingClassifier
+from lime.lime_tabular import LimeTabularExplainer
+
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+            "email_opens_90d"]
+train, test = train_test_split(customers, test_size=0.25, stratify=customers["churned"], random_state=42)
+X_train, X_test = train[features].astype(float), test[features].astype(float)
+model = HistGradientBoostingClassifier(random_state=42).fit(X_train, train["churned"])
+
+campaign = test[["customer_id", "age_group", "churned"]].assign(p=model.predict_proba(X_test)[:, 1])
+campaign["flag"] = campaign["p"] &gt;= campaign["p"].quantile(0.80)
+print(f"flagged {campaign['flag'].sum()} of {len(campaign)}; churners among them {campaign.loc[campaign['flag'], 'churned'].mean():.1%}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>flagged 300 of 1500; churners among them 52.3%</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Explain three flagged customers <span class="step-time">(10 min)</span></h3>
+                    <p>Pick three flagged customers at different risk levels (the top one, one near the middle of the flagged group, one just above the cut-off) so you see more than the easy case. Record each explanation's fidelity and the surrogate's prediction.</p>
+                    <pre><code class="language-python">fill = X_train.median()
+
+def predict_fn(rows):
+    return model.predict_proba(pd.DataFrame(rows, columns=features))
+
+explainer = LimeTabularExplainer(X_train.fillna(fill).to_numpy(), feature_names=features,
+                                 class_names=["stayed", "churned"], random_state=42)
+
+flagged = campaign[campaign["flag"]].sort_values("p", ascending=False)
+picks = flagged.iloc[[0, len(flagged) // 2, len(flagged) - 1]]
+
+explained = {}
+for label, row in picks.iterrows():
+    e = explainer.explain_instance(X_test.loc[label].fillna(fill).to_numpy(), predict_fn, num_features=3)
+    explained[row["customer_id"]] = e
+    print(f"{row['customer_id']}  model {row['p']:.3f}  surrogate {e.local_pred[0]:.3f}  fidelity {e.score:.2f}")
+    for rule, w in e.as_list():
+        print(f"    {rule:35s} {w:+.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>C104051  model 0.972  surrogate 0.509  fidelity 0.48
+    days_since_last_order &gt; 110.00      +0.295
+    discount_share &gt; 0.29               +0.240
+    39.00 &lt; tenure_months &lt;= 68.00      -0.071
+C103674  model 0.530  surrogate 0.395  fidelity 0.36
+    days_since_last_order &gt; 110.00      +0.317
+    0.14 &lt; discount_share &lt;= 0.29       -0.090
+    tenure_months &gt; 68.00               +0.078
+C104266  model 0.254  surrogate 0.309  fidelity 0.27
+    discount_share &gt; 0.29               +0.248
+    days_since_last_order &lt;= 23.00      -0.116
+    tenure_months &gt; 68.00               +0.065</code></pre>
+                    </div>
+                </div>
+
+                <p>Fidelity falls for the customers nearer the cut-off (0.27 for the last one): their neighborhoods straddle the model's thresholds, so a flat map fits worse. For the middle customer, the surrogate even lands on the other side of 0.5 from the model. Those are exactly the explanations to handle with care.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Test stability across seeds <span class="step-time">(10 min)</span></h3>
+                    <p>For each of the three customers, rerun LIME with five different seeds and count how often the top reason (the rule with the largest positive weight) is the same as with seed 42.</p>
+                    <pre><code class="language-python">def top_rule(e):
+    return max(e.as_list(), key=lambda rw: rw[1])[0]
+
+stability = {}
+for label, row in picks.iterrows():
+    reference_rule = top_rule(explained[row["customer_id"]])
+    same = 0
+    for seed in range(5):
+        explainer_s = LimeTabularExplainer(X_train.fillna(fill).to_numpy(), feature_names=features,
+                                           class_names=["stayed", "churned"], random_state=seed)
+        e = explainer_s.explain_instance(X_test.loc[label].fillna(fill).to_numpy(), predict_fn, num_features=3)
+        same += top_rule(e) == reference_rule
+    stability[row["customer_id"]] = same / 5
+    print(f"{row['customer_id']}: top reason '{reference_rule}' kept in {same} of 5 seeds")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>C104051: top reason 'days_since_last_order &gt; 110.00' kept in 5 of 5 seeds
+C103674: top reason 'days_since_last_order &gt; 110.00' kept in 5 of 5 seeds
+C104266: top reason 'discount_share &gt; 0.29' kept in 5 of 5 seeds</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Flag rates by age group <span class="step-time">(10 min)</span></h3>
+                    <p>The lesson checked recall. Now check the other common definition: are age groups flagged at similar rates? Compute the flag rate and churn rate per group, then a permutation test on the largest flag-rate gap (shuffle the age labels among <em>all</em> test customers this time).</p>
+                    <pre><code class="language-python">campaign["age"] = campaign["age_group"].fillna("unknown")
+by_age = campaign.groupby("age").agg(customers=("flag", "size"), churn_rate=("churned", "mean"),
+                                     flag_rate=("flag", "mean"))
+print(by_age.round(3))
+
+def flag_gap(frame):
+    rates = frame.groupby("age")["flag"].mean()
+    return rates.max() - rates.min()
+
+observed = flag_gap(campaign)
+rng = np.random.default_rng(42)
+gaps = np.array([flag_gap(campaign.assign(age=rng.permutation(campaign["age"].to_numpy())))
+                 for _ in range(2000)])
+p_value = (gaps &gt;= observed).mean()
+print(f"flag-rate gap {observed:.3f}; share of shuffles at least as large: {p_value:.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>         customers  churn_rate  flag_rate
+age
+18-24          162       0.173      0.173
+25-34          309       0.178      0.184
+35-44          295       0.173      0.173
+45-54          255       0.122      0.212
+55-64          204       0.167      0.255
+65+            147       0.163      0.211
+unknown        128       0.195      0.211
+flag-rate gap 0.082; share of shuffles at least as large: 0.395</code></pre>
+                    </div>
+                </div>
+
+                <p>Flag rates range from about 17% to 26% across age groups, and gaps at least that large show up in roughly 40% of shuffles: again, no evidence of a real difference at this sample size, and no proof of its absence either.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Save the audit <span class="step-time">(10 min)</span></h3>
+                    <p>Save the per-group table and print an audit note. The note must state what was checked, what was found, and what was not checked.</p>
+                    <pre><code class="language-python">by_age["recall"] = campaign[campaign["churned"] == 1].groupby("age")["flag"].mean()
+by_age.round(3).to_csv("fairness_audit.csv")
+
+print(f"""Retention campaign audit
+Explanations : LIME on 3 flagged customers; fidelity {min(e.score for e in explained.values()):.2f} to {max(e.score for e in explained.values()):.2f}
+Stability    : top reason kept in {min(stability.values()):.0%} to {max(stability.values()):.0%} of reseeded runs
+Flag rate    : {by_age['flag_rate'].min():.1%} to {by_age['flag_rate'].max():.1%} by age group (permutation p = {p_value:.3f})
+Recall       : {by_age['recall'].min():.1%} to {by_age['recall'].max():.1%} by age group
+Not checked  : other groups (e.g. region), other thresholds, effects of the offer itself
+Saved        : fairness_audit.csv ({len(by_age)} groups)""")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>Retention campaign audit
+Explanations : LIME on 3 flagged customers; fidelity 0.27 to 0.48
+Stability    : top reason kept in 100% to 100% of reseeded runs
+Flag rate    : 17.3% to 25.5% by age group (permutation p = 0.395)
+Recall       : 53.6% to 76.5% by age group
+Not checked  : other groups (e.g. region), other thresholds, effects of the offer itself
+Saved        : fairness_audit.csv (7 groups)</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Exactly 20% of test customers are flagged, and you know what share of them really churned</li>
+                        <li>Three customers at different risk levels are explained, each with its fidelity and surrogate prediction</li>
+                        <li>Each top reason was rechecked with five seeds</li>
+                        <li>Flag rates by age group come with a permutation test, and you can say what its result means</li>
+                        <li><code>fairness_audit.csv</code> is saved and the note lists what was <em>not</em> checked</li>
+                        <li><code>age_group</code> was used only to audit, never as a model input</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue in the project notebook, so <code>model</code>, <code>explainer</code>, <code>predict_fn</code>, <code>fill</code>, <code>campaign</code> and <code>picks</code> already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: More Features, Better Fit?</h3>
+                    <p>Explain the top flagged customer with <code>num_features</code> set to 3, 6 and 11. Print the fidelity score each time. Does a longer explanation imitate the model better, and is it still useful to an agent?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>The customer's row label is <code>picks.index[0]</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">row = X_test.loc[picks.index[0]].fillna(fill).to_numpy()
+for k in [3, 6, 11]:
+    e = explainer.explain_instance(row, predict_fn, num_features=k)
+    print(f"num_features={k:2d}  fidelity {e.score:.3f}  surrogate {e.local_pred[0]:.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>num_features= 3  fidelity 0.486  surrogate 0.495
+num_features= 6  fidelity 0.539  surrogate 0.590
+num_features=11  fidelity 0.545  surrogate 0.597</code></pre>
+                        </div>
+                        <p>More features fit the neighborhood a little better, as any regression with more inputs does, but the gain is modest and an 11-reason explanation is no explanation for a phone call. Three to five reasons, checked for stability, is the usual compromise.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: LIME Versus SHAP on the Same Customers</h3>
+                    <p>For the three customers in <code>picks</code>, compute SHAP values with <code>shap.TreeExplainer(model)</code> and print the top SHAP feature next to LIME's top rule. Do they name the same feature?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>LIME's rule text starts with or contains the feature name; SHAP's top feature is the column with the largest value in each row.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">import shap
+
+sv = shap.TreeExplainer(model)(X_test.loc[picks.index])
+shap_top = pd.DataFrame(sv.values, columns=features, index=picks["customer_id"]).idxmax(axis=1)
+for cid in picks["customer_id"]:
+    print(f"{cid}  SHAP: {shap_top[cid]:22s}  LIME: {top_rule(explained[cid])}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>C104051  SHAP: days_since_last_order   LIME: days_since_last_order &gt; 110.00
+C103674  SHAP: days_since_last_order   LIME: days_since_last_order &gt; 110.00
+C104266  SHAP: discount_share          LIME: discount_share &gt; 0.29</code></pre>
+                        </div>
+                        <p>When the two methods agree, an agent can trust the lead reason more. When they disagree, it usually means two reasons are close in size for that customer, or that LIME's bins and SHAP's background are answering slightly different questions. Report the agreement, not just one method's answer.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Another Grouping</h3>
+                    <p>Repeat the recall check from the lesson by <code>home_store</code> (Online and the four stores). Store is not a protected attribute, but it matters for service quality: are online customers' churners found as reliably as store customers'? Include the number of churners per group.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>home_store</code> is in <code>test</code>, not in <code>campaign</code>: join it on the index with <code>campaign.join(test["home_store"])</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">stores = campaign.join(test["home_store"])
+churned_only = stores[stores["churned"] == 1]
+report = churned_only.groupby("home_store").agg(churners=("flag", "size"), recall=("flag", "mean"))
+report["flag_rate"] = stores.groupby("home_store")["flag"].mean()
+print(report.round(3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>            churners  recall  flag_rate
+home_store
+Asheville         47   0.809      0.268
+Bend              31   0.484      0.156
+Boise             41   0.610      0.177
+Flagstaff         30   0.467      0.211
+Online            99   0.657      0.197</code></pre>
+                        </div>
+                        <p>Recall ranges widely across stores, but again the groups are small (30 to 99 churners). Before acting, run the permutation test from the lesson on this grouping. Even when a gap is real, the cause may be the customers (Asheville's churners may simply look more like churners) rather than unfair treatment, so the next step is investigation, not a conclusion.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: What Would It Take? (Stretch)</h3>
+                    <p>For customer C104051, search a grid of <code>days_since_last_order</code> (30 to 364) and <code>discount_share</code> (0.05 to 0.45) values and find the combinations where the model's predicted churn drops below 0.5. Print the combination closest to the customer's real values. Then write one sentence on why this is not a recommendation to the retention team.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Build all combinations with a list comprehension over two <code>np.linspace</code> grids, copy the customer's row once per combination, predict all at once, then measure the distance in standard deviations to the real values.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">label = campaign.index[campaign["customer_id"] == "C104051"][0]
+base_row = X_test.loc[label]
+grid = [(d, s) for d in np.linspace(30, 364, 12) for s in np.linspace(0.05, 0.45, 9)]
+candidates = pd.DataFrame([base_row] * len(grid)).reset_index(drop=True)
+candidates["days_since_last_order"] = [d for d, _ in grid]
+candidates["discount_share"] = [s for _, s in grid]
+candidates["p"] = model.predict_proba(candidates[features])[:, 1]
+
+sd = X_train.std()
+safe = candidates[candidates["p"] &lt; 0.5].copy()
+safe["distance"] = np.sqrt(((safe["days_since_last_order"] - base_row["days_since_last_order"]) / sd["days_since_last_order"]) ** 2
+                           + ((safe["discount_share"] - base_row["discount_share"]) / sd["discount_share"]) ** 2)
+print(f"{len(safe)} of {len(candidates)} combinations fall below 0.5")
+print(safe.nsmallest(1, "distance")[["days_since_last_order", "discount_share", "p"]].round(3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>37 of 108 combinations fall below 0.5
+    days_since_last_order  discount_share      p
+42                151.455            0.35  0.457</code></pre>
+                        </div>
+                        <p>This is a <strong>counterfactual explanation</strong>: the smallest change that flips the model's answer. It is a statement about the model, not about the customer. Nobody can change a customer's past order dates, and lowering their discounts might drive them away rather than keep them. Counterfactuals are useful for understanding a model's decision boundary and for telling someone what would have changed a decision; turning them into actions needs an experiment.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> What does LIME fit to explain one prediction?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="LIME never touches the original model's training. What does it ask the model for?">
+                                A) A new version of the churn model, retrained on the customer's neighbors
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="That describes SHAP. Which method uses a surrogate model?">
+                                B) Shapley values averaged over every order of features
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="LIME scores many perturbed variants of the customer with the original model, weights them by closeness, and fits a simple weighted linear model whose weights are the explanation.">
+                                C) A simple weighted linear model to the original model's scores on nearby variants of the customer
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> A LIME explanation has <code>exp.score</code> of 0.12 and <code>exp.local_pred</code> of 0.31 for a customer the model scores at 0.88. What should you do?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="A low fidelity score and a surrogate prediction on the other side of the threshold mean the flat map does not imitate the model here. Do not present these weights as the reason; try other settings or use SHAP.">
+                                A) Treat the explanation as unreliable: the surrogate does not imitate the model near this customer
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The weights come from the surrogate. How well does the surrogate match the model here?">
+                                B) Report the weights as usual; fidelity only matters for regression models
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The model's 0.88 is what is being explained. Which of the two numbers is the approximation?">
+                                C) Trust the surrogate: the real risk is 0.31, not 0.88
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> For a customer with 364 days since the last order, SHAP gives recency the largest share, but a hand-built LIME gives it a small local slope. How can both be right?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Both methods ran correctly. Do they ask the same question?">
+                                A) They cannot; one of the two methods has a bug
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="SHAP measures how much a feature explains the gap from an average customer; a local slope measures how much the prediction changes if the feature moves a little. At 364 days the risk curve is already flat, so the slope is small even though the share is large.">
+                                B) SHAP measures the share of the gap from an average customer; the slope measures sensitivity nearby, and the risk curve is already flat at 364 days
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The model clearly uses recency (it was the top permutation importance). What is special about this customer's value?">
+                                C) The model does not really use recency
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> The churn model never uses <code>age_group</code>. Which statement is true?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Can other features carry information about age?">
+                                A) The model must treat all age groups equally
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Using age as an input would not help an audit. What should age be used for?">
+                                B) You should add <code>age_group</code> as a feature so the model can correct for it
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Other features can act as proxies, so leaving the attribute out guarantees nothing. You measure outcomes such as flag rate and recall per group to find out.">
+                                C) Its outcomes can still differ by age through proxy features, so you have to measure them by group
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> Recall is 0.54 for one age group (28 churners) and 0.77 for another (34 churners). A permutation test finds that shuffled labels produce a gap at least this large in 47% of shuffles. What is the best conclusion?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="A 47% share means gaps this big are common when age has nothing to do with flagging. Is that evidence?">
+                                A) The model is unfair to the first group and must be retrained
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Gaps this large are common by chance with groups this small, so there is no evidence of a difference. But small groups also cannot rule out a moderate real difference, so keep monitoring as data grows.">
+                                B) No evidence of a real difference, but the groups are too small to prove there is none; keep monitoring
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Not finding evidence is different from proving absence. What do small groups do to your ability to detect a real gap?">
+                                C) The model is proven fair across age groups
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>LIME or SHAP: which should I use?</summary>
+                    <p>For tree models on tabular data, SHAP's TreeExplainer is usually the better default: exact, fast, additive and stable. LIME is useful when you only have a prediction function (a model behind an API), when you want rule-like explanations, and as a second opinion. When the two agree, you can be more confident in the explanation.</p>
+                </details>
+                <details>
+                    <summary>Can LIME explain text and images?</summary>
+                    <p>Yes. The package has <code>LimeTextExplainer</code>, which removes words to build variants, and <code>lime_image</code>, which hides patches of an image. The same cautions apply: check stability, and remember the explanation is about the model's behavior near one example.</p>
+                </details>
+                <details>
+                    <summary>Are there libraries for fairness metrics?</summary>
+                    <p>Yes, for example Fairlearn, which computes metrics by group (its <code>MetricFrame</code>) and offers mitigation methods. It is not installed in this course's environment; the pandas groupby you wrote computes the same core numbers, and writing it yourself makes clear exactly what is being compared.</p>
+                </details>
+                <details>
+                    <summary>If a real gap shows up, what can be done?</summary>
+                    <p>First investigate: which features drive the difference, and is the gap in the data (different churn patterns) or in the model? Options then include better features for the under-served group, a different threshold or capacity allocation per group where that is legal and justified, or changing the business process. Which, if any, is appropriate is a decision for the business and its legal and ethics advisors, not for the model alone.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>The fairness check used one threshold (the top 20%). Repeat the recall-by-age table for the top 10%, 20% and 40%, and run the permutation test at each. Does the conclusion depend on how many calls Pinecrest can afford? Write a two-sentence note for the analytics lead.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> You found a 23-point recall gap between two age groups and then showed it was consistent with chance. Write how you would report both facts to a manager in three sentences, without making the model sound either guilty or certified fair. Then note one decision in your own life or work where a model, or a rule of thumb, could treat groups differently without ever looking at group membership.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>LIME explains one prediction with a simple surrogate fitted to the model's scores on weighted, nearby variants</li>
+                        <li>Check fidelity (<code>exp.score</code>, <code>exp.local_pred</code>) and stability (other seeds) before trusting a LIME explanation</li>
+                        <li>A local slope (sensitivity) and a SHAP share (attribution) answer different questions and can rank features differently</li>
+                        <li>What-if checks and counterfactuals describe the model's answers, not what would happen in the world</li>
+                        <li>Leaving a sensitive attribute out of the model does not make it fair; measure outcomes by group</li>
+                        <li>Flag rate, recall and precision by group are different fairness views; small groups need a significance check such as a permutation test</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You built LIME from scratch with NumPy and a weighted ridge regression</li>
+                        <li>You used the <code>lime</code> library and caught its silent weaknesses: low fidelity and seed dependence</li>
+                        <li>You ran what-if and counterfactual checks on a real customer</li>
+                        <li>You audited a churn campaign by age group and tested whether a gap was more than chance</li>
+                        <li>You completed Module 7: you can now explain a model globally, locally, and in terms of who it affects</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="clustering_kmeans.html"><strong>Lesson 8.1: K-Means Clustering</strong></a> you leave labels behind. Instead of predicting churn, you will ask the data which kinds of customers Pinecrest has, and meet K-Means, the classic algorithm for finding groups. Interpretation comes with you: a cluster is only useful once you can describe it.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>fairness_audit.csv</code>; it is a template you can reuse for any future model.</li>
+                    <li>Without code, sort Pinecrest customers you can picture into three or four types (for example, by how often they buy and how much they rely on discounts). You will compare your guess with what K-Means finds.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You finished a module that many machine-learning courses skip. You can open a model up, explain a single decision in plain words, tell when an explanation is shaky, and check whether a model's errors land evenly. Those skills are what turn "the model says so" into a decision people can trust. If fairness felt less tidy than the rest of the course, that is because it is: it mixes statistics with judgment, and you have just practiced both.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="interpretability_shap.html" class="prev-lesson">← Previous: SHAP Values</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="clustering_kmeans.html" class="next-lesson">Next: K-Means Clustering →</a>
+            </nav>
         </div>
-
-        <pre class="language-python"><code>class AdvancedLIMETechniques:
-    """
-    Advanced LIME techniques and best practices
-    """
-    
-    @staticmethod
-    def submodular_pick(data, model, explainer, num_exps=5):
-        """
-        Select diverse representative explanations using submodular optimization
-        """
-        print("\n" + "=" * 60)
-        print("SUBMODULAR PICK - REPRESENTATIVE EXPLANATIONS")
-        print("=" * 60)
-        
-        # This would use lime.submodular_pick.SubmodularPick
-        # For demonstration, we'll show the concept
-        
-        print("Submodular Pick selects diverse, representative instances")
-        print("that together provide good coverage of the model's behavior.")
-        print("\nBenefits:")
-        print("  - Reduces redundancy in explanations")
-        print("  - Provides global understanding from local explanations")
-        print("  - Efficiently summarizes model behavior")
-        
-        # Simulate picking diverse instances
-        n_samples = len(data)
-        picked_indices = np.random.choice(n_samples, num_exps, replace=False)
-        
-        return picked_indices
-    
-    @staticmethod
-    def fidelity_analysis(explainer, model, X_test, n_samples=100):
-        """
-        Analyze fidelity of LIME explanations
-        """
-        print("\n" + "=" * 60)
-        print("FIDELITY ANALYSIS")
-        print("=" * 60)
-        
-        fidelity_scores = []
-        
-        for i in range(min(n_samples, len(X_test))):
-            instance = X_test[i]
-            
-            # Get LIME explanation
-            exp = explainer.explain_instance(
-                instance,
-                model.predict_proba,
-                num_features=10
-            )
-            
-            # Get linear model coefficients
-            local_model = exp.local_exp[1]  # For class 1
-            intercept = exp.intercept[1]
-            
-            # Calculate local prediction
-            local_pred = intercept
-            for feat_idx, coef in local_model:
-                local_pred += coef * instance[feat_idx]
-            
-            # Get actual model prediction
-            actual_pred = model.predict_proba([instance])[0, 1]
-            
-            # Calculate fidelity (how well local model approximates)
-            fidelity = 1 - abs(local_pred - actual_pred)
-            fidelity_scores.append(fidelity)
-        
-        # Statistics
-        mean_fidelity = np.mean(fidelity_scores)
-        std_fidelity = np.std(fidelity_scores)
-        
-        print(f"Mean Fidelity: {mean_fidelity:.3f}")
-        print(f"Std Fidelity: {std_fidelity:.3f}")
-        print(f"Min Fidelity: {np.min(fidelity_scores):.3f}")
-        print(f"Max Fidelity: {np.max(fidelity_scores):.3f}")
-        
-        # Visualize
-        plt.figure(figsize=(10, 5))
-        plt.subplot(1, 2, 1)
-        plt.hist(fidelity_scores, bins=20, edgecolor='black', alpha=0.7)
-        plt.xlabel('Fidelity Score')
-        plt.ylabel('Frequency')
-        plt.title('Distribution of Fidelity Scores')
-        plt.axvline(mean_fidelity, color='red', linestyle='--', 
-                   label=f'Mean: {mean_fidelity:.3f}')
-        plt.legend()
-        
-        plt.subplot(1, 2, 2)
-        plt.plot(fidelity_scores, 'o-', alpha=0.5)
-        plt.xlabel('Instance Index')
-        plt.ylabel('Fidelity Score')
-        plt.title('Fidelity Scores by Instance')
-        plt.axhline(mean_fidelity, color='red', linestyle='--', alpha=0.5)
-        
-        plt.suptitle('LIME Explanation Fidelity Analysis')
-        plt.tight_layout()
-        plt.show()
-        
-        return fidelity_scores
-    
-    @staticmethod
-    def parameter_sensitivity(X_train, X_test, model, instance_idx=0):
-        """
-        Analyze sensitivity to LIME parameters
-        """
-        print("\n" + "=" * 60)
-        print("PARAMETER SENSITIVITY ANALYSIS")
-        print("=" * 60)
-        
-        instance = X_test[instance_idx]
-        
-        # Different parameter settings
-        kernel_widths = [0.25, 0.75, 1.0, 3.0]
-        num_samples_list = [100, 500, 1000, 5000]
-        
-        results = {}
-        
-        # Test different kernel widths
-        print("\nTesting kernel widths...")
-        for width in kernel_widths:
-            explainer = lime.lime_tabular.LimeTabularExplainer(
-                X_train,
-                kernel_width=width,
-                verbose=False
-            )
-            
-            exp = explainer.explain_instance(
-                instance,
-                model.predict_proba,
-                num_features=5
-            )
-            
-            results[f'width_{width}'] = exp.as_list()
-        
-        # Test different sample sizes
-        print("Testing sample sizes...")
-        for num_samples in num_samples_list:
-            explainer = lime.lime_tabular.LimeTabularExplainer(
-                X_train,
-                verbose=False
-            )
-            
-            exp = explainer.explain_instance(
-                instance,
-                model.predict_proba,
-                num_features=5,
-                num_samples=num_samples
-            )
-            
-            results[f'samples_{num_samples}'] = exp.as_list()
-        
-        print("\nParameter sensitivity results stored.")
-        print("Key insight: LIME explanations can vary with parameters.")
-        print("Recommendation: Use multiple runs and average for stability.")
-        
-        return results
-
-# Demonstrate advanced techniques
-print("\n" + "=" * 60)
-print("ADVANCED LIME TECHNIQUES")
-print("=" * 60)
-
-# Reuse the breast cancer data and model from earlier
-advanced = AdvancedLIMETechniques()
-
-# Submodular pick demonstration
-picked = advanced.submodular_pick(data['X_test'], models['Random Forest'], None)
-
-# Fidelity analysis
-explainer = lime.lime_tabular.LimeTabularExplainer(
-    data['X_train'],
-    feature_names=data['feature_names'],
-    class_names=data['class_names'],
-    mode='classification'
-)
-
-fidelity_scores = advanced.fidelity_analysis(
-    explainer, 
-    models['Random Forest'],
-    data['X_test'],
-    n_samples=50
-)
-
-# Parameter sensitivity
-sensitivity_results = advanced.parameter_sensitivity(
-    data['X_train'],
-    data['X_test'],
-    models['Random Forest'],
-    instance_idx=5
-)</code></pre>
-
-        <h2>Best Practices</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 LIME Best Practices</h3>
-            <ul>
-                <li><strong>Sample Size:</strong> Use sufficient samples (1000-5000) for stable explanations</li>
-                <li><strong>Feature Selection:</strong> Limit to interpretable number of features (5-10)</li>
-                <li><strong>Kernel Width:</strong> Tune based on data dimensionality and local neighborhood</li>
-                <li><strong>Multiple Runs:</strong> Average over multiple runs for stability</li>
-                <li><strong>Validation:</strong> Check fidelity of local approximation</li>
-                <li><strong>Domain Knowledge:</strong> Interpret explanations in context</li>
-                <li><strong>Combine Methods:</strong> Use with SHAP or other techniques for validation</li>
-                <li><strong>Text Data:</strong> Preprocess consistently with model training</li>
-                <li><strong>Categorical Features:</strong> Handle properly with one-hot encoding</li>
-                <li><strong>Global Understanding:</strong> Use submodular pick for representative set</li>
-            </ul>
-        </div>
-
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Custom LIME Implementation</h3>
-            <p>Implement a simplified version of LIME:</p>
-            <ul>
-                <li>Create perturbation sampling function</li>
-                <li>Implement proximity weighting</li>
-                <li>Fit local linear model</li>
-                <li>Extract and visualize coefficients</li>
-            </ul>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: LIME for Image Classification</h3>
-            <p>Apply LIME to explain image predictions:</p>
-            <ul>
-                <li>Use LIME for image segmentation</li>
-                <li>Identify important superpixels</li>
-                <li>Compare explanations for correct vs incorrect predictions</li>
-                <li>Analyze robustness to perturbations</li>
-            </ul>
-        </div>
-
-        <h2>Summary</h2>
-        
-        <div class="summary-box">
-            <h3>✅ You've Learned</h3>
-            <ul>
-                <li>LIME fundamentals and how it creates local explanations</li>
-                <li>Implementing LIME for tabular, text, and complex models</li>
-                <li>Comparing explanations across different models</li>
-                <li>Analyzing stability and fidelity of explanations</li>
-                <li>Advanced techniques like submodular pick</li>
-                <li>Parameter sensitivity and tuning</li>
-                <li>Best practices for reliable explanations</li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> LIME explains one prediction at a time. Think of a decision a
-            model might make about a person — a loan, a diagnosis. How would a clear local explanation change how much
-            you'd trust, or challenge, that decision?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>LIME is model-agnostic: it explains any classifier or regressor by treating it as a black box you can only query.</li>
-                <li>It works locally — perturbing an instance, seeing how predictions change, and fitting a simple interpretable model to that neighborhood.</li>
-                <li>The output is a per-prediction list of feature contributions, ideal for explaining individual decisions to stakeholders.</li>
-                <li>LIME explanations can be unstable and depend on perturbation and neighborhood settings, so validate before trusting them.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now open up a black-box model and explain <em>why</em> it made a specific prediction — for tabular and
-        text data — turning an opaque score into a story a human can scrutinize.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>Does LIME explain the whole model or just one prediction?</summary>
-            <p>Just one prediction. LIME builds a <em>local</em> approximation around a single instance. For global
-            behavior across all data, reach for tools like SHAP summaries or permutation importance.</p>
-        </details>
-        <details>
-            <summary>Why do LIME explanations sometimes change between runs?</summary>
-            <p>LIME samples random perturbations, so results can vary. Increasing the number of samples and fixing a
-            random seed makes explanations more stable and reproducible.</p>
-        </details>
-        <details>
-            <summary>Is LIME's local linear model the same as the real model?</summary>
-            <p>No — it's a faithful approximation only near the point being explained. Don't extrapolate a LIME
-            explanation to other regions of the input space.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>LIME answers "why this one prediction?" locally; next we meet SHAP, which grounds feature attribution in game
-        theory and unifies local and global explanations.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Explain three different predictions from the same model and compare which features dominate each.</li>
-            <li>Increase the number of LIME samples and observe how much the explanation stabilizes.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Being able to explain a model's decisions is what earns trust — from teammates, users, and regulators.
-            You're learning to make machine learning accountable, one prediction at a time. That matters.</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="model_interpretation.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="interpretability_shap.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1004,24 +897,10 @@ sensitivity_results = advanced.parameter_sensitivity(
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
     <script src="js/course-enhancements.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-        mermaid.initialize({ 
-            startOnLoad: true,
-            theme: 'default',
-            themeVariables: {
-                primaryColor: '#f0f0f0',
-                primaryTextColor: '#333',
-                primaryBorderColor: '#667eea',
-                lineColor: '#667eea',
-                secondaryColor: '#e0e7ff',
-                tertiaryColor: '#fff'
-            }
-        });
-    </script>
 </body>
 </html>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 3</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 3: Choosing k and Hierarchical Clustering</h1>
+    <p class="sub">Your workbook for Session 3: a warm-up on Session 2, the key ideas of Lessons 8.2 and 8.3, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>8.2–8.3</b></span>
+      <span class="chip">Session <b>3</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Choose k from four kinds of evidence (elbow, silhouette, stability, usefulness), and write the trade-off down.</li>
+  <li>Compute a silhouette by hand and read it per cluster; compare two labelings with the adjusted Rand index.</li>
+  <li>Build a tree of merges, read its linkage matrix and dendrogram, and cut it by height or by number.</li>
+  <li>Pick a linkage and a distance that fit the question, and know when the pairwise cost rules the method out.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<p>Five questions on Session 2. Write first; we go through them together.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">Name LIME's two checks before you trust an explanation.</div><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">Recall by age group ranges from 54% to 77% and a permutation test finds a gap this large in 47% of shuffles. Say the honest conclusion in one sentence.</div><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.cluster <span class="k">import</span> KMeans
+km = KMeans(n_clusters=<span class="s">2</span>, n_init=<span class="s">10</span>, random_state=<span class="s">42</span>).fit([[<span class="s">0</span>], [<span class="s">4</span>], [<span class="s">10</span>], [<span class="s">14</span>]])
+print(km.inertia_)</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Why scale before K-Means?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Yesterday cluster 3 was the discount segment; after a refit it is cluster 1. What happened?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">8.2</span><h3>Choosing k and Customer Segments</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Read an elbow plot and explain why inertia alone cannot choose k</li>
+  <li>Compute and interpret silhouette scores, overall and per cluster, from the formula and with scikit-learn</li>
+  <li>Test whether clusters are stable by refitting on resampled data and comparing labelings with the adjusted Rand index</li>
+  <li>Build a reusable clustering pipeline (log transform, scaling, K-Means) and use <code class="inline">MiniBatchKMeans</code> when data gets large</li>
+  <li>Profile, name and size segments, link them to an outcome such as churn, and write recommendations with honest limits</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>No answer key.</b> Collect four kinds of evidence and look for agreement: elbow, silhouette, stability, usefulness.</li>
+  <li><b>Elbow.</b> Inertia always falls as k grows; read where the drops become small, never its minimum.</li>
+  <li><b>Silhouette.</b> s = (b - a) / max(a, b) per point; near 1 snug, near 0 on a border, negative probably misassigned. Look per cluster, not only the mean. It costs every pairwise distance: sample on big data.</li>
+  <li><b>Stability.</b> Refit on bootstrap samples and compare with the adjusted Rand index (same groups = 1, random = about 0, numbers ignored).</li>
+  <li><b>Prepare features.</b> Log right-skewed counts and money, then scale, all in one pipeline so new rows get the same fitted steps.</li>
+  <li><b>Segments.</b> Profile (an index of 100 = average), name, size, link to outcomes the clustering never saw, suggest actions. Segments describe; they do not explain or target.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: the adjusted Rand index by pair counting</div>
+<p>The ARI drives the stability check, so it is worth seeing once at full size. Two labelings of six points: the second run uses other numbers and moved one point.</p>
+<pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> adjusted_rand_score, rand_score
+<span class="k">import</span> itertools
+
+first  = [<span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>]
+second = [<span class="s">5</span>, <span class="s">5</span>, <span class="s">7</span>, <span class="s">7</span>, <span class="s">9</span>, <span class="s">9</span>]          <span class="c"># another run: other numbers, one point moved</span>
+pairs = list(itertools.combinations(range(<span class="s">6</span>), <span class="s">2</span>))
+agree = sum((first[a] == first[b]) == (second[a] == second[b]) <span class="k">for</span> a, b <span class="k">in</span> pairs)
+print(<span class="s">f"pairs: {len(pairs)}, labelings agree on {agree}: Rand index {agree / len(pairs):.3f}"</span>)
+print(<span class="s">f"rand_score {rand_score(first, second):.3f}   adjusted_rand_score {adjusted_rand_score(first, second):.3f}"</span>)</pre>
+<pre class="out">pairs: 15, labelings agree on 10: Rand index 0.667
+rand_score 0.667   adjusted_rand_score 0.242</pre><p>Of the 15 pairs of points, the two labelings agree (both "together" or both "apart") on 10: a Rand index of 0.667. That sounds good, but random labelings also agree on many pairs, mostly "apart" ones. The ADJUSTED Rand index subtracts what chance would give:</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+rng = np.random.default_rng(<span class="s">42</span>)
+random_aris = [adjusted_rand_score(first, rng.integers(<span class="s">0</span>, <span class="s">3</span>, size=<span class="s">6</span>)) <span class="k">for</span> _ <span class="k">in</span> range(<span class="s">1000</span>)]
+print(<span class="s">f"ARI of random labelings: mean {np.mean(random_aris):.3f}"</span>)</pre>
+<pre class="out">ARI of random labelings: mean -0.009</pre><p>Random labelings score about 0, so 0.242 is modest agreement, and the 0.98 to 0.99 of the customer segments under resampling is very strong.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (pairs):</b> <code class="inline">labs/module-03/l8_2-choosing-k/choose_k_tastes_starter.py</code>. Customers by WHAT they buy (activity shares): elbow, silhouette, stability, a profile. Then decide between the two best candidates and write why.</li>
+  <li>Done when your numbers match the "Expected when done" lines.</li>
+  <li>Finished early? <code class="inline">segment_economics_starter.py</code> (usefulness in dollars), then <code class="inline">debug_choose_k.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (Two tight pairs, far apart.)</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> silhouette_samples
+print(silhouette_samples([[<span class="s">0</span>], [<span class="s">1</span>], [<span class="s">4</span>], [<span class="s">5</span>]], [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>]).round(<span class="s">2</span>))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (Same groups renamed, then a different grouping.)</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> adjusted_rand_score
+print(adjusted_rand_score([<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>], [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>]), adjusted_rand_score([<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>], [<span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>]))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>The segment brief</b> (lesson page). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: one pipeline, log + scale + K-Means. Check: sizes 1253, 1374, 1449, 811, 1113</li>
+  <li>☐ Step 2: the evidence. Check: <code class="inline">{4: 0.424, 5: 0.479, 6: 0.452}</code></li>
+  <li>☐ Step 3: the index table and five names from it</li>
+  <li>☐ Step 4: the brief table with an action per segment</li>
+  <li>☐ Step 5: three newcomers assigned with <code class="inline">segmenter.predict</code></li>
+  <li>☐ Step 6: <code class="inline">customer_segments.csv</code> and the printed brief</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">Your loop prints inertia for k = 2 to 9. Why is "pick the k with the lowest inertia" useless?</div><div class="opts"><div class="opt">A) Inertia is only defined for k = 5</div><div class="opt">B) Inertia can only fall as k grows, so its minimum is always the largest k you tried</div><div class="opt">C) Inertia rises after the true k, so its minimum is too small</div><div class="opt">D) Inertia is random, so its minimum changes every run</div></div></div>
+<div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> silhouette_samples
+print(silhouette_samples([[<span class="s">0</span>], [<span class="s">2</span>], [<span class="s">10</span>]], [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>]).round(<span class="s">2</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">Bootstrap refits at k = 3 give a worst ARI of 0.60, while k = 4 and 5 stay above 0.98. What does that say about three clusters?</div><div class="opts"><div class="opt">A) Three is the best k because its ARI varies most</div><div class="opt">B) The ARI is broken for k = 3</div><div class="opt">C) Three clusters are too few to have a silhouette</div><div class="opt">D) Three is not a natural number of groups here: K-Means must make an arbitrary choice about what to merge, and resamples disagree</div></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">In Lab 8.2 B, a blanket retention offer loses money in four of five segments, and on the test customers the churn model's 300 offers earn $4,920 against -$7,620 for offering everyone. What is the lesson for the segment brief?</div><div class="opts"><div class="opt">A) Segments describe who is together; choosing whom to call is the model's job</div><div class="opt">B) Segments are useless and should be dropped</div><div class="opt">C) Offer everyone in Deal Hunters and nobody else: that beats the model</div><div class="opt">D) Refit the segments with churn as a fifth column</div></div></div>
+<div class="q" data-sc="5" data-kind="short"><div class="qn">Q5</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> adjusted_rand_score
+a = [<span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>]
+b = [<span class="s">3</span>, <span class="s">3</span>, <span class="s">3</span>, <span class="s">8</span>, <span class="s">8</span>, <span class="s">8</span>]
+print(adjusted_rand_score(a, b), round(adjusted_rand_score(a, [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>]), <span class="s">2</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">For the activity-share clusters (Lab 8.2 A), the silhouette is 0.453 at k = 5 and 0.429 at k = 6, both are stable, and k = 6 adds a "general gear" group of 484 customers. What is the most sensible next step?</div><div class="opts"><div class="opt">A) Choose 9, the k with the lowest inertia</div><div class="opt">B) Stop: the scores disagree, so the data has no clusters</div><div class="opt">C) Compare the profiles for 5 and 6 and choose the one whose groups lead to distinct actions</div><div class="opt">D) Average the two clusterings</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Write the paragraph you would put at the top of the segment brief explaining why five segments, citing at least three kinds of evidence from this lesson. Then name one decision marketing should not make from the segments alone, and what they would need to make it safely.</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">8.3</span><h3>Hierarchical Clustering</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain how agglomerative clustering builds a hierarchy by repeatedly merging the two closest groups</li>
+  <li>Read a SciPy linkage matrix and a dendrogram, and cut the tree by number of clusters or by height</li>
+  <li>Compare single, complete, average and Ward linkage and predict how each behaves on chains, blobs and outliers</li>
+  <li>Use <code class="inline">AgglomerativeClustering</code> with the right metric and linkage, including non-Euclidean distances</li>
+  <li>Judge when hierarchical clustering beats K-Means, and when its cost rules it out</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>Agglomerative.</b> Start with every point alone; merge the two closest groups; record the height; n − 1 merges in all. No random start, no k up front.</li>
+  <li><b>Linkage matrix and dendrogram.</b> Each row: the two clusters merged, the distance, the new size. A horizontal cut gives flat clusters; a long empty stretch suggests a natural number.</li>
+  <li><b>Linkage.</b> Single (closest pair: chains), complete (farthest pair: compact, outlier-sensitive), average (all pairs: any distance), Ward (variance increase: round groups, Euclidean only).</li>
+  <li><b>Any distance.</b> <code class="inline">metric=</code> (or SciPy's <code class="inline">pdist</code>): correlation and cosine compare patterns, not volumes.</li>
+  <li><b>scikit-learn details.</b> <code class="inline">metric=</code> not <code class="inline">affinity=</code>; <code class="inline">n_clusters=None</code> with <code class="inline">distance_threshold</code>; no <code class="inline">predict</code>.</li>
+  <li><b>Cost.</b> Every pairwise distance: fine for thousands, impossible for millions. Sample, build the tree, assign the rest to the nearest mean.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: complete and single linkage by hand</div>
+<p>Four points on a line: 0, 4, 5 and 11. Work out the merges by hand for complete and for single linkage, then check.</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> scipy.cluster.hierarchy <span class="k">import</span> linkage
+
+points = np.array([[<span class="s">0.0</span>], [<span class="s">4.0</span>], [<span class="s">5.0</span>], [<span class="s">11.0</span>]])
+print(<span class="s">"complete:\n"</span>, linkage(points, method=<span class="s">"complete"</span>).round(<span class="s">1</span>))
+print(<span class="s">"single:\n"</span>, linkage(points, method=<span class="s">"single"</span>).round(<span class="s">1</span>))</pre>
+<pre class="out">complete:
+ [[ 1.  2.  1.  2.]
+ [ 0.  4.  5.  3.]
+ [ 3.  5. 11.  4.]]
+single:
+ [[1. 2. 1. 2.]
+ [0. 4. 4. 3.]
+ [3. 5. 6. 4.]]</pre><p>Both start by merging 4 and 5 (distance 1) into cluster 4. Then they disagree on HOW FAR the box {4, 5} is: complete linkage uses the farthest member, so 0 is 5 away and 11 is 7 away; 0 joins at 5, and 11 joins last at 11 (its distance to the far end, 0). Single linkage uses the nearest member: 0 joins at 4 and 11 at 6. Same merges in the same order here, very different heights: the cut that gives two clusters lies between 5 and 11 for complete, between 4 and 6 for single.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-03/l8_3-hierarchical/seasonal_families_starter.py</code>. The 24 products by WHEN they sell: a tree on monthly averages with correlation distance; cuts; Euclidean for contrast.</li>
+  <li><b>Lab B:</b> <code class="inline">labs/module-03/l8_3-hierarchical/sample_then_assign_starter.py</code>. Ward on a sample, everyone to the nearest mean, then K-Means polished from those means.</li>
+  <li>Done when your numbers match the "Expected when done" lines. Finished early? <code class="inline">debug_hierarchical.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (Five points on a line, single linkage.)</div><pre class="code"><span class="k">from</span> scipy.cluster.hierarchy <span class="k">import</span> linkage
+Z = linkage([[<span class="s">0.0</span>], [<span class="s">1.0</span>], [<span class="s">2.0</span>], [<span class="s">10.0</span>], [<span class="s">30.0</span>]], method=<span class="s">"single"</span>)
+print(len(Z), Z[:, <span class="s">2</span>].tolist())</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (Correlation distance compares shapes.)</div><pre class="code"><span class="k">from</span> scipy.spatial.distance <span class="k">import</span> pdist
+print(pdist([[<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>], [<span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>], [<span class="s">2</span>, <span class="s">0</span>, <span class="s">2</span>, <span class="s">0</span>]], metric=<span class="s">"correlation"</span>).round(<span class="s">2</span>))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A product family tree</b> (lesson page). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: the product x customer matrix. Check: <code class="inline">(200, 3000)</code></li>
+  <li>☐ Step 2: the tree with average linkage and correlation distance (199 merges)</li>
+  <li>☐ Step 3: the dendrogram cut at 0.97</li>
+  <li>☐ Step 4: five families against <code class="inline">primary_activity</code></li>
+  <li>☐ Step 5: single linkage chaining, with sizes and ARI</li>
+  <li>☐ Step 6: family names and <code class="inline">product_families.csv</code></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> scipy.cluster.hierarchy <span class="k">import</span> linkage
+Z = linkage(np.array([[<span class="s">0.0</span>], [<span class="s">1.0</span>], [<span class="s">3.0</span>], [<span class="s">10.0</span>], [<span class="s">11.0</span>], [<span class="s">30.0</span>]]), method=<span class="s">"single"</span>)
+print(len(Z), Z[-<span class="s">1</span>, <span class="s">3</span>])</pre><div class="write"></div></div>
+<div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">Lab 8.3 A clusters 24 products by their monthly sales. With Euclidean distance the tree puts the two best sellers on their own; with correlation distance it finds a winter family and a summer family. Why?</div><div class="opts"><div class="opt">A) Euclidean distance is wrong for numbers between 0 and 100</div><div class="opt">B) Correlation distance ignores the months</div><div class="opt">C) Euclidean distance mostly measures volume (how many units), correlation distance compares the shape of the year</div><div class="opt">D) Average linkage only works with correlation</div></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">Which call cuts a tree at height 50 and lets the number of clusters follow?</div><div class="opts"><div class="opt">A) <code class="inline">AgglomerativeClustering(n_clusters=None, distance_threshold=50, linkage="ward")</code></div><div class="opt">B) <code class="inline">AgglomerativeClustering(n_clusters=5, distance_threshold=50, linkage="ward")</code></div><div class="opt">C) <code class="inline">AgglomerativeClustering(affinity="euclidean", distance_threshold=50)</code></div><div class="opt">D) <code class="inline">AgglomerativeClustering(n_clusters=50, linkage="ward")</code></div></div></div>
+<div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">A dendrogram's highest merges are at 1.54, then 0.29, 0.28, 0.22. How many families does the tree suggest, and why?</div><div class="opts"><div class="opt">A) Four, one per merge listed</div><div class="opt">B) Twenty-four, one per product</div><div class="opt">C) It depends only on the business</div><div class="opt">D) Two: the long empty stretch between 0.29 and 1.54 means any cut there gives the same two groups</div></div></div>
+<div class="q" data-sc="11" data-kind="short"><div class="qn">Q11</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> scipy.spatial.distance <span class="k">import</span> pdist
+summer = [<span class="s">10</span>, <span class="s">20</span>, <span class="s">40</span>, <span class="s">20</span>]          <span class="c"># units per season</span>
+winter = [<span class="s">40</span>, <span class="s">20</span>, <span class="s">10</span>, <span class="s">20</span>]
+big_summer = [<span class="s">100</span>, <span class="s">200</span>, <span class="s">400</span>, <span class="s">200</span>]  <span class="c"># same shape as summer, ten times the volume</span>
+print(pdist(np.array([summer, winter, big_summer]), metric=<span class="s">"correlation"</span>).round(<span class="s">2</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">Why does Lab 8.3 B build the Ward tree on a sample of 500 customers and then assign everyone to the nearest cluster mean?</div><div class="opts"><div class="opt">A) Ward cannot handle more than 500 rows</div><div class="opt">B) Agglomerative clustering needs every pairwise distance (18 million for 6,000, billions for 100,000) and has no predict, so: tree on a sample, nearest mean for the rest</div><div class="opt">C) A sample always gives better clusters than the full data</div><div class="opt">D) The nearest-mean step makes the clusters hierarchical</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Draw (on paper) the dendrogram of five things you own, merged by how similar they are, and mark where you would cut it for two different purposes. Then write two sentences on why correlation distance found the product families when Euclidean distance would have mostly measured popularity.</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<p>Three questions, no notes.</p>
+<div class="q"><div class="qn">E1</div><div class="qt">Name the four kinds of evidence for choosing k, and one thing each can tell you.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">Why did correlation distance find product families (by buyers, or by season) when Euclidean distance would not?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">When would you choose K-Means over agglomerative clustering?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish the segment brief (Steps 4 to 6) and the product family tree (Steps 4 to 6)</li>
+  <li>☐ Lesson 8.2 Exercises 1 to 3; Lesson 8.3 Exercises 1 to 3 (Exercise 4 of each is a stretch)</li>
+  <li>☐ Both Quick Quizzes and both journal entries</li>
+  <li>☐ Lab 8.2 B (segment economics), if not done in class</li>
+  <li>☐ 8.3 "Before the Next Lesson": keep <code class="inline">product_families.csv</code>; the moons experiment; three one-sentence answers</li>
+  <li>☐ Image data: if my check said READY for Sessions 1 to 4, run it with <code class="inline">--download</code> before Session 5</li>
+  <li>☐ Bring to Session 4: a READY laptop, my 8.2 notebook and <code class="inline">customer_segments.csv</code>, this workbook and my journal</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>elbow</td><td>The bend in the inertia curve where extra clusters stop paying off</td></tr>
+<tr><td>silhouette</td><td>(b - a) / max(a, b) per point: cohesion against separation, from -1 to 1</td></tr>
+<tr><td>adjusted Rand index (ARI)</td><td>Agreement between two labelings over pairs of points, corrected for chance; ignores cluster numbers</td></tr>
+<tr><td>bootstrap</td><td>A sample of the same size drawn with replacement, to test stability</td></tr>
+<tr><td>segment</td><td>A profiled, named cluster with a size, linked outcomes and an action</td></tr>
+<tr><td>agglomerative clustering</td><td>Bottom-up merging of the two closest groups, n - 1 times</td></tr>
+<tr><td>linkage matrix</td><td>SciPy's record of the merges: the two clusters, their distance, the new size</td></tr>
+<tr><td>dendrogram</td><td>The tree drawing of the merges; a horizontal cut gives flat clusters</td></tr>
+<tr><td>linkage</td><td>How the distance between two groups is defined: single, complete, average, Ward</td></tr>
+<tr><td>chaining</td><td>Single linkage gluing groups together through a trail of close points</td></tr>
+<tr><td>correlation distance</td><td>1 minus the correlation of two rows: 0 same pattern, 1 unrelated, 2 opposite</td></tr>
+<tr><td>cophenetic correlation</td><td>How well the tree's merge heights preserve the original distances</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 3 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

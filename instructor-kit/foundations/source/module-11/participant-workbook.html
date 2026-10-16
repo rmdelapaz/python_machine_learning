@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 11</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 11: Hyperparameter Tuning and Final Project Studio</h1>
+    <p class="sub">Your workbook for Session 11: Lesson 6.2's key ideas, two new worked examples, the guided lab, the project-skills self-check, your final-project studio page and showcase card, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lesson <b>6.2</b> + studio</span>
+      <span class="chip">Session <b>11</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Tune a whole pipeline with grid search, random search, successive halving and Optuna, naming its knobs as <code class="inline">step__param</code>.</li>
+  <li>Spend a search budget well: log scales, distributions, and a written space before anything runs.</li>
+  <li>Report a tuned model honestly: best_score_ chooses, a nested estimate or one test look reports.</li>
+  <li>Move your final project through milestones 2 and 3 in the studio, and present it in two minutes.</li>
+</ul>
+
+  <div class="sec"><h2>Lesson</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">6.2</span><h3>Hyperparameter Tuning</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Tune a whole pipeline with <code class="inline">GridSearchCV</code> and <code class="inline">RandomizedSearchCV</code>, naming its hyperparameters as <code class="inline">step__param</code>, and read <code class="inline">cv_results_</code></li>
+  <li>Choose sensible search ranges (log scales, distributions from <code class="inline">scipy.stats</code>) and explain why random search usually beats a grid of the same size</li>
+  <li>Speed up a search with successive halving (<code class="inline">HalvingRandomSearchCV</code>)</li>
+  <li>Run a seeded Optuna study that learns where to search next</li>
+  <li>Explain why <code class="inline">best_score_</code> is optimistic, estimate a tuned model honestly with nested cross-validation, and use the test set once</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>Parameters</b> are learned by <code class="inline">fit</code>; <b>hyperparameters</b> are chosen by you, before <code class="inline">fit</code>, and found by search with cross-validation on the training rows.</li>
+  <li><b>Every search</b> has a space (knobs and ranges), a budget (trials) and an objective (the CV metric decided first). Keys are <code class="inline">step__param</code>.</li>
+  <li><b>Grid search</b> tries every combination: its cost is the product of the list lengths. <b>Random search</b> samples distributions (<code class="inline">loguniform</code>, <code class="inline">randint</code>) and usually beats a grid of the same size.</li>
+  <li><b>Successive halving</b> screens many candidates on growing data; slow starters can be knocked out. <b>Optuna</b> (TPE) learns from past trials; seed it and run trials one at a time.</li>
+  <li><b>best_score_ is optimistic</b> (the winner's curse). Report a nested cross-validation estimate or the test score, once. On churn: best 0.8795, nested 0.868, test 0.874.</li>
+  <li><b>Tuning moves a model toward its own ceiling</b>; it does not change which family has the higher one. When gains flatten, look at features and framing.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: a business threshold, tuned honestly</div>
+<p>Tuning a model is one decision; turning probabilities into actions is another, and it must be tuned honestly too. Take the tuned churn booster from Lesson 6.2's project and let TunedThresholdClassifierCV choose the offer threshold on the training customers for Lesson 1.4's economics ($15 per offer, $60 per churner reached).</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.compose <span class="k">import</span> ColumnTransformer
+<span class="k">from</span> sklearn.ensemble <span class="k">import</span> HistGradientBoostingClassifier
+<span class="k">from</span> sklearn.impute <span class="k">import</span> SimpleImputer
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> make_scorer
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> StratifiedKFold, TunedThresholdClassifierCV, train_test_split
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> Pipeline, make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> OneHotEncoder, StandardScaler
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+numeric = [<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"days_since_last_order"</span>,
+           <span class="s">"returns_12m"</span>, <span class="s">"return_rate"</span>, <span class="s">"support_tickets_12m"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>, <span class="s">"email_opens_90d"</span>]
+categorical = [<span class="s">"home_store"</span>, <span class="s">"region"</span>, <span class="s">"age_group"</span>, <span class="s">"loyalty_tier"</span>, <span class="s">"preferred_category"</span>]
+train, test = train_test_split(customers, test_size=<span class="s">0.25</span>, stratify=customers[<span class="s">"churned"</span>], random_state=<span class="s">42</span>)
+X_train, y_train = train[numeric + categorical], train[<span class="s">"churned"</span>]
+X_test, y_test = test[numeric + categorical], test[<span class="s">"churned"</span>]
+prep = ColumnTransformer([
+    (<span class="s">"num"</span>, make_pipeline(SimpleImputer(strategy=<span class="s">"median"</span>), StandardScaler()), numeric),
+    (<span class="s">"cat"</span>, make_pipeline(SimpleImputer(strategy=<span class="s">"most_frequent"</span>), OneHotEncoder(handle_unknown=<span class="s">"ignore"</span>)), categorical)])
+best = {<span class="s">"l2_regularization"</span>: <span class="s">0.0292</span>, <span class="s">"learning_rate"</span>: <span class="s">0.0472</span>, <span class="s">"max_leaf_nodes"</span>: <span class="s">50</span>, <span class="s">"min_samples_leaf"</span>: <span class="s">199</span>}
+tuned = Pipeline([(<span class="s">"prep"</span>, prep), (<span class="s">"model"</span>, HistGradientBoostingClassifier(random_state=<span class="s">42</span>, **best))])
+
+<span class="k">def</span> campaign_profit(y_true, flagged):               <span class="c"># Lesson 1.4: $60 per churner reached, $15 per offer</span>
+    y_true, flagged = np.asarray(y_true), np.asarray(flagged)
+    <span class="k">return</span> <span class="s">60</span> * int(((flagged == <span class="s">1</span>) &amp; (y_true == <span class="s">1</span>)).sum()) - <span class="s">15</span> * int(flagged.sum())
+
+cv = StratifiedKFold(n_splits=<span class="s">5</span>, shuffle=<span class="k">True</span>, random_state=<span class="s">42</span>)
+plan = TunedThresholdClassifierCV(tuned, scoring=make_scorer(campaign_profit), cv=cv).fit(X_train, y_train)
+offers = plan.predict(X_test)
+print(<span class="s">f"threshold chosen on the training customers: {plan.best_threshold_:.3f}  (break-even 0.25)"</span>)
+print(<span class="s">f"test: {offers.sum()} offers, {int(y_test[offers == 1].sum())} reach a churner, profit ${campaign_profit(y_test, offers):,}"</span>)</pre>
+<pre class="out">threshold chosen on the training customers: 0.240  (break-even 0.25)
+test: 377 offers, 182 reach a churner, profit $5,265</pre><p>Now the tempting shortcut: try thresholds on the test customers and keep the best.</p>
+<pre class="code">p = plan.predict_proba(X_test)[:, <span class="s">1</span>]
+peek = {t: campaign_profit(y_test, (p &gt;= t).astype(int)) <span class="k">for</span> t <span class="k">in</span> np.round(np.arange(<span class="s">0.05</span>, <span class="s">0.6</span>, <span class="s">0.01</span>), <span class="s">2</span>)}
+t_peek = max(peek, key=peek.get)
+print(<span class="s">f"threshold picked by peeking at the test set: {t_peek:.2f}, 'profit' ${peek[t_peek]:,}"</span>)
+print(<span class="s">f"default 0.5: ${campaign_profit(y_test, (p &gt;= 0.5).astype(int)):,}"</span>)
+print(<span class="s">f"contact everyone: {campaign_profit(y_test, np.ones(len(p), int)):,} dollars"</span>)</pre>
+<pre class="out">threshold picked by peeking at the test set: 0.26, 'profit' $5,475
+default 0.5: $3,690
+contact everyone: -7,620 dollars</pre><p>The chosen threshold (0.240) sits next to the break-even 0.25, a sign the probabilities are reasonably calibrated, and earns $5,265 on customers it never saw. Peeking finds $5,475, but that number was chosen by the data that grades it, so it is not a result: it is the winner's curse again. The default 0.5 earns far less, and offering to everyone loses money.</p>
+</div>
+<div class="blk"><div class="h">Worked example: when tuning does not help</div>
+<p>Tuning does not always help, and saying so is a result. The demand forecaster from Lesson 5.3, tuned with 8 random settings on blocks of 2024 weeks:</p>
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> scipy.stats <span class="k">import</span> loguniform, randint
+<span class="k">from</span> sklearn.ensemble <span class="k">import</span> HistGradientBoostingRegressor
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> mean_absolute_error
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> KFold, RandomizedSearchCV, cross_val_score
+
+demand = pd.read_csv(<span class="s">"data/weekly_demand.csv"</span>)
+features = [<span class="s">"store"</span>, <span class="s">"product_id"</span>, <span class="s">"category"</span>, <span class="s">"week_of_year"</span>, <span class="s">"list_price"</span>,
+            <span class="s">"discount_pct"</span>, <span class="s">"price"</span>, <span class="s">"promo"</span>, <span class="s">"holiday_week"</span>, <span class="s">"avg_high_temp_f"</span>]
+cats = [<span class="s">"store"</span>, <span class="s">"product_id"</span>, <span class="s">"category"</span>]
+X = demand[features].copy()
+X[cats] = X[cats].astype(<span class="s">"category"</span>)
+is_train = demand[<span class="s">"year"</span>] == <span class="s">2024</span>
+X_train, X_test = X[is_train], X[~is_train]
+y_train, y_test = demand.loc[is_train, <span class="s">"units_sold"</span>], demand.loc[~is_train, <span class="s">"units_sold"</span>]
+
+blocks = KFold(<span class="s">5</span>)                                      <span class="c"># blocks of weeks: no shuffling of time</span>
+base = HistGradientBoostingRegressor(loss=<span class="s">"poisson"</span>, random_state=<span class="s">42</span>)
+default_cv = -cross_val_score(base, X_train, y_train, cv=blocks, scoring=<span class="s">"neg_mean_absolute_error"</span>).mean()
+space = {<span class="s">"learning_rate"</span>: loguniform(<span class="s">0.01</span>, <span class="s">0.3</span>), <span class="s">"max_leaf_nodes"</span>: randint(<span class="s">4</span>, <span class="s">64</span>),
+         <span class="s">"min_samples_leaf"</span>: randint(<span class="s">10</span>, <span class="s">200</span>), <span class="s">"l2_regularization"</span>: loguniform(<span class="s">1e-3</span>, <span class="s">10</span>)}
+search = RandomizedSearchCV(base, space, n_iter=<span class="s">8</span>, cv=blocks, scoring=<span class="s">"neg_mean_absolute_error"</span>,
+                            random_state=<span class="s">42</span>, n_jobs=-<span class="s">1</span>).fit(X_train, y_train)
+print(<span class="s">f"default CV MAE {default_cv:.2f}   best of 8 settings {-search.best_score_:.2f}"</span>)
+print(<span class="s">f"2025 test MAE: default {mean_absolute_error(y_test, base.fit(X_train, y_train).predict(X_test)):.2f}"</span>
+      <span class="s">f"   tuned {mean_absolute_error(y_test, search.predict(X_test)):.2f}"</span>)</pre>
+<pre class="out">default CV MAE 8.49   best of 8 settings 8.73
+2025 test MAE: default 8.05   tuned 8.20</pre><p>The best of 8 settings is worse than the library default in cross-validation (8.73 against 8.49), and the test agrees (8.20 against 8.05). The honest report: "A random search did not improve on the default settings; we kept the default." Then spend the effort where it pays: features, the forecast horizon, or more history.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-11/l6_2-hyperparameter-tuning/tune_fraud_starter.py</code>. Write the space, run a budgeted search on January to May, read the leaderboard, open June once for both models, save the settings.</li>
+  <li>Done when your numbers match the "Expected when done" lines.</li>
+  <li>Finished early? <code class="inline">winners_curse_starter.py</code>: tune a tree on shuffled labels and watch best_score_ climb on pure noise.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (Settings and fits in a grid.)</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> ParameterGrid
+grid = {<span class="s">"model__learning_rate"</span>: [<span class="s">0.05</span>, <span class="s">0.1</span>], <span class="s">"model__max_leaf_nodes"</span>: [<span class="s">7</span>, <span class="s">15</span>, <span class="s">31</span>],
+        <span class="s">"model__l2_regularization"</span>: [<span class="s">0.0</span>]}
+print(len(ParameterGrid(grid)), len(ParameterGrid(grid)) * <span class="s">5</span>)</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (How many rows does each demand year have?)</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+demand = pd.read_csv(<span class="s">"data/weekly_demand.csv"</span>)
+print((demand[<span class="s">"year"</span>] == <span class="s">2024</span>).sum(), (demand[<span class="s">"year"</span>] == <span class="s">2025</span>).sum())</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (Two break-even probabilities.)</div><pre class="code">print(round(<span class="s">15</span> / <span class="s">60</span>, <span class="s">2</span>), round(<span class="s">10</span> / <span class="s">375</span>, <span class="s">3</span>))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: at home</div>
+<p><b>Tune the Retention Model</b> (lesson page). This one goes home: the studio belongs to your final project.</p>
+<ul class="tick">
+  <li>☐ Step 1: default CV average precision 0.608 +/- 0.043</li>
+  <li>☐ Step 2: the space and the budget (15 settings x 5 folds = 75 fits)</li>
+  <li>☐ Step 3: best CV AP 0.636</li>
+  <li>☐ Step 4: settings within one std of the best: 12 of 15</li>
+  <li>☐ Step 5: test AP 0.600 → 0.614; top-50 shortlist 40 → 43 real churners</li>
+  <li>☐ Step 6: <code class="inline">best_params.json</code></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check: project skills</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">Which of these is a well-framed final-project question?</div><div class="opts"><div class="opt">A) Build the most accurate churn model possible</div><div class="opt">B) Use gradient boosting on the transactions table</div><div class="opt">C) Which customers should get the $15 retention offer next quarter, judged by profit on held-out customers, against offering to everyone (-$7,620)?</div><div class="opt">D) Find out what causes churn</div></div></div>
+<div class="q" data-sc="2"><div class="qn">Q2</div><div class="qt">Your weekly-demand model (train 2024, test 2025) has an MAE of 9.1 units. Which number must it beat to be worth anything?</div><div class="opts"><div class="opt">A) The per-product 2024 mean: MAE 13.42</div><div class="opt">B) Zero, the perfect forecast</div><div class="opt">C) The training MAE of the same model</div><div class="opt">D) A shuffled 75/25 split's MAE of 7.36</div></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">A learner adds "units sold last week" as a feature to the demand forecaster, which is meant to plan all of 2025 at the start of the year. What is wrong?</div><div class="opts"><div class="opt">A) Nothing: lag features always help</div><div class="opt">B) Lag features need scaling first</div><div class="opt">C) The feature makes the model slower</div><div class="opt">D) On the planning date, last week's sales are unknown for almost every 2025 week: it is a framing leak</div></div></div>
+<div class="q" data-sc="4" data-kind="short"><div class="qn">Q4</div><div class="qt">How many fits does a GridSearchCV with cv=5 run on this grid, not counting the refit?</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> ParameterGrid
+grid = {<span class="s">"model__learning_rate"</span>: [<span class="s">0.03</span>, <span class="s">0.1</span>, <span class="s">0.3</span>],
+        <span class="s">"model__max_leaf_nodes"</span>: [<span class="s">7</span>, <span class="s">15</span>, <span class="s">31</span>, <span class="s">63</span>]}
+print(len(ParameterGrid(grid)) * <span class="s">5</span>)          <span class="c"># cv=5</span></pre><div class="write"></div></div>
+<div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">Your search reports best_score_ 0.636 (CV average precision). The tuned model scores 0.614 on the test set, opened once. Which number goes in your report as the model's expected performance?</div><div class="opts"><div class="opt">A) 0.636, because it is the cross-validated score</div><div class="opt">B) 0.614, the one-time test score (or a nested CV estimate), with best_score_ described only as what chose the settings</div><div class="opt">C) Their average, 0.625</div><div class="opt">D) Whichever is higher, since both are honest</div></div></div>
+<div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">Two hyperparameters, only the first matters, budget 9 trials. Why does random search usually beat a 3 × 3 grid?</div><div class="opts"><div class="opt">A) Random search uses more folds</div><div class="opt">B) Random search learns from earlier trials</div><div class="opt">C) It tries 9 different values of the important hyperparameter instead of 3</div><div class="opt">D) A grid cannot use log scales</div></div></div>
+<div class="q" data-sc="7"><div class="qn">Q7</div><div class="qt">For the fraud project, which split is the leak-safe one?</div><div class="opts"><div class="opt">A) Train January to May, test June, never shuffling months together</div><div class="opt">B) A stratified 70/30 split of all six months, random_state=42</div><div class="opt">C) Train on June, test on January to May</div><div class="opt">D) Five-fold cross-validation on all six months, with no test set</div></div></div>
+<div class="q" data-sc="8" data-kind="short"><div class="qn">Q8</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+print(np.logspace(-<span class="s">3</span>, <span class="s">1</span>, <span class="s">5</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">A churn offer costs $15 and is worth $60 when it reaches a real churner. If the probabilities are well calibrated, above which churn probability does an offer pay for itself?</div><div class="opts"><div class="opt">A) 0.50, the default of predict</div><div class="opt">B) 0.75</div><div class="opt">C) 0.15</div><div class="opt">D) 0.25</div></div></div>
+<div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">Which sentence is an honest report of a tuning result?</div><div class="opts"><div class="opt">A) Tuning made the model 2% better</div><div class="opt">B) Tuned boosting: test ROC AUC 0.874 against 0.860 for the default, on the same 1,500 test customers, after a search on the training rows only; the nested CV estimate of the procedure is 0.868</div><div class="opt">C) Our best CV score was 0.8795, so the model will score 0.88 on new customers</div><div class="opt">D) Tuning proved that small trees cause better predictions</div></div></div>
+<div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">You choose the churn offer threshold by trying thresholds on the TEST customers and keeping the most profitable (0.26: $5,475). The threshold chosen by TunedThresholdClassifierCV on the training customers (0.240) earns $5,265 on the same test set. Which number goes in the report?</div><div class="opts"><div class="opt">A) $5,475: it is the best result you found</div><div class="opt">B) The average of the two</div><div class="opt">C) $5,265: the threshold was chosen without the test set, so its test profit is an honest estimate</div><div class="opt">D) Neither: profits cannot be reported</div></div></div>
+<div class="q" data-sc="12" data-kind="short"><div class="qn">Q12</div><div class="qt">Fraud review cost ($10 per review, $375 per missed fraud). What does this print?</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> confusion_matrix
+y_true = [<span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>]
+flag   = [<span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>]
+tn, fp, fn, tp = confusion_matrix(y_true, flag).ravel()
+print(<span class="s">10</span> * (tp + fp) + <span class="s">375</span> * fn)</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Write down three numbers from today: the default model's cross-validated score, the best tuned score, and the nested or test score. Explain to an imagined manager, in two or three sentences, why the middle number is not the one to promise. Then describe the camp stove analogy for one of the four search strategies.</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Final Project Studio</h2><span class="rule"></span></div>
+<div class="blk lab"><div class="h">The milestone ladder (tick what is done)</div>
+<ul class="tick">
+  <li>☐ <b>1 · Split and bar to beat:</b> the course's split for my problem; the do-nothing numbers; a first CV score (<code class="inline">final_project_starter.py</code>)</li>
+  <li>☐ <b>2 · Fair leaderboard:</b> baseline + at least two real candidates as pipelines, ONE splitter, my deciding metric, mean ± std, a paired check of the top two</li>
+  <li>☐ <b>3 · Tuned on the training rows:</b> a written space (log scales), 10 to 15 settings; churn and fraud: a threshold tuned for the business cost on the training rows</li>
+  <li>☐ <b>4 · Test once, decide:</b> fit the chosen model on all training rows, open the test set once, compute the business number (profit, MAE, cost)</li>
+  <li>☐ <b>5 · Report:</b> one page (Question, Answer, Evidence, Caveats, Next questions, Method), README, a notebook that reruns from a fresh start</li>
+</ul>
+</div>
+<div class="blk"><div class="h">My leaderboard (training rows only)</div>
+<table class="timing">
+<thead><tr><th>Candidate</th><th>Mean (deciding metric)</th><th>Std</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>baseline</td><td></td><td></td><td></td></tr>
+<tr><td></td><td></td><td></td><td></td></tr>
+<tr><td></td><td></td><td></td><td></td></tr>
+<tr><td></td><td></td><td></td><td></td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Studio questions to ask myself</div>
+<ul class="tick">
+  <li>Which rows chose each setting? (Training rows only.)</li>
+  <li>On prediction day, which of my columns would I not know yet?</li>
+  <li>Is the gap between my top two bigger than the fold spread?</li>
+  <li>What will I report: best_score_, a nested estimate, or the one-time test score?</li>
+</ul>
+</div>
+
+  <div class="sec"><h2>Showcase: My Two Minutes</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">S1</div><div class="qt">The decision my model informs:</div><div class="write"></div></div>
+<div class="q"><div class="qn">S2</div><div class="qt">The bar to beat (what doing nothing scores):</div><div class="write"></div></div>
+<div class="q"><div class="qn">S3</div><div class="qt">My best cross-validated score, with its spread:</div><div class="write"></div></div>
+<div class="q"><div class="qn">S4</div><div class="qt">One trap I avoided, and how:</div><div class="write"></div></div>
+<div class="q"><div class="qn">S5</div><div class="qt">What is left before I submit:</div><div class="write"></div></div>
+<p>Peer feedback I received (one strength, one question):</p>
+<div class="write tall"></div>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">E1</div><div class="qt">Why is a search's <code class="inline">best_score_</code> not the number to promise?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">Write the three numbers your report will lead with.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">What is the one thing left before you submit?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Lesson 6.2 project Steps 1 to 6 and <code class="inline">best_params.json</code></li>
+  <li>☐ Lesson 6.2 Exercises 1 to 3 (Exercise 4 is a stretch); the Quick Quiz; the journal</li>
+  <li>☐ Final project milestones 4 and 5; submit within one week</li>
+  <li>☐ Optional: <code class="inline">winners_curse_starter.py</code></li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>hyperparameter</td><td>A setting chosen before fit (learning_rate, max_leaf_nodes, C)</td></tr>
+<tr><td>search space</td><td>The knobs and ranges a search may try</td></tr>
+<tr><td>grid / random search</td><td>Every combination of listed values / samples from distributions</td></tr>
+<tr><td>loguniform</td><td>A distribution even across orders of magnitude, for rates and strengths</td></tr>
+<tr><td>successive halving</td><td>A tournament: many candidates on little data, the best go on with more</td></tr>
+<tr><td>Optuna, TPE</td><td>A tuning library whose sampler learns from earlier trials</td></tr>
+<tr><td>best_score_</td><td>The best mean CV score of a search: chooses, but is optimistic</td></tr>
+<tr><td>winner's curse</td><td>The best of many noisy scores looks better than it really is</td></tr>
+<tr><td>nested cross-validation</td><td>Cross-validating the whole search-and-refit procedure</td></tr>
+<tr><td>decision threshold</td><td>The probability above which you act; tuned for costs on training data</td></tr>
+<tr><td>milestone</td><td>A checkpoint of the final project: split, leaderboard, tuning, test once, report</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 11 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

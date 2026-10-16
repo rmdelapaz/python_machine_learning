@@ -3,975 +3,973 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about Feature Selection techniques for dimensionality reduction and improving model performance in machine learning.">
+    <meta name="description" content="Find the smallest set of features that keeps a churn model's accuracy, using redundancy checks, filter, wrapper and embedded selection methods inside leak-proof pipelines. Python Machine Learning Lesson 2.4.">
+    <meta name="author" content="Ray de la Paz">
     <title>Feature Selection - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#dimensionality">Dimensionality</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#dimensionality">Dimensionality</a></li>
-            <li aria-current="page">Feature Selection</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>🎯 Feature Selection: Choosing the Right Features</h1>
+        <div class="container">
+            <header>
+                <h1>🎒 Lesson 2.4: Feature Selection</h1>
+                <p class="lead">Pack light: find the few columns that carry a model's accuracy, drop the duplicates and the dead weight, and do it without fooling yourself.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Distinguish feature <em>selection</em> (keeping original features) from feature <em>extraction</em> like PCA, and explain why selection preserves interpretability</li>
-                <li>Apply filter methods such as variance threshold, correlation, the ANOVA F-test, chi-square, and mutual information</li>
-                <li>Use wrapper methods including recursive feature elimination (RFE) and forward/backward selection</li>
-                <li>Use embedded methods such as L1 (Lasso) regularization and tree-based feature importances</li>
-                <li>Choose an appropriate method based on dataset size, model type, and interpretability needs</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Reduce a high-dimensional dataset to its most predictive features and compare model performance before and after selection.</p>
-        </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain what feature selection buys you (simpler, cheaper, sturdier models) and what it usually does not (big accuracy gains)</li>
+                        <li>Find redundant features with correlations, exact relationships and cross-tabulations</li>
+                        <li>Use filter (<code>SelectKBest</code>), wrapper (<code>RFECV</code>, <code>SequentialFeatureSelector</code>) and embedded (L1, <code>SelectFromModel</code>) methods, and say what each can miss</li>
+                        <li>Keep selection inside a <code>Pipeline</code> so cross-validation stays honest, and show what happens when it is not</li>
+                        <li>Choose the smallest feature set whose cross-validated score is within a tolerance of the best</li>
+                    </ul>
+                </div>
 
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>Feature selection is the process of selecting a subset of relevant features for model construction. Unlike feature extraction methods like PCA that create new features, feature selection keeps the original features intact, making the model more interpretable. This lesson covers filter methods, wrapper methods, and embedded methods for feature selection, along with practical guidelines for choosing the right approach.</p>
-        </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 100 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="feature_engineering.html">Lesson 2.3: Creating Features</a> (and <a href="pipelines_composite.html">Lesson 2.2: Pipelines</a>)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A lean churn model that uses 6 of 16 columns and scores as well as the full model</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code></li>
+                </ul>
+            </header>
 
-        <h2>Feature Selection Overview</h2>
-        
-        <div class="mermaid">
-        flowchart TD
-            A[All Features] --> B{Selection Method}
-            
-            B --> C[Filter Methods]
-            C --> C1[Correlation]
-            C --> C2[Chi-Square]
-            C --> C3[Mutual Information]
-            C --> C4[Variance Threshold]
-            
-            B --> D[Wrapper Methods]
-            D --> D1[Forward Selection]
-            D --> D2[Backward Elimination]
-            D --> D3[Recursive Feature Elimination]
-            
-            B --> E[Embedded Methods]
-            E --> E1[LASSO L1]
-            E --> E2[Ridge L2]
-            E --> E3[Tree Importance]
-            E --> E4[ElasticNet]
-            
-            C --> F[Selected Features]
-            D --> F
-            E --> F
-            
-            F --> G[Improved Model]
-            
-            style A fill:#e3f2fd
-            style F fill:#fff9c4
-            style G fill:#c8e6c9
-        </div>
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Packing for the Trail</a></li>
+                        <li><a href="#redundant" class="toc-link">Free Wins: Redundant Columns</a></li>
+                        <li><a href="#filters" class="toc-link">Filter Methods: One Feature at a Time</a></li>
+                        <li><a href="#wrappers" class="toc-link">Wrapper Methods: Let the Model Judge</a></li>
+                        <li><a href="#embedded" class="toc-link">Embedded Methods: L1 Regularization</a></li>
+                        <li><a href="#leak" class="toc-link">Selection Can Leak</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: The Lean Churn Model</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
 
-        <h2>Why Feature Selection?</h2>
-        
-        <div class="mermaid">
-        graph LR
-            A[Feature Selection Benefits] --> B[Performance]
-            A --> C[Interpretability]
-            A --> D[Training Time]
-            A --> E[Overfitting]
-            
-            B --> B1[Remove Noise]
-            B --> B2[Reduce Complexity]
-            
-            C --> C1[Understand Important Factors]
-            C --> C2[Business Insights]
-            
-            D --> D1[Fewer Computations]
-            D --> D2[Faster Training]
-            
-            E --> E1[Better Generalization]
-            E --> E2[Simpler Models]
-            
-            style A fill:#f0f4c3
-        </div>
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Packing for the Trail</h2>
 
-        <h2>Setting Up the Environment</h2>
-        
-        <pre class="language-python"><code>import numpy as np
+                <p>Lesson 2.3 added columns. This lesson takes them away. Pinecrest's churn table has 16 candidate feature columns, and you could keep adding more. Do you need them all? Usually not, and every column has a cost: it must be collected, cleaned and monitored in production, it can break when an upstream system changes, and it makes the model harder to explain.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: An Ultralight Backpack</h4>
+                    <p>Experienced hikers weigh every item before a long trip. Two stoves? One goes home: that is a <strong>redundant</strong> feature, carrying the same information as another. The camp chair you never sit in? Home: an <strong>irrelevant</strong> feature. But the water filter stays, even though you use it only twice a day. The goal is not the lightest pack, it is the lightest pack that still gets you to the end of the trail. In model terms: the smallest feature set that keeps the score.</p>
+                </div>
+
+                <p>Feature selection rarely makes a good model dramatically more accurate. Its real benefits are a <strong>simpler</strong> model (fewer inputs to collect, explain and monitor), a <strong>sturdier</strong> one (fewer places for noise and drift to creep in), and, when there are many more columns than rows, protection from fitting noise. There are three families of methods:</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Family</th><th>How it works</th><th>Strength</th><th>Blind spot</th><th>scikit-learn</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Filter</td><td>Scores each column against the target, alone</td><td>Very fast</td><td>Ignores the model and teamwork between columns</td><td><code>SelectKBest</code>, <code>VarianceThreshold</code></td></tr>
+                            <tr><td>Wrapper</td><td>Tries subsets of columns with the real model</td><td>Judges columns as the model uses them</td><td>Slow: many fits</td><td><code>RFECV</code>, <code>SequentialFeatureSelector</code></td></tr>
+                            <tr><td>Embedded</td><td>Selection happens while the model trains</td><td>One fit</td><td>Tied to one model type</td><td>L1 penalty, <code>SelectFromModel</code></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>Every later module meets this problem in some form: which coefficients matter in a regularized regression (3.2), which features a forest relies on (5.2, 7.1), how to compress many columns into a few (Module 9). The habits you build here (decide with cross-validation, keep the choice inside the pipeline, prefer the smaller model when scores tie) carry through all of them.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="redundant" class="lesson-section">
+                <h2>🧹 Free Wins: Redundant Columns</h2>
+
+                <p>Load the churn table and the standard split. This lesson uses all 11 numeric columns, including <code>email_opens_90d</code>, which has gaps (you will impute it inside each pipeline, as in Lesson 2.1).</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.datasets import make_classification, load_breast_cancer
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split
+
+pd.set_option("display.width", 150)
+
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+           "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user", "email_opens_90d"]
+
+train, test = train_test_split(customers, test_size=0.25, stratify=customers["churned"], random_state=42)
+X_train, y_train = train[numeric], train["churned"]
+X_test, y_test = test[numeric], test["churned"]
+print(X_train.shape, X_test.shape)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(4500, 11) (1500, 11)</code></pre>
+                </div>
+
+                <p>Start with the cheapest check: which pairs of columns move together? The code keeps the upper triangle of the correlation matrix (each pair once) and lists the strong pairs.</p>
+
+                <pre><code class="language-python">corr = X_train.corr()
+upper = corr.where(np.triu(np.ones(corr.shape, dtype=bool), k=1)).stack()
+print(upper[upper.abs() &gt; 0.3].sort_values(key=abs, ascending=False).round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>returns_12m      return_rate              0.68
+orders_12m       spend_12m                0.57
+spend_12m        avg_order_value          0.49
+orders_12m       days_since_last_order   -0.41
+spend_12m        returns_12m              0.39
+avg_order_value  discount_share          -0.34
+orders_12m       avg_order_value         -0.32
+                 returns_12m              0.31
+spend_12m        return_rate              0.31
+dtype: float64</code></pre>
+                </div>
+
+                <p>The strongest pair is the two views of returns (0.68), then spend with orders, spend with average order value, and a long gap since the last order with fewer orders: all expected. None of these correlations is close to 1, so no column is a copy of another. But correlation only sees straight-line relationships between <em>two</em> columns. Lesson 2.3 found a three-column relationship hiding in plain sight:</p>
+
+                <pre><code class="language-python">rebuilt = X_train["orders_12m"] * X_train["avg_order_value"]
+print("largest gap between spend and orders x AOV:", (X_train["spend_12m"] - rebuilt).abs().max().round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>largest gap between spend and orders x AOV: 0.09</code></pre>
+                </div>
+
+                <p>Nine cents, from rounding the average to the cent. Any one of <code>spend_12m</code>, <code>orders_12m</code> and <code>avg_order_value</code> can be rebuilt from the other two, so one of them is redundant. Correlation alone would never have told you. The two category columns hide a similar relationship:</p>
+
+                <pre><code class="language-python">print(train.groupby("home_store")["region"].nunique())
+print(train.groupby("loyalty_tier")[["spend_12m", "tenure_months"]].median())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>home_store
+Asheville    1
+Bend         1
+Boise        1
+Flagstaff    1
+Online       6
+Name: region, dtype: int64
+              spend_12m  tenure_months
+loyalty_tier
+Basic           253.230           18.0
+Gold           1350.765           71.0
+Silver          741.960           59.0</code></pre>
+                </div>
+
+                <p>Every physical store belongs to exactly one region, so for store shoppers <code>region</code> repeats <code>home_store</code>; only for online shoppers does it add anything. And <code>loyalty_tier</code> follows spend and tenure closely: Pinecrest assigns tiers from those two numbers. Redundant columns do not usually hurt accuracy much, but they split credit between near-copies, make coefficients unstable (Lesson 1.1 warned about this) and add things to maintain.</p>
+
+                <div class="card card-success">
+                    <h4>✅ Domain Knowledge First</h4>
+                    <p>The fastest selection method is asking "how was this column made?". A column computed from other columns (an average, a ratio, a tier, a region lookup) is a candidate to drop before any algorithm runs. You will test that idea with cross-validation in the project.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="filters" class="lesson-section">
+                <h2>🔬 Filter Methods: One Feature at a Time</h2>
+
+                <p>A <strong>filter</strong> gives each column a score for how strongly it relates to the target, on its own, and keeps the best. Two common scores:</p>
+                <ul>
+                    <li><code>f_classif</code>, the ANOVA F-test: how far apart are the churners' and stayers' averages, relative to the spread? Fast, but it only sees differences in the mean, roughly a straight-line effect.</li>
+                    <li><code>mutual_info_classif</code>, <strong>mutual information</strong>: how much does knowing the column reduce uncertainty about the target? Zero means independent. It detects any kind of relationship, including U-shapes, but it is <em>estimated</em> from each row's nearest neighbors, so it is noisy, needs a <code>random_state</code>, and can round small effects down to exactly 0.</li>
+                </ul>
+
+                <pre><code class="language-python">from sklearn.feature_selection import f_classif, mutual_info_classif
+from sklearn.impute import SimpleImputer
+
+X_filled = SimpleImputer(strategy="median").set_output(transform="pandas").fit_transform(X_train)
+
+f_scores, _ = f_classif(X_filled, y_train)
+mi_scores = mutual_info_classif(X_filled, y_train, random_state=42)
+
+filters = pd.DataFrame({"F": f_scores, "MI": mi_scores}, index=numeric)
+filters["F_rank"] = filters["F"].rank(ascending=False).astype(int)
+filters["MI_rank"] = filters["MI"].rank(ascending=False).astype(int)
+print(filters.sort_values("F_rank").round(4))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>                              F      MI  F_rank  MI_rank
+days_since_last_order  735.4249  0.0641       1        1
+discount_share         196.5015  0.0118       2        6
+spend_12m              174.5598  0.0190       3        4
+orders_12m             156.1053  0.0206       4        3
+app_user                64.2232  0.0145       5        5
+support_tickets_12m     41.8948  0.0000       6       10
+email_opens_90d         37.1523  0.0000       7       10
+returns_12m             15.5411  0.0064       8        8
+tenure_months           14.9306  0.0329       9        2
+avg_order_value          8.5355  0.0106      10        7
+return_rate              1.1013  0.0000      11       10</code></pre>
+                </div>
+
+                <p>Both put <code>days_since_last_order</code> first. Look at where they disagree. <code>tenure_months</code> is near the bottom for F but second for mutual information: tenure has the U-shape from Lesson 2.3, so churners' <em>average</em> tenure is close to the stayers', and the F-test sees little. Mutual information sees that both very short and very long tenures mean risk. Going the other way, mutual information gives <code>support_tickets_12m</code> and <code>email_opens_90d</code> exactly 0, although the F-test finds clear differences: their effects are modest, and the neighbor-based estimate rounds them away. And neither score knows about teamwork: <code>support_tickets_12m</code> matters mostly for customers without the app, and a one-column score only sees the diluted average.</p>
+
+                <p>To use a filter, put it in a pipeline as <code>SelectKBest</code>, which keeps the <code>k</code> best-scoring columns. In a pipeline the scores are recomputed on each training fold, so the validation fold never influences the choice.</p>
+
+                <pre><code class="language-python">from functools import partial
+from sklearn.feature_selection import SelectKBest
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.feature_selection import (
-    SelectKBest, f_classif, chi2, mutual_info_classif,
-    RFE, RFECV, SelectFromModel, VarianceThreshold
-)
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression, Lasso
-from sklearn.metrics import accuracy_score, classification_report
-import warnings
-warnings.filterwarnings('ignore')
 
-# Set style for visualizations
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+mi = partial(mutual_info_classif, random_state=42)
 
-# Set random seed
-np.random.seed(42)
+def churn_pipe(*steps):
+    return make_pipeline(SimpleImputer(strategy="median"), StandardScaler(), *steps, LogisticRegression())
 
-print("Feature Selection Methods")
-print("=" * 50)</code></pre>
+for name, pipe in [("all 11 columns", churn_pipe()),
+                   ("best 6 by F", churn_pipe(SelectKBest(f_classif, k=6))),
+                   ("best 6 by MI", churn_pipe(SelectKBest(mi, k=6)))]:
+    scores = cross_val_score(pipe, X_train, y_train, cv=cv, scoring="roc_auc")
+    print(f"{name:15s} CV ROC AUC {scores.mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>all 11 columns  CV ROC AUC 0.833
+best 6 by F     CV ROC AUC 0.824
+best 6 by MI    CV ROC AUC 0.813</code></pre>
+                </div>
 
-        <h2>Filter Methods</h2>
-        
-        <pre class="language-python"><code>class FilterMethods:
-    """
-    Filter methods for feature selection
-    """
-    
-    def __init__(self):
-        self.scores = {}
-        
-    def generate_sample_data(self, n_samples=1000, n_features=20, n_informative=10):
-        """
-        Generate sample data with informative and noise features
-        """
-        X, y = make_classification(
-            n_samples=n_samples,
-            n_features=n_features,
-            n_informative=n_informative,
-            n_redundant=5,
-            n_repeated=0,
-            n_classes=2,
-            random_state=42,
-            shuffle=False
-        )
-        
-        # Create feature names
-        feature_names = [f'Feature_{i}' for i in range(n_features)]
-        
-        # Create DataFrame
-        df = pd.DataFrame(X, columns=feature_names)
-        df['target'] = y
-        
-        print(f"Generated dataset: {n_samples} samples, {n_features} features")
-        print(f"Informative features: {n_informative}")
-        print(f"Redundant features: 5")
-        print(f"Noise features: {n_features - n_informative - 5}")
-        
-        return df, feature_names
-    
-    def variance_threshold_selection(self, X, threshold=0.1):
-        """
-        Remove features with low variance
-        """
-        selector = VarianceThreshold(threshold=threshold)
-        X_selected = selector.fit_transform(X)
-        
-        # Get selected features
-        selected_features = X.columns[selector.get_support()]
-        removed_features = X.columns[~selector.get_support()]
-        
-        print(f"\nVariance Threshold (threshold={threshold}):")
-        print(f"Selected features: {len(selected_features)}/{len(X.columns)}")
-        print(f"Removed low-variance features: {list(removed_features)[:5]}...")
-        
-        return selected_features, selector
-    
-    def correlation_selection(self, df, threshold=0.9):
-        """
-        Remove highly correlated features
-        """
-        # Calculate correlation matrix
-        corr_matrix = df.corr().abs()
-        
-        # Select upper triangle of correlation matrix
-        upper = corr_matrix.where(
-            np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
-        )
-        
-        # Find features with correlation greater than threshold
-        to_drop = [column for column in upper.columns 
-                  if any(upper[column] > threshold)]
-        
-        selected_features = [col for col in df.columns if col not in to_drop]
-        
-        print(f"\nCorrelation-based Selection (threshold={threshold}):")
-        print(f"Removed highly correlated features: {to_drop[:5]}...")
-        print(f"Selected features: {len(selected_features)}/{len(df.columns)}")
-        
-        return selected_features, corr_matrix
-    
-    def univariate_selection(self, X, y, k=10, method='f_classif'):
-        """
-        Select K best features using statistical tests
-        """
-        # Choose scoring function
-        if method == 'f_classif':
-            score_func = f_classif
-        elif method == 'chi2':
-            # Ensure non-negative values for chi2
-            X_positive = X - X.min() + 1
-            score_func = chi2
-            X = X_positive
-        elif method == 'mutual_info':
-            score_func = mutual_info_classif
-        else:
-            raise ValueError(f"Unknown method: {method}")
-        
-        # Select K best features
-        selector = SelectKBest(score_func=score_func, k=k)
-        X_selected = selector.fit_transform(X, y)
-        
-        # Get scores and selected features
-        scores = selector.scores_
-        selected_features = X.columns[selector.get_support()]
-        
-        self.scores[method] = pd.DataFrame({
-            'feature': X.columns,
-            'score': scores
-        }).sort_values('score', ascending=False)
-        
-        print(f"\nUnivariate Selection ({method}, k={k}):")
-        print(f"Top features: {list(selected_features[:5])}...")
-        
-        return selected_features, selector
-    
-    def visualize_filter_methods(self, df):
-        """
-        Visualize results from different filter methods
-        """
-        X = df.drop('target', axis=1)
-        y = df['target']
-        
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        
-        # 1. Feature Variance
-        variances = X.var()
-        axes[0, 0].bar(range(len(variances)), variances.sort_values(ascending=False))
-        axes[0, 0].axhline(y=0.1, color='r', linestyle='--', label='Threshold')
-        axes[0, 0].set_xlabel('Feature Index')
-        axes[0, 0].set_ylabel('Variance')
-        axes[0, 0].set_title('Feature Variance')
-        axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # 2. Correlation Heatmap
-        corr_matrix = X.corr().abs()
-        sns.heatmap(corr_matrix, cmap='coolwarm', center=0, 
-                   square=True, ax=axes[0, 1], cbar_kws={'label': 'Correlation'})
-        axes[0, 1].set_title('Feature Correlation Matrix')
-        
-        # 3. F-statistic scores
-        _, f_selector = self.univariate_selection(X, y, k=10, method='f_classif')
-        f_scores = f_selector.scores_
-        axes[1, 0].bar(range(len(f_scores)), np.sort(f_scores)[::-1])
-        axes[1, 0].set_xlabel('Feature Rank')
-        axes[1, 0].set_ylabel('F-statistic Score')
-        axes[1, 0].set_title('F-statistic Feature Scores')
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # 4. Mutual Information scores
-        _, mi_selector = self.univariate_selection(X, y, k=10, method='mutual_info')
-        mi_scores = mi_selector.scores_
-        axes[1, 1].bar(range(len(mi_scores)), np.sort(mi_scores)[::-1])
-        axes[1, 1].set_xlabel('Feature Rank')
-        axes[1, 1].set_ylabel('Mutual Information')
-        axes[1, 1].set_title('Mutual Information Feature Scores')
-        axes[1, 1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Filter Methods for Feature Selection', fontsize=14)
-        plt.tight_layout()
-        plt.show()
+                <p>Six columns chosen by F lose about 0.01 AUC; by mutual information they lose about 0.02, even though mutual information is the "smarter" score. It keeps tenure, whose U-shape a logistic regression cannot use anyway (unless you engineer it, as in Lesson 2.3). A filter knows nothing about the model that comes after it. That is its speed and its weakness.</p>
 
-# Demonstrate filter methods
-filter_methods = FilterMethods()
+                <div class="card card-info">
+                    <h4>💡 <code>functools.partial</code></h4>
+                    <p><code>SelectKBest</code> calls its scoring function with just <code>(X, y)</code>. <code>partial</code> makes a version of <code>mutual_info_classif</code> with <code>random_state=42</code> already filled in, so the selector can call it the usual way and every run gives the same scores.</p>
+                </div>
+            </section>
 
-# Generate data
-df, feature_names = filter_methods.generate_sample_data()
+            <!-- ============================================================ -->
+            <section id="wrappers" class="lesson-section">
+                <h2>🔁 Wrapper Methods: Let the Model Judge</h2>
 
-# Apply filter methods
-X = df.drop('target', axis=1)
-y = df['target']
+                <p>A <strong>wrapper</strong> tries subsets of columns with the actual model and keeps what scores best. Two strategies are built in:</p>
+                <ul>
+                    <li><strong>Recursive feature elimination</strong> (<code>RFE</code>, and <code>RFECV</code> with cross-validation): fit the model, drop the column with the smallest weight, refit, repeat. The weights must be comparable, so scale first.</li>
+                    <li><strong>Sequential feature selection</strong> (<code>SequentialFeatureSelector</code>): start empty and, at each step, add the column that raises the cross-validated score most (forward), or start full and remove (backward).</li>
+                </ul>
 
-# Variance threshold
-var_features, _ = filter_methods.variance_threshold_selection(X, threshold=0.1)
+                <pre><code class="language-python">from sklearn.feature_selection import RFECV
 
-# Correlation-based selection
-corr_features, _ = filter_methods.correlation_selection(X, threshold=0.9)
+rfecv = RFECV(LogisticRegression(), cv=cv, scoring="roc_auc")
+rfe_pipe = make_pipeline(SimpleImputer(strategy="median"), StandardScaler(), rfecv).set_output(transform="pandas")
+rfe_pipe.fit(X_train, y_train)
 
-# Univariate selection
-f_features, _ = filter_methods.univariate_selection(X, y, k=10, method='f_classif')
-mi_features, _ = filter_methods.univariate_selection(X, y, k=10, method='mutual_info')
+curve = pd.Series(rfecv.cv_results_["mean_test_score"], index=rfecv.cv_results_["n_features"])
+print("RFECV keeps", rfecv.n_features_, "columns")
+print(curve.round(4).to_string())
 
-# Visualize
-filter_methods.visualize_filter_methods(df)</code></pre>
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.plot(curve.index, curve.values, marker="o", color="#667eea", label="mean CV ROC AUC (5 folds)")
+ax.axhline(curve.max() - 0.005, color="black", linestyle="--", linewidth=1, label="best minus 0.005")
+ax.set_xticks(curve.index)
+ax.set_xlabel("Number of columns kept by recursive elimination")
+ax.set_ylabel("CV ROC AUC")
+ax.set_title("After about six columns, more columns add almost nothing")
+ax.legend()
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>RFECV keeps 11 columns
+1     0.7215
+2     0.8063
+3     0.8116
+4     0.8226
+5     0.8263
+6     0.8328
+7     0.8328
+8     0.8323
+9     0.8332
+10    0.8333
+11    0.8333</code></pre>
+                </div>
 
-        <h2>Wrapper Methods</h2>
-        
-        <pre class="language-python"><code>class WrapperMethods:
-    """
-    Wrapper methods for feature selection
-    """
-    
-    def __init__(self):
-        self.selected_features = {}
-        
-    def forward_selection(self, X, y, estimator, max_features=10):
-        """
-        Forward feature selection
-        """
-        n_features = X.shape[1]
-        selected = []
-        remaining = list(range(n_features))
-        scores = []
-        
-        # Iteratively add features
-        for i in range(min(max_features, n_features)):
-            best_score = -np.inf
-            best_feature = None
-            
-            for feature in remaining:
-                # Try adding this feature
-                trial_features = selected + [feature]
-                X_subset = X[:, trial_features]
-                
-                # Evaluate with cross-validation
-                cv_scores = cross_val_score(
-                    estimator, X_subset, y, cv=3, scoring='accuracy'
-                )
-                score = cv_scores.mean()
-                
-                if score > best_score:
-                    best_score = score
-                    best_feature = feature
-            
-            if best_feature is not None:
-                selected.append(best_feature)
-                remaining.remove(best_feature)
-                scores.append(best_score)
-                
-        return selected, scores
-    
-    def backward_elimination(self, X, y, estimator, min_features=1):
-        """
-        Backward feature elimination
-        """
-        n_features = X.shape[1]
-        selected = list(range(n_features))
-        scores = []
-        
-        # Iteratively remove features
-        while len(selected) > min_features:
-            worst_score = np.inf
-            worst_feature = None
-            
-            for feature in selected:
-                # Try removing this feature
-                trial_features = [f for f in selected if f != feature]
-                X_subset = X[:, trial_features]
-                
-                # Evaluate with cross-validation
-                cv_scores = cross_val_score(
-                    estimator, X_subset, y, cv=3, scoring='accuracy'
-                )
-                score = -cv_scores.mean()  # Negative for minimization
-                
-                if score < worst_score:
-                    worst_score = score
-                    worst_feature = feature
-            
-            if worst_feature is not None:
-                selected.remove(worst_feature)
-                scores.append(-worst_score)  # Convert back to positive
-                
-        return selected, scores
-    
-    def recursive_feature_elimination(self, X, y, estimator, n_features_to_select=10):
-        """
-        Recursive Feature Elimination (RFE)
-        """
-        # RFE with specified number of features
-        rfe = RFE(estimator, n_features_to_select=n_features_to_select)
-        rfe.fit(X, y)
-        
-        # Get selected features
-        selected_features = X.columns[rfe.support_]
-        feature_ranking = pd.DataFrame({
-            'feature': X.columns,
-            'ranking': rfe.ranking_
-        }).sort_values('ranking')
-        
-        print(f"\nRFE Selected Features ({n_features_to_select}):")
-        print(f"Top features: {list(selected_features[:5])}...")
-        
-        return selected_features, feature_ranking, rfe
-    
-    def rfecv_selection(self, X, y, estimator):
-        """
-        RFE with Cross-Validation to find optimal number of features
-        """
-        rfecv = RFECV(
-            estimator,
-            step=1,
-            cv=5,
-            scoring='accuracy',
-            n_jobs=-1
-        )
-        rfecv.fit(X, y)
-        
-        # Get results
-        optimal_features = X.columns[rfecv.support_]
-        n_optimal = rfecv.n_features_
-        
-        print(f"\nRFECV Optimal Features: {n_optimal}")
-        print(f"Selected: {list(optimal_features[:5])}...")
-        
-        return optimal_features, rfecv
-    
-    def compare_wrapper_methods(self, X, y):
-        """
-        Compare different wrapper methods
-        """
-        # Use simple estimator for speed
-        estimator = LogisticRegression(random_state=42, max_iter=100)
-        
-        # Standardize features
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        
-        print("\nComparing Wrapper Methods...")
-        print("-" * 40)
-        
-        # Forward Selection (limited for speed)
-        print("Running Forward Selection...")
-        forward_features, forward_scores = self.forward_selection(
-            X_scaled, y, estimator, max_features=10
-        )
-        
-        # RFE
-        print("Running RFE...")
-        rfe_features, rfe_ranking, rfe = self.recursive_feature_elimination(
-            X, y, estimator, n_features_to_select=10
-        )
-        
-        # RFECV
-        print("Running RFECV...")
-        rfecv_features, rfecv = self.rfecv_selection(X, y, estimator)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # Forward Selection scores
-        axes[0].plot(range(1, len(forward_scores) + 1), forward_scores, 'bo-')
-        axes[0].set_xlabel('Number of Features')
-        axes[0].set_ylabel('CV Accuracy')
-        axes[0].set_title('Forward Selection')
-        axes[0].grid(True, alpha=0.3)
-        
-        # RFE Ranking
-        axes[1].barh(range(len(rfe_ranking[:15])), 
-                    rfe_ranking['ranking'].values[:15])
-        axes[1].set_yticks(range(len(rfe_ranking[:15])))
-        axes[1].set_yticklabels(rfe_ranking['feature'].values[:15])
-        axes[1].set_xlabel('Ranking')
-        axes[1].set_title('RFE Feature Ranking (lower is better)')
-        axes[1].invert_yaxis()
-        
-        # RFECV scores
-        axes[2].plot(range(1, len(rfecv.cv_results_['mean_test_score']) + 1),
-                    rfecv.cv_results_['mean_test_score'], 'go-')
-        axes[2].axvline(x=rfecv.n_features_, color='r', linestyle='--',
-                       label=f'Optimal: {rfecv.n_features_}')
-        axes[2].set_xlabel('Number of Features')
-        axes[2].set_ylabel('CV Accuracy')
-        axes[2].set_title('RFECV: Optimal Features')
-        axes[2].legend()
-        axes[2].grid(True, alpha=0.3)
-        
-        plt.suptitle('Wrapper Methods Comparison', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        return {
-            'forward': forward_features,
-            'rfe': rfe_features,
-            'rfecv': rfecv_features
-        }
+                <figure>
+                    <img src="images/dimensionality_feature_selection_rfecv.png" alt="Line chart of cross-validated ROC AUC against the number of columns kept by recursive feature elimination. The score climbs steeply from 0.72 with one column to about 0.83 with six columns, then stays flat up to eleven columns, above a dashed line at the best score minus 0.005." width="990" height="440" loading="lazy">
+                    <figcaption>The curve flattens at six columns. RFECV picks the highest point, which here is all eleven, but anything on the plateau is just as good.</figcaption>
+                </figure>
 
-# Demonstrate wrapper methods
-wrapper_methods = WrapperMethods()
+                <p>Read the curve, not just <code>n_features_</code>. RFECV keeps the count with the highest mean score, and with a flat plateau that can be the full set, won by a ten-thousandth. The differences on the plateau are far smaller than the spread between folds. A sensible rule: <strong>take the smallest set within a small tolerance of the best</strong> (here 0.005 AUC). You will apply it in the project.</p>
 
-print("\n" + "=" * 50)
-print("WRAPPER METHODS")
-print("=" * 50)
+                <p><code>SequentialFeatureSelector</code> can apply a tolerance for you. With <code>n_features_to_select="auto"</code> and <code>tol=0.002</code>, forward selection stops as soon as the next column adds less than 0.002 to the CV score:</p>
 
-# Compare wrapper methods
-wrapper_results = wrapper_methods.compare_wrapper_methods(X, y)</code></pre>
+                <pre><code class="language-python">from sklearn.feature_selection import SequentialFeatureSelector
 
-        <h2>Embedded Methods</h2>
-        
-        <div class="mermaid">
-        flowchart TB
-            A[Training Data] --> B[Model with Built-in Selection]
-            
-            B --> C[L1 Regularization<br/>LASSO]
-            B --> D[L2 Regularization<br/>Ridge]
-            B --> E[Tree-based<br/>Feature Importance]
-            B --> F[ElasticNet<br/>L1 + L2]
-            
-            C --> G[Sparse Coefficients]
-            D --> H[Shrunk Coefficients]
-            E --> I[Importance Scores]
-            F --> J[Balanced Selection]
-            
-            G --> K[Selected Features]
-            I --> K
-            J --> K
-            
-            style A fill:#e3f2fd
-            style K fill:#c8e6c9
+sfs = SequentialFeatureSelector(LogisticRegression(), n_features_to_select="auto", tol=0.002,
+                                direction="forward", cv=cv, scoring="roc_auc")
+sfs_pipe = make_pipeline(SimpleImputer(strategy="median"), StandardScaler(), sfs).set_output(transform="pandas")
+sfs_pipe.fit(X_train, y_train)
+
+forward_six = list(sfs.get_feature_names_out())
+print(forward_six)
+scores = cross_val_score(churn_pipe(SequentialFeatureSelector(LogisticRegression(), n_features_to_select="auto",
+                                                              tol=0.002, cv=cv, scoring="roc_auc")),
+                         X_train, y_train, cv=cv, scoring="roc_auc")
+print(f"forward selection inside CV: {scores.mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>['orders_12m', 'days_since_last_order', 'support_tickets_12m', 'discount_share', 'app_user', 'email_opens_90d']
+forward selection inside CV: 0.832</code></pre>
+                </div>
+
+                <p>Forward selection stops at six columns and keeps the full model's score. Notice what it picked: <code>support_tickets_12m</code> and <code>app_user</code>, the pair that only matters together. A wrapper judges columns by how they help the model <em>alongside the columns already chosen</em>, so it can find teamwork that filters miss. The price is time: forward selection fitted the model hundreds of times. With 11 columns that takes seconds; with 500 it takes a long time.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Two Cross-Validations</h4>
+                    <p>The second score comes from cross-validating the <em>whole selection procedure</em>: each outer fold runs its own forward selection (with its own inner folds) on its training part only. That is the honest estimate of "select, then fit". The selector's own internal scores are optimistic, because they are the winners of a competition run on those very folds.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="embedded" class="lesson-section">
+                <h2>🧲 Embedded Methods: L1 Regularization</h2>
+
+                <p>An <strong>embedded</strong> method selects while it trains. The classic is <strong>L1 regularization</strong> (also called the Lasso penalty): the model is charged a price for the total size of its weights, and the cheapest way to pay is to set the weights of weak columns to exactly zero. In scikit-learn's <code>LogisticRegression</code>, <code>l1_ratio=1</code> asks for a pure L1 penalty, and <code>C</code> controls its strength: a <em>smaller</em> <code>C</code> means a heavier penalty and more zeros. The <code>liblinear</code> solver handles L1 well on data this size. Lesson 3.2 covers regularization properly; here it is a selection tool.</p>
+
+                <pre><code class="language-python">rows, zeroed = [], {}
+for C in [0.005, 0.01, 0.02, 0.05, 1.0]:
+    l1_pipe = churn_pipe().set_params(logisticregression=LogisticRegression(l1_ratio=1, solver="liblinear", C=C))
+    auc = cross_val_score(l1_pipe, X_train, y_train, cv=cv, scoring="roc_auc").mean()
+    weights = l1_pipe.fit(X_train, y_train)[-1].coef_[0]
+    zeroed[C] = [col for col, w in zip(numeric, weights) if w == 0]
+    rows.append({"C": C, "kept": int((weights != 0).sum()), "cv_auc": round(auc, 4)})
+
+print(pd.DataFrame(rows).to_string(index=False))
+print("zero at C=0.05:", zeroed[0.05])
+print("zero at C=0.01:", zeroed[0.01])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>    C  kept  cv_auc
+0.005     2  0.7955
+0.010     6  0.8175
+0.020     8  0.8301
+0.050     8  0.8333
+1.000    11  0.8334
+zero at C=0.05: ['avg_order_value', 'returns_12m', 'return_rate']
+zero at C=0.01: ['tenure_months', 'orders_12m', 'avg_order_value', 'returns_12m', 'return_rate']</code></pre>
+                </div>
+
+                <p>Read from the bottom up. With a weak penalty (<code>C=1.0</code>) every column survives. At <code>C=0.05</code> three columns drop out with no loss in AUC, and they are the redundant ones you found by hand: <code>avg_order_value</code> (spend divided by orders), <code>returns_12m</code> and <code>return_rate</code> (two views of returns). Squeeze harder (<code>C=0.01</code>) and genuinely useful columns such as <code>tenure_months</code> and <code>orders_12m</code> start to go, and the score falls. <code>set_params(logisticregression=...)</code> swaps the pipeline's last step by its name, the lowercase class name that <code>make_pipeline</code> gives it.</p>
+
+                <p>To use L1 purely as a selector in front of another model, wrap it in <code>SelectFromModel</code>, which keeps the columns with nonzero weights:</p>
+
+                <pre><code class="language-python">from sklearn.feature_selection import SelectFromModel
+
+l1_selector = SelectFromModel(LogisticRegression(l1_ratio=1, solver="liblinear", C=0.05))
+l1_select_pipe = churn_pipe(l1_selector).set_output(transform="pandas").fit(X_train, y_train)
+print(list(l1_selector.get_feature_names_out()))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>['tenure_months', 'orders_12m', 'spend_12m', 'days_since_last_order', 'support_tickets_12m', 'discount_share', 'app_user', 'email_opens_90d']</code></pre>
+                </div>
+
+                <p>Tree models offer another embedded option: <code>SelectFromModel</code> can read a forest's <code>feature_importances_</code>. Exercise 3 tries it and shows a catch: a selector should think like the model that comes after it.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="leak" class="lesson-section">
+                <h2>🚰 Selection Can Leak</h2>
+
+                <p>Here is the most important experiment in this lesson. Build a dataset of <strong>pure noise</strong>: 200 "customers", 5,000 random columns, and a random yes/no target. No model can genuinely predict anything here; honest accuracy is a coin flip, 50%. Now select the 20 columns most related to the target, and cross-validate a model on them, in two ways.</p>
+
+                <pre><code class="language-python">def noise_experiment(seed):
+    rng = np.random.default_rng(seed)
+    X_noise = rng.normal(size=(200, 5000))
+    y_noise = rng.integers(0, 2, size=200)
+
+    # Wrong: select on ALL rows, then cross-validate the model on the chosen columns
+    chosen = SelectKBest(f_classif, k=20).fit(X_noise, y_noise)
+    leaky = cross_val_score(LogisticRegression(), chosen.transform(X_noise), y_noise, cv=cv).mean()
+
+    # Right: selection is a pipeline step, so it is redone inside every training fold
+    honest = cross_val_score(make_pipeline(SelectKBest(f_classif, k=20), LogisticRegression()),
+                             X_noise, y_noise, cv=cv).mean()
+    return {"seed": seed, "select first, then CV": leaky, "select inside CV": honest}
+
+noise = pd.DataFrame([noise_experiment(seed) for seed in range(42, 47)]).set_index("seed")
+print(noise.round(3))
+print(noise.mean().round(3).to_string())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>      select first, then CV  select inside CV
+seed
+42                    0.825             0.595
+43                    0.780             0.545
+44                    0.820             0.515
+45                    0.770             0.520
+46                    0.795             0.460
+select first, then CV    0.798
+select inside CV         0.527</code></pre>
+                </div>
+
+                <p>The leaky version reports around 80% accuracy <strong>on pure noise</strong>, on every one of five fresh datasets. With 5,000 random columns, some will line up with the random target by chance, and choosing them with all 200 rows bakes that chance alignment into every validation fold. The honest version averages close to a coin flip; single runs wander a few points either way, because each validation fold has only 40 rows. Same data, same model, one line of difference.</p>
+
+                <div class="card card-danger">
+                    <h4>🛑 Any Choice Made with the Labels Is Part of the Model</h4>
+                    <p>Selecting columns, choosing thresholds (Lesson 2.3), tuning settings (Lesson 6.2): if a step looks at <code>y</code>, it is learning, and it must happen inside each training fold, never before the split. This leak is easy to miss in real projects because the result looks plausible. 80% sounds like a decent model, not like noise.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <h3>1. Missing Values Reach the Selector</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">SelectKBest(f_classif, k=5).fit(X_train, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Input X contains NaN.
+SelectKBest does not accept missing values encoded as NaN natively. For supervised learning, you might want to consider sklearn.ensemble.HistGradientBoostingClassifier and Regressor which accept missing values encoded as NaNs natively. Alternatively, it is possible to preprocess the data, for instance by using an imputer transformer in a pipeline or drop samples with missing values. See https://scikit-learn.org/stable/modules/impute.html You can find a list of all estimators that handle NaN values at the following page: https://scikit-learn.org/stable/modules/impute.html#estimators-that-handle-nan-values</code></pre>
+                </div>
+                <p><strong>What it means:</strong> <code>email_opens_90d</code> has gaps, and the F-test cannot score a column with missing values. <strong>Fix:</strong> put a <code>SimpleImputer</code> in the pipeline before the selector, as <code>churn_pipe</code> does.</p>
+
+                <h3>2. Recursive Elimination with a Model That Has No Weights</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">from sklearn.feature_selection import RFE
+from sklearn.neighbors import KNeighborsClassifier
+
+RFE(KNeighborsClassifier(), n_features_to_select=5).fit(X_filled, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: when `importance_getter=='auto'`, the underlying estimator KNeighborsClassifier should have `coef_` or `feature_importances_` attribute. Either pass a fitted estimator to feature selector or call fit before calling transform.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> RFE drops the column with the smallest <code>coef_</code> or <code>feature_importances_</code>, and k-nearest neighbors (Lesson 4.1) has neither. <strong>Fix:</strong> use <code>SequentialFeatureSelector</code>, which works with any model because it only needs scores, or pass a custom <code>importance_getter</code>.</p>
+
+                <h3>3. L1 Selection on Unscaled Columns</h3>
+
+                <pre><code class="language-python">l1 = LogisticRegression(l1_ratio=1, solver="liblinear", C=0.02)
+for name, pipe in [("scaled", make_pipeline(SimpleImputer(strategy="median"), StandardScaler(), l1)),
+                   ("unscaled", make_pipeline(SimpleImputer(strategy="median"), l1))]:
+    weights = pipe.fit(X_train, y_train)[-1].coef_[0]
+    print(f"{name:9s} keeps discount_share: {weights[numeric.index('discount_share')] != 0}, "
+          f"keeps avg_order_value: {weights[numeric.index('avg_order_value')] != 0}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>scaled    keeps discount_share: True, keeps avg_order_value: False
+unscaled  keeps discount_share: False, keeps avg_order_value: True</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the penalty charges for the size of each weight. <code>discount_share</code> runs from 0 to 1, so it needs a large weight to have any effect, and the penalty kills it, even though it is the second-best predictor in the table. <code>avg_order_value</code> is in dollars, needs only a tiny weight, and survives although it is redundant. Without scaling, L1 selects by units, not by usefulness. <strong>Fix:</strong> always scale before an L1 penalty (and before RFE, which compares weights too).</p>
+
+                <h3>4. Reading "Dropped" as "Does Not Matter"</h3>
+                <p>No code this time, because the mistake is in the sentence you write afterwards. L1 dropped <code>avg_order_value</code>. That does not mean average order value has nothing to do with churn; it means that, given spend and orders, it adds nothing new. Drop <code>spend_12m</code> instead and <code>avg_order_value</code> may well be kept. Selection results describe <em>this model with these other columns</em>, not which customer traits cause churn. Treat them the way Lesson 1.1 treated coefficients: a useful first impression.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: The Lean Churn Model</h2>
+
+                <p>Pinecrest's data team wants to put the churn model into production, and each input column means a data feed someone must maintain. Your brief: find the smallest set of columns, from all 16 candidates (11 numeric and 5 categorical), whose cross-validated ROC AUC is within 0.005 of the best, then confirm on the test set. You will write forward selection yourself, over the original columns, so that a category like <code>home_store</code> is kept or dropped as one unit rather than as separate one-hot columns. Work in a new notebook called <code>lesson_2_4_project</code>. Allow about 50 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load, split and list the candidates <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
+
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+           "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user", "email_opens_90d"]
+categorical = ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"]
+candidates = numeric + categorical
+
+train, test = train_test_split(customers, test_size=0.25, stratify=customers["churned"], random_state=42)
+y_train, y_test = train["churned"], test["churned"]
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+print(len(candidates), "candidate columns;", train[candidates].isna().sum()[lambda s: s &gt; 0].to_dict())</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>16 candidate columns; {'email_opens_90d': 419, 'age_group': 359}</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: A model for any list of columns <span class="step-time">(10 min)</span></h3>
+                    <p>Write a function that builds the right pipeline for whatever columns it is given (impute and scale the numeric ones, impute and one-hot encode the categorical ones), and a second that cross-validates it. Then score the full model.</p>
+                    <pre><code class="language-python">from sklearn.compose import make_column_transformer
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+def build_model(columns):
+    num = [c for c in columns if c in numeric]
+    cat = [c for c in columns if c in categorical]
+    parts = []
+    if num:
+        parts.append((make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), num))
+    if cat:
+        parts.append((make_pipeline(SimpleImputer(strategy="most_frequent"),
+                                    OneHotEncoder(handle_unknown="ignore")), cat))
+    return make_pipeline(make_column_transformer(*parts), LogisticRegression(max_iter=1000))
+
+def cv_auc(columns):
+    return cross_val_score(build_model(columns), train[columns], y_train, cv=cv, scoring="roc_auc").mean()
+
+full_auc = cv_auc(candidates)
+print(f"all 16 columns: CV ROC AUC {full_auc:.4f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>all 16 columns: CV ROC AUC 0.8324</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Drop the known duplicates <span class="step-time">(5 min)</span></h3>
+                    <p>Test the domain-knowledge idea from the lesson: drop the four columns that are computed from others.</p>
+                    <pre><code class="language-python">derived = ["avg_order_value", "returns_12m", "region", "loyalty_tier"]
+trimmed = [c for c in candidates if c not in derived]
+print(f"without {len(derived)} derived columns ({len(trimmed)} left): CV ROC AUC {cv_auc(trimmed):.4f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>without 4 derived columns (12 left): CV ROC AUC 0.8305</code></pre>
+                    </div>
+                    <p>Four columns gone for a change in the third decimal, well inside the fold-to-fold spread. Good, but probably not the smallest set. Time to let the model choose.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Forward selection, by hand <span class="step-time">(15 min)</span></h3>
+                    <p>Start with no columns. At each step, try adding each remaining column, keep the one that gives the best CV score, and record the score. This is exactly what <code>SequentialFeatureSelector</code> does, but over whole columns. It fits about 600 small models, so allow it a minute.</p>
+                    <pre><code class="language-python">chosen, remaining, history = [], list(candidates), []
+while remaining and len(chosen) &lt; 10:
+    step_scores = {col: cv_auc(chosen + [col]) for col in remaining}
+    best = max(step_scores, key=step_scores.get)
+    chosen.append(best)
+    remaining.remove(best)
+    history.append((len(chosen), best, step_scores[best]))
+    print(f"{len(chosen):2d}  + {best:22s} CV ROC AUC {step_scores[best]:.4f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code> 1  + days_since_last_order  CV ROC AUC 0.7215
+ 2  + discount_share         CV ROC AUC 0.8063
+ 3  + app_user               CV ROC AUC 0.8165
+ 4  + support_tickets_12m    CV ROC AUC 0.8235
+ 5  + orders_12m             CV ROC AUC 0.8289
+ 6  + email_opens_90d        CV ROC AUC 0.8328
+ 7  + tenure_months          CV ROC AUC 0.8336
+ 8  + loyalty_tier           CV ROC AUC 0.8341
+ 9  + avg_order_value        CV ROC AUC 0.8358
+10  + spend_12m              CV ROC AUC 0.8357</code></pre>
+                    </div>
+                    <p>The first column alone gets to 0.72; the next five add 0.11; after that, each column adds a thousandth or less. <code>loyalty_tier</code> sneaks in at step 8: it is derived from spend and tenure, but in steps, so it gives a linear model a little of the shape it cannot draw itself (Lesson 2.3's lesson again).</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Apply the tolerance rule <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">import matplotlib.pyplot as plt
+
+path = pd.DataFrame(history, columns=["n_columns", "added", "cv_auc"]).set_index("n_columns")
+target = path["cv_auc"].max() - 0.005
+n_lean = path.index[path["cv_auc"] &gt;= target].min()
+lean = chosen[:n_lean]
+print(f"best {path['cv_auc'].max():.4f}, tolerance line {target:.4f}, smallest set within it: {n_lean} columns")
+print(lean)
+
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.plot(path.index, path["cv_auc"], marker="o", color="#667eea", label="forward selection, mean CV ROC AUC")
+ax.axhline(full_auc, color="gray", linestyle=":", label=f"all 16 columns ({full_auc:.3f})")
+ax.axhline(target, color="black", linestyle="--", linewidth=1, label="best minus 0.005")
+ax.axvline(n_lean, color="#e53e3e", linewidth=1, label=f"lean model: {n_lean} columns")
+ax.set_xticks(path.index)
+ax.set_xlabel("Number of columns")
+ax.set_ylabel("CV ROC AUC")
+ax.set_title("Six columns are enough")
+ax.legend(loc="lower right")
+plt.show()</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>best 0.8358, tolerance line 0.8308, smallest set within it: 6 columns
+['days_since_last_order', 'discount_share', 'app_user', 'support_tickets_12m', 'orders_12m', 'email_opens_90d']</code></pre>
+                    </div>
+                    <figure>
+                        <img src="images/dimensionality_feature_selection_forward.png" alt="Line chart of cross-validated ROC AUC as forward selection adds columns one at a time. The score rises from 0.72 with one column to 0.833 with six, then creeps up to 0.836 at nine. A dotted line marks the full sixteen-column model at 0.832, a dashed line marks the best score minus 0.005, and a vertical line marks the lean model at six columns." width="990" height="440" loading="lazy">
+                        <figcaption>From six columns on, the lean path sits at or above the full model's score. The extra columns are within the noise.</figcaption>
+                    </figure>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: One test, and the report <span class="step-time">(10 min)</span></h3>
+                    <p>The forward-selection scores are optimistic (they won a competition on those folds), so confirm on the untouched test set, once, and save the column list for the data team.</p>
+                    <pre><code class="language-python">from sklearn.dummy import DummyClassifier
+from sklearn.metrics import roc_auc_score
+
+results = {}
+for name, cols in [("full (16 columns)", candidates), (f"lean ({len(lean)} columns)", lean)]:
+    model = build_model(cols).fit(train[cols], y_train)
+    results[name] = roc_auc_score(y_test, model.predict_proba(test[cols])[:, 1])
+baseline = DummyClassifier(strategy="most_frequent").fit(train[candidates], y_train)
+results["baseline"] = roc_auc_score(y_test, baseline.predict_proba(test[candidates])[:, 1])
+
+for name, auc in results.items():
+    print(f"{name:18s} test ROC AUC {auc:.3f}")
+
+with open("lean_features.txt", "w") as f:
+    f.write("\n".join(lean) + "\n")
+print("saved", len(lean), "column names to lean_features.txt")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>full (16 columns)  test ROC AUC 0.826
+lean (6 columns)   test ROC AUC 0.824
+baseline           test ROC AUC 0.500
+saved 6 column names to lean_features.txt</code></pre>
+                    </div>
+                    <p>The six-column model matches the 16-column model on data neither has seen, and both are far above the baseline's 0.5 (a model that ranks everyone equally). Pinecrest can drop ten data feeds, including both store columns, age and loyalty tier, at no cost in quality. Notice which columns made the cut: recency, discount reliance, the app, support tickets, order count and email engagement. That is a short list a marketing team can understand and act on.</p>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li><code>build_model</code> handles any mix of numeric and categorical columns, with all preprocessing inside the pipeline</li>
+                        <li>The full model's CV ROC AUC is about 0.832, and dropping the four derived columns changes it by less than 0.002</li>
+                        <li>Your forward-selection loop prints ten steps, starting with <code>days_since_last_order</code></li>
+                        <li>You chose the lean set with the tolerance rule, not by the single highest score</li>
+                        <li>The test set was used once, for the final comparison, and the lean model matches the full one</li>
+                        <li><code>lean_features.txt</code> lists the chosen columns</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>Try each one before opening the solution. Exercises 1 to 3 use the lesson's variables (<code>X_train</code>, <code>X_filled</code>, <code>churn_pipe</code>, <code>mi</code>); the project reassigned <code>cv</code> to an identical splitter, so nothing changes. Exercise 4 needs only <code>train</code> and <code>y_train</code>.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: What Do the Filters Keep?</h3>
+                    <p>Fit <code>SelectKBest(f_classif, k=4)</code> and <code>SelectKBest(mi, k=4)</code> on <code>X_filled</code> and <code>y_train</code>, and print the names each one keeps with <code>get_feature_names_out()</code>. Which columns differ, and which of the forward-selection favorites does each one miss?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Because <code>X_filled</code> is a DataFrame, the selector remembers the column names. Compare with the list <code>forward_six</code> from the wrapper section.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for name, score_func in [("F", f_classif), ("MI", mi)]:
+    kept = SelectKBest(score_func, k=4).fit(X_filled, y_train).get_feature_names_out()
+    missing = [c for c in forward_six if c not in kept]
+    print(f"{name:2s} keeps {list(kept)}")
+    print(f"   misses {missing}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>F  keeps ['orders_12m', 'spend_12m', 'days_since_last_order', 'discount_share']
+   misses ['support_tickets_12m', 'app_user', 'email_opens_90d']
+MI keeps ['tenure_months', 'orders_12m', 'spend_12m', 'days_since_last_order']
+   misses ['support_tickets_12m', 'discount_share', 'app_user', 'email_opens_90d']</code></pre>
+                        </div>
+                        <p>Both filters spend slots on <code>spend_12m</code> and <code>orders_12m</code>, which overlap heavily (a filter cannot see that two columns tell the same story), and mutual information also spends one on tenure. Neither keeps <code>app_user</code> or <code>support_tickets_12m</code>, whose value shows up mainly together. Filters are a fine first pass to cut thousands of columns to hundreds; for the final choice, let the model judge.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Backward Instead of Forward</h3>
+                    <p>Run <code>SequentialFeatureSelector</code> with <code>direction="backward"</code> and <code>n_features_to_select=6</code> inside the same impute-and-scale pipeline. Does starting from all columns and removing them reach the same six as forward selection?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Copy the forward version from the lesson and change two arguments. Compare the result with <code>forward_six</code> using sets.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">backward = SequentialFeatureSelector(LogisticRegression(), n_features_to_select=6,
+                                     direction="backward", cv=cv, scoring="roc_auc")
+make_pipeline(SimpleImputer(strategy="median"), StandardScaler(), backward).set_output(transform="pandas").fit(X_train, y_train)
+backward_six = list(backward.get_feature_names_out())
+print(backward_six)
+print("only forward :", sorted(set(forward_six) - set(backward_six)))
+print("only backward:", sorted(set(backward_six) - set(forward_six)))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>['orders_12m', 'days_since_last_order', 'support_tickets_12m', 'discount_share', 'app_user', 'email_opens_90d']
+only forward : []
+only backward: []</code></pre>
+                        </div>
+                        <p>Here both directions land on exactly the same six columns, which is reassuring. They do not always agree: both are greedy searches, which never revisit a decision, so they find a good subset rather than the guaranteed best one. When they disagree, the swapped columns are usually near-substitutes (orders, spend and average order value can stand in for one another). When two methods agree, as here, you can trust the choice more.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: A Forest as the Selector</h3>
+                    <p>Use <code>SelectFromModel(RandomForestClassifier(n_estimators=100, min_samples_leaf=5, random_state=42, n_jobs=-1), threshold="median")</code> in <code>churn_pipe</code> (it keeps the columns with above-median importance), cross-validate it, and print which columns the forest picks. How does the logistic regression do on the forest's choice?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>After fitting the pipeline, the selector is step 2 (<code>pipe[2]</code>), and its fitted forest is <code>pipe[2].estimator_</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.ensemble import RandomForestClassifier
+
+forest_selector = SelectFromModel(
+    RandomForestClassifier(n_estimators=100, min_samples_leaf=5, random_state=42, n_jobs=-1), threshold="median")
+forest_pipe = churn_pipe(forest_selector).set_output(transform="pandas")
+scores = cross_val_score(forest_pipe, X_train, y_train, cv=cv, scoring="roc_auc")
+forest_pipe.fit(X_train, y_train)
+print(list(forest_pipe[2].get_feature_names_out()))
+print(f"logistic regression on the forest's columns: CV ROC AUC {scores.mean():.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>['tenure_months', 'spend_12m', 'avg_order_value', 'days_since_last_order', 'return_rate', 'discount_share']
+logistic regression on the forest's columns: CV ROC AUC 0.813</code></pre>
+                        </div>
+                        <p>The forest values <code>tenure_months</code> and <code>return_rate</code>, which it can split into useful ranges, and skips <code>app_user</code> and <code>support_tickets_12m</code>. A logistic regression cannot use tenure's U-shape, so it does worse on the forest's choice than on its own. Rule: select with the same kind of model you will deploy, or with the model itself. Also remember that impurity-based importances favor columns with many distinct values; Lesson 7.1 shows the more reliable permutation importance.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Select Among Engineered Features (Stretch)</h3>
+                    <p>Bring back Lesson 2.3's <code>add_churn_features</code> (the five flags and the interaction), apply it to the 10 numeric columns without missing values, and run the L1 sweep from the lesson (<code>C</code> in 0.005, 0.01, 0.02, 0.05) on the 15 resulting columns. Which engineered features survive the strongest penalty, and what does that suggest about the raw columns they were built from?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Put <code>FunctionTransformer(add_churn_features)</code> first in a pipeline, then <code>StandardScaler</code> and the L1 logistic regression. The names going into the last step are in <code>pipe[-1].feature_names_in_</code> when the pipeline outputs pandas.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.preprocessing import FunctionTransformer
+
+def add_churn_features(df):
+    df = df.copy()
+    df["lapsed_150"] = (df["days_since_last_order"] &gt; 150).astype(int)
+    df["new_customer"] = (df["tenure_months"] &lt; 6).astype(int)
+    df["veteran"] = (df["tenure_months"] &gt; 72).astype(int)
+    df["heavy_discount"] = (df["discount_share"] &gt; 0.35).astype(int)
+    df["tickets_no_app"] = df["support_tickets_12m"] * (1 - df["app_user"])
+    return df
+
+base = [c for c in numeric if c != "email_opens_90d"]
+for C in [0.005, 0.01, 0.02, 0.05]:
+    pipe = make_pipeline(FunctionTransformer(add_churn_features), StandardScaler(),
+                         LogisticRegression(l1_ratio=1, solver="liblinear", C=C)).set_output(transform="pandas")
+    auc = cross_val_score(pipe, train[base], y_train, cv=cv, scoring="roc_auc").mean()
+    pipe.fit(train[base], y_train)
+    kept = [n for n, w in zip(pipe[-1].feature_names_in_, pipe[-1].coef_[0]) if w != 0]
+    print(f"C={C:&lt;5} AUC {auc:.3f}  kept {len(kept):2d}: {kept}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>C=0.005 AUC 0.850  kept  5: ['days_since_last_order', 'lapsed_150', 'new_customer', 'heavy_discount', 'tickets_no_app']
+C=0.01  AUC 0.873  kept  7: ['days_since_last_order', 'discount_share', 'lapsed_150', 'new_customer', 'veteran', 'heavy_discount', 'tickets_no_app']
+C=0.02  AUC 0.880  kept  9: ['orders_12m', 'spend_12m', 'days_since_last_order', 'discount_share', 'lapsed_150', 'new_customer', 'veteran', 'heavy_discount', 'tickets_no_app']
+C=0.05  AUC 0.883  kept 10: ['orders_12m', 'spend_12m', 'days_since_last_order', 'discount_share', 'app_user', 'lapsed_150', 'new_customer', 'veteran', 'heavy_discount', 'tickets_no_app']</code></pre>
+                        </div>
+                        <p>Under heavy pressure, the engineered columns are among the first to be chosen, ahead of the raw columns they came from: a threshold or an interaction says in one weight what the raw column could only approximate. That is the strongest evidence that Lesson 2.3's features captured real structure. Engineering and selection work as a pair: create generously, then keep what earns its place.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> What does this print?</p>
+                        <pre><code class="language-python">from sklearn.feature_selection import VarianceThreshold
+
+quiz_X = pd.DataFrame({"a": [1, 1, 1, 1], "b": [0, 1, 0, 1], "c": [5, 3, 5, 9]})
+print(VarianceThreshold().fit(quiz_X).get_feature_names_out())</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="VarianceThreshold removes columns, it does not keep the constant ones. Which column never changes?">
+                                A) <code>['a']</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The default threshold is 0: a column is removed only if it has no variance at all. Is any column constant?">
+                                B) <code>['a' 'b' 'c']</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="With the default threshold of 0, VarianceThreshold drops columns whose values never change. Column a is always 1, so it carries no information and is removed; b and c vary and are kept. It never looks at a target, which makes it the simplest filter of all.">
+                                C) <code>['b' 'c']</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> On 5,000 columns of pure noise, selecting the 20 best columns on all rows and then cross-validating gave about 80% accuracy. Why?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="The selector looked at every row's label, including the rows that later served as validation folds. It picked columns that line up with those labels by chance, so each validation fold was partly used to build the model. Inside a pipeline, selection sees only the training folds and the score falls to about chance.">
+                                A) The selection step used the labels of the validation rows
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="With truly random columns and a random target, can any column carry real information? What did the honest version score?">
+                                B) Some of the noise columns genuinely predict the target
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The honest version used the same model and data. What is different about when the selection happened?">
+                                C) Logistic regression overfits when it has 20 columns
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> The F-test ranked <code>tenure_months</code> near the bottom, while mutual information ranked it near the top. What explains the difference?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Both scores were computed on the same imputed training data. What kind of relationship does each score detect?">
+                                A) Mutual information was given more rows than the F-test
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Churn is high for both very new and very long-standing customers, so churners and stayers have similar average tenure and the F-test, which compares means, sees little. Mutual information detects any dependence, including this U-shape.">
+                                B) Tenure has a U-shaped effect, which a comparison of means misses
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Scaling does not change either score's ranking. Think about the churn rates by tenure range from Lesson 2.3.">
+                                C) Tenure was not scaled before the F-test
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> An RFECV curve rises to 0.8328 at 6 columns and reaches its maximum, 0.8333, at 11 columns. Fold-to-fold spread is about 0.02. Which set should you prefer?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The highest mean wins by 0.0005, while the folds disagree by about 0.02. Is that difference real?">
+                                A) All 11, because they have the highest mean score
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The difference between 6 and 11 columns is far smaller than the noise between folds, so the scores are effectively tied. When scores tie, the smaller model is cheaper, simpler and usually sturdier: take the smallest set within a small tolerance of the best.">
+                                B) The 6-column set, because it is within a small tolerance of the best
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A single column scored about 0.72 on this curve. How much accuracy would you give up?">
+                                C) The single best column, because simpler is always better
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> In <code>LogisticRegression(l1_ratio=1, solver="liblinear", C=C)</code> on scaled data, what happens to the number of nonzero weights as you make <code>C</code> smaller?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="C is the inverse of the penalty strength. A smaller C means a heavier L1 penalty, and the cheapest way for the model to pay it is to set weak weights exactly to zero, so fewer columns survive.">
+                                A) It goes down: more weights become exactly zero
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Look at the sweep table in the lesson: how many columns were kept at C=1.0 and at C=0.005?">
+                                B) It goes up: the model needs more columns to compensate
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="With an L1 penalty, weights do not just shrink. What happened to avg_order_value at C=0.05?">
+                                C) It stays the same: all weights only get smaller
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Should I always do feature selection?</summary>
+                    <p>No. With a dozen sensible columns and thousands of rows, as here, it changes accuracy very little; do it when columns are costly to maintain, when you need a simple explanation, or when you have many more columns than rows (text, genetics, sensor data), where it can prevent fitting noise. Regularized models (Lesson 3.2) and tree ensembles (Module 5) already cope with many weak columns fairly well.</p>
+                </details>
+                <details>
+                    <summary>Which method should I use first?</summary>
+                    <p>A practical order: remove columns that cannot be known at prediction time (leaks, Lesson 1.2) and columns computed from others; use a cheap filter only if you have thousands of columns; then use an embedded method (L1) or a wrapper with the model you plan to deploy, inside cross-validation. Finish with one test-set check.</p>
+                </details>
+                <details>
+                    <summary>How is this different from PCA?</summary>
+                    <p>Feature selection keeps some of the original columns and drops the rest, so the model still speaks in terms like "days since last order". Principal component analysis (Lesson 9.1) builds new columns, each a blend of all the originals, which can compress information well but is harder to explain. Selection is about choosing; dimensionality reduction is about compressing.</p>
+                </details>
+                <details>
+                    <summary>Can I use a protected attribute, like age group, in selection experiments?</summary>
+                    <p>You can measure whether a column helps, but whether a model <em>should</em> use it is a separate decision about fairness and law. Here <code>age_group</code> did not make the lean set, which is convenient, but a column you drop can still leak in through correlated columns. Lesson 7.3 shows how to check a model's behavior across groups.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>How stable is your lean set? Rerun the project's forward selection three times with different cross-validation shuffles (<code>random_state</code> 0, 1 and 2 in the <code>StratifiedKFold</code>), stopping at six columns each time, and count how often each column is chosen. Columns picked every time are your core; columns that come and go are near-substitutes. Then try the same on a random 50% of the training rows. Does a smaller dataset make the choice less stable? Write down what that means for a team that retrains the model every quarter.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> The noise experiment reported about 80% accuracy on data with no signal at all. In your own words, explain to a colleague why that happened and the one-line change that fixed it. Then list your six lean columns and, for each, write one sentence a Pinecrest marketer would understand about why it might matter, keeping in mind that the model describes patterns, not causes.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Feature selection mainly buys simpler, cheaper, sturdier models; on a good set of columns it rarely buys much accuracy</li>
+                        <li>Check how columns were made: averages, ratios, tiers and lookups computed from other columns are redundant candidates</li>
+                        <li>Filters (<code>f_classif</code>, <code>mutual_info_classif</code>, <code>SelectKBest</code>) are fast but score one column at a time and ignore the model</li>
+                        <li>Wrappers (<code>RFECV</code>, <code>SequentialFeatureSelector</code>) judge columns with the real model and can find teamwork, at a cost in time</li>
+                        <li>L1 regularization (<code>l1_ratio=1</code>, smaller <code>C</code> = fewer columns) selects while training; always scale first</li>
+                        <li>Selection that sees the labels is learning: keep it inside the pipeline, or cross-validation will lie (about 80% on pure noise)</li>
+                        <li>Prefer the smallest set within a small tolerance of the best score, and confirm once on the test set</li>
+                        <li>"Dropped" means "adds nothing given the other columns", not "unrelated to the target"</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You found an exact three-column relationship that correlation could not see</li>
+                        <li>You compared filter, wrapper and embedded selection on the same data and explained why they disagree</li>
+                        <li>You watched selection leakage turn pure noise into an 80% "model", and fixed it</li>
+                        <li>You wrote forward selection over whole columns and cut Pinecrest's churn model from 16 inputs to 6 with no loss on the test set</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="imbalanced_learning.html"><strong>Lesson 2.5: Imbalanced Classes</strong></a> you will take on a problem your churn model has quietly lived with all along: one class is much rarer than the other. With Pinecrest's payment data, where fewer than 1 in 100 transactions is fraud, you will see why accuracy collapses as a measure and how class weights, resampling and decision thresholds help.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>lean_features.txt</code>; later lessons compare models on the full and lean column sets.</li>
+                    <li>Try the bonus challenge, or rerun the noise experiment with <code>k=200</code>, and note how the leaky score changes.</li>
+                    <li>Review precision and recall from Lesson 1.4; Lesson 2.5 leans on them.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>Today you learned to make a model smaller without making it worse, and to distrust a score that comes too easily. Both are signs of real maturity in machine learning: the impressive-looking number is not the goal, the trustworthy one is. Module 2 has given you a full toolkit for preparing data; one more lesson and you are ready to open up the models themselves.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="feature_engineering.html" class="prev-lesson">← Previous: Creating Features</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="imbalanced_learning.html" class="next-lesson">Next: Imbalanced Classes →</a>
+            </nav>
         </div>
-
-        <pre class="language-python"><code>class EmbeddedMethods:
-    """
-    Embedded methods for feature selection
-    """
-    
-    def __init__(self):
-        self.models = {}
-        
-    def lasso_selection(self, X, y, alpha=0.01):
-        """
-        Feature selection using LASSO (L1 regularization)
-        """
-        # Standardize features
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        
-        # Fit LASSO
-        lasso = Lasso(alpha=alpha, random_state=42)
-        lasso.fit(X_scaled, y)
-        
-        # Get selected features (non-zero coefficients)
-        selected_features = X.columns[lasso.coef_ != 0]
-        
-        # Create importance DataFrame
-        importance = pd.DataFrame({
-            'feature': X.columns,
-            'coefficient': lasso.coef_,
-            'abs_coefficient': np.abs(lasso.coef_)
-        }).sort_values('abs_coefficient', ascending=False)
-        
-        print(f"\nLASSO Selection (alpha={alpha}):")
-        print(f"Selected features: {len(selected_features)}/{len(X.columns)}")
-        print(f"Top features: {list(selected_features[:5])}...")
-        
-        return selected_features, importance, lasso
-    
-    def tree_based_selection(self, X, y, n_estimators=100):
-        """
-        Feature selection using Random Forest importance
-        """
-        # Train Random Forest
-        rf = RandomForestClassifier(
-            n_estimators=n_estimators,
-            random_state=42,
-            n_jobs=-1
-        )
-        rf.fit(X, y)
-        
-        # Get feature importances
-        importance = pd.DataFrame({
-            'feature': X.columns,
-            'importance': rf.feature_importances_
-        }).sort_values('importance', ascending=False)
-        
-        # Select features above mean importance
-        threshold = rf.feature_importances_.mean()
-        selected_features = X.columns[rf.feature_importances_ > threshold]
-        
-        print(f"\nTree-based Selection:")
-        print(f"Selected features (importance > mean): {len(selected_features)}/{len(X.columns)}")
-        print(f"Top features: {list(importance['feature'].head())}...")
-        
-        return selected_features, importance, rf
-    
-    def select_from_model(self, X, y, estimator, threshold='mean'):
-        """
-        Generic selection from any model with feature_importances_ or coef_
-        """
-        selector = SelectFromModel(estimator, threshold=threshold)
-        selector.fit(X, y)
-        
-        # Get selected features
-        selected_features = X.columns[selector.get_support()]
-        
-        print(f"\nSelectFromModel ({estimator.__class__.__name__}):")
-        print(f"Selected features: {len(selected_features)}/{len(X.columns)}")
-        
-        return selected_features, selector
-    
-    def compare_embedded_methods(self, X, y):
-        """
-        Compare different embedded methods
-        """
-        # Standardize for linear models
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        X_scaled_df = pd.DataFrame(X_scaled, columns=X.columns)
-        
-        # LASSO
-        lasso_features, lasso_importance, _ = self.lasso_selection(X, y, alpha=0.01)
-        
-        # Random Forest
-        rf_features, rf_importance, _ = self.tree_based_selection(X, y)
-        
-        # Logistic Regression with L1
-        lr_l1 = LogisticRegression(penalty='l1', solver='liblinear', random_state=42)
-        lr_features, _ = self.select_from_model(X_scaled_df, y, lr_l1)
-        
-        # Visualization
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        
-        # LASSO coefficients
-        top_lasso = lasso_importance.head(15)
-        axes[0, 0].barh(range(len(top_lasso)), top_lasso['abs_coefficient'])
-        axes[0, 0].set_yticks(range(len(top_lasso)))
-        axes[0, 0].set_yticklabels(top_lasso['feature'])
-        axes[0, 0].set_xlabel('|Coefficient|')
-        axes[0, 0].set_title('LASSO Feature Importance')
-        axes[0, 0].invert_yaxis()
-        
-        # Random Forest importance
-        top_rf = rf_importance.head(15)
-        axes[0, 1].barh(range(len(top_rf)), top_rf['importance'])
-        axes[0, 1].set_yticks(range(len(top_rf)))
-        axes[0, 1].set_yticklabels(top_rf['feature'])
-        axes[0, 1].set_xlabel('Importance')
-        axes[0, 1].set_title('Random Forest Feature Importance')
-        axes[0, 1].invert_yaxis()
-        
-        # Venn diagram of selected features (simplified)
-        axes[1, 0].bar(['LASSO', 'Random Forest', 'Logistic L1'],
-                      [len(lasso_features), len(rf_features), len(lr_features)])
-        axes[1, 0].set_ylabel('Number of Selected Features')
-        axes[1, 0].set_title('Features Selected by Each Method')
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # Feature overlap
-        all_methods = set(lasso_features) & set(rf_features)
-        axes[1, 1].text(0.5, 0.5, 
-                       f'Common features selected by\nLASSO and Random Forest:\n\n' +
-                       '\n'.join(list(all_methods)[:10]),
-                       ha='center', va='center', fontsize=10)
-        axes[1, 1].set_title('Feature Consensus')
-        axes[1, 1].axis('off')
-        
-        plt.suptitle('Embedded Methods Comparison', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        return {
-            'lasso': lasso_features,
-            'random_forest': rf_features,
-            'logistic_l1': lr_features
-        }
-
-# Demonstrate embedded methods
-embedded_methods = EmbeddedMethods()
-
-print("\n" + "=" * 50)
-print("EMBEDDED METHODS")
-print("=" * 50)
-
-# Compare embedded methods
-embedded_results = embedded_methods.compare_embedded_methods(X, y)</code></pre>
-
-        <h2>Complete Feature Selection Pipeline</h2>
-        
-        <pre class="language-python"><code>class FeatureSelectionPipeline:
-    """
-    Complete pipeline for feature selection
-    """
-    
-    def __init__(self):
-        self.selected_features = None
-        self.selection_report = {}
-        
-    def evaluate_feature_subset(self, X, y, selected_features, method_name):
-        """
-        Evaluate model performance with selected features
-        """
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X[selected_features], y, test_size=0.3, random_state=42
-        )
-        
-        # Train model
-        model = RandomForestClassifier(n_estimators=100, random_state=42)
-        model.fit(X_train, y_train)
-        
-        # Predict and evaluate
-        y_pred = model.predict(X_test)
-        accuracy = accuracy_score(y_test, y_pred)
-        
-        # Cross-validation score
-        cv_scores = cross_val_score(model, X[selected_features], y, cv=5)
-        
-        return {
-            'method': method_name,
-            'n_features': len(selected_features),
-            'accuracy': accuracy,
-            'cv_mean': cv_scores.mean(),
-            'cv_std': cv_scores.std()
-        }
-    
-    def run_complete_pipeline(self, X, y):
-        """
-        Run complete feature selection pipeline
-        """
-        results = []
-        
-        # 1. Baseline - All features
-        print("Evaluating baseline (all features)...")
-        baseline = self.evaluate_feature_subset(X, y, X.columns, 'All Features')
-        results.append(baseline)
-        
-        # 2. Filter method - Mutual Information
-        print("Applying filter method...")
-        filter_selector = SelectKBest(mutual_info_classif, k=10)
-        filter_selector.fit(X, y)
-        filter_features = X.columns[filter_selector.get_support()]
-        filter_result = self.evaluate_feature_subset(X, y, filter_features, 'Filter (MI)')
-        results.append(filter_result)
-        
-        # 3. Wrapper method - RFE
-        print("Applying wrapper method...")
-        estimator = LogisticRegression(random_state=42, max_iter=100)
-        rfe = RFE(estimator, n_features_to_select=10)
-        rfe.fit(X, y)
-        wrapper_features = X.columns[rfe.support_]
-        wrapper_result = self.evaluate_feature_subset(X, y, wrapper_features, 'Wrapper (RFE)')
-        results.append(wrapper_result)
-        
-        # 4. Embedded method - Random Forest
-        print("Applying embedded method...")
-        rf = RandomForestClassifier(n_estimators=100, random_state=42)
-        rf.fit(X, y)
-        importance_threshold = np.percentile(rf.feature_importances_, 50)
-        embedded_features = X.columns[rf.feature_importances_ > importance_threshold]
-        embedded_result = self.evaluate_feature_subset(X, y, embedded_features, 'Embedded (RF)')
-        results.append(embedded_result)
-        
-        # Create results DataFrame
-        results_df = pd.DataFrame(results)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # Number of features vs accuracy
-        axes[0].bar(results_df['method'], results_df['n_features'])
-        axes[0].set_ylabel('Number of Features')
-        axes[0].set_title('Feature Count by Method')
-        axes[0].tick_params(axis='x', rotation=45)
-        axes[0].grid(True, alpha=0.3)
-        
-        # Accuracy comparison
-        axes[1].bar(results_df['method'], results_df['accuracy'], color='green', alpha=0.7)
-        axes[1].set_ylabel('Test Accuracy')
-        axes[1].set_title('Model Performance')
-        axes[1].tick_params(axis='x', rotation=45)
-        axes[1].grid(True, alpha=0.3)
-        
-        # CV scores with error bars
-        axes[2].bar(results_df['method'], results_df['cv_mean'], 
-                   yerr=results_df['cv_std'], capsize=5, color='blue', alpha=0.7)
-        axes[2].set_ylabel('CV Accuracy')
-        axes[2].set_title('Cross-Validation Performance')
-        axes[2].tick_params(axis='x', rotation=45)
-        axes[2].grid(True, alpha=0.3)
-        
-        plt.suptitle('Feature Selection Pipeline Results', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        return results_df
-
-# Run complete pipeline
-print("\n" + "=" * 50)
-print("COMPLETE FEATURE SELECTION PIPELINE")
-print("=" * 50)
-
-pipeline = FeatureSelectionPipeline()
-results = pipeline.run_complete_pipeline(X, y)
-
-print("\n" + "=" * 50)
-print("PIPELINE RESULTS SUMMARY")
-print("=" * 50)
-print(results.to_string(index=False))
-
-print("\n" + "=" * 50)
-print("RECOMMENDATIONS")
-print("=" * 50)
-best_method = results.loc[results['accuracy'].idxmax()]
-print(f"Best performing method: {best_method['method']}")
-print(f"Number of features: {int(best_method['n_features'])}")
-print(f"Test accuracy: {best_method['accuracy']:.3f}")
-print(f"CV accuracy: {best_method['cv_mean']:.3f} (+/- {best_method['cv_std']:.3f})")</code></pre>
-
-        <h2>Best Practices</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 Feature Selection Guidelines</h3>
-            <ul>
-                <li><strong>Start Simple:</strong> Try filter methods first for initial exploration</li>
-                <li><strong>Consider Scale:</strong> Filter methods for many features, wrapper for fewer</li>
-                <li><strong>Domain Knowledge:</strong> Combine statistical methods with expertise</li>
-                <li><strong>Avoid Leakage:</strong> Do feature selection on training data only</li>
-                <li><strong>Cross-Validation:</strong> Always validate selected features</li>
-                <li><strong>Multiple Methods:</strong> Try different approaches and compare</li>
-                <li><strong>Interpretability:</strong> Balance performance with model simplicity</li>
-                <li><strong>Stability:</strong> Check if selected features are consistent across folds</li>
-            </ul>
-        </div>
-
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Text Classification Feature Selection</h3>
-            <p>Select features for text classification:</p>
-            <ul>
-                <li>Load a text dataset with TF-IDF features</li>
-                <li>Apply chi-square test for feature selection</li>
-                <li>Compare with mutual information</li>
-                <li>Evaluate impact on classification accuracy</li>
-            </ul>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: Time Series Feature Selection</h3>
-            <p>Select relevant features for time series prediction:</p>
-            <ul>
-                <li>Generate lag features and rolling statistics</li>
-                <li>Use forward selection with time-aware CV</li>
-                <li>Apply LASSO for automatic selection</li>
-                <li>Compare prediction performance</li>
-            </ul>
-        </div>
-
-        <h2>Summary</h2>
-        
-        <div class="summary-box">
-            <h3>✅ You've Learned</h3>
-            <ul>
-                <li>Three main approaches: Filter, Wrapper, and Embedded methods</li>
-                <li>Filter methods: Fast, univariate, good for initial screening</li>
-                <li>Wrapper methods: Consider feature interactions, computationally expensive</li>
-                <li>Embedded methods: Built into model training, balanced approach</li>
-                <li>How to implement various feature selection techniques</li>
-                <li>Evaluation strategies for selected features</li>
-                <li>When to use each method based on your problem</li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Which selection approach felt most trustworthy to you — filter, wrapper,
-            or embedded — and why might that intuition change if your dataset grew from thousands of rows to millions?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Feature selection keeps the <em>original</em> features, so models stay interpretable — unlike PCA, which creates new combined features.</li>
-                <li>Filter methods are fast and model-agnostic; wrapper methods are accurate but expensive; embedded methods balance both.</li>
-                <li>Fit selectors on the training data only — selecting features using the test set leaks information and inflates scores.</li>
-                <li>Fewer, well-chosen features reduce overfitting, speed up training, and make results easier to explain.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now take a wide, noisy dataset and trim it down to the handful of features that genuinely drive
-        predictions — improving both performance and interpretability.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>When should I use feature selection instead of PCA?</summary>
-            <p>Use selection when interpretability matters and you want to keep the original, named features. Use PCA when you
-            only care about predictive signal and can accept transformed, harder-to-read components.</p>
-        </details>
-        <details>
-            <summary>Won't dropping features throw away useful information?</summary>
-            <p>Often it removes noise and redundancy rather than signal — irrelevant or highly correlated features can actively
-            hurt a model. Always confirm with cross-validation that the trimmed set performs as well or better.</p>
-        </details>
-        <details>
-            <summary>How many features should I keep?</summary>
-            <p>There is no fixed number. Plot the cross-validated score against the number of selected features and keep adding
-            until performance stops improving (or starts to drop).</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Next you'll move from selecting among existing features to <em>extracting</em> new ones — techniques that transform
-        the data onto new axes rather than choosing a subset of the originals.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Apply both RFE and Lasso to the same dataset and compare which features each one keeps.</li>
-            <li>Plot cross-validated score versus number of selected features to find the sweet spot.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Choosing the right features is often what separates a mediocre model from a great one. You now hold one of the
-            most practical, high-impact skills in all of applied machine learning. Keep going!</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="dimensionality_lda.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="ensemble_methods.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -979,24 +977,10 @@ print(f"CV accuracy: {best_method['cv_mean']:.3f} (+/- {best_method['cv_std']:.3
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
     <script src="js/course-enhancements.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-        mermaid.initialize({ 
-            startOnLoad: true,
-            theme: 'default',
-            themeVariables: {
-                primaryColor: '#f0f0f0',
-                primaryTextColor: '#333',
-                primaryBorderColor: '#667eea',
-                lineColor: '#667eea',
-                secondaryColor: '#e0e7ff',
-                tertiaryColor: '#fff'
-            }
-        });
-    </script>
 </body>
 </html>

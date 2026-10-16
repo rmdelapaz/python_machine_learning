@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 10</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 10: Recommendations and Reproducibility</h1>
+    <p class="sub">Your workbook for Session 10: a warm-up on transfer learning and text, the key ideas of Lessons 11.2 and 12.1, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>11.2–12.1</b></span>
+      <span class="chip">Session <b>10</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Build recommenders from a sparse customer-by-product matrix: best sellers, item-based filtering, matrix factorization, content.</li>
+  <li>Evaluate them honestly: leave the last purchase out, hit rate at 10 against random and best sellers, settings chosen on a validation item.</li>
+  <li>Make a result reproducible: seeds, a data fingerprint, recorded versions, settings in one place.</li>
+  <li>Save models safely with skops and track experiments with MLflow (SQLite store).</li>
+</ul>
+
+  <div class="sec"><h2>Warm-up: Transfer Learning and Text</h2><span class="rule"></span></div>
+<p>Five questions on Lessons 10.5 and 11.1. Answer alone first.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+<span class="k">from</span> torchvision <span class="k">import</span> models
+m = models.resnet18(weights=<span class="k">None</span>)
+<span class="k">for</span> p <span class="k">in</span> m.parameters():
+    p.requires_grad = <span class="k">False</span>
+m.fc = nn.Linear(<span class="s">512</span>, <span class="s">5</span>)
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> m.parameters() <span class="k">if</span> p.requires_grad))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+print(CountVectorizer().build_analyzer()(<span class="s">"Not bad, NOT bad at all!"</span>))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Why must the backbone be in <code class="inline">eval()</code> mode while you extract features?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Someone fits a <code class="inline">TfidfVectorizer</code> on all reviews, then splits. What is wrong, and how do you fix it?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Frozen features: 0.885 with 500 labels, 0.902 with 2,000. What is the better next step than labeling more?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">11.2</span><h3>Recommendation Systems</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Build a sparse customer-by-product matrix from purchase records with SciPy</li>
+  <li>Evaluate a recommender with a leave-last-out split and hit rate at 10, against random and best-seller baselines</li>
+  <li>Implement item-based collaborative filtering with cosine similarity, and matrix factorization with <code class="inline">TruncatedSVD</code></li>
+  <li>Use product attributes for content-based recommendations, and explain how they rescue a brand-new product</li>
+  <li>Judge a recommender on more than accuracy: catalog coverage and popularity bias</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The clerk who remembers.</b> Collaborative filtering learns from many customers together which products end up with the same people.</li>
+  <li><b>Rank the empty cells.</b> A customer-by-product grid, 5.4% filled, stored as a sparse matrix; an empty cell is not a dislike.</li>
+  <li><b>Leave the last one out.</b> Hide each customer's latest purchase; HR@10 = share of customers whose hidden product is in their top 10 (owned products masked).</li>
+  <li><b>Baselines:</b> random 0.047, best sellers 0.209. Beat the best sellers before you celebrate; losing to random means a bug.</li>
+  <li><b>Item-kNN:</b> <code class="inline">R @ cosine_similarity(R.T)</code>, diagonal zeroed: 0.308. Explainable: "because you bought X".</li>
+  <li><b>Matrix factorization:</b> <code class="inline">TruncatedSVD</code> finds a few tastes; k = 5 scores 0.311, k = 40 memorizes (0.190). Choose k on a validation item.</li>
+  <li><b>Content-based</b> (attributes) is weaker (0.192) but solves the cold start for new products.</li>
+  <li><b>Beyond hit rate:</b> coverage and popularity bias; recommendations shape the data they learn from; purchase lists are personal data.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: a recommender you can check by hand</div>
+<p>The whole item-based recommender on four customers and four products, small enough to check by hand. Rows: Ana, Ben, Cy, Dee; columns: tent, stove, rope, harness.</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.metrics.pairwise <span class="k">import</span> cosine_similarity
+<span class="c"># rows: Ana, Ben, Cy, Dee   columns: tent, stove, rope, harness</span>
+R = np.array([[<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>],
+              [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>],
+              [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>],
+              [<span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>]])
+sim = cosine_similarity(R.T)
+np.fill_diagonal(sim, <span class="s">0</span>)
+print(sim.round(<span class="s">2</span>))</pre>
+<pre class="out">[[0.   0.82 0.   0.41]
+ [0.82 0.   0.   0.5 ]
+ [0.   0.   0.   0.71]
+ [0.41 0.5  0.71 0.  ]]</pre><p>Tent and stove share two buyers (Ana, Ben): cos = 2 / √(3 × 2) = 0.82. Rope and tent share none: 0. Now score, mask what each customer owns, and take the top pick:</p>
+<pre class="code">scores = R @ sim
+scores = scores.astype(float)
+scores[R &gt; <span class="s">0</span>] = -np.inf          <span class="c"># never recommend what they own</span>
+print(scores.round(<span class="s">2</span>))
+print(<span class="s">"top pick per customer:"</span>, np.argsort(-scores, axis=<span class="s">1</span>)[:, <span class="s">0</span>])</pre>
+<pre class="out">[[-inf -inf 0.   0.91]
+ [-inf -inf 0.71 -inf]
+ [0.41 0.5  -inf -inf]
+ [-inf 0.82 0.   0.41]]
+top pick per customer: [3 2 1 1]</pre><p>Ana (tent, stove) gets the harness (0.41 + 0.50 = 0.91); Ben gets the rope; Cy (rope, harness) gets the stove (0.50 beats the tent's 0.41); Dee (tent) gets the stove. Every top pick is "because you bought X": the explanation comes free with item-based filtering.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-10/l11_2-recommendations/segment_baselines_starter.py</code>. Best sellers of the customer's store and of their favorite activity, against global best sellers and item-kNN.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">user_based_starter.py</code>: customers like you, the number of neighbors chosen on a validation item, and a "because you just bought" list.</li>
+  <li>Finished early? <code class="inline">debug_recommender.py</code>: four bugs.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction first, then run the code.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (Only the first pick of each list counts here.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+top = np.array([[<span class="s">3</span>, <span class="s">1</span>], [<span class="s">0</span>, <span class="s">2</span>], [<span class="s">4</span>, <span class="s">5</span>]])
+test = np.array([<span class="s">3</span>, <span class="s">2</span>, <span class="s">5</span>])
+print((top[:, :<span class="s">1</span>] == test[:, <span class="k">None</span>]).any(axis=<span class="s">1</span>).mean().round(<span class="s">3</span>))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (Owned items are masked before sorting.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+scores = np.array([<span class="s">0.9</span>, <span class="s">0.2</span>, <span class="s">0.5</span>, <span class="s">0.7</span>])
+owned = np.array([<span class="k">True</span>, <span class="k">False</span>, <span class="k">False</span>, <span class="k">True</span>])
+scores[owned] = -np.inf
+print(np.argsort(-scores)[:<span class="s">2</span>])</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>Picked for You</b> (lesson page, "Project: Picked for You"). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: <code class="inline">fit 26,178   validation 3,000   test 3,000</code></li>
+  <li>☐ Step 2: helpers as functions; <code class="inline">(3000, 200) 26178</code></li>
+  <li>☐ Step 3: validation HR@10: best sellers 0.209, item-kNN 0.286, SVD k=5 0.285; chosen item-kNN</li>
+  <li>☐ Step 4: test once: 0.308 vs 0.209 (+47%)</li>
+  <li>☐ Step 5: refit on everything; <code class="inline">picked_for_you.csv</code>, 15,000 rows</li>
+  <li>☐ Step 6: 0 owned, 112 different products, 63% of slots from the top 20</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">A new recommender scores HR@10 = 0.004 on the leave-last-out test, where a random list scores 0.047. What is the most likely explanation?</div><div class="opts"><div class="opt">A) A strong model on a hard dataset</div><div class="opt">B) A bug, such as sorting the scores ascending or forgetting to mask owned products</div><div class="opt">C) Too few factors in the SVD</div><div class="opt">D) The test item should have been chosen at random</div></div></div>
+<div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> scipy.sparse <span class="k">import</span> csr_matrix
+<span class="k">from</span> sklearn.metrics.pairwise <span class="k">import</span> cosine_similarity
+R = csr_matrix(np.array([[<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>], [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>], [<span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>], [<span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>]]))
+print(cosine_similarity(R.T)[<span class="s">0</span>].round(<span class="s">2</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">Why does <code class="inline">top_k</code> set the scores of owned products to minus infinity before sorting?</div><div class="opts"><div class="opt">A) Because cosine similarity is undefined for owned products</div><div class="opt">B) To make the hit rate look better than it is</div><div class="opt">C) Because SciPy cannot sort sparse matrices</div><div class="opt">D) Owned products are similar to what the customer bought, so they score high and crowd the list; customers would see items they already have</div></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">The best-seller list shows 31 different products; item-kNN shows 161 and hits more often. What does that number measure?</div><div class="opts"><div class="opt">A) Catalog coverage: how many different products appear on anyone's list</div><div class="opt">B) How many customers got a hit</div><div class="opt">C) How many products have at least one buyer</div><div class="opt">D) How many factors the model learned</div></div></div>
+<div class="q" data-sc="5" data-kind="short"><div class="qn">Q5</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> scipy.sparse <span class="k">import</span> csr_matrix
+<span class="k">from</span> sklearn.decomposition <span class="k">import</span> TruncatedSVD
+svd = TruncatedSVD(n_components=<span class="s">3</span>, random_state=<span class="s">42</span>)
+factors = svd.fit_transform(csr_matrix(np.eye(<span class="s">6</span>, <span class="s">8</span>)))
+print(factors.shape, svd.components_.shape)</pre><div class="write"></div></div>
+<div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">You plot HR@10 against the number of SVD factors on the test item and pick the peak, k = 5. What is wrong with reporting 0.311?</div><div class="opts"><div class="opt">A) Nothing: the test item was never used for training</div><div class="opt">B) SVD needs more than 5 factors to be valid</div><div class="opt">C) k was tuned on the test item, so 0.311 is optimistic; choose k on a validation item and score the test item once</div><div class="opt">D) Hit rate cannot be used to compare SVD models</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Think of one recommendation an app made to you that felt right and one that felt wrong. Which kind of recommender produced each? Write the three numbers from your project you would show the marketing team, and one caution about feedback loops or privacy.</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">12.1</span><h3>Reproducibility and Experiment Tracking</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Name the five ingredients of a reproducible result (code, data, environment, randomness, settings) and capture each one</li>
+  <li>Fingerprint a data file with SHA-256 and record library versions next to a model</li>
+  <li>Save and load a fitted pipeline with <code class="inline">joblib</code>, and explain why loading a pickle from an untrusted source can run arbitrary code</li>
+  <li>Save and load models with <code class="inline">skops.io</code>, reviewing the untrusted types before you trust them</li>
+  <li>Track parameters, metrics and models with MLflow, query the runs, and load a logged model back</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The lab notebook.</b> Record the five ingredients (code, data, environment, randomness, settings) plus the results.</li>
+  <li><b>Seeds</b> make randomness repeatable on the same software; third-decimal differences between seeds are noise (0.8612 vs 0.8560).</li>
+  <li><b>A SHA-256 fingerprint</b> proves which exact bytes a model saw; a re-saved file with the same meaning can have a different fingerprint.</li>
+  <li><b>Save the whole pipeline.</b> The classifier alone cannot read raw columns.</li>
+  <li><b>Loading a pickle runs code.</b> <code class="inline">joblib</code> files are pickles: never load one you did not make or fully trust.</li>
+  <li><b>skops</b> rebuilds only known types; review <code class="inline">get_untrusted_types</code> and pass an explicit, hand-written <code class="inline">trusted=</code> list. The list depends on the model.</li>
+  <li><b>A model card</b> (JSON beside the model) holds data fingerprint, settings, versions, score, trusted types and intended use.</li>
+  <li><b>MLflow</b> with <code class="inline">sqlite:///mlflow.db</code>: one run per setting, <code class="inline">log_params</code>, <code class="inline">log_metrics</code>, tags; choose winners with <code class="inline">search_runs</code>. The old <code class="inline">./mlruns</code> store is refused in MLflow 3.17.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: a fingerprint for your settings</div>
+<p>Settings are an ingredient too. Give each configuration a short ID that is the same whenever the settings are the same, whatever order you typed them in:</p>
+<pre class="code"><span class="k">import</span> hashlib, json
+config_a = {<span class="s">"model"</span>: <span class="s">"forest"</span>, <span class="s">"n_estimators"</span>: <span class="s">200</span>, <span class="s">"seed"</span>: <span class="s">42</span>, <span class="s">"test_size"</span>: <span class="s">0.25</span>}
+config_b = {<span class="s">"seed"</span>: <span class="s">42</span>, <span class="s">"test_size"</span>: <span class="s">0.25</span>, <span class="s">"model"</span>: <span class="s">"forest"</span>, <span class="s">"n_estimators"</span>: <span class="s">200</span>}   <span class="c"># same settings, new order</span>
+
+<span class="k">def</span> config_id(cfg):
+    text = json.dumps(cfg, sort_keys=<span class="k">True</span>)          <span class="c"># one canonical spelling of the settings</span>
+    <span class="k">return</span> hashlib.sha256(text.encode()).hexdigest()[:<span class="s">12</span>]
+
+print(config_id(config_a), config_id(config_b), config_id(config_a) == config_id(config_b))</pre>
+<pre class="out">7c42f30604d9 7c42f30604d9 True</pre><p>Change one setting and the ID changes; and see why <code class="inline">sort_keys=True</code> matters:</p>
+<pre class="code">config_c = dict(config_a, n_estimators=<span class="s">201</span>)
+print(config_id(config_c))
+print(json.dumps(config_a) == json.dumps(config_b), json.dumps(config_a, sort_keys=<span class="k">True</span>) == json.dumps(config_b, sort_keys=<span class="k">True</span>))</pre>
+<pre class="out">32c7a072bf5b
+False True</pre><p>A dictionary's text depends on the order of its keys; <code class="inline">sort_keys=True</code> gives one canonical spelling, so the hash identifies the settings, not the typing. Log the ID as an MLflow tag and two runs with the same ID must give the same result (given the same data fingerprint and environment).</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-10/l12_1-reproducibility/track_demand_starter.py</code>. Three demand models tracked in MLflow, the winner chosen by querying the store, one test score, a seed check.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">safe_handover_starter.py</code>: hand a fraud model to another team with skops, a model card and a verify function.</li>
+  <li>Everything the labs save goes to an <code class="inline">output/</code> folder next to the lab. To browse your runs, open a terminal in the lab's folder and run <code class="inline">mlflow ui --backend-store-uri sqlite:///output/mlflow.db</code>. Finished early? <code class="inline">debug_reproducibility.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction first, then run the code.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (A hash compares bytes, not meaning.)</div><pre class="code"><span class="k">import</span> hashlib
+same_hash = hashlib.sha256(<span class="s">b"6"</span>).hexdigest() == hashlib.sha256(<span class="s">b"6.0"</span>).hexdigest()
+print(same_hash, float(<span class="s">"6"</span>) == float(<span class="s">"6.0"</span>))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (Two generators with the same seed, one with another.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+a = np.random.default_rng(<span class="s">42</span>).permutation(<span class="s">5</span>)
+b = np.random.default_rng(<span class="s">42</span>).permutation(<span class="s">5</span>)
+c = np.random.default_rng(<span class="s">7</span>).permutation(<span class="s">5</span>)
+print((a == b).all(), (a == c).all())</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A tracked, reproducible churn model</b> (lesson page). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: <code class="inline">data fingerprint: ac541c7e8691d33f</code></li>
+  <li>☐ Step 2: <code class="inline">(4500, 16) ['logreg', 'forest', 'hgb', 'hgb-slow']</code></li>
+  <li>☐ Step 3: CV AUC 0.8324 / 0.8678 / 0.8615 / 0.8588, one MLflow run each</li>
+  <li>☐ Step 4: forest chosen by querying the store; test AUC 0.8612</li>
+  <li>☐ Step 5: <code class="inline">churn_final.skops</code> (trusted <code class="inline">numpy.dtype</code>, <code class="inline">sklearn.tree._tree.Tree</code>) and <code class="inline">churn_final.json</code></li>
+  <li>☐ Step 6: <code class="inline">Reproduced : True</code></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7"><div class="qn">Q7</div><div class="qt">A colleague reruns your churn notebook and gets test AUC 0.8560 instead of 0.8612. The data fingerprint and every library version match. Which ingredient most likely differs?</div><div class="opts"><div class="opt">A) The data file</div><div class="opt">B) The scikit-learn version</div><div class="opt">C) The random seed of the forest</div><div class="opt">D) AUC is computed differently on each run</div></div></div>
+<div class="q" data-sc="8" data-kind="short"><div class="qn">Q8</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> hashlib
+h = hashlib.sha256(<span class="s">b"customers_churn.csv contents"</span>).hexdigest()
+print(len(h), h == hashlib.sha256(<span class="s">b"customers_churn.csv contents"</span>).hexdigest())</pre><div class="write"></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">What happens on the last line?</div><pre class="code"><span class="k">import</span> skops.io <span class="k">as</span> sio
+<span class="k">from</span> sklearn.ensemble <span class="k">import</span> HistGradientBoostingClassifier
+sio.dump(HistGradientBoostingClassifier().fit([[<span class="s">0</span>], [<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">3</span>]], [<span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>]), <span class="s">"q9.skops"</span>)
+model = sio.load(<span class="s">"q9.skops"</span>)</pre><div class="opts"><div class="opt">A) <code class="inline">UntrustedTypesFoundException</code>: it names the HistGradientBoosting tree type, which you must review and pass in <code class="inline">trusted=</code></div><div class="opt">B) The model loads, because skops files are always safe</div><div class="opt">C) <code class="inline">pickle.UnpicklingError</code>: skops cannot read its own files</div><div class="opt">D) The model loads, but prints a warning about the scikit-learn version</div></div></div>
+<div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">Why should a model you share with another team be saved with skops rather than joblib?</div><div class="opts"><div class="opt">A) skops files are smaller</div><div class="opt">B) joblib cannot save pipelines</div><div class="opt">C) skops makes the model more accurate</div><div class="opt">D) Loading a joblib file (a pickle) can run arbitrary code; skops only rebuilds known types or types you trust explicitly</div></div></div>
+<div class="q" data-sc="11" data-kind="short"><div class="qn">Q11</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.ensemble <span class="k">import</span> RandomForestClassifier
+X, y = [[<span class="s">0</span>], [<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">3</span>], [<span class="s">4</span>], [<span class="s">5</span>]], [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>]
+a = RandomForestClassifier(n_estimators=<span class="s">5</span>, random_state=<span class="s">3</span>).fit(X, y).predict_proba(X)[:, <span class="s">1</span>]
+b = RandomForestClassifier(n_estimators=<span class="s">5</span>, random_state=<span class="s">3</span>).fit(X, y).predict_proba(X)[:, <span class="s">1</span>]
+print((a == b).all(), RandomForestClassifier().get_params()[<span class="s">"random_state"</span>])</pre><div class="write"></div></div>
+<div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">Which call lists the runs of an experiment with the best cross-validated AUC first?</div><div class="opts"><div class="opt">A) <code class="inline">mlflow.search_runs(experiment_names=["churn"], order_by=["params.cv_auc DESC"])</code></div><div class="opt">B) <code class="inline">mlflow.search_runs(experiment_names=["churn"], order_by=["metrics.cv_auc DESC"])</code></div><div class="opt">C) <code class="inline">mlflow.search_runs(experiment_names=["churn"], order_by=["metrics.cv_auc ASC"])</code></div><div class="opt">D) <code class="inline">mlflow.search_runs(experiment_names=["churn"], filter_string="max(cv_auc)")</code></div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Pick one earlier project of yours. For each of the five ingredients, could you reproduce it today, and what is missing? Then explain why loading a stranger's pickle is like running a stranger's program.</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">E1</div><div class="qt">Item-kNN scores HR@10 0.308 and the best sellers 0.209. What does that comparison mean for Pinecrest's email?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">Name the five ingredients of a reproducible result and one tool or habit for each.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">A teammate sends <code class="inline">model.joblib</code>. What do you do before loading it?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish Picked for You (Steps 4 to 6) and save <code class="inline">picked_for_you.csv</code></li>
+  <li>☐ Finish the tracked churn model (Steps 4 to 6): <code class="inline">churn_final.skops</code>, <code class="inline">churn_final.json</code>, <code class="inline">Reproduced : True</code></li>
+  <li>☐ Lesson 11.2 Exercises 1 to 3; Lesson 12.1 Exercises 1 to 3 (Exercise 4 of each is a stretch)</li>
+  <li>☐ Both Quick Quizzes and both journal entries</li>
+  <li>☐ <code class="inline">mlflow ui --backend-store-uri sqlite:///mlflow.db</code>: explore my runs; add <code class="inline">mlflow.db</code>, <code class="inline">mlruns/</code>, <code class="inline">*.skops</code> to <code class="inline">.gitignore</code></li>
+  <li>☐ Bring to Session 11: a READY laptop (FastAPI, uvicorn, httpx), <code class="inline">churn_final.skops</code> and <code class="inline">churn_final.json</code>, <code class="inline">data/</code> and <code class="inline">labs/</code>, this workbook</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>implicit / explicit feedback</td><td>What people did (purchases) / what they said (ratings)</td></tr>
+<tr><td>collaborative filtering</td><td>Recommending from the behavior of many customers together</td></tr>
+<tr><td>item-kNN</td><td>Scoring products by their similarity to what the customer owns</td></tr>
+<tr><td>leave-last-out</td><td>Hold out each customer's latest interaction as the test item</td></tr>
+<tr><td>hit rate at k (HR@k)</td><td>Share of customers whose held-out item is in their top-k list</td></tr>
+<tr><td>matrix factorization</td><td>Approximating the grid by customer factors × product factors (<code class="inline">TruncatedSVD</code>)</td></tr>
+<tr><td>cold start</td><td>No history yet for a new product or customer</td></tr>
+<tr><td>catalog coverage</td><td>How many different products appear on anyone's list</td></tr>
+<tr><td>reproducible</td><td>Rebuildable with the same result from recorded code, data, environment, randomness and settings</td></tr>
+<tr><td>SHA-256 fingerprint</td><td>A 64-character hash of a file's exact bytes</td></tr>
+<tr><td>pickle</td><td>Python's object format; loading one can run arbitrary code (<code class="inline">joblib</code> uses it)</td></tr>
+<tr><td>skops</td><td>A safer format that rebuilds only known or explicitly trusted types</td></tr>
+<tr><td>model card</td><td>A document beside a model: data, settings, versions, score, intended use</td></tr>
+<tr><td>MLflow run / experiment</td><td>One training attempt with its params, metrics and artifacts / a named group of runs</td></tr>
+<tr><td>tracking store</td><td>Where MLflow keeps runs; here a SQLite file, <code class="inline">sqlite:///mlflow.db</code></td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 10 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

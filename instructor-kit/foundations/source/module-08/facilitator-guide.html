@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facilitator Guide: Session 8</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">contains answers &amp; timing · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Facilitator Guide</div>
+    <h1>Session 8: Support Vector Machines and Decision Trees</h1>
+    <p class="sub">How to teach Session 8 of Machine Learning Foundations: support vector machines (the widest street, support vectors, the C and gamma dials, the kernel trick, scaling, class weights, calibration) and decision trees (signposts and campsites, Gini, leaves as probabilities, overfitting and its controls, importances and instability). Learners leave with a tuned SVM shortlist started, a churn rule book started, and a fraud rule book of their own.</p>
+    <div class="meta-row">
+      <span class="chip"><b>2</b> lessons</span>
+      <span class="chip"><b>3 hrs</b> session</span>
+      <span class="chip">Lessons <b>4.3–5.1</b></span>
+      <span class="chip">Session <b>8</b> of 11</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>How to Use This Guide</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Same rhythm for both lessons: frame (one mental model) → live demo (you type, they follow) → guided lab (kit labs, new practice) → start the lesson project. Exercises, quizzes and journals are homework.</li>
+  <li>Every code block below was run to produce the output printed under it (Python 3.12, pandas 3.0, scikit-learn 1.9.1, 4 CPU threads). The demo code is the lesson pages' code with the plotting lines left out: show the pictures from the lesson page (the street with C = 0.01 and 100, the ring with both kernels, the moons with three gammas, the tree drawn with <code class="inline">plot_tree</code>, the depth curve).</li>
+  <li>Keep <code class="inline">classification_svm.html</code> and <code class="inline">trees_decision.html</code> open in browser tabs. Labs live in <code class="inline">labs/module-08/</code>: hand out the <code class="inline">_starter.py</code> and <code class="inline">debug_*.py</code> files, keep the <code class="inline">_solution.py</code> files.</li>
+  <li>Session 8 is the hinge of the course: the last of Module 4's four classifiers, then the first tree. Today's tree is the building block of Session 9's forests and boosting, so protect the 5.1 demo.</li>
+</ul>
+<div class="note warn"><div class="t">The #1 risk of Session 8: an SVM demo that drowns in math</div>
+<p>The lesson needs no formulas beyond the RBF similarity, and the room does not either. Teach with the street picture, the two dials (C, gamma) and the ring. If someone asks about Lagrange multipliers or the dual problem, give one sentence ("the training only ever needs the similarity of each pair of points; that is why kernels work") and offer to talk at the break. The second risk is time: the 4.3 project's grid search (45 fits) takes 30 to 60 seconds on a laptop. Start it, then talk about what the table will show while it runs.</p>
+</div>
+
+  <div class="sec"><h2>Before the Session</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ <b>Run the kit check:</b> <code class="inline">python3 labs/check_labs.py module-08</code> from this kit's folder. Every line PASS (8 files, about 30 seconds).</li>
+  <li>☐ <b>Downloads:</b> none. Everything today uses the Pinecrest CSV files already in <code class="inline">data/</code>.</li>
+  <li>☐ <b>Projector machine:</b> <code class="inline">(.venv)</code> active in your own <code class="inline">pinecrest-ml</code>, JupyterLab started there, two empty notebooks: <code class="inline">lesson_4_3</code> and <code class="inline">lesson_5_1</code>. Browser tabs: <code class="inline">classification_svm.html</code>, <code class="inline">trees_decision.html</code>, and the Session 7 lesson pages for the warm-up.</li>
+  <li>☐ <b>Board, before learners arrive:</b> a street between two neighborhoods with its two curbs (dashed) and a few circled curb houses; under it "C = price of a violation · gamma = how far each point reaches". On the right, an empty trail map with a first signpost.</li>
+  <li>☐ <b>Print or share:</b> the Session 8 pages of the workbook; sticky notes for the exit ticket.</li>
+  <li>☐ <b>Pre-run the 4.3 project grid once on the projector machine</b> so you know its time (in the kit's measurements, under a minute).</li>
+</ul>
+<div class="blk warn"><div class="h">Known environment traps</div>
+<table class="timing">
+<thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td><code class="inline">AttributeError: This 'Pipeline' has no attribute 'predict_proba'</code></td><td>An SVM has no probabilities</td><td><code class="inline">decision_function</code> for ranking and AUC; <code class="inline">CalibratedClassifierCV(SVC(), ensemble=False)</code> for probabilities.</td></tr>
+<tr><td><code class="inline">FutureWarning</code> about <code class="inline">probability=True</code></td><td>Code copied from an older tutorial</td><td>Remove <code class="inline">probability=True</code>; calibrate as above.</td></tr>
+<tr><td><code class="inline">ValueError: Invalid parameter 'C' for estimator Pipeline(...)</code></td><td>Grid key without the step name</td><td><code class="inline">svc__C</code>, <code class="inline">svc__gamma</code> (lowercase class name, two underscores).</td></tr>
+<tr><td>A grid search that seems frozen</td><td>45 kernel-SVM fits; or <code class="inline">n_jobs=-1</code> on a busy laptop</td><td>Wait up to a minute; check that the scaler is in the pipeline (unscaled SVMs can be much slower to converge).</td></tr>
+<tr><td><code class="inline">InvalidParameterError: The 'max_depth' parameter ... Got 0 instead.</code></td><td>max_depth=0</td><td>Use 1 or more, or None.</td></tr>
+<tr><td><code class="inline">ValueError: could not convert string to float: 'Bend'</code></td><td>A text column given to a tree</td><td>One-hot encode it (the 5.1 project's <code class="inline">tree_prep</code>).</td></tr>
+<tr><td>Tree rules that look backwards (big safe leaf labeled churned)</td><td><code class="inline">class_names</code> not in the order of <code class="inline">classes_</code></td><td>Build the names from <code class="inline">model.classes_</code>.</td></tr>
+<tr><td><code class="inline">plot_tree</code> text overlapping or tiny</td><td>Figure too small for the depth</td><td><code class="inline">figsize=(10, 5)</code> and depth 2 or 3 for display; use <code class="inline">export_text</code> for bigger trees.</td></tr>
+</tbody>
+</table>
+</div>
+
+  <div class="sec"><h2>Session 8 Agenda (3 hours)</h2><span class="rule"></span></div>
+  <table class="timing">
+    <thead><tr><th>Clock</th><th>Minutes</th><th>Segment</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="t">0:00</td><td class="t">10</td><td>Warm-up</td><td>Five retrieval questions on Lessons 4.1 and 4.2; homework check (lookalike shortlist, review triage).</td></tr>
+      <tr><td class="t">0:10</td><td class="t">10</td><td><b>4.3</b> Frame and mental model</td><td>The widest street between two neighborhoods; support vectors; the two dials C and gamma.</td></tr>
+      <tr><td class="t">0:20</td><td class="t">30</td><td><b>4.3</b> Live demo</td><td>Support vectors and C on blobs, the ring lifted by hand, the RBF kernel, gamma overfitting, scaling, a fair comparison on churn, calibration, two errors.</td></tr>
+      <tr><td class="t">0:50</td><td class="t">25</td><td><b>4.3</b> Guided lab</td><td><code class="inline">labs/module-08/l4_3-svm/review_svm_starter.py</code>, then <code class="inline">labs/module-08/l4_3-svm/kernel_by_hand_starter.py</code> in pairs.</td></tr>
+      <tr><td class="t">1:15</td><td class="t">10</td><td><b>4.3</b> Start the lesson project</td><td>The tuned SVM retention list, Steps 1 to 3 (the grid search runs while you talk); Steps 4 to 6 go home.</td></tr>
+      <tr><td class="t">1:25</td><td class="t">10</td><td>Break</td><td>Leave the street and the two dials on the board.</td></tr>
+      <tr><td class="t">1:35</td><td class="t">10</td><td><b>5.1</b> Frame and mental model</td><td>Trail junction signposts: questions, trails, campsites; Gini impurity.</td></tr>
+      <tr><td class="t">1:45</td><td class="t">30</td><td><b>5.1</b> Live demo</td><td>The depth-2 churn tree, Gini by hand, every threshold, stumps, leaf probabilities, no scaling, depth and leaf size by CV, importances, instability, two mistakes.</td></tr>
+      <tr><td class="t">2:15</td><td class="t">25</td><td><b>5.1</b> Guided lab</td><td><code class="inline">labs/module-08/l5_1-decision-trees/fraud_rules_starter.py</code>, then <code class="inline">labs/module-08/l5_1-decision-trees/sales_tree_starter.py</code> in pairs.</td></tr>
+      <tr><td class="t">2:40</td><td class="t">10</td><td><b>5.1</b> Start the lesson project</td><td>The churn rule book, Steps 1 to 3; Steps 4 to 6 go home.</td></tr>
+      <tr><td class="t">2:50</td><td class="t">10</td><td>Wrap-up</td><td>Exit ticket (3 questions), homework, bring list for Session 9.</td></tr>
+      <tr><td class="t"><b>Total</b></td><td class="t"><b>180</b></td><td></td><td>Ends at 3:00.</td></tr>
+    </tbody>
+  </table>
+<p><b>In the room.</b> The lesson pages estimate 100 + 100 minutes for a solo learner; after the warm-up, the break and the wrap-up the room has 150. So each lesson gets 75 minutes: the mental model, the live demo, the guided labs and the first steps of the project.</p>
+<p><b>Goes home (2 to 3 hours).</b> The SVM retention list Steps 4 to 6 and the churn rule book Steps 4 to 6; each lesson's Hands-on Exercises 1 to 3 (Exercise 4 is a stretch); both Quick Quizzes; both journal entries; both "Before the Next Lesson" lists; any unfinished lab.</p>
+<p><b>Protect, in this order:</b> the 4.3 demo Steps 4 to 6 (lift, kernel, gamma: the kernel idea and the dial); the 5.1 demo Steps 1, 5 and 7 (the tree as rules, leaves as probabilities, the depth curve); Lab A of each lesson. <b>Cut first:</b> 4.3 demo Steps 9 to 11 (say the three fixes), then 5.1 Steps 3, 6 and 10 to 12, then the paired Lab B of each lesson (homework).</p>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">0:00</span><h3>Warm-up: Nearest Neighbors and Naive Bayes</h3><span class="dur">10 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Run it</div>
+<p>Put the five questions on the slide. Two minutes alone, one minute with a neighbor, then cold-call gently. While they work, walk the room for the Session 7 homework: the <code class="inline">lookalike_shortlist.csv</code> (Lesson 4.1 project) and the review triage files (Lesson 4.2 project).</p>
+<ul class="tick">
+  <li><b>W1</b> Lesson 4.1: a kNN churn model scores a perfect 1.000 on its training data with k=1. Why, and what do you do about it? <b>Answer:</b> Each training customer is its own nearest neighbor, so k=1 is right by construction (high variance). Choose a larger k by cross-validation; the 4.1 project chose k=51. Ask for the word: overfitting. Today's two models have their own versions: gamma for SVMs, depth for trees.</li>
+  <li><b>W2</b> Two unscaled features: spend differs by $300 and days since last order by 120. What share of the squared distance comes from spend? Predict, then check. <b>Answer:</b> 0.86 (86%). 300² = 90,000 against 120² = 14,400: spend takes 86% of the distance purely because of its units. The same reason SVMs need a scaler today.</li>
+  <li><b>W3</b> Lesson 4.2: a word appears in 6% of negative reviews and 0.5% of positive ones; 25% of reviews are negative. After seeing the word, about how likely is the review to be negative? <b>Answer:</b> About 0.8: the odds go from 1:3 to (1 × 6) : (3 × 0.5) = 6 : 1.5 = 4 : 1. Prior odds times the likelihood ratio (12). Anyone stuck: draw the 1,000-review table.</li>
+  <li><b>W4</b> Why does MultinomialNB need alpha above 0? <b>Answer:</b> Without smoothing a word never seen in one class gives that class a probability of exactly 0, which vetoes all the other evidence. Then bridge: today's SVM on reviews (Lab A) needs no smoothing, but it needs scaling, in its text form (TF-IDF).</li>
+  <li><b>W5</b> Your Naive Bayes model ranks customers well (AUC 0.81) but its probabilities pile up near 0 and 1. Can you quote them to the care team? <b>Answer:</b> Rank with it, but recalibrate (CalibratedClassifierCV) before quoting probabilities. Today's SVM gives no probabilities at all, and the same tool fixes it.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Bridge to today</div>
+<p>"kNN asked the closest past customers, Naive Bayes multiplied clues. Today: a model that draws the widest possible boundary, and a model that asks yes-or-no questions. By the end of the day you will have five classifiers and an honest way to compare them."</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Lesson Plans</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">4.3</span><h3>Support Vector Machines</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Explain the maximum-margin idea and find the support vectors of a fitted model</li>
+  <li>Predict how changing C and gamma changes the margin, the number of support vectors and the risk of overfitting</li>
+  <li>Explain the kernel trick and use the RBF kernel to learn a curved boundary</li>
+  <li>Build a scaled SVC pipeline, rank with <code class="inline">decision_function</code>, handle imbalance with <code class="inline">class_weight</code>, and tune C and gamma with cross-validation</li>
+  <li>Decide when an SVM is a sensible choice and when its training time rules it out</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: the widest street; support vectors; C and gamma</td></tr>
+<tr><td class="t">30m</td><td>Live demo: Steps 1 to 12</td></tr>
+<tr><td class="t">25m</td><td>Guided lab: <code class="inline">review_svm_starter.py</code> (13m), then <code class="inline">kernel_by_hand_starter.py</code> in pairs (12m)</td></tr>
+<tr><td class="t">10m</td><td>Start the lesson project: Steps 1 to 3</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>Point at the board: "Two neighborhoods, red and blue, and a city planner who must build a straight street between them. Many streets would work. The planner picks the <b>widest</b> one, because a wide street leaves room for error: a new house built near either edge still lands on the right side."</p>
+<p>Circle the curb houses: "Only these decided where the street went. The houses deep inside could move and nothing would change. They are the <b>support vectors</b>, and they are all the model remembers."</p>
+<p>Then the two extensions, one per dial: "Real neighborhoods overlap, so we allow some houses on the street, at a price: that price is <b>C</b>. Real boundaries curve, so we bend the street with a kernel; for the usual RBF kernel, <b>gamma</b> says how far each house's influence reaches."</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook <code class="inline">lesson_4_3</code>. Ask for a prediction before every run that prints a number: the street gets narrower as C rises, and gamma's test score collapses while its training score climbs.</p>
+<ol class="steps">
+  <li><b>The widest street (3m).</b> "Many lines separate these two clouds. The SVM picks the widest street that fits, and only the points on its curbs decide where it goes." Show the lesson's first picture, then run.
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.datasets <span class="k">import</span> make_blobs
+<span class="k">from</span> sklearn.svm <span class="k">import</span> SVC
+
+X_toy, y_toy = make_blobs(n_samples=<span class="s">80</span>, centers=[(-<span class="s">2</span>, <span class="s">0</span>), (<span class="s">2</span>, <span class="s">0</span>)], cluster_std=<span class="s">1.3</span>, random_state=<span class="s">42</span>)
+
+svm = SVC(kernel=<span class="s">"linear"</span>, C=<span class="s">1</span>).fit(X_toy, y_toy)
+print(<span class="s">"support vectors per class:"</span>, svm.n_support_)
+print(<span class="s">"margin width:"</span>, round(<span class="s">2</span> / np.linalg.norm(svm.coef_[<span class="s">0</span>]), <span class="s">2</span>))
+print(<span class="s">"training accuracy:"</span>, svm.score(X_toy, y_toy))</pre>
+<pre class="out">support vectors per class: [6 5]
+margin width: 1.34
+training accuracy: 0.9625</pre>
+80 points, 11 support vectors: the other 69 could move freely and nothing would change. Ask: "Why not 100% training accuracy?" (the clouds overlap; no straight line separates them).</li>
+  <li><b>C prices the violations (3m).</b> "C is what a point inside the street costs. Cheap violations: a wide street held up by many points. Expensive: a narrow street that bends toward individual points."
+<pre class="code"><span class="k">for</span> C <span class="k">in</span> [<span class="s">0.01</span>, <span class="s">0.1</span>, <span class="s">1</span>, <span class="s">100</span>]:
+    model = SVC(kernel=<span class="s">"linear"</span>, C=C).fit(X_toy, y_toy)
+    width = <span class="s">2</span> / np.linalg.norm(model.coef_[<span class="s">0</span>])
+    print(<span class="s">f"C={C:&lt;6} support vectors {model.n_support_.sum():2d}   margin width {width:.2f}"</span>)</pre>
+<pre class="out">C=0.01   support vectors 42   margin width 4.06
+C=0.1    support vectors 18   margin width 2.11
+C=1      support vectors 11   margin width 1.34
+C=100    support vectors  7   margin width 0.75</pre>
+Write on the board: small C = strong regularization = wide street. It is the same C as logistic regression's, the inverse of Lesson 3.2's alpha.</li>
+  <li><b>A problem no line can solve (2m).</b> "One class makes a ring around the other. Predict the linear SVM's accuracy."
+<pre class="code"><span class="k">from</span> sklearn.datasets <span class="k">import</span> make_circles
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+
+X_ring, y_ring = make_circles(n_samples=<span class="s">300</span>, noise=<span class="s">0.08</span>, factor=<span class="s">0.5</span>, random_state=<span class="s">42</span>)
+Xr_train, Xr_test, yr_train, yr_test = train_test_split(X_ring, y_ring, test_size=<span class="s">0.3</span>, stratify=y_ring, random_state=<span class="s">42</span>)
+
+linear_ring = SVC(kernel=<span class="s">"linear"</span>).fit(Xr_train, yr_train)
+print(<span class="s">f"linear SVM, test accuracy {linear_ring.score(Xr_test, yr_test):.3f}"</span>)</pre>
+<pre class="out">linear SVM, test accuracy 0.478</pre>
+Worse than a coin flip.</li>
+  <li><b>Lift it by hand (3m).</b> "What separates them? Distance from the center. Add it as a third feature and a flat plane in 3-D separates them perfectly."
+<pre class="code"><span class="k">def</span> add_radius(X):
+    <span class="k">return</span> np.column_stack([X, (X ** <span class="s">2</span>).sum(axis=<span class="s">1</span>)])
+
+lifted = SVC(kernel=<span class="s">"linear"</span>).fit(add_radius(Xr_train), yr_train)
+print(<span class="s">f"linear SVM on (x, y, x²+y²), test accuracy {lifted.score(add_radius(Xr_test), yr_test):.3f}"</span>)</pre>
+<pre class="out">linear SVM on (x, y, x²+y²), test accuracy 1.000</pre>
+Draw the bowl: inner points low, outer points high, a flat sheet between them. Projected back, the flat sheet is a circle.</li>
+  <li><b>Let the kernel do it (3m).</b> "With ten customer features you cannot see which feature to add. The kernel trick never builds the features: it only needs how similar each pair of points is, as if they had been lifted." Write the RBF similarity: exp(-gamma × squared distance).
+<pre class="code">rbf_ring = SVC(kernel=<span class="s">"rbf"</span>).fit(Xr_train, yr_train)
+print(<span class="s">f"RBF SVM, test accuracy {rbf_ring.score(Xr_test, yr_test):.3f}, support vectors {rbf_ring.n_support_.sum()}"</span>)</pre>
+<pre class="out">RBF SVM, test accuracy 1.000, support vectors 42</pre>
+Lab B (<code class="inline">kernel_by_hand</code>) does exactly this comparison on the churn table: 66 hand-built columns against a kernel that builds none.</li>
+  <li><b>gamma is how far each point reaches (4m).</b> "Small gamma: each support vector's influence spreads wide. Huge gamma: a tiny bubble around each point." Ask for a prediction of the test score at gamma=1000 before you run it.
+<pre class="code"><span class="k">from</span> sklearn.datasets <span class="k">import</span> make_moons
+
+X_moon, y_moon = make_moons(n_samples=<span class="s">400</span>, noise=<span class="s">0.3</span>, random_state=<span class="s">42</span>)
+Xm_train, Xm_test, ym_train, ym_test = train_test_split(X_moon, y_moon, test_size=<span class="s">0.3</span>, stratify=y_moon, random_state=<span class="s">42</span>)
+
+<span class="k">for</span> gamma <span class="k">in</span> [<span class="s">0.1</span>, <span class="s">1</span>, <span class="s">10</span>, <span class="s">100</span>, <span class="s">1000</span>]:
+    model = SVC(kernel=<span class="s">"rbf"</span>, gamma=gamma).fit(Xm_train, ym_train)
+    print(<span class="s">f"gamma={gamma:&lt;5} train {model.score(Xm_train, ym_train):.3f}  test {model.score(Xm_test, ym_test):.3f}"</span>
+          <span class="s">f"  support vectors {model.n_support_.sum()}"</span>)</pre>
+<pre class="out">gamma=0.1   train 0.814  test 0.908  support vectors 141
+gamma=1     train 0.882  test 0.925  support vectors 96
+gamma=10    train 0.921  test 0.900  support vectors 141
+gamma=100   train 0.975  test 0.867  support vectors 259
+gamma=1000  train 1.000  test 0.650  support vectors 280</pre>
+Training climbs to 1.000, test collapses to 0.650, and the support-vector count rises at the end: almost every point must be remembered. Same overfitting picture as Lesson 3.2, new dial.</li>
+  <li><b>Scaling is not optional (3m).</b> "The RBF kernel is distances, and Lesson 4.1 showed what unscaled distances do." Note <code class="inline">decision_function</code> in the AUC line: AUC only needs a ranking score.
+<pre class="code"><span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> roc_auc_score
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+features = [<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"days_since_last_order"</span>,
+            <span class="s">"returns_12m"</span>, <span class="s">"return_rate"</span>, <span class="s">"support_tickets_12m"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>]
+X_train, X_test, y_train, y_test = train_test_split(
+    customers[features], customers[<span class="s">"churned"</span>], test_size=<span class="s">0.25</span>, stratify=customers[<span class="s">"churned"</span>], random_state=<span class="s">42</span>
+)
+
+<span class="k">for</span> name, model <span class="k">in</span> [(<span class="s">"unscaled SVC"</span>, SVC()), (<span class="s">"scaled SVC"</span>, make_pipeline(StandardScaler(), SVC()))]:
+    model.fit(X_train, y_train)
+    auc = roc_auc_score(y_test, model.decision_function(X_test))
+    print(<span class="s">f"{name:13s} accuracy {model.score(X_test, y_test):.3f}  ROC AUC {auc:.3f}"</span>)</pre>
+<pre class="out">unscaled SVC  accuracy 0.839  ROC AUC 0.767
+scaled SVC    accuracy 0.859  ROC AUC 0.814</pre>
+0.767 to 0.814 from one line. The scaler goes INSIDE the pipeline (Lesson 2.2) so cross-validation never peeks.</li>
+  <li><b>A fair comparison on churn (4m).</b> "Baseline, logistic regression, an RBF SVM, and the same SVM told that a missed churner costs more."
+<pre class="code"><span class="k">from</span> sklearn.dummy <span class="k">import</span> DummyClassifier
+<span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> average_precision_score, recall_score
+
+<span class="k">def</span> report(name, model):
+    model.fit(X_train, y_train)
+    <span class="k">if</span> hasattr(model, <span class="s">"decision_function"</span>):
+        scores = model.decision_function(X_test)
+    <span class="k">else</span>:
+        scores = model.predict_proba(X_test)[:, <span class="s">1</span>]
+    print(<span class="s">f"{name:22s} accuracy {model.score(X_test, y_test):.3f}  AUC {roc_auc_score(y_test, scores):.3f}"</span>
+          <span class="s">f"  AP {average_precision_score(y_test, scores):.3f}  recall {recall_score(y_test, model.predict(X_test)):.3f}"</span>)
+
+report(<span class="s">"baseline"</span>, DummyClassifier(strategy=<span class="s">"most_frequent"</span>))
+report(<span class="s">"logistic regression"</span>, make_pipeline(StandardScaler(), LogisticRegression()))
+report(<span class="s">"SVC (RBF)"</span>, make_pipeline(StandardScaler(), SVC()))
+report(<span class="s">"SVC (RBF, balanced)"</span>, make_pipeline(StandardScaler(), SVC(class_weight=<span class="s">"balanced"</span>)))</pre>
+<pre class="out">baseline               accuracy 0.835  AUC 0.500  AP 0.165  recall 0.000
+logistic regression    accuracy 0.848  AUC 0.823  AP 0.497  recall 0.266
+SVC (RBF)              accuracy 0.859  AUC 0.814  AP 0.540  recall 0.258
+SVC (RBF, balanced)    accuracy 0.792  AUC 0.850  AP 0.495  recall 0.774</pre>
+Three things: the plain SVM has the best accuracy and a WORSE AUC than logistic regression; <code class="inline">class_weight="balanced"</code> jumps recall from 0.258 to 0.774 and AUC to 0.850; accuracy falls because it flags many more stayers. Ask: "Which number would the care team care about?"</li>
+  <li><b>Probabilities, when you need them (2m).</b> "An SVM scores distances. When the team wants a probability, for revenue at risk, calibrate."
+<pre class="code"><span class="k">from</span> sklearn.calibration <span class="k">import</span> CalibratedClassifierCV
+
+svm_proba = make_pipeline(StandardScaler(), CalibratedClassifierCV(SVC(class_weight=<span class="s">"balanced"</span>), ensemble=<span class="k">False</span>))
+svm_proba.fit(X_train, y_train)
+p = svm_proba.predict_proba(X_test)[:, <span class="s">1</span>]
+print(<span class="s">"first five churn probabilities:"</span>, p[:<span class="s">5</span>].round(<span class="s">3</span>))
+print(<span class="s">f"average predicted churn {p.mean():.3f} vs real churn rate {y_test.mean():.3f}"</span>)
+print(<span class="s">f"ROC AUC {roc_auc_score(y_test, p):.3f}"</span>)</pre>
+<pre class="out">first five churn probabilities: [0.066 0.484 0.105 0.148 0.046]
+average predicted churn 0.164 vs real churn rate 0.165
+ROC AUC 0.850</pre>
+Average 0.164 against a real 0.165, AUC unchanged. Mention once: older code uses <code class="inline">SVC(probability=True)</code>; it is deprecated now (FutureWarning in scikit-learn 1.9).</li>
+  <li><b>Error 1: asking for probabilities (1m).</b> "Read the last line."
+<pre class="code">make_pipeline(StandardScaler(), SVC()).fit(X_train, y_train).predict_proba(X_test)</pre>
+<pre class="out">AttributeError: This 'Pipeline' has no attribute 'predict_proba'</pre>
+The pipeline passes the question to its last step, hence "Pipeline".</li>
+  <li><b>Error 2: a grid key without the step name (1m).</b> "The grid applies to the pipeline, and the pipeline has no C."
+<pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> GridSearchCV
+
+GridSearchCV(make_pipeline(StandardScaler(), SVC()), {<span class="s">"C"</span>: [<span class="s">1</span>, <span class="s">10</span>]}).fit(X_train, y_train)</pre>
+<pre class="out">ValueError: Invalid parameter 'C' for estimator Pipeline(steps=[('standardscaler', StandardScaler()), ('svc', SVC())]). Valid parameters are: ['memory', 'steps', 'transform_input', 'verbose'].</pre>
+Fix: <code class="inline">svc__C</code>. <code class="inline">pipe.get_params().keys()</code> lists every valid key. The project needs this in ten minutes.</li>
+  <li><b>The silent one (1m).</b> "No error, and that is the problem."
+<pre class="code">silent = make_pipeline(StandardScaler(), SVC(kernel=<span class="s">"linear"</span>)).fit(X_train, y_train)
+print(<span class="s">f"accuracy {silent.score(X_test, y_test):.3f}"</span>)
+print(<span class="s">"customers predicted to churn:"</span>, (silent.predict(X_test) == <span class="s">1</span>).sum())</pre>
+<pre class="out">accuracy 0.835
+customers predicted to churn: 0</pre>
+Accuracy exactly the baseline's, zero churners predicted. Judge with AUC or recall, use class_weight, or choose a threshold. Skip the timing block live; say the rule: kernel SVMs up to about 10,000 rows, LinearSVC beyond (the lesson's table).</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>Judging an SVM by accuracy on imbalanced data.</b> The linear SVM that predicts nobody churns scores 0.835, exactly the baseline. Coach: "How many churners did it flag?" Then AUC, recall, or <code class="inline">class_weight</code>.</li>
+  <li><b>Tuning by the training score.</b> gamma=10 on churn: training 0.996, test AUC 0.699, 4,491 of 4,500 customers as support vectors. Coach: "What share of the customers are support vectors? What does that say?" Choose C and gamma by CV.</li>
+  <li><b>Probabilities from an SVM.</b> <code class="inline">predict_proba</code> raises; <code class="inline">probability=True</code> warns. Coach: "Do you need a probability or a ranking?" Ranking: <code class="inline">decision_function</code>. Probability: calibrate.</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (13m, everyone):</b> <code class="inline">labs/module-08/l4_3-svm/review_svm_starter.py</code>; reference <code class="inline">labs/module-08/l4_3-svm/review_svm_solution.py</code>. Session 7's reviews and split, now with a linear SVM: rank with <code class="inline">decision_function</code>, "scale" word counts with TF-IDF, choose C by CV with the key <code class="inline">linearsvc__C</code>, read the weights, count reviews inside the street, calibrate.</li>
+  <li><b>Expected, Lab A:</b> raw counts accuracy 0.859, AUC 0.921 (worse than Naive Bayes' 0.868 / 0.934); TF-IDF 0.884 / 0.936 with 1,856 features; CV AUC peaks at C=1 (0.9269); strongest words <code class="inline">not</code> (-2.51) and <code class="inline">would buy</code> (1.93); 445 of 774 reviews inside the street, 90 on the wrong side; calibrated average 0.734 vs 0.745.</li>
+  <li><b>Circulate in Lab A for:</b> <code class="inline">roc_auc_score(y_test, svm.predict(X_test))</code> (0/1 labels: a much lower AUC; ask "how many distinct scores does that give?"); the key typed <code class="inline">LinearSVC__C</code> (case matters: the step name is lowercase). <b>Debrief:</b> "Raw counts lost to Naive Bayes; TF-IDF won. For text, TF-IDF is the scaler." And the odd weight: <code class="inline">late it</code> comes from "It arrived late. It ...": word pairs ignore sentence boundaries, so read weights skeptically.</li>
+  <li><b>Lab B (12m, pairs):</b> <code class="inline">labs/module-08/l4_3-svm/kernel_by_hand_starter.py</code>; reference <code class="inline">labs/module-08/l4_3-svm/kernel_by_hand_solution.py</code>. The ring's lift, on churn: <code class="inline">PolynomialFeatures(2)</code> builds 66 columns for a straight LinearSVC; a degree-2 polynomial kernel reaches the same AUC without building any.</li>
+  <li><b>Expected, Lab B:</b> LinearSVC 0.826; lift + LinearSVC 0.852; poly kernel 0.852 (2,293 support vectors); 66 / 286 / 1,001 / 3,003 columns for degrees 2 to 5; RBF 0.850. Fit times differ per machine. Stretch: the biggest lifted weights include <code class="inline">tenure_months^2</code> (+0.31): the U-shape in tenure that a straight line could not draw.</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-08/l4_3-svm/debug_svm.py</code>: two loud bugs (grid key <code class="inline">C</code>; <code class="inline">predict_proba</code>) and two silent ones (no scaler; the top 50 taken with <code class="inline">np.argsort(scores)[:50]</code>, the LEAST risky). Fixed: best C 1, CV 0.848, test 0.850, 32 churners in the top 50.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The <b>tuned SVM retention list</b> (lesson page, "Project: A Tuned SVM Retention List"). In the room: Steps 1 to 3 (10 minutes).</p>
+<ul class="tick">
+  <li>Step 1: split the whole table, keep the IDs. <b>Check:</b> <code class="inline">4500 1500 ['C102112', 'C103063', 'C101159']</code>.</li>
+  <li>Step 2: logistic regression CV AUC 0.829 ± 0.021, the bar to beat.</li>
+  <li>Step 3: start the grid (C × gamma, 45 fits) and talk while it runs: which corner will overfit? <b>Done</b> = best <code class="inline">{'svc__C': 10, 'svc__gamma': 0.01}</code>, CV AUC 0.854.</li>
+  <li><b>Goes home:</b> Steps 4 to 6 (test AUC 0.848 vs 0.823; 34 vs 33 churners in the top 50, only 21 shared; <code class="inline">svm_shortlist.csv</code>).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these during the demo and the labs:</p>
+<ul class="tick">
+  <li>You delete a training point far from the boundary and refit. What changes? <b>Answer:</b> nothing: it was not a support vector.</li>
+  <li>Which way do you move C to get a simpler boundary? <b>Answer:</b> down: cheaper violations, wider street.</li>
+  <li>Why does <code class="inline">roc_auc_score</code> accept <code class="inline">decision_function</code> output? <b>Answer:</b> AUC only needs scores that rank; the signed distance ranks.</li>
+  <li>When would you NOT use a kernel SVM? <b>Answer:</b> many rows (training time grows roughly with the square of the rows): use LinearSVC, logistic regression or trees.</li>
+</ul>
+<p>Workbook self-check, items Q1 to Q6.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q1</b> <span data-sc="1">B) A wider street held up by many more support vectors</span>; <b>Q2</b> <span data-sc="2"><code class="inline">['svc__gamma']</code></span>; <b>Q3</b> <span data-sc="3">D) The kernel and the margin are built on distances, and unscaled <code class="inline">spend_12m</code> and <code class="inline">days_since_last_order</code> would drown out the 0-to-1 columns</span>; <b>Q4</b> <span data-sc="4">B) <code class="inline">AttributeError: This 'Pipeline' has no attribute 'predict_proba'</code></span>; <b>Q5</b> <span data-sc="5">A) Recall of churners jumped (0.258 to 0.774) while accuracy fell (0.859 to 0.792)</span>; <b>Q6</b> <span data-sc="6"><code class="inline">0.67 0.0</code></span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> draw the street for every question; let pairs copy the pipeline lines from the demo and spend the lab time on the numbers. In Lab A, a struggling pair can stop after TODO 3.</p>
+<p><b>Stretch:</b> Lab A's RBF stretch (no gain on text: 0.928); the lesson's Exercise 2 (polynomial kernels on the rings) and the Nystroem bonus on 50,000 transactions.</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">5.1</span><h3>Decision Trees</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Explain how a classification tree chooses each split by reducing Gini impurity, and compute the impurity of a node by hand</li>
+  <li>Train <code class="inline">DecisionTreeClassifier</code> and <code class="inline">DecisionTreeRegressor</code>, and read their rules with <code class="inline">export_text</code> and <code class="inline">plot_tree</code></li>
+  <li>Explain where a tree's probabilities come from and why trees do not need scaled features</li>
+  <li>Control overfitting with <code class="inline">max_depth</code>, <code class="inline">min_samples_leaf</code>, <code class="inline">max_leaf_nodes</code> and cost-complexity pruning, chosen by cross-validation</li>
+  <li>Read a tree's feature importances, including what they cannot tell you</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: trail junction signposts; Gini</td></tr>
+<tr><td class="t">30m</td><td>Live demo: Steps 1 to 12</td></tr>
+<tr><td class="t">25m</td><td>Guided lab: <code class="inline">fraud_rules_starter.py</code> (13m), then <code class="inline">sales_tree_starter.py</code> in pairs (12m)</td></tr>
+<tr><td class="t">10m</td><td>Start the lesson project: Steps 1 to 3</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>Draw on the trail map: "At the trailhead a signpost asks: has it been more than about 170 days since your last order? Each answer sends the customer down a different trail, to the next signpost. Every trail ends at a campsite with a sign: the share of past customers who walked that way and then left."</p>
+<p>"Training a tree means choosing which question to post at each junction: it tries every feature and every threshold and keeps the one that makes the two piles purest. Predicting means walking a new customer down the trails and reading the campsite's sign." Write <b>Gini = chance that two customers picked from a node disagree</b> next to the map.</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook <code class="inline">lesson_5_1</code>. The demo uses the 1.1 split and ten features, so every number can be compared with the SVM's.</p>
+<ol class="steps">
+  <li><b>A tree that asks two questions (3m).</b> "Every model so far did arithmetic. A tree asks one yes-or-no question, splits the pile, and asks again in each pile." Draw the trail map with its signposts while it runs.
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+<span class="k">from</span> sklearn.tree <span class="k">import</span> DecisionTreeClassifier, export_text
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+features = [<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"days_since_last_order"</span>,
+            <span class="s">"returns_12m"</span>, <span class="s">"return_rate"</span>, <span class="s">"support_tickets_12m"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>]
+X = customers[features]
+y = customers[<span class="s">"churned"</span>]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=<span class="s">0.25</span>, stratify=y, random_state=<span class="s">42</span>)
+
+small_tree = DecisionTreeClassifier(max_depth=<span class="s">2</span>, random_state=<span class="s">42</span>)
+small_tree.fit(X_train, y_train)
+print(export_text(small_tree, feature_names=features, show_weights=<span class="k">True</span>))</pre>
+<pre class="out">|--- days_since_last_order &lt;= 172.50
+|   |--- discount_share &lt;= 0.35
+|   |   |--- weights: [2845.00, 175.00] class: 0
+|   |--- discount_share &gt;  0.35
+|   |   |--- weights: [620.00, 245.00] class: 0
+|--- days_since_last_order &gt;  172.50
+|   |--- tenure_months &lt;= 5.50
+|   |   |--- weights: [31.00, 127.00] class: 1
+|   |--- tenure_months &gt;  5.50
+|   |   |--- weights: [260.00, 197.00] class: 0</pre>
+Read the weights as [stayed, churned]. Ask: "Which campsite would you call first?" (lapsed and brand new: 127 of 158 churned, 80%). Nobody typed 172.5: the tree found it.</li>
+  <li><b>Gini by hand (3m).</b> "Pick two customers from a node at random; Gini is the chance they disagree. A good split makes purer children."
+<pre class="code"><span class="k">def</span> gini(counts):
+    p = np.asarray(counts) / np.sum(counts)
+    <span class="k">return</span> <span class="s">1</span> - np.sum(p ** <span class="s">2</span>)
+
+root = np.bincount(y_train)                                        <span class="c"># [stayed, churned]</span>
+left = np.bincount(y_train[X_train[<span class="s">"days_since_last_order"</span>] &lt;= <span class="s">172.5</span>])
+right = root - left
+weighted = (left.sum() * gini(left) + right.sum() * gini(right)) / root.sum()
+
+print(<span class="s">"root"</span>, root, <span class="s">" left"</span>, left, <span class="s">" right"</span>, right)
+print(<span class="s">f"Gini root {gini(root):.4f}  left {gini(left):.4f}  right {gini(right):.4f}"</span>)
+print(<span class="s">f"weighted Gini of the children {weighted:.4f}, decrease {gini(root) - weighted:.4f}"</span>)
+
+t = small_tree.tree_
+print(<span class="s">"scikit-learn's values:"</span>, t.impurity[[<span class="s">0</span>, t.children_left[<span class="s">0</span>], t.children_right[<span class="s">0</span>]]].round(<span class="s">4</span>))</pre>
+<pre class="out">root [3756  744]  left [3465  420]  right [291 324]
+Gini root 0.2760  left 0.1928  right 0.4986
+weighted Gini of the children 0.2346, decrease 0.0414
+scikit-learn's values: [0.276  0.1928 0.4986]</pre>
+Your arithmetic matches <code class="inline">tree_.impurity</code> exactly. The right child is MORE mixed than the root, but it holds only 615 customers, so it counts for less.</li>
+  <li><b>Every threshold, tried (2m).</b> "Why 172.5 and not 150? It tried them all."
+<pre class="code">recency = X_train[<span class="s">"days_since_last_order"</span>].to_numpy()
+thresholds = np.arange(<span class="s">0</span>, <span class="s">364</span>) + <span class="s">0.5</span>
+decrease = []
+<span class="k">for</span> cut <span class="k">in</span> thresholds:
+    left = np.bincount(y_train[recency &lt;= cut], minlength=<span class="s">2</span>)
+    right = root - left
+    weighted = (left.sum() * gini(left) + right.sum() * gini(right)) / root.sum()
+    decrease.append(gini(root) - weighted)
+
+best = thresholds[np.argmax(decrease)]
+print(<span class="s">f"best recency threshold: {best}  (impurity decrease {max(decrease):.4f})"</span>)</pre>
+<pre class="out">best recency threshold: 172.5  (impurity decrease 0.0414)</pre>
+Show the lesson's decrease-by-threshold chart: flat below 100 days, a peak at 172.5.</li>
+  <li><b>Every feature competes (3m).</b> "The same scan for each feature; the winner becomes the root."
+<pre class="code">rows = []
+<span class="k">for</span> col <span class="k">in</span> features:
+    stump = DecisionTreeClassifier(max_depth=<span class="s">1</span>, random_state=<span class="s">42</span>).fit(X_train[[col]], y_train)
+    s = stump.tree_
+    children = (s.n_node_samples[<span class="s">1</span>] * s.impurity[<span class="s">1</span>] + s.n_node_samples[<span class="s">2</span>] * s.impurity[<span class="s">2</span>]) / s.n_node_samples[<span class="s">0</span>]
+    rows.append({<span class="s">"feature"</span>: col, <span class="s">"threshold"</span>: s.threshold[<span class="s">0</span>], <span class="s">"decrease"</span>: s.impurity[<span class="s">0</span>] - children})
+
+stumps = pd.DataFrame(rows).sort_values(<span class="s">"decrease"</span>, ascending=<span class="k">False</span>)
+print(stumps.round(<span class="s">4</span>).head(<span class="s">5</span>).to_string(index=<span class="k">False</span>))</pre>
+<pre class="out">              feature  threshold  decrease
+days_since_last_order   172.5000    0.0414
+       discount_share     0.3505    0.0142
+        tenure_months     5.5000    0.0125
+            spend_12m   443.2250    0.0114
+           orders_12m     6.5000    0.0108</pre>
+Recency wins by a factor of three. Then the search repeats inside each child: that is why the two second-level questions differ (Lab A asks the same of fraud). Say "greedy": it never reconsiders a split.</li>
+  <li><b>Probabilities come from leaves (3m).</b> "A probability is the churn share of the campsite the customer reaches. Four leaves, four possible numbers."
+<pre class="code">leaf_of = small_tree.apply(X_test)
+proba = small_tree.predict_proba(X_test)[:, <span class="s">1</span>]
+
+per_leaf = pd.DataFrame({<span class="s">"leaf"</span>: leaf_of, <span class="s">"p_churn"</span>: proba, <span class="s">"churned"</span>: y_test.to_numpy()})
+print(per_leaf.groupby(<span class="s">"leaf"</span>).agg(customers=(<span class="s">"churned"</span>, <span class="s">"size"</span>),
+                                   predicted=(<span class="s">"p_churn"</span>, <span class="s">"first"</span>),
+                                   actual=(<span class="s">"churned"</span>, <span class="s">"mean"</span>)).round(<span class="s">3</span>))</pre>
+<pre class="out">      customers  predicted  actual
+leaf                              
+2          1011      0.058   0.057
+3           286      0.283   0.308
+5            42      0.804   0.786
+6           161      0.431   0.429</pre>
+Test churn rates match the training shares: the groups are real. A rule book is fine with four ties; a top-50 list is not.</li>
+  <li><b>No scaling needed (2m).</b> "A split asks 'above this value?'. Rescaling moves the threshold, not the customers."
+<pre class="code"><span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+
+scaler = StandardScaler().set_output(transform=<span class="s">"pandas"</span>).fit(X_train)
+scaled_tree = DecisionTreeClassifier(max_depth=<span class="s">2</span>, random_state=<span class="s">42</span>).fit(scaler.transform(X_train), y_train)
+
+same = np.array_equal(scaled_tree.predict_proba(scaler.transform(X_test)), small_tree.predict_proba(X_test))
+print(<span class="s">"identical predictions:"</span>, same)
+print(<span class="s">"root threshold, raw vs scaled:"</span>, small_tree.tree_.threshold[<span class="s">0</span>], scaled_tree.tree_.threshold[<span class="s">0</span>].round(<span class="s">3</span>))</pre>
+<pre class="out">identical predictions: True
+root threshold, raw vs scaled: 172.5 1.021</pre></li>
+  <li><b>Grow too far (4m).</b> "Left alone, a tree splits until every leaf is pure. Watch training and validation AUC as it grows." Predict first: where does the validation AUC peak?
+<pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> StratifiedKFold, cross_validate, cross_val_score
+
+cv = StratifiedKFold(n_splits=<span class="s">5</span>, shuffle=<span class="k">True</span>, random_state=<span class="s">42</span>)
+rows = []
+<span class="k">for</span> depth <span class="k">in</span> [<span class="s">1</span>, <span class="s">2</span>, <span class="s">3</span>, <span class="s">4</span>, <span class="s">5</span>, <span class="s">6</span>, <span class="s">8</span>, <span class="s">10</span>, <span class="k">None</span>]:
+    res = cross_validate(DecisionTreeClassifier(max_depth=depth, random_state=<span class="s">42</span>), X_train, y_train,
+                         cv=cv, scoring=<span class="s">"roc_auc"</span>, return_train_score=<span class="k">True</span>)
+    rows.append({<span class="s">"max_depth"</span>: str(depth), <span class="s">"train_auc"</span>: res[<span class="s">"train_score"</span>].mean(), <span class="s">"cv_auc"</span>: res[<span class="s">"test_score"</span>].mean()})
+
+depth_table = pd.DataFrame(rows)
+print(depth_table.round(<span class="s">3</span>).to_string(index=<span class="k">False</span>))</pre>
+<pre class="out">max_depth  train_auc  cv_auc
+        1      0.682   0.678
+        2      0.791   0.783
+        3      0.834   0.823
+        4      0.857   0.839
+        5      0.878   0.839
+        6      0.897   0.834
+        8      0.938   0.744
+       10      0.973   0.674
+     None      1.000   0.663</pre>
+Peak at depth 4 to 5, then down to 0.663 while training reaches 1.000. Bias-variance from Lesson 3.2, in its clearest form.</li>
+  <li><b>Leaf size is often the better control (3m).</b> "Require enough customers in every leaf."
+<pre class="code"><span class="k">for</span> leaf <span class="k">in</span> [<span class="s">1</span>, <span class="s">10</span>, <span class="s">25</span>, <span class="s">50</span>, <span class="s">100</span>, <span class="s">200</span>]:
+    model = DecisionTreeClassifier(min_samples_leaf=leaf, random_state=<span class="s">42</span>)
+    auc = cross_val_score(model, X_train, y_train, cv=cv, scoring=<span class="s">"roc_auc"</span>).mean()
+    n_leaves = model.fit(X_train, y_train).get_n_leaves()
+    print(<span class="s">f"min_samples_leaf={leaf:3d}  leaves {n_leaves:3d}  CV AUC {auc:.3f}"</span>)</pre>
+<pre class="out">min_samples_leaf=  1  leaves 523  CV AUC 0.663
+min_samples_leaf= 10  leaves 186  CV AUC 0.800
+min_samples_leaf= 25  leaves 100  CV AUC 0.831
+min_samples_leaf= 50  leaves  58  CV AUC 0.848
+min_samples_leaf=100  leaves  30  CV AUC 0.844
+min_samples_leaf=200  leaves  16  CV AUC 0.828</pre>
+50 per leaf: 58 leaves, CV AUC 0.848, the best so far. Mention <code class="inline">ccp_alpha</code> (pruning) in one sentence; the lesson page has it.</li>
+  <li><b>What the tree used (3m).</b> "Importances add up each feature's impurity decreases."
+<pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> roc_auc_score
+
+pruned = DecisionTreeClassifier(min_samples_leaf=<span class="s">50</span>, random_state=<span class="s">42</span>).fit(X_train, y_train)
+print(<span class="s">f"test ROC AUC {roc_auc_score(y_test, pruned.predict_proba(X_test)[:, 1]):.3f}, leaves {pruned.get_n_leaves()}"</span>)
+
+importance = pd.Series(pruned.feature_importances_, index=features).sort_values(ascending=<span class="k">False</span>)
+print(importance.round(<span class="s">3</span>))</pre>
+<pre class="out">test ROC AUC 0.863, leaves 58
+days_since_last_order    0.450
+tenure_months            0.250
+discount_share           0.169
+app_user                 0.049
+support_tickets_12m      0.034
+return_rate              0.020
+avg_order_value          0.016
+spend_12m                0.012
+orders_12m               0.001
+returns_12m              0.000
+dtype: float64</pre>
+Then the three cautions: a low score is not "no effect" (spend overlaps with others), MDI favors many-valued columns (Lesson 5.2 shows a noise column winning), and it describes the model, not the customers.</li>
+  <li><b>A single tree is unstable (2m).</b> "Three trees, three random 80% slices of the same customers."
+<pre class="code">rng = np.random.default_rng(<span class="s">42</span>)
+subsets = [rng.choice(len(X_train), size=<span class="s">3600</span>, replace=<span class="k">False</span>) <span class="k">for</span> _ <span class="k">in</span> range(<span class="s">3</span>)]
+
+<span class="k">for</span> label, settings <span class="k">in</span> [(<span class="s">"unlimited tree"</span>, {}), (<span class="s">"pruned tree (min_samples_leaf=50)"</span>, {<span class="s">"min_samples_leaf"</span>: <span class="s">50</span>})]:
+    preds = []
+    <span class="k">for</span> rows <span class="k">in</span> subsets:
+        model = DecisionTreeClassifier(random_state=<span class="s">42</span>, **settings).fit(X_train.iloc[rows], y_train.iloc[rows])
+        preds.append(model.predict(X_test))
+    preds = np.array(preds)
+    disagree = (preds.min(axis=<span class="s">0</span>) != preds.max(axis=<span class="s">0</span>)).mean()
+    print(<span class="s">f"{label:34s} the three trees disagree on {disagree:.1%} of test customers"</span>)</pre>
+<pre class="out">unlimited tree                     the three trees disagree on 24.6% of test customers
+pruned tree (min_samples_leaf=50)  the three trees disagree on 10.3% of test customers</pre>
+One customer in four gets a different answer from an unlimited tree. Pruning helps; Lesson 5.2 turns the weakness into a strength.</li>
+  <li><b>Mistake: class names in the wrong order (1m).</b> "No error. Read the first leaf: 175 churners of 3,020, labeled churned."
+<pre class="code">print(export_text(small_tree, feature_names=features, class_names=[<span class="s">"churned"</span>, <span class="s">"stayed"</span>]))</pre>
+<pre class="out">|--- days_since_last_order &lt;= 172.50
+|   |--- discount_share &lt;= 0.35
+|   |   |--- class: churned
+|   |--- discount_share &gt;  0.35
+|   |   |--- class: churned
+|--- days_since_last_order &gt;  172.50
+|   |--- tenure_months &lt;= 5.50
+|   |   |--- class: stayed
+|   |--- tenure_months &gt;  5.50
+|   |   |--- class: churned</pre>
+Build names from <code class="inline">classes_</code>: <code class="inline">["stayed" if c == 0 else "churned" for c in model.classes_]</code>.</li>
+  <li><b>Mistake: depth zero (1m).</b> "The smallest tree is a stump."
+<pre class="code">DecisionTreeClassifier(max_depth=<span class="s">0</span>).fit(X_train, y_train)</pre>
+<pre class="out">InvalidParameterError: The 'max_depth' parameter of DecisionTreeClassifier must be an int in the range [1, inf) or None. Got 0 instead.</pre></li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>Reporting the training score.</b> An unlimited tree: training 1.000, test 0.822, baseline 0.835. Coach: "Which customers was that 1.000 measured on?"</li>
+  <li><b>Ranking with an unpruned tree.</b> Its probabilities are all 0 or 1 (AUC 0.683): you cannot choose a top 50 from ties. Coach: "How many distinct probabilities does it give?" (<code class="inline">np.unique</code>). Fix: <code class="inline">min_samples_leaf</code>, or a forest next session.</li>
+  <li><b>Reading importance as truth.</b> <code class="inline">spend_12m</code> 0.012, yet churn falls from 24% to 8% across spend quartiles. Coach: "Did the model need it, or does it not matter?"</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (13m, everyone):</b> <code class="inline">labs/module-08/l5_1-decision-trees/fraud_rules_starter.py</code>; reference <code class="inline">labs/module-08/l5_1-decision-trees/fraud_rules_solution.py</code>. A rule book for the payments team: rules with weights, the root's Gini by hand, an unlimited tree judged honestly, size by CV average precision (fraud is rare), a segment table, a zero importance.</li>
+  <li><b>Expected, Lab A:</b> leaf "velocity_24h &gt; 3.5 and account_age_days &lt;= 366" holds 40 frauds of 42; Gini root 0.0174 (tiny: 0.88% fraud), decrease 0.0018; unlimited tree 433 leaves, training AUC 1.000, test AUC 0.684, AP 0.129; CV AP 0.178 / 0.259 / 0.287 / 0.295 for 4 / 8 / 12 / 16 leaves; the 8-rule book test AUC 0.756, AP 0.253, riskiest segment 15 of 19; <code class="inline">items</code> importance 0.000 although frauds buy more items (2.39 vs 1.89).</li>
+  <li><b>Circulate in Lab A for:</b> <code class="inline">bincount</code> without <code class="inline">minlength=2</code> on a child with no frauds; CV by accuracy (every size scores 0.991: ask what accuracy means at 0.88% fraud). <b>Debrief:</b> read the rule book aloud as a reviewer would, especially the night + new device + young account rule (38 of 68 fraud in training): that is an interaction a straight line cannot express.</li>
+  <li><b>Lab B (12m, pairs):</b> <code class="inline">labs/module-08/l5_1-decision-trees/sales_tree_starter.py</code>; reference <code class="inline">labs/module-08/l5_1-decision-trees/sales_tree_solution.py</code>. A regression tree for daily store sales: calendar features, a time split, <code class="inline">TimeSeriesSplit</code> for the depth, leaves as averages, and the trend a tree cannot follow.</li>
+  <li><b>Expected, Lab B:</b> baselines $1,967 / $1,670; first question <code class="inline">day_of_week &lt;= 4</code>; biggest leaf Boise weekends from May on, $10,059; CV MAE $1,374 (depth 2) to $901 (depth 10); depth 10 test MAE $976; Boise 2025 actual $8,342 vs predicted $7,339 (2024 actual $7,821): a tree predicts averages of past days, so it cannot follow growth.</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-08/l5_1-decision-trees/debug_tree.py</code>: <code class="inline">max_depth=0</code>, a text column, class names reversed, training accuracy reported as accuracy on new customers. Fixed: <code class="inline">accuracy on new customers 0.851 (baseline 0.835)</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The <b>churn rule book</b> (lesson page, "Project: A Churn Rule Book"). In the room: Steps 1 to 3 (10 minutes).</p>
+<ul class="tick">
+  <li>Step 1: fifteen columns, <code class="inline">cancellation_reason</code> left out. <b>Check:</b> <code class="inline">(4500, 15) (1500, 15)</code>, gaps in <code class="inline">email_opens_90d</code> (419) and <code class="inline">age_group</code> (359).</li>
+  <li>Step 2: <code class="inline">tree_prep</code> passes numbers through and one-hot encodes categories. <b>Check:</b> 35 columns after encoding.</li>
+  <li>Step 3: baselines by CV: do-nothing 0.500, logistic regression 0.832 ± 0.023.</li>
+  <li><b>Goes home:</b> Steps 4 to 6 (max_leaf_nodes by CV, 12 leaves at 0.834; test AUC 0.837; <code class="inline">churn_rules.txt</code>, riskiest segment 79% on test customers).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these during the demo and the labs:</p>
+<ul class="tick">
+  <li>Why do the two second-level questions differ? <b>Answer:</b> the search repeats inside each child, using only that child's customers.</li>
+  <li>A depth-2 tree gives how many distinct probabilities? <b>Answer:</b> at most four, one per leaf.</li>
+  <li>Does a tree need scaled features? <b>Answer:</b> no: scaling moves thresholds, not customers.</li>
+  <li>Which tells you the right tree size: training score, test score, or CV on the training set? <b>Answer:</b> CV on the training set; the test set once at the end.</li>
+</ul>
+<p>Workbook self-check, items Q7 to Q12.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q7</b> <span data-sc="7"><code class="inline">0.375</code></span>; <b>Q8</b> <span data-sc="8">C) The share of churners among the training customers in the leaf the new customer lands in</span>; <b>Q9</b> <span data-sc="9">B) <code class="inline">5.0</code></span>; <b>Q10</b> <span data-sc="10">D) Choose a size control such as <code class="inline">min_samples_leaf</code> by cross-validation on the training set</span>; <b>Q11</b> <span data-sc="11">A) The tree did not need spend: other features it split on first carried the same information</span>; <b>Q12</b> <span data-sc="12">C) <code class="inline">InvalidParameterError</code>: max_depth must be at least 1 (or None)</span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> have strugglers read <code class="inline">export_text</code> aloud as sentences ("if recency is at most 172 days and discount share at most 0.35, 6% churn"); give them the <code class="inline">gini</code> function ready-made.</p>
+<p><b>Stretch:</b> the lesson's Exercise 4 (a monotonic constraint on recency) and the Bonus Challenge (write <code class="inline">best_split</code> yourself); in Lab B, add <code class="inline">ccp_alpha</code> to the depth search.</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Closing</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Exit ticket (3 questions, no notes, 4 minutes)</div>
+<p>Questions on the slide; answers in the workbook's Exit Ticket box or on a sticky note. Sort into "got it" and "not yet": question 1's pile tells you how much of the Session 9 warm-up goes to gamma, question 3's whether the readability-versus-ranking idea landed.</p>
+<ol class="steps">
+  <li>Your SVM scores 0.996 on the training customers and AUC 0.699 on the test set, with 4,491 of 4,500 customers as support vectors. Which dial is set wrong, and how do you choose it properly? <b>Answer:</b> gamma is far too large (each customer's influence is a tiny bubble, so the model memorized the training set; nearly every point is a support vector). Choose C and gamma together with cross-validation on the training set (keys svc__C, svc__gamma), never with the training score.</li>
+  <li>A node holds 40 stayers and 10 churners. What is its Gini impurity, and what churn probability does a tree give a customer who lands there? <b>Answer:</b> Gini = 1 - (0.8² + 0.2²) = 0.32. The probability is the leaf's churn share: 10 / 50 = 0.2.</li>
+  <li>The care team wants rules they can pin to the wall AND the best possible top-50 list. What do you give them from today's two models, and why not one model for both? <b>Answer:</b> A small tree (about 12 leaves, size chosen by CV) as the rule book: readable, but its probabilities come in a few big ties. For the list, a model that scores every customer individually: today the tuned SVM (34 of 50; AUC 0.848), and next session a forest (41 of 50). Readability and ranking pull in different directions.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Homework (about 2 to 3 hours)</div>
+<ul class="tick">
+  <li><b>Finish both lesson projects:</b> the SVM retention list (Steps 4 to 6: test AUC 0.848 vs 0.823; 34 vs 33 churners in the top 50; <code class="inline">svm_shortlist.csv</code>) and the churn rule book (Steps 4 to 6: 12 leaves; test AUC 0.837; <code class="inline">churn_rules.txt</code>).</li>
+  <li><b>Lesson exercises:</b> 4.3 Exercises 1 to 3 (support-vector share, polynomial kernels on the rings, LinearSVC vs SVC); 5.1 Exercises 1 to 3 (impurity by hand, Gini or entropy, a regression tree for Snow gear). Exercise 4 of each is a stretch.</li>
+  <li><b>Both Quick Quizzes</b> and <b>both journal entries</b>.</li>
+  <li><b>Before the Next Lesson:</b> 4.3: predict, then check, the CV AUC with gamma=0.003. 5.1: rerun "A Tree Is Unstable" with min_samples_leaf=100, and predict (without running) what share of distinct customers a bootstrap sample of 4,500 from 4,500 holds: Session 9 opens with it.</li>
+  <li><b>Unfinished labs</b> from today: each starter's "Expected when done" block lets them check themselves.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Bring list for Session 9</div>
+<ul class="tick">
+  <li>A laptop on which <code class="inline">check_environment.py</code> still ends with READY (nothing new to install: XGBoost and LightGBM are already in the course environment).</li>
+  <li>The <code class="inline">pinecrest-ml</code> folder with <code class="inline">data/</code> and the <code class="inline">labs/</code> folder; Session 9's starters are in <code class="inline">labs/module-09/</code>.</li>
+  <li>The finished 5.1 project notebook (<code class="inline">lesson_5_1_project</code>): Lesson 5.2's project starts from the same columns and split and compares the forest with the rule tree.</li>
+  <li>The 4.3 project notebook: its numbers (0.848, 34 of 50) are the yardstick for forests and boosting.</li>
+  <li>Your written prediction for the bootstrap question, the workbook and the journal.</li>
+</ul>
+</div>
+
+  <div class="sec"><h2>If You Run Long or Short</h2><span class="rule"></span></div>
+<div class="blk warn"><div class="h">Running long: what to protect and what to cut first</div>
+<ul class="tick">
+  <li><b>Protect:</b> 4.3 Steps 4 to 6; 5.1 Steps 1, 5 and 7; Lab A of each lesson.</li>
+  <li><b>Cut first (saves 5m):</b> 4.3 Steps 9 to 11: say the three fixes (decision_function or calibrate; <code class="inline">svc__C</code>; judge by AUC or recall).</li>
+  <li><b>Cut second (saves 7m):</b> 5.1 Steps 3, 6 and 10 to 12; show the lesson's threshold chart instead of Step 3.</li>
+  <li><b>Cut third (saves 12m per lesson):</b> Lab B of each lesson goes home; its expected output is in the starter.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Running short: what to add</div>
+<ul class="tick">
+  <li>4.3 Exercise 4 live: a threshold that fits a 150-call budget (precision 0.600, recall 0.363).</li>
+  <li>5.1 Exercise 4 live: the monotonic constraint (risk drops for 80 of 200 customers unconstrained, 0 constrained, for 0.004 AUC).</li>
+  <li>Put Session 1's logistic regression fraud list (53 in the top 100) next to Lab A's rule book and ask what a forest might do (Session 9 answers it).</li>
+</ul>
+</div>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 8 · Facilitator Guide · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

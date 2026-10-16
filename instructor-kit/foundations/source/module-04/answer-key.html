@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Key: Session 4</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">answers &amp; solutions · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Answer Key</div>
+    <h1>Session 4: Pipelines and Creating Features</h1>
+    <p class="sub">Answers and reasoning for every Session 4 item: the warm-up, both self-checks, the predict-then-run items, the worked examples, the lab reference outputs, the lesson pages' own quizzes and the exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Session <b>4</b></span>
+      <span class="chip"><b>12</b> self-check items</span>
+      <span class="chip">Confidential</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<p>Retrieval from Session 3 (Lessons 1.4 and 2.1). Answers and what each checks:</p>
+<div class="q"><div class="qn">W1</div><div class="qt">Pinecrest's care team calls 150 customers and 103 of them really were about to churn. Which metric is 103 / 150, and what does it answer? <span style="color:var(--muted,#666)">(Lesson 1.4)</span></div><div class="opts"><div class="opt correct"><b>Precision</b> (at 150): of the customers we contacted, how many were real churners? Recall would divide by all real churners instead.</div></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">What does this print? <span style="color:var(--muted,#666)">(Lesson 1.4)</span></div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> precision_score, recall_score
+y_true = [<span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>]
+y_pred = [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>]
+print(round(precision_score(y_true, y_pred), <span class="s">3</span>), round(recall_score(y_true, y_pred), <span class="s">3</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">0.667 0.667</code>: two of the three flagged are churners (precision 2/3) and two of the three churners were flagged (recall 2/3).</div></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Lesson 1.4's project chose a threshold of 0.26. Why from out-of-fold probabilities on the training rows, and never from the test set? <span style="color:var(--muted,#666)">(Lesson 1.4)</span></div><div class="opts"><div class="opt correct">The threshold is a setting learned from data. Choosing it on the test set lets the test set help build the model, so its score is no longer an honest preview. Out-of-fold probabilities give every training customer a score from a model that did not see them.</div></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">What does this print? <span style="color:var(--muted,#666)">(Lesson 2.1)</span></div><pre class="code"><span class="k">from</span> sklearn.preprocessing <span class="k">import</span> OneHotEncoder
+enc = OneHotEncoder(sparse_output=<span class="k">False</span>, handle_unknown=<span class="s">"ignore"</span>).fit([[<span class="s">"Bend"</span>], [<span class="s">"Boise"</span>], [<span class="s">"Online"</span>]])
+print(enc.transform([[<span class="s">"Reno"</span>], [<span class="s">"Boise"</span>]]))</pre><div class="opts"><div class="opt correct">Reno is unknown, so with <code class="inline">handle_unknown="ignore"</code> it becomes a row of zeros; Boise is the second learned category. The category list was learned in <code class="inline">fit</code>.</div></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Lesson 2.1 asked: to cross-validate its churn model, which objects must be refitted inside every fold, and in which order? <span style="color:var(--muted,#666)">(Lesson 2.1)</span></div><div class="opts"><div class="opt correct">The whole <code class="inline">ColumnTransformer</code> (imputer, scalers, ordinal and one-hot encoders), then the model, on the training folds only; then transform-and-predict on the validation fold. Doing that by hand is error-prone: a <code class="inline">Pipeline</code> does exactly this, which is today's first lesson.</div></div></div>
+
+  <div class="sec"><h2>2.2 · Pipelines: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">A fitted pipeline <code class="inline">make_pipeline(StandardScaler(), LogisticRegression())</code> is asked to <code class="inline">predict_proba(X_new)</code>. What does the scaler step do with <code class="inline">X_new</code>?</div><div class="opts"><div class="opt">A) <code class="inline">fit_transform</code>: the new rows are centered on their own mean</div><div class="opt correct">B) <code class="inline">transform</code> only, with the means and standard deviations it learned during <code class="inline">fit</code></div><div class="opt">C) Nothing: scaling only happens during fit</div><div class="opt">D) It refits on the training rows and the new rows together</div></div><div class="why"><b>Why:</b> During prediction every step except the last calls <code class="inline">transform</code> with what it learned in <code class="inline">fit</code>; nothing is refitted on the data being predicted. That is the whole reason a pipeline cannot leak.<br><b>A</b> is wrong: Then a batch of ten new customers would be scaled against each other, and the same customer would get a different score in a different batch.<br><b>C</b> is wrong: Without scaling, the model would receive raw numbers it was never trained on.<br><b>D</b> is wrong: The pipeline does not keep the training rows; it keeps only what each step learned.</div></div>
+  <div class="q" data-sc="2"><div class="qn">Q2</div><div class="qt">Which name sets the imputer's strategy in this pipeline?</div><pre class="code">pipe = Pipeline([
+    (<span class="s">"prep"</span>, ColumnTransformer([
+        (<span class="s">"num"</span>, make_pipeline(SimpleImputer(), StandardScaler()), [<span class="s">"email_opens_90d"</span>]),
+    ])),
+    (<span class="s">"model"</span>, LogisticRegression()),
+])</pre><div class="opts"><div class="opt">A) <code class="inline">prep__simpleimputer__strategy</code></div><div class="opt">B) <code class="inline">num__simpleimputer__strategy</code></div><div class="opt">C) <code class="inline">prep_num_simpleimputer_strategy</code></div><div class="opt correct">D) <code class="inline">prep__num__simpleimputer__strategy</code></div></div><div class="why"><b>Why:</b> Read it as a path from the top: the step named prep, its branch named num, that branch's step simpleimputer (make_pipeline's automatic name), then the setting. Each level is joined by two underscores.<br><b>A</b> is wrong: Skips the branch name num.<br><b>B</b> is wrong: Starts below the top level: the pipeline itself has no step called num.<br><b>C</b> is wrong: Single underscores are part of ordinary names; the separator is a double underscore.</div></div>
+  <div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+pipe = make_pipeline(StandardScaler(), LogisticRegression())
+pipe.set_params(model__C=<span class="s">0.1</span>)</pre><div class="opts"><div class="opt correct">A) <code class="inline">ValueError</code>: <code class="inline">Invalid parameter</code> <code class="inline">'model'</code>: make_pipeline named the step <code class="inline">logisticregression</code></div><div class="opt">B) It sets C on the logistic regression</div><div class="opt">C) <code class="inline">TypeError</code>: C can only be set when the model is created</div><div class="opt">D) Nothing: the unknown setting is silently ignored</div></div><div class="why"><b>Why:</b> <code class="inline">make_pipeline</code> names steps after their classes in lowercase, so the model step is <code class="inline">logisticregression</code> and the setting is <code class="inline">logisticregression__C</code>. The step is called <code class="inline">model</code> only when you name it yourself with <code class="inline">Pipeline([...])</code>. The message: <code class="inline">ValueError: Invalid parameter 'model' for estimator Pipeline(s...</code><br><b>B</b> is wrong: It would, with the right step name.<br><b>C</b> is wrong: <code class="inline">set_params</code> can change any setting after creation.<br><b>D</b> is wrong: scikit-learn refuses unknown settings loudly, and lists the valid ones.</div></div>
+  <div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">Which of these steps could be applied to all training rows BEFORE cross-validation without changing the cross-validated score at all?</div><div class="opts"><div class="opt">A) <code class="inline">SimpleImputer(strategy="median")</code></div><div class="opt">B) <code class="inline">TargetEncoder()</code> on a high-cardinality column</div><div class="opt correct">C) <code class="inline">FunctionTransformer(np.log1p)</code></div><div class="opt">D) <code class="inline">SelectKBest(k=10)</code> (keeps the columns most related to y)</div></div><div class="why"><b>Why:</b> A fixed function learns nothing from the data (it is stateless), so applying it early or inside the folds gives the identical result. Lab 2.2 B measures it: a difference of +0.00000.<br><b>A</b> is wrong: Learns a median from the rows it sees, so the validation rows would shape it (a tiny leak, but a leak).<br><b>B</b> is wrong: Learns from the target: the biggest leaks of all (0.913 vs 0.583 in the lab).<br><b>D</b> is wrong: Selection looks at y, so choosing columns on all rows lets the validation rows vote (Lesson 2.4).</div></div>
+  <div class="q" data-sc="5" data-kind="short"><div class="qn">Q5</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> FunctionTransformer
+log = FunctionTransformer(np.log1p).fit([[<span class="s">0.0</span>], [<span class="s">9.0</span>]])
+print(log.transform([[<span class="s">99.0</span>]]).round(<span class="s">3</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">[[4.605]]</code></div></div><div class="why"><b>Why:</b> <code class="inline">FunctionTransformer</code> with a fixed function is stateless: <code class="inline">fit</code> learns nothing from 0 and 9, and <code class="inline">transform</code> applies log(1 + 99) = log(100) = 4.605 to whatever arrives.</div></div>
+  <div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">The IT team reloads <code class="inline">churn_pipeline.joblib</code> and sends next month's records, but their export leaves out the <code class="inline">email_opens_90d</code> column. What happens?</div><div class="opts"><div class="opt">A) The imputer fills the whole column with the training median</div><div class="opt">B) The pipeline uses the other 15 columns and ignores the missing one</div><div class="opt">C) It predicts the baseline churn rate for every customer</div><div class="opt correct">D) <code class="inline">ValueError: columns are missing: {'email_opens_90d'}</code>: send the column, empty (NaN) where unknown</div></div><div class="why"><b>Why:</b> The ColumnTransformer selects columns by name and refuses a record that lacks one it was fitted with (<code class="inline">reloaded.feature_names_in_</code> lists them). A column that is present but empty is fine: the imputer handles NaN.<br><b>A</b> is wrong: The imputer fills gaps INSIDE a column; it cannot invent a missing column.<br><b>B</b> is wrong: The model's weights assume every column; nothing silently drops one.<br><b>C</b> is wrong: Nothing falls back to a baseline; it raises an error.</div></div>
+
+  <div class="sec"><h2>2.2 · Pipelines: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> sklearn.impute <span class="k">import</span> SimpleImputer
+<span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+pipe = make_pipeline(SimpleImputer(), StandardScaler(), LogisticRegression())
+print(list(pipe.named_steps))
+print(len(pipe[:-<span class="s">1</span>]))</pre><div class="opts"><div class="opt correct"><code class="inline">['simpleimputer', 'standardscaler', 'logisticregression']
+2</code></div></div><div class="why"><b>Why:</b> <code class="inline">make_pipeline</code> names each step after its class in lowercase. <code class="inline">pipe[:-1]</code> is a pipeline of every step before the model: two steps.</div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> sklearn.impute <span class="k">import</span> SimpleImputer
+imp = SimpleImputer(strategy=<span class="s">"median"</span>).fit([[<span class="s">1.0</span>], [<span class="s">2.0</span>], [<span class="s">9.0</span>]])
+print(imp.transform([[<span class="k">None</span>], [<span class="s">100.0</span>]]).ravel())</pre><div class="opts"><div class="opt correct"><code class="inline">[  2. 100.]</code></div></div><div class="why"><b>Why:</b> The median of 1, 2 and 9 is 2. The gap gets the training median; 100 is not a gap, so it passes through unchanged. Nothing is learned from the new rows.</div></div>
+
+  <div class="sec"><h2>2.3 · Creating Features: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+df = pd.DataFrame({<span class="s">"store"</span>: [<span class="s">"A"</span>, <span class="s">"A"</span>, <span class="s">"B"</span>, <span class="s">"B"</span>, <span class="s">"A"</span>], <span class="s">"units"</span>: [<span class="s">5</span>, <span class="s">7</span>, <span class="s">9</span>, <span class="s">4</span>, <span class="s">6</span>]})
+print(df.groupby(<span class="s">"store"</span>)[<span class="s">"units"</span>].shift(<span class="s">1</span>).tolist())</pre><div class="opts"><div class="opt correct"><code class="inline">[nan, 5.0, nan, 9.0, 7.0]</code></div></div><div class="why"><b>Why:</b> <code class="inline">shift(1)</code> within each store: each row gets the previous value of ITS OWN store. Rows 0 and 2 are the first of stores A and B (no history: NaN); row 3 gets B's 9; row 4 gets A's previous value, 7 (row 1), not B's 4. That is why lags are always built per series.</div></div>
+  <div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">Churn is 32% for customers under 6 months, about 8 to 11% in the middle years and 21.5% above 72 months, yet a logistic regression on the raw columns gives tenure only a small weight. Why?</div><div class="opts"><div class="opt">A) Tenure does not really matter for churn</div><div class="opt">B) Tenure was not scaled</div><div class="opt correct">C) A straight line through a U-shape is nearly flat; flags such as new_customer and veteran let the model express it</div><div class="opt">D) Tenure is redundant with <code class="inline">signup_date</code></div></div><div class="why"><b>Why:</b> A linear model gives each column one slope. High at both ends and low in the middle averages out to almost no slope. With two flags, each arm of the U gets its own weight (0.92 and 0.49 in the lesson).<br><b>A</b> is wrong: The tenure table shows a big effect, just not a straight-line one.<br><b>B</b> is wrong: The lesson's pipelines all scale; scaling changes units, not shape.<br><b>D</b> is wrong: It is (the workbook example shows a correlation of 1.0), but that does not explain the weight, and <code class="inline">signup_date</code> is not in the model.</div></div>
+  <div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">What does <code class="inline">tickets_no_app = support_tickets_12m * (1 - app_user)</code> let a linear model do?</div><div class="opts"><div class="opt correct">A) Give support tickets their own weight for customers without the app</div><div class="opt">B) Remove app users from the training data</div><div class="opt">C) Count every app user's tickets twice</div><div class="opt">D) Replace <code class="inline">app_user</code>, which can then be dropped</div></div><div class="why"><b>Why:</b> The product equals the ticket count for non-app customers and 0 for app users, so its weight describes tickets where they matter (churn 14% to 46% without the app, flat with it). That is an interaction term.<br><b>B</b> is wrong: Every row stays; app users just get 0 in the new column.<br><b>C</b> is wrong: App users get 0, not double.<br><b>D</b> is wrong: The interaction is added next to <code class="inline">app_user</code>, which still carries its own effect.</div></div>
+  <div class="q" data-sc="10" data-kind="short"><div class="qn">Q10</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+months = np.array([<span class="s">3</span>, <span class="s">6</span>, <span class="s">12</span>])
+print(np.cos(<span class="s">2</span> * np.pi * months / <span class="s">12</span>).round(<span class="s">2</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">[ 0. -1.  1.]</code></div></div><div class="why"><b>Why:</b> cos(2π·3/12) = cos(π/2) = 0, cos(π) = -1, cos(2π) = 1. December (12) lands on the same point of the circle as "month 0", one step from January: the encoding wraps around. Cosine alone is not enough, though: April and August both have a cosine of -0.5. The sine column tells them apart.</div></div>
+  <div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">An average of units sold per product, store and month computed from BOTH years forecasts 2025 with MAE 9.87; computed from 2024 only, 11.36. Why is 9.87 not a real improvement?</div><div class="opts"><div class="opt">A) Averages over more rows always overfit</div><div class="opt correct">B) The 2025 weeks being predicted helped compute their own feature</div><div class="opt">C) MAE rewards forecasts that are too low</div><div class="opt">D) 2025 has fewer weeks than 2024</div></div><div class="why"><b>Why:</b> Half of every average now comes from the test answers. On the day a 2025 forecast is made, those weeks have not happened. Compute target aggregates from the training rows only (or per fold, with TargetEncoder).<br><b>A</b> is wrong: More honest rows would help; the problem is WHICH rows.<br><b>C</b> is wrong: MAE treats over- and under-forecasts alike.<br><b>D</b> is wrong: The row counts (5,088 and 4,896) do not explain an error that drops by 13%.</div></div>
+  <div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+df = pd.DataFrame({<span class="s">"returns"</span>: [<span class="s">1</span>, <span class="s">0</span>, <span class="s">2</span>], <span class="s">"tickets"</span>: [<span class="s">2</span>, <span class="s">0</span>, <span class="s">0</span>]})
+print((df[<span class="s">"returns"</span>] / df[<span class="s">"tickets"</span>]).tolist())</pre><div class="opts"><div class="opt">A) <code class="inline">[0.5, 0.0, 0.0]</code></div><div class="opt">B) A <code class="inline">ZeroDivisionError</code></div><div class="opt correct">C) <code class="inline">[0.5, nan, inf]</code></div><div class="opt">D) <code class="inline">[0.5, nan, nan]</code></div></div><div class="why"><b>Why:</b> pandas does not raise on division by zero: 0 / 0 is NaN and 2 / 0 is infinity. The error appears only later, inside the model (<code class="inline">Input X contains infinity</code>). Divide by something that cannot be 0, such as <code class="inline">tickets + 1</code>.<br><b>A</b> is wrong: pandas does not replace the result with 0.<br><b>B</b> is wrong: Plain Python integers raise; pandas Series do not.<br><b>D</b> is wrong: Only 0 / 0 is undefined; a positive number over 0 is infinity.</div></div>
+
+  <div class="sec"><h2>2.3 · Creating Features: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+df = pd.DataFrame({<span class="s">"tickets"</span>: [<span class="s">0</span>, <span class="s">2</span>, <span class="s">3</span>, <span class="s">1</span>], <span class="s">"app_user"</span>: [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>]})
+df[<span class="s">"tickets_no_app"</span>] = df[<span class="s">"tickets"</span>] * (<span class="s">1</span> - df[<span class="s">"app_user"</span>])
+print(df[<span class="s">"tickets_no_app"</span>].tolist())</pre><div class="opts"><div class="opt correct"><code class="inline">[0, 0, 3, 1]</code></div></div><div class="why"><b>Why:</b> Rows 0 and 1 are app users (1 - 1 = 0), so 0 whatever their tickets; rows 2 and 3 keep their ticket counts 3 and 1.</div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+days = pd.to_datetime(pd.Series([<span class="s">"2025-06-28"</span>, <span class="s">"2025-06-30"</span>, <span class="s">"2025-07-04"</span>]))
+print(days.dt.dayofweek.tolist(), days.dt.month.tolist())</pre><div class="opts"><div class="opt correct"><code class="inline">[5, 0, 4] [6, 6, 7]</code></div></div><div class="why"><b>Why:</b> Monday is 0, so Saturday June 28 is 5, Monday June 30 is 0 and Friday July 4 is 4; the months are 6, 6 and 7.</div></div>
+
+  <div class="sec"><h2>Worked Examples: What to Point Out</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">2.2 · a pipeline that fills a gap</div>
+<p>Outputs as printed in the workbook:</p>
+<pre class="out">CV ROC AUC 0.813 +/- 0.024
+medians learned: [52.     0.141  6.   ]
+[[-0.73 -0.61 -0.22]
+ [ 1.57  1.63 -0.22]]
+churn probability: [0.043 0.669]</pre><p>Both unknown email counts become the training median 6 and scale to the same -0.22: nothing is refitted on new rows. The three-column model's CV ROC AUC (0.813) sits below the 16-column pipeline's 0.833: fine for an example, and a hint of what Lesson 2.4 asks (how few columns do you need?).</p>
+</div>
+<div class="blk"><div class="h">2.3 · a date feature that was already there</div>
+<p>Outputs:</p>
+<pre class="out">     signup_date  days_since_signup  tenure_months
+1556  2025-05-11                 50              1
+965   2021-10-28               1341             44
+5145  2025-02-25                125              4
+correlation with tenure: 1.0
+signup_month    1     2     3     4     5     6     7     8     9     10    11    12
+churn         0.19  0.20  0.20  0.19  0.24  0.11  0.09  0.12  0.14  0.14  0.11  0.15
+new_share     0.40  0.44  0.42  0.40  0.38  0.00  0.00  0.00  0.00  0.00  0.00  0.01
+customers with 6+ months: churn by signup month from 0.091 to 0.153</pre><p>Two lessons in one example: a computed feature can duplicate an existing column exactly (correlation 1.0), and a feature can be a proxy (signup month stands in for "joined in 2025", that is, for the new-customer effect). Expect some learners to propose signup month as a churn feature; this is the answer.</p>
+</div>
+
+  <div class="sec"><h2>Lab Reference Solutions</h2><span class="rule"></span></div>
+<div class="blk lab"><div class="h">Lab 2.2-A: labs/module-04/l2_2-pipelines/fraud_pipeline_starter.py → fraud_pipeline_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">(35000, 10) (15000, 10) frauds in train: 307
+['prep', 'model']
+baseline             CV ROC AUC 0.500   CV average precision 0.009
+logistic regression  CV ROC AUC 0.867   CV average precision 0.535
+categories learned: 10 ['Accessories', 'Apparel', 'Camp Kitchen'] ...
+largest weights: {'scale__device_new': 0.56, 'scale__velocity_24h': 0.77, 'onehot__category_Gift Cards': 0.95}
+model__C=0.01  CV average precision 0.518
+model__C=1.0   CV average precision 0.535
+test ROC AUC 0.843   test average precision 0.463   frauds in the top 100: 56
+reloaded steps: ['prep', 'model'] | columns expected: 10
+fraud probability: [0.999, 0.0, 0.002]</pre><p>What each TODO teaches: (1) the same <code class="inline">prep</code>/<code class="inline">model</code> structure as the lesson, on a new table; (2) the baseline's average precision equals the fraud rate (0.009), the number to beat on rare classes, while its ROC AUC is 0.5; (3) <code class="inline">named_transformers_</code> and feature names from <code class="inline">pipe[:-1]</code> (the Gift Cards category carries the largest weight); (4) <code class="inline">model__C</code> from the top (more regularization hurts a little here); (5) the test set once: 0.843 against a CV estimate of 0.867, within the folds' wide spread on 131 test frauds; (6-7) a saved, reloaded pipeline scores raw rows, and the unknown <code class="inline">Bikes</code> category becomes zeros thanks to <code class="inline">handle_unknown="ignore"</code>. The saved file goes to <code class="inline">OUTPUT</code> (<code class="inline">output/</code> next to the lab; a temporary folder during the kit check).</p>
+</div>
+<div class="blk lab"><div class="h">Lab 2.2-B: labs/module-04/l2_2-pipelines/leak_size_starter.py → leak_size_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">1016 distinct dollar amounts in train; 434 of them occur 5 times or fewer
+target rate  before CV 0.913   inside pipeline 0.583   test 0.568
+scaler       before CV 0.8613  inside pipeline 0.8613  difference -0.00001
+log1p        before CV 0.8617  inside pipeline 0.8617  difference +0.00000
+
+learns from y, few rows per value : huge lie  (put it in the pipeline, or drop the idea)
+learns from X only                : tiny lie  (still: put it in the pipeline)
+learns nothing (stateless)        : no lie    (safe anywhere; the pipeline costs nothing)</pre><p>Reading it: the per-amount fraud rate is the lesson's signup-date leak on new data. Most amounts occur only a handful of times, so "the fraud rate of this amount" is mostly the row's own label: 0.913. Inside the pipeline the encoder never sees a validation row's label: 0.583, and the test agrees (0.568). The amount does carry a little real signal (gift cards come in $25 steps). The scaler leak exists but is invisible at this size (-0.00001); the log step cannot leak at all. The habit, not the judgment: put every learning step in the pipeline.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-04/l2_2-pipelines/debug_pipeline.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">ValueError: Invalid parameter 'alpha' for estimator Pipeline(...)</code> → <code class="inline">pipe.set_params(model__alpha=10.0)</code>.</li>
+  <li><code class="inline">ValueError: Estimator names must not contain __: got ['one__hot']</code> → name the branch <code class="inline">one_hot</code> (or <code class="inline">onehot</code>).</li>
+  <li><code class="inline">ValueError: columns are missing: {'product_id', 'store'}</code> → predict on <code class="inline">test[numeric + cats]</code>.</li>
+  <li>No error: <code class="inline">test = demand[demand["year"] != 2025]</code> selects 2024, the training year (the first line prints <code class="inline">5088 training weeks, 5088 test weeks</code>, the clue). Fixed to <code class="inline">== 2025</code>: 4,896 test weeks and MAE 11.75 instead of the flattering 11.02.</li>
+</ol>
+</div>
+<div class="blk lab"><div class="h">Lab 2.3-A: labs/module-04/l2_3-creating-features/night_features_starter.py → night_features_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">         mean   size
+hour                
+0-5    0.0671   1296
+6-11   0.0067   8266
+12-17  0.0064  13179
+18-23  0.0065  12259
+device_new      0      1
+night                   
+False       0.005  0.022
+True        0.005  0.425
+{'night': 0.037, 'night_new_device': 0.006, 'log_amount': 5.009}
+raw columns        CV ROC AUC 0.867   CV average precision 0.535
++ night features   CV ROC AUC 0.864   CV average precision 0.564
+raw columns        {'scale__hour': -0.28, 'scale__device_new': 0.56}
++ night features   {'scale__hour': 0.01, 'scale__night': 0.02, 'scale__night_new_device': 0.19, 'scale__device_new': 0.43}
+raw columns        test ROC AUC 0.843   average precision 0.463   frauds in the top 100: 56
++ night features   test ROC AUC 0.844   average precision 0.504   frauds in the top 100: 61</pre><p>Reading it: fraud is ten times more common from midnight to 5:59, and the night-plus-new-device combination is where it concentrates (42.5%). The raw model could only give <code class="inline">hour</code> one slope, and it came out negative (fraud at hours 0 to 5 drags the line down for "late"); with the flags, <code class="inline">hour</code> drops to about 0 and the flags carry the effect. ROC AUC stays flat (0.867 vs 0.864, well inside the spread) while average precision rises 0.535 → 0.564 in CV and 0.463 → 0.504 on test, and the top 100 holds 61 frauds instead of 56: the features help at the top of the ranking, where a review team works. <code class="inline">pipe[:-1].get_feature_names_out()</code> fails because the first step is a <code class="inline">FunctionTransformer</code> without <code class="inline">feature_names_out</code>; asking the <code class="inline">prep</code> step works. The scaled weight of <code class="inline">night_new_device</code> looks small (0.19) because the flag is rare (0.6% of rows): scaled weights are per standard deviation.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 2.3-B: labs/module-04/l2_3-creating-features/daily_sales_features_starter.py → daily_sales_features_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">mean sales by day of week, 2023-2024 (Mon..Sun): [4639, 4270, 4512, 4750, 6024, 8209, 6988]
+         date   sales   lag_1   lag_7  rolling_7
+30 2023-01-08  7949.0  8165.0  6027.0     5506.0
+34 2023-01-09  3922.0  7949.0  4433.0     5781.0
+38 2023-01-10  4401.0  3922.0  4471.0     5708.0
+lag_1     as the forecast: MAE 1,350 dollars
+lag_7     as the forecast: MAE 1,072 dollars
+rolling_7 as the forecast: MAE 1,451 dollars
+calendar only                        MAE 996
+calendar + lag_7 + rolling_7         MAE 708
++ store x day + lag_1                MAE 586
+leaky window (includes today)        MAE 551</pre><p>Reading it: Saturday sells almost twice what Tuesday does, so the history feature that matches the weekly cycle wins: the same day last week (1,072) beats yesterday (1,350) and the last seven days (1,451). In a linear pipeline, calendar parts plus the known events (closed days, sales) reach 996; adding history 708; letting each store have its own weekly pattern (store × day) plus yesterday 586. The window without <code class="inline">shift(1)</code> contains the day being forecast: 551, better and unusable, because the evening before, today's sales do not exist yet. (These numbers are not comparable with the deep-learning forecast in Lesson 10.4, which predicts log sales with a different setup.)</p>
+</div>
+
+  <div class="sec"><h2>The Lesson Pages' Own Quick Quizzes</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Lesson 2.2 · Pipelines</div>
+<ol class="steps">
+  <li><b>C</b> It calls <code class="inline">fit_transform</code> on X_train and passes the result to the model: every step but the last fits and transforms during fit.</li>
+  <li><b>A</b> <code class="inline">quiz_pipe.set_params(logisticregression__C=0.1)</code>: <code class="inline">make_pipeline</code> names the step after its class, and the separator is two underscores.</li>
+  <li><b>B</b> The rates were computed before the folds were split, so each validation row's own label went into its feature.</li>
+  <li><b>A</b> It fills the gap with the median it learned from the training rows: prediction only transforms.</li>
+  <li><b>B</b> No: a pipeline keeps rows apart, but it cannot know that a column comes from the future.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Lesson 2.3 · Creating Features</div>
+<ol class="steps">
+  <li><b>B</b> <code class="inline">[nan, nan, 6.0, 8.0]</code>: shift moves 5, 7, 9 down one place, then each window of two averages (5, 7) and (7, 9).</li>
+  <li><b>C</b> Categories have opposite seasons, so one shared effect per month averages them away.</li>
+  <li><b>A</b> The training rows only: choosing a threshold is learning from data.</li>
+  <li><b>C</b> The window includes the week being predicted, so the feature contains the answer.</li>
+  <li><b>A</b> Sine alone gives two different months the same value (for example April and August); cosine tells them apart.</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<ol class="steps">
+  <li><b>Pipeline:</b> it fits each step on the training rows and only transforms at prediction time (no remembering the order); cross-validation and grid search refit every step inside each fold; one object saves to one file. It cannot stop a leaky COLUMN (such as <code class="inline">cancellation_reason</code>) that you put in the feature list.</li>
+  <li><b>0.930 vs 0.571:</b> the rates were computed with every training label, so each validation row's feature contained its own answer (most signup dates have one or two customers). <code class="inline">TargetEncoder</code> inside a pipeline, refitted per fold: honest CV 0.586, which matches the test.</li>
+  <li><b>A feature and its proof:</b> e.g. <code class="inline">lapsed_150</code> (a jump), <code class="inline">new_customer</code>/<code class="inline">veteran</code> (a U-shape), <code class="inline">tickets_no_app</code> or <code class="inline">night_new_device</code> (an interaction), category × month (a season per category). Proof = cross-validation against the plain model (0.829 → 0.883 for churn; 11.23 → 9.39 MAE for demand), then one test check.</li>
+</ol>
+
+  <div class="sec"><h2>Common Wrong Answers and What They Reveal</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li><b>Q1 A (<code class="inline">fit_transform</code> on new rows).</b> The learner still pictures preprocessing as something that happens to whatever data arrives. Use the batch argument: the same customer would get a different score in a different batch.</li>
+  <li><b>Q2 A or B.</b> Skips a level of nesting. Have them print <code class="inline">list(pipe.get_params())</code> and find the key; the path always starts at the top-level step.</li>
+  <li><b>Q3 B ("it sets C").</b> Assumes the step is called <code class="inline">model</code> everywhere. Only <code class="inline">Pipeline([...])</code> with your own names gives <code class="inline">model</code>.</li>
+  <li><b>Q4 A (the imputer).</b> Thinks "it does not look at y" means "it cannot leak". It still learns a median from the validation rows: a tiny leak, but not zero. Only a step that learns nothing is exactly safe.</li>
+  <li><b>Q8 A ("tenure does not matter").</b> Reads a small weight as no effect. Show the tenure table next to the weight: a shape the model cannot draw.</li>
+  <li><b>Q11 A ("averages overfit").</b> Misses the timing. Ask: "Were the 2025 weeks known when the forecast was made?"</li>
+  <li><b>Exit ticket 1: "a pipeline prevents all leaks".</b> The most important misconception of the day; point back to the selector that grabbed <code class="inline">cancellation_reason</code> (0.937).</li>
+</ul>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 4 · Answer Key · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

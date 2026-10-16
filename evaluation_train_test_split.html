@@ -3,1139 +3,1062 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Master train/test splits in machine learning. Learn stratification, time series splits, data leakage prevention, and validation strategies.">
-    <title>Train/Test Splits Path - Python Machine Learning</title>
+    <meta name="description" content="Split data honestly: measure how much one random split wobbles, keep a validation set apart from the test set, split by time and by group, choose the right baseline, and catch data leakage before it fools you. Python Machine Learning Lesson 1.2.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Splits, Baselines and Leakage - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
+    </nav>
+
     <main id="main-content">
-    <header role="banner">
-        <h1>Train/Test Splits</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Fundamentals</a>
-        <span class="separator">›</span>
-        <span class="current">Train/Test Splits</span>
-    </nav>
+        <div class="container">
+            <header>
+                <h1>✂️ Lesson 1.2: Splits, Baselines and Leakage</h1>
+                <p class="lead">A model's score is only as honest as the data it was graded on: learn to split data the way the model will really be used, and to spot a result that is too good to be true.</p>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Explain why holding out a test set is essential for an honest estimate of generalization</li>
-            <li>Use <code>train_test_split</code> with an appropriate <code>test_size</code> and <code>random_state</code></li>
-            <li>Apply stratification to preserve class balance across the split</li>
-            <li>Describe the distinct roles of training, validation, and test sets</li>
-            <li>Avoid data leakage by fitting preprocessing on the training set only</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Split a dataset into stratified training and test sets, train a model, and compare training versus test performance to diagnose fit.</p>
-    </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Measure how much a test score moves from one random split to another, and explain why stratifying helps</li>
+                        <li>Make a train / validation / test split and use each part for its one job</li>
+                        <li>Split by time and by group when rows are related, and show how much a careless random split flatters a model</li>
+                        <li>Pick a baseline that fits the problem (most frequent class, mean, yesterday, same day last week)</li>
+                        <li>Detect target leakage and train-test contamination, and remove them</li>
+                    </ul>
+                </div>
 
-    <h2>The Foundation of Model Evaluation! 🎯</h2>
-    
-    <blockquote>
-        <p>Proper train/test splitting is the cornerstone of reliable machine learning. It's not just about randomly dividing data—it's about creating representative splits that prevent overfitting, avoid data leakage, and provide honest performance estimates. Master these techniques to build models that generalize well to real-world data.</p>
-    </blockquote>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 100 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="basics_sklearn.html">Lesson 1.1: The scikit-learn Estimator API</a></li>
+                    <li><span class="meta-label">🛠️ You will build</span> An honest evaluation of a churn model: a leak audit, a validation-based choice and one final test score, saved as a short report</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code>, <code>data/daily_store_sales.csv</code>, <code>data/weekly_demand.csv</code> (exercises also use <code>data/transactions.csv</code>)</li>
+                </ul>
+            </header>
 
-    <h2>Why Train/Test Splits Matter</h2>
-    
-    <div class="mermaid">
-    graph TD
-        A[Complete Dataset] --> B{Split Strategy}
-        
-        B --> C[Random Split]
-        B --> D[Stratified Split]
-        B --> E[Time Series Split]
-        B --> F[Group Split]
-        B --> G[Multi-level Split]
-        
-        C --> H[Training Set<br/>60-80%]
-        C --> I[Test Set<br/>20-40%]
-        
-        G --> J[Training Set<br/>60%]
-        G --> K[Validation Set<br/>20%]
-        G --> L[Test Set<br/>20%]
-        
-        H --> M[Model Training]
-        M --> N[Predictions]
-        I --> N
-        N --> O[Evaluation]
-        
-        P[Data Leakage] -.->|Avoid| B
-        Q[Class Imbalance] -.->|Consider| D
-        R[Temporal Order] -.->|Maintain| E
-    </div>
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#why" class="toc-link">The Dress Rehearsal Rule</a></li>
+                        <li><a href="#wobble" class="toc-link">One Split Is One Sample</a></li>
+                        <li><a href="#validation" class="toc-link">Train, Validation and Test</a></li>
+                        <li><a href="#time" class="toc-link">Splitting by Time, and Forecast Baselines</a></li>
+                        <li><a href="#groups" class="toc-link">Splitting by Group</a></li>
+                        <li><a href="#leakage" class="toc-link">Leakage: Too Good to Be True</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: An Honest Churn Evaluation</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
 
-    <h2>Basic Train/Test Split</h2>
-    
-    <h3>Simple Random Split</h3>
-    <pre class="language-python"><code>import numpy as np
+            <!-- ============================================================ -->
+            <section id="why" class="lesson-section">
+                <h2>🎭 The Dress Rehearsal Rule</h2>
+
+                <p>In Lesson 1.1 you held back a test set, trained on the rest, and graded the model on the held-back rows. That one step is the whole reason you could trust the result: the model was graded on customers it had never seen. This lesson is about everything that can quietly break that promise, and about the yardsticks (baselines) that make a score mean something.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Dress Rehearsal</h4>
+                    <p>A theater company rehearses for weeks, then holds one <strong>dress rehearsal</strong> that is run exactly like opening night: full costumes, no stopping, no script in hand. If the dress rehearsal is easier than opening night (a prompter whispering lines, half the audience missing), it tells you nothing about the real show.</p>
+                    <p>Your test set is the dress rehearsal for the day the model goes live. The rule: <strong>evaluate the model under the same conditions it will face in real use</strong>. If it will predict next month from data up to this month, the test must be "later" than the training data. If it will score brand-new products, the test must hold products it has never seen. If a column will not exist at prediction time, the model must not see it in testing either.</p>
+                </div>
+
+                <p>Each section below breaks the rule in a different way and measures the damage with real numbers. The pattern is always the same: the careless evaluation looks better. That is what makes these mistakes dangerous. Nobody goes looking for a bug when the score goes up.</p>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>A model that looks 30% better in testing than it will be in use leads to wrong decisions: a budget approved for a forecast that will miss, a retention campaign aimed with a model that leans on information it will never have. Honest splitting is the cheapest quality control in machine learning. It costs a few lines of code, and it is the first thing an experienced reviewer checks.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="wobble" class="lesson-section">
+                <h2>🎲 One Split Is One Sample</h2>
+
+                <p>Start from the same customers and the same ten features as Lesson 1.1.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.datasets import make_classification, make_regression
 import matplotlib.pyplot as plt
-import seaborn as sns
-
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
-
-# Generate sample data
-X, y = make_classification(n_samples=1000, n_features=20, n_informative=15,
-                          n_redundant=5, n_classes=2, random_state=42)
-
-# Basic train/test split
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, 
-    test_size=0.2,      # 20% for testing
-    random_state=42     # For reproducibility
-)
-
-print(f"Original dataset size: {X.shape[0]} samples")
-print(f"Training set size: {X_train.shape[0]} samples ({X_train.shape[0]/X.shape[0]:.1%})")
-print(f"Test set size: {X_test.shape[0]} samples ({X_test.shape[0]/X.shape[0]:.1%})")
-
-# Verify no overlap
-train_indices = set(range(len(X_train)))
-test_indices = set(range(len(X_test)))
-print(f"Overlap between train and test: {len(train_indices.intersection(test_indices))} samples")
-
-# Different split ratios
-split_ratios = [0.1, 0.2, 0.25, 0.3, 0.4]
-results = []
-
-for ratio in split_ratios:
-    X_train_temp, X_test_temp, _, _ = train_test_split(
-        X, y, test_size=ratio, random_state=42
-    )
-    results.append({
-        'Test Ratio': ratio,
-        'Train Size': len(X_train_temp),
-        'Test Size': len(X_test_temp),
-        'Train %': f"{len(X_train_temp)/len(X):.1%}",
-        'Test %': f"{len(X_test_temp)/len(X):.1%}"
-    })
-
-results_df = pd.DataFrame(results)
-print("\nDifferent Split Ratios:")
-print(results_df.to_string(index=False))
-
-# Visualize split distribution
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-# Distribution of target variable
-train_counts = pd.Series(y_train).value_counts()
-test_counts = pd.Series(y_test).value_counts()
-
-axes[0].bar(['Class 0', 'Class 1'], train_counts.values, alpha=0.7, label='Train')
-axes[0].bar(['Class 0', 'Class 1'], test_counts.values, alpha=0.7, label='Test')
-axes[0].set_title('Class Distribution: Train vs Test')
-axes[0].set_ylabel('Count')
-axes[0].legend()
-
-# Feature distribution comparison
-feature_idx = 0  # First feature
-axes[1].hist(X_train[:, feature_idx], bins=30, alpha=0.5, label='Train', density=True)
-axes[1].hist(X_test[:, feature_idx], bins=30, alpha=0.5, label='Test', density=True)
-axes[1].set_title(f'Feature {feature_idx} Distribution')
-axes[1].set_xlabel('Value')
-axes[1].set_ylabel('Density')
-axes[1].legend()
-
-plt.tight_layout()
-plt.show()</code></pre>
-
-    <h2>Stratified Splitting</h2>
-    
-    <h3>Maintaining Class Balance</h3>
-    <pre class="language-python"><code># Stratified split for classification problems
-
 from sklearn.model_selection import train_test_split
-import numpy as np
-import pandas as pd
-
-# Create imbalanced dataset
-np.random.seed(42)
-n_samples = 1000
-n_class_0 = 900  # Majority class
-n_class_1 = 100  # Minority class
-
-X = np.vstack([
-    np.random.randn(n_class_0, 2),
-    np.random.randn(n_class_1, 2) + 3
-])
-y = np.array([0] * n_class_0 + [1] * n_class_1)
-
-print("Original class distribution:")
-print(pd.Series(y).value_counts(normalize=True))
-
-# Compare random vs stratified split
-fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-
-# Multiple random splits
-for i in range(3):
-    X_train_rand, X_test_rand, y_train_rand, y_test_rand = train_test_split(
-        X, y, test_size=0.2, random_state=i  # Different seeds
-    )
-    
-    # Plot class distributions
-    train_dist = pd.Series(y_train_rand).value_counts(normalize=True)
-    test_dist = pd.Series(y_test_rand).value_counts(normalize=True)
-    
-    x_pos = np.arange(2)
-    width = 0.35
-    
-    axes[0, i].bar(x_pos - width/2, train_dist.values, width, label='Train', alpha=0.7)
-    axes[0, i].bar(x_pos + width/2, test_dist.values, width, label='Test', alpha=0.7)
-    axes[0, i].set_title(f'Random Split {i+1}')
-    axes[0, i].set_xlabel('Class')
-    axes[0, i].set_ylabel('Proportion')
-    axes[0, i].set_xticks(x_pos)
-    axes[0, i].set_xticklabels(['Class 0', 'Class 1'])
-    axes[0, i].legend()
-    axes[0, i].set_ylim([0, 1])
-
-# Stratified splits
-for i in range(3):
-    X_train_strat, X_test_strat, y_train_strat, y_test_strat = train_test_split(
-        X, y, test_size=0.2, random_state=i, stratify=y  # Stratified
-    )
-    
-    # Plot class distributions
-    train_dist = pd.Series(y_train_strat).value_counts(normalize=True)
-    test_dist = pd.Series(y_test_strat).value_counts(normalize=True)
-    
-    axes[1, i].bar(x_pos - width/2, train_dist.values, width, label='Train', alpha=0.7)
-    axes[1, i].bar(x_pos + width/2, test_dist.values, width, label='Test', alpha=0.7)
-    axes[1, i].set_title(f'Stratified Split {i+1}')
-    axes[1, i].set_xlabel('Class')
-    axes[1, i].set_ylabel('Proportion')
-    axes[1, i].set_xticks(x_pos)
-    axes[1, i].set_xticklabels(['Class 0', 'Class 1'])
-    axes[1, i].legend()
-    axes[1, i].set_ylim([0, 1])
-
-plt.suptitle('Random vs Stratified Splitting on Imbalanced Data', fontsize=14)
-plt.tight_layout()
-plt.show()
-
-# Stratified split for regression (using bins)
-def stratified_split_regression(X, y, test_size=0.2, n_bins=5, random_state=42):
-    """
-    Stratified split for regression by binning the target variable
-    """
-    # Create bins for stratification
-    y_binned = pd.qcut(y, q=n_bins, labels=False, duplicates='drop')
-    
-    # Perform stratified split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, stratify=y_binned, random_state=random_state
-    )
-    
-    return X_train, X_test, y_train, y_test
-
-# Example with regression data
-X_reg, y_reg = make_regression(n_samples=1000, n_features=10, noise=10, random_state=42)
-
-# Apply stratified split for regression
-X_train_reg, X_test_reg, y_train_reg, y_test_reg = stratified_split_regression(
-    X_reg, y_reg, test_size=0.2
-)
-
-# Verify distribution similarity
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-axes[0].hist(y_train_reg, bins=30, alpha=0.5, label='Train', density=True)
-axes[0].hist(y_test_reg, bins=30, alpha=0.5, label='Test', density=True)
-axes[0].set_title('Target Distribution after Stratified Split (Regression)')
-axes[0].set_xlabel('Target Value')
-axes[0].set_ylabel('Density')
-axes[0].legend()
-
-# Q-Q plot to compare distributions
-from scipy import stats
-stats.probplot(y_test_reg, dist="norm", plot=axes[1])
-axes[1].set_title('Q-Q Plot of Test Set Target')
-
-plt.tight_layout()
-plt.show()</code></pre>
-
-    <h2>Time Series Splits</h2>
-    
-    <h3>Temporal Data Splitting</h3>
-    <pre class="language-python"><code># Time series splitting strategies
-
-from sklearn.model_selection import TimeSeriesSplit
-import pandas as pd
-import numpy as np
-
-# Generate time series data
-np.random.seed(42)
-dates = pd.date_range('2020-01-01', periods=365, freq='D')
-trend = np.linspace(100, 200, 365)
-seasonal = 10 * np.sin(np.arange(365) * 2 * np.pi / 30)  # Monthly seasonality
-noise = np.random.normal(0, 5, 365)
-values = trend + seasonal + noise
-
-df = pd.DataFrame({
-    'date': dates,
-    'value': values,
-    'feature1': np.random.randn(365),
-    'feature2': np.random.randn(365)
-})
-
-print(f"Time series data from {df['date'].min()} to {df['date'].max()}")
-
-# Method 1: Simple time-based split
-def time_based_split(df, train_ratio=0.8):
-    """Simple chronological split"""
-    n_train = int(len(df) * train_ratio)
-    train = df.iloc[:n_train]
-    test = df.iloc[n_train:]
-    return train, test
-
-train_simple, test_simple = time_based_split(df, train_ratio=0.8)
-
-print(f"\nSimple Time Split:")
-print(f"Train: {train_simple['date'].min()} to {train_simple['date'].max()}")
-print(f"Test: {test_simple['date'].min()} to {test_simple['date'].max()}")
-
-# Method 2: TimeSeriesSplit for cross-validation
-tscv = TimeSeriesSplit(n_splits=5)
-
-fig, axes = plt.subplots(5, 1, figsize=(12, 10))
-
-for i, (train_idx, test_idx) in enumerate(tscv.split(df)):
-    train_dates = df.iloc[train_idx]['date']
-    test_dates = df.iloc[test_idx]['date']
-    
-    axes[i].scatter(df.iloc[train_idx]['date'], df.iloc[train_idx]['value'], 
-                   alpha=0.5, label='Train', s=10)
-    axes[i].scatter(df.iloc[test_idx]['date'], df.iloc[test_idx]['value'], 
-                   alpha=0.5, label='Test', s=10, color='red')
-    axes[i].set_title(f'Split {i+1}')
-    axes[i].set_ylabel('Value')
-    axes[i].legend()
-    
-    # Add vertical line to show split point
-    split_date = df.iloc[train_idx[-1]]['date']
-    axes[i].axvline(x=split_date, color='black', linestyle='--', alpha=0.5)
-
-axes[-1].set_xlabel('Date')
-plt.suptitle('Time Series Cross-Validation Splits', fontsize=14)
-plt.tight_layout()
-plt.show()
-
-# Method 3: Expanding window (for time series)
-class ExpandingWindowSplit:
-    """Expanding window for time series validation"""
-    
-    def __init__(self, initial_train_size, test_size, step_size=1):
-        self.initial_train_size = initial_train_size
-        self.test_size = test_size
-        self.step_size = step_size
-    
-    def split(self, X):
-        n = len(X)
-        splits = []
-        
-        train_end = self.initial_train_size
-        
-        while train_end + self.test_size <= n:
-            train_idx = list(range(train_end))
-            test_idx = list(range(train_end, min(train_end + self.test_size, n)))
-            
-            splits.append((train_idx, test_idx))
-            train_end += self.step_size
-        
-        return splits
-
-# Method 4: Sliding window
-class SlidingWindowSplit:
-    """Fixed-size sliding window for time series"""
-    
-    def __init__(self, train_size, test_size, step_size=1):
-        self.train_size = train_size
-        self.test_size = test_size
-        self.step_size = step_size
-    
-    def split(self, X):
-        n = len(X)
-        splits = []
-        
-        start = 0
-        
-        while start + self.train_size + self.test_size <= n:
-            train_idx = list(range(start, start + self.train_size))
-            test_idx = list(range(start + self.train_size, 
-                                 start + self.train_size + self.test_size))
-            
-            splits.append((train_idx, test_idx))
-            start += self.step_size
-        
-        return splits
-
-# Visualize different time series split strategies
-fig, axes = plt.subplots(3, 1, figsize=(14, 10))
-
-# Expanding window
-expanding = ExpandingWindowSplit(initial_train_size=100, test_size=30, step_size=30)
-splits_expanding = expanding.split(df)
-
-for i, (train_idx, test_idx) in enumerate(splits_expanding[:5]):
-    color = plt.cm.viridis(i / 5)
-    axes[0].scatter(df.iloc[train_idx]['date'], [i] * len(train_idx), 
-                   alpha=0.7, s=5, color=color)
-    axes[0].scatter(df.iloc[test_idx]['date'], [i] * len(test_idx), 
-                   alpha=0.7, s=5, color='red')
-
-axes[0].set_title('Expanding Window Strategy')
-axes[0].set_ylabel('Split Number')
-axes[0].set_ylim([-0.5, 4.5])
-
-# Sliding window
-sliding = SlidingWindowSplit(train_size=100, test_size=30, step_size=30)
-splits_sliding = sliding.split(df)
-
-for i, (train_idx, test_idx) in enumerate(splits_sliding[:5]):
-    color = plt.cm.viridis(i / 5)
-    axes[1].scatter(df.iloc[train_idx]['date'], [i] * len(train_idx), 
-                   alpha=0.7, s=5, color=color)
-    axes[1].scatter(df.iloc[test_idx]['date'], [i] * len(test_idx), 
-                   alpha=0.7, s=5, color='red')
-
-axes[1].set_title('Sliding Window Strategy')
-axes[1].set_ylabel('Split Number')
-axes[1].set_ylim([-0.5, 4.5])
-
-# TimeSeriesSplit (sklearn)
-tscv = TimeSeriesSplit(n_splits=5)
-for i, (train_idx, test_idx) in enumerate(tscv.split(df)):
-    color = plt.cm.viridis(i / 5)
-    axes[2].scatter(df.iloc[train_idx]['date'], [i] * len(train_idx), 
-                   alpha=0.7, s=5, color=color)
-    axes[2].scatter(df.iloc[test_idx]['date'], [i] * len(test_idx), 
-                   alpha=0.7, s=5, color='red')
-
-axes[2].set_title('TimeSeriesSplit (sklearn)')
-axes[2].set_ylabel('Split Number')
-axes[2].set_xlabel('Date')
-axes[2].set_ylim([-0.5, 4.5])
-
-plt.tight_layout()
-plt.show()</code></pre>
-
-    <h2>Advanced Splitting Strategies</h2>
-    
-    <h3>Group-Based and Multi-Level Splits</h3>
-    <pre class="language-python"><code># Advanced splitting strategies
-
-from sklearn.model_selection import GroupShuffleSplit, GroupKFold, StratifiedGroupKFold
-from sklearn.model_selection import train_test_split
-import pandas as pd
-import numpy as np
-
-# Create grouped data (e.g., multiple samples per patient/user)
-np.random.seed(42)
-n_groups = 50
-n_samples_per_group = 20
-
-data = []
-for group_id in range(n_groups):
-    for sample in range(n_samples_per_group):
-        data.append({
-            'group_id': group_id,
-            'feature1': np.random.randn(),
-            'feature2': np.random.randn(),
-            'target': np.random.choice([0, 1])
-        })
-
-df = pd.DataFrame(data)
-X = df[['feature1', 'feature2']].values
-y = df['target'].values
-groups = df['group_id'].values
-
-print(f"Dataset: {len(df)} samples from {df['group_id'].nunique()} groups")
-print(f"Samples per group: {df['group_id'].value_counts().describe()}")
-
-# Method 1: GroupShuffleSplit - Ensures groups don't overlap
-gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-
-for train_idx, test_idx in gss.split(X, y, groups):
-    X_train, X_test = X[train_idx], X[test_idx]
-    y_train, y_test = y[train_idx], y[test_idx]
-    groups_train, groups_test = groups[train_idx], groups[test_idx]
-
-print(f"\nGroupShuffleSplit:")
-print(f"Train: {len(X_train)} samples from {len(np.unique(groups_train))} groups")
-print(f"Test: {len(X_test)} samples from {len(np.unique(groups_test))} groups")
-print(f"Group overlap: {len(set(groups_train).intersection(set(groups_test)))} groups")
-
-# Method 2: GroupKFold for cross-validation
-gkf = GroupKFold(n_splits=5)
-
-splits_info = []
-for fold, (train_idx, test_idx) in enumerate(gkf.split(X, y, groups)):
-    train_groups = np.unique(groups[train_idx])
-    test_groups = np.unique(groups[test_idx])
-    
-    splits_info.append({
-        'Fold': fold + 1,
-        'Train Samples': len(train_idx),
-        'Test Samples': len(test_idx),
-        'Train Groups': len(train_groups),
-        'Test Groups': len(test_groups),
-        'Group Overlap': len(set(train_groups).intersection(set(test_groups)))
-    })
-
-splits_df = pd.DataFrame(splits_info)
-print("\nGroupKFold Splits:")
-print(splits_df.to_string(index=False))
-
-# Method 3: Multi-level split (train/val/test)
-def multi_level_split(X, y, train_ratio=0.6, val_ratio=0.2, test_ratio=0.2, 
-                      stratify=None, random_state=42):
-    """
-    Split data into train/validation/test sets
-    """
-    assert train_ratio + val_ratio + test_ratio == 1.0, "Ratios must sum to 1"
-    
-    # First split: separate test set
-    X_temp, X_test, y_temp, y_test = train_test_split(
-        X, y, 
-        test_size=test_ratio,
-        stratify=stratify if stratify is not None else None,
-        random_state=random_state
-    )
-    
-    # Second split: separate train and validation
-    val_ratio_adjusted = val_ratio / (train_ratio + val_ratio)
-    
-    if stratify is not None:
-        # Need to adjust stratify array for temp split
-        stratify_temp = stratify[:len(X_temp)]
-    else:
-        stratify_temp = None
-    
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_temp, y_temp,
-        test_size=val_ratio_adjusted,
-        stratify=y_temp if stratify is not None else None,
-        random_state=random_state
-    )
-    
-    return X_train, X_val, X_test, y_train, y_val, y_test
-
-# Apply multi-level split
-X_multi, y_multi = make_classification(n_samples=1000, n_features=10, 
-                                       n_classes=3, random_state=42)
-
-X_train, X_val, X_test, y_train, y_val, y_test = multi_level_split(
-    X_multi, y_multi, 
-    train_ratio=0.6, 
-    val_ratio=0.2, 
-    test_ratio=0.2,
-    stratify=y_multi
-)
-
-print(f"\nMulti-level Split:")
-print(f"Train: {len(X_train)} samples ({len(X_train)/len(X_multi):.1%})")
-print(f"Validation: {len(X_val)} samples ({len(X_val)/len(X_multi):.1%})")
-print(f"Test: {len(X_test)} samples ({len(X_test)/len(X_multi):.1%})")
-
-# Visualize multi-level split
-fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-datasets = [
-    ('Training Set', y_train),
-    ('Validation Set', y_val),
-    ('Test Set', y_test)
-]
-
-for ax, (name, y_data) in zip(axes, datasets):
-    unique, counts = np.unique(y_data, return_counts=True)
-    ax.bar(unique, counts, alpha=0.7)
-    ax.set_title(f'{name}\n(n={len(y_data)})')
-    ax.set_xlabel('Class')
-    ax.set_ylabel('Count')
-    ax.set_xticks(unique)
-    
-    # Add percentage labels
-    for i, (u, c) in enumerate(zip(unique, counts)):
-        ax.text(u, c, f'{c/len(y_data):.1%}', 
-               ha='center', va='bottom')
-
-plt.suptitle('Multi-Level Split: Class Distribution', fontsize=14)
-plt.tight_layout()
-plt.show()
-
-# Method 4: Nested splits for hyperparameter tuning
-class NestedSplit:
-    """
-    Nested splitting for unbiased model evaluation
-    Outer loop: Model evaluation
-    Inner loop: Hyperparameter tuning
-    """
-    
-    def __init__(self, outer_splits=5, inner_splits=3):
-        self.outer_splits = outer_splits
-        self.inner_splits = inner_splits
-    
-    def split(self, X, y):
-        from sklearn.model_selection import KFold
-        
-        outer_cv = KFold(n_splits=self.outer_splits, shuffle=True, random_state=42)
-        inner_cv = KFold(n_splits=self.inner_splits, shuffle=True, random_state=42)
-        
-        nested_scores = []
-        
-        for outer_fold, (train_val_idx, test_idx) in enumerate(outer_cv.split(X, y)):
-            X_train_val, X_test = X[train_val_idx], X[test_idx]
-            y_train_val, y_test = y[train_val_idx], y[test_idx]
-            
-            # Inner loop for hyperparameter tuning
-            inner_scores = []
-            for inner_fold, (train_idx, val_idx) in enumerate(inner_cv.split(X_train_val, y_train_val)):
-                X_train = X_train_val[train_idx]
-                X_val = X_train_val[val_idx]
-                y_train = y_train_val[train_idx]
-                y_val = y_train_val[val_idx]
-                
-                inner_scores.append({
-                    'outer_fold': outer_fold,
-                    'inner_fold': inner_fold,
-                    'train_size': len(X_train),
-                    'val_size': len(X_val),
-                    'test_size': len(X_test)
-                })
-            
-            nested_scores.extend(inner_scores)
-        
-        return pd.DataFrame(nested_scores)
-
-# Example of nested splits
-nested = NestedSplit(outer_splits=3, inner_splits=3)
-nested_df = nested.split(X_multi, y_multi)
-
-print("\nNested Cross-Validation Structure:")
-print(nested_df.groupby('outer_fold').agg({
-    'inner_fold': 'count',
-    'train_size': 'mean',
-    'val_size': 'mean',
-    'test_size': 'mean'
-}).round().astype(int))</code></pre>
-
-    <h2>Data Leakage Prevention</h2>
-    
-    <h3>Avoiding Common Pitfalls</h3>
-    <pre class="language-python"><code># Data leakage examples and prevention
-
-from sklearn.preprocessing import StandardScaler, PolynomialFeatures
-from sklearn.feature_selection import SelectKBest, f_classif
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline
-import numpy as np
-import pandas as pd
+from sklearn.dummy import DummyClassifier
 
-# Generate data
-X, y = make_classification(n_samples=1000, n_features=20, n_informative=10,
-                          n_redundant=10, random_state=42)
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+X = customers[features]
+y = customers["churned"]
+print(X.shape, f"churn rate {y.mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(6000, 10) churn rate 0.165</code></pre>
+                </div>
 
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                <p>In Lesson 1.1, logistic regression scored 0.848 on the split made with <code>random_state=42</code>. But 42 was an arbitrary choice. Which 1,500 customers land in the test set is luck, and a different draw gives a different score. How different? Wrap the whole split, scale, fit and score routine in a function and run it for 30 different seeds.</p>
 
-print("Data Leakage Examples:\n")
-
-# ❌ WRONG: Scaling before splitting (data leakage!)
-def wrong_preprocessing():
-    """Incorrect: Preprocessing before splitting causes leakage"""
-    # Scale the entire dataset (WRONG!)
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)  # Fit on ALL data - leakage!
-    
-    # Then split
-    X_train_wrong, X_test_wrong, y_train_wrong, y_test_wrong = train_test_split(
-        X_scaled, y, test_size=0.2, random_state=42
+                <pre><code class="language-python">def split_and_score(seed, test_size=0.25):
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, stratify=y, random_state=seed
     )
-    
-    # Train model
-    model = LogisticRegression(random_state=42)
-    model.fit(X_train_wrong, y_train_wrong)
-    score = model.score(X_test_wrong, y_test_wrong)
-    
-    return score
+    scaler = StandardScaler().fit(X_train)
+    model = LogisticRegression().fit(scaler.transform(X_train), y_train)
+    return model.score(scaler.transform(X_test), y_test)
 
-# ✅ CORRECT: Scaling after splitting
-def correct_preprocessing():
-    """Correct: Preprocessing after splitting prevents leakage"""
-    # Split first
-    X_train_correct, X_test_correct, y_train_correct, y_test_correct = train_test_split(
-        X, y, test_size=0.2, random_state=42
+scores = pd.Series([split_and_score(seed) for seed in range(30)])
+print(scores.describe().round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>count    30.000
+mean      0.851
+std       0.007
+min       0.836
+25%       0.849
+50%       0.852
+75%       0.855
+max       0.866
+dtype: float64</code></pre>
+                </div>
+
+                <pre><code class="language-python">fig, ax = plt.subplots(figsize=(9, 3.6), layout="constrained")
+ax.hist(scores, bins=12, color="#667eea", label="logistic regression, 30 random splits")
+ax.axvline(0.835, color="black", linestyle="--", linewidth=1, label="baseline (always 'stays'): 0.835")
+ax.set_xlabel("Test accuracy")
+ax.set_ylabel("Number of splits")
+ax.set_title("The same model, 30 different test sets")
+ax.legend(loc="upper left")
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/evaluation_train_test_split_wobble.png" alt="Histogram of logistic regression test accuracy over 30 random train/test splits. The scores spread from about 0.836 to 0.866, centered near 0.851, and the lowest lies just above the dashed baseline line at 0.835." width="990" height="396" loading="lazy">
+                    <figcaption>Nothing about the model changed between these 30 runs, only which customers were in the test set. The spread is the noise in any single score.</figcaption>
+                </figure>
+
+                <p>The same model scores anywhere from 0.836 to 0.866 depending only on the draw. The standard deviation, about 0.007, is the size of the "wobble". Compare that with the gap that matters: logistic regression beats the baseline by about 0.016 on average, little more than two wobbles. With one unlucky split you could conclude the model is no better than doing nothing; with a lucky one you might report 0.866 and believe it.</p>
+
+                <div class="card card-success">
+                    <h4>✅ What to Do About It</h4>
+                    <p>Treat a single test score as an estimate with an error bar, not a fact. Differences smaller than the wobble mean nothing. Lesson 1.3 gives you the standard tool for this: cross-validation, which averages over several splits automatically and reports the spread.</p>
+                </div>
+
+                <h3>Stratify, or the Class Balance Wobbles Too</h3>
+                <p>The function above stratifies. Without <code>stratify=y</code>, the share of churners in the test set also varies from draw to draw, which adds a second source of noise:</p>
+
+                <pre><code class="language-python">test_rates = {"random": [], "stratified": []}
+for seed in range(30):
+    *_, y_te = train_test_split(X, y, test_size=0.25, random_state=seed)
+    test_rates["random"].append(y_te.mean())
+    *_, y_te = train_test_split(X, y, test_size=0.25, stratify=y, random_state=seed)
+    test_rates["stratified"].append(y_te.mean())
+
+print(pd.DataFrame(test_rates).agg(["min", "max"]).round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>     random  stratified
+min   0.151       0.165
+max   0.181       0.165</code></pre>
+                </div>
+
+                <p>(<code>*_, y_te = ...</code> keeps only the last of the four results.) Unstratified test sets held anywhere from about 15% to 18% churners; stratified ones are pinned at 16.5%. Since the baseline's accuracy is exactly one minus the churn rate, an unstratified test set moves the yardstick as well as the score. Always stratify a classification split, and stratify on the target, never on a feature.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="validation" class="lesson-section">
+                <h2>🧪 Train, Validation and Test</h2>
+
+                <p>Lesson 1.1 warned that comparing models on the test set, again and again, slowly turns the test set into training data: <em>you</em> learn from it. Every time you pick the better of two options by their test score, a little luck from that particular test set leaks into your choice. The fix is a third part with its own job.</p>
+
+                <div class="diagram">
+                    <svg viewBox="0 0 440 180" width="440" height="180" role="img" aria-label="A bar split into three parts: training 60 percent, 3,600 customers, used to fit models; validation 20 percent, 1,200 customers, used to choose between models and settings; test 20 percent, 1,200 customers, used once at the end to grade the final choice.">
+                        <rect class="svg-box-1" x="10" y="10" width="252" height="44" rx="6"/>
+                        <rect class="svg-box-3" x="264" y="10" width="82" height="44" rx="6"/>
+                        <rect class="svg-box-2" x="348" y="10" width="82" height="44" rx="6"/>
+                        <text class="svg-text" font-size="13" x="136" y="37" text-anchor="middle">train 60%: 3,600</text>
+                        <text class="svg-text" font-size="13" x="305" y="37" text-anchor="middle">1,200</text>
+                        <text class="svg-text" font-size="13" x="389" y="37" text-anchor="middle">1,200</text>
+                        <rect class="svg-box-1" x="10" y="76" width="16" height="16" rx="3"/>
+                        <text class="svg-text" font-size="13" x="34" y="89">train: fit every candidate</text>
+                        <rect class="svg-box-3" x="10" y="102" width="16" height="16" rx="3"/>
+                        <text class="svg-text" font-size="13" x="34" y="115">validation (20%): compare and choose one</text>
+                        <rect class="svg-box-2" x="10" y="128" width="16" height="16" rx="3"/>
+                        <text class="svg-text" font-size="13" x="34" y="141">test (20%): grade the final choice once</text>
+                        <text class="svg-accent" font-size="13" x="10" y="170">The test set is opened once, at the very end.</text>
+                    </svg>
+                </div>
+
+                <ul>
+                    <li><strong>Training set</strong>: every candidate model learns from it.</li>
+                    <li><strong>Validation set</strong>: you compare candidates (different models, different settings) on it and pick one. It is allowed to influence your choices; that is its job.</li>
+                    <li><strong>Test set</strong>: locked away until the choice is made, then used once to report how the chosen model will do. Because nothing was chosen with it, its score is unbiased.</li>
+                </ul>
+
+                <p>scikit-learn has no three-way split function; call <code>train_test_split</code> twice. Carve off the test set first, then split the rest. To get 60/20/20, the second split takes 25% of the remaining 80%.</p>
+
+                <pre><code class="language-python">X_rest, X_test, y_rest, y_test = train_test_split(X, y, test_size=0.20, stratify=y, random_state=42)
+X_train, X_val, y_train, y_val = train_test_split(X_rest, y_rest, test_size=0.25, stratify=y_rest, random_state=42)
+
+print(len(X_train), len(X_val), len(X_test))
+print(f"churn rates: {y_train.mean():.3f} {y_val.mean():.3f} {y_test.mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>3600 1200 1200
+churn rates: 0.166 0.165 0.165</code></pre>
+                </div>
+
+                <p>Note <code>stratify=y_rest</code> in the second call: you stratify on the target of the data you are splitting. Now use the validation set for a real decision: how deep should a decision tree be? (Trees do not need scaling, so the raw features are fine.)</p>
+
+                <pre><code class="language-python">from sklearn.tree import DecisionTreeClassifier
+
+val_by_depth = {}
+for depth in [2, 3, 4, 5, 6, 8, 12]:
+    tree = DecisionTreeClassifier(max_depth=depth, random_state=42).fit(X_train, y_train)
+    val_by_depth[depth] = tree.score(X_val, y_val)
+    print(f"max_depth={depth:2d}  train {tree.score(X_train, y_train):.3f}  validation {val_by_depth[depth]:.3f}")
+
+best_depth = max(val_by_depth, key=val_by_depth.get)
+print("chosen depth:", best_depth)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>max_depth= 2  train 0.858  validation 0.849
+max_depth= 3  train 0.872  validation 0.864
+max_depth= 4  train 0.876  validation 0.864
+max_depth= 5  train 0.886  validation 0.859
+max_depth= 6  train 0.898  validation 0.858
+max_depth= 8  train 0.921  validation 0.848
+max_depth=12  train 0.978  validation 0.823
+chosen depth: 3</code></pre>
+                </div>
+
+                <p>Training accuracy climbs with every extra level, because a deeper tree memorizes more. Validation accuracy peaks and then falls: that is the overfitting you saw in Lesson 1.1's exercise, now used to make a decision. Depths 3 and 4 tie on validation (the same number of correct answers out of 1,200); <code>max</code> returns the first of equal values, which here is also the sensible tie-break: when two settings score the same, prefer the simpler one. Now, and only now, open the test set: refit the chosen tree on training plus validation data (more data, same settings) and grade it once, next to the baseline.</p>
+
+                <pre><code class="language-python">final_tree = DecisionTreeClassifier(max_depth=best_depth, random_state=42).fit(X_rest, y_rest)
+baseline = DummyClassifier(strategy="most_frequent").fit(X_rest, y_rest)
+
+print(f"baseline   test accuracy {baseline.score(X_test, y_test):.3f}")
+print(f"tree (d={best_depth}) test accuracy {final_tree.score(X_test, y_test):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>baseline   test accuracy 0.835
+tree (d=3) test accuracy 0.858</code></pre>
+                </div>
+
+                <p>The test score (0.858) is a little below the best validation score (0.864). That is normal and even expected: the winner on validation is partly the one that got lucky on those 1,200 rows. The test score is the number you report.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Once Means Once</h4>
+                    <p>If the test score disappoints and you go back to try more depths, then look at the test set again, it has become a second validation set and no longer gives an unbiased estimate. In real projects, teams sometimes keep a final test set that nobody on the modeling team may look at. In this course, treat the test set as a sealed envelope.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="time" class="lesson-section">
+                <h2>📅 Splitting by Time, and Forecast Baselines</h2>
+
+                <p>Pinecrest wants to forecast each store's daily sales. On opening night, the model will be trained on everything up to today and asked about days that have not happened yet. The dress rehearsal must look the same: train on the past, test on the future. A random split breaks that rule, and you can measure what it costs.</p>
+
+                <p>Load the daily sales and build a few calendar features. A model can only use numbers, so the store name becomes a code, and the date becomes a running day count, a day of the week and a day of the year.</p>
+
+                <pre><code class="language-python">sales = pd.read_csv("data/daily_store_sales.csv", parse_dates=["date"])
+sales["store_code"] = sales["store"].map({"Asheville": 0, "Bend": 1, "Boise": 2, "Flagstaff": 3})
+sales["day_index"] = (sales["date"] - sales["date"].min()).dt.days
+sales["day_of_week"] = sales["date"].dt.dayofweek
+sales["day_of_year"] = sales["date"].dt.dayofyear
+sales["closed"] = (sales["event"] == "Closed").astype(int)
+
+calendar = ["store_code", "day_index", "day_of_week", "day_of_year", "promo", "closed"]
+print(sales[["date", "store", "sales"] + calendar].head(5))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>        date      store    sales  store_code  day_index  day_of_week  day_of_year  promo  closed
+0 2023-01-01  Asheville  4838.69           0          0            6            1      0       0
+1 2023-01-01       Bend  4533.55           1          0            6            1      0       0
+2 2023-01-01      Boise  6026.92           2          0            6            1      0       0
+3 2023-01-01  Flagstaff  4217.59           3          0            6            1      0       0
+4 2023-01-02  Asheville  2695.58           0          1            0            2      0       0</code></pre>
+                </div>
+
+                <p>Now train the same random forest twice. Once on a random split, and once on the honest time split: 2023 and 2024 for training, all of 2025 for testing. Both test sets have the same size. To grade a number prediction, use <strong>mean absolute error</strong> (MAE): the average size of the miss, here in dollars. Lower is better, and Lesson 1.4 covers it with the other metrics.</p>
+
+                <pre><code class="language-python">from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error
+
+def forest_mae(train, test):
+    forest = RandomForestRegressor(n_estimators=200, min_samples_leaf=3, random_state=42, n_jobs=-1)
+    forest.fit(train[calendar], train["sales"])
+    return mean_absolute_error(test["sales"], forest.predict(test[calendar]))
+
+is_2025 = sales["date"].dt.year == 2025
+past, future = sales[~is_2025], sales[is_2025]
+shuffled_train, shuffled_test = train_test_split(sales, test_size=len(future), random_state=42)
+
+print(f"test rows: {len(future):,}")
+print(f"random split MAE: ${forest_mae(shuffled_train, shuffled_test):,.0f}")
+print(f"time split MAE:   ${forest_mae(past, future):,.0f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>test rows: 1,460
+random split MAE: $613
+time split MAE:   $854</code></pre>
+                </div>
+
+                <p>Same model, same features, same number of test days, and the random split claims the forecast is off by about $600 a day when it will really be off by about $850. The random split flatters the model by roughly 30%. Why? Sales have momentum: a strong Tuesday is usually followed by a strong Wednesday. With a random split, almost every test day has its neighbors (the day before <em>and the day after</em>) in the training set, and the forest leans on them. In real use, tomorrow's neighbors are never available. The time split takes them away, exactly as reality will.</p>
+
+                <pre><code class="language-python">boise = sales[sales["store"] == "Boise"]
+
+fig, ax = plt.subplots(figsize=(9, 3.6), layout="constrained")
+ax.plot(boise.loc[~is_2025, "date"], boise.loc[~is_2025, "sales"], color="#667eea", linewidth=0.6, label="train: 2023 and 2024")
+ax.plot(boise.loc[is_2025, "date"], boise.loc[is_2025, "sales"], color="#d97706", linewidth=0.6, label="test: 2025")
+ax.set_ylabel("Daily sales ($)")
+ax.set_title("Boise store: train on the past, test on the future")
+ax.legend(loc="upper left")
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/evaluation_train_test_split_time_split.png" alt="Line chart of the Boise store's daily sales from 2023 to 2025. The first two years, drawn in blue, are the training data; 2025, drawn in orange, is the test data. Sales swing up and down with the week and the season, peak in summer and late November, and drift upward over the three years." width="990" height="396" loading="lazy">
+                    <figcaption>A time split draws one line through the calendar: everything left of it is the past the model may learn from, everything right of it is the future it must predict.</figcaption>
+                </figure>
+
+                <h3>Baselines for a Forecast</h3>
+                <p>Is $850 good? Only a baseline can say. For classification, Lesson 1.1's baseline was "always predict the most common class". For numbers, the equivalent is "always predict the training mean" (<code>DummyRegressor</code>). For a forecast there are two much tougher baselines that cost nothing: <strong>naive</strong> (tomorrow will be like today) and <strong>seasonal naive</strong> (next Saturday will be like last Saturday). Each is just a shifted column.</p>
+
+                <pre><code class="language-python">from sklearn.dummy import DummyRegressor
+
+sales = sales.sort_values(["store", "date"])
+sales["yesterday"] = sales.groupby("store")["sales"].shift(1)
+sales["same_day_last_week"] = sales.groupby("store")["sales"].shift(7)
+future = sales[sales["date"].dt.year == 2025]
+
+mean_model = DummyRegressor(strategy="mean").fit(past[calendar], past["sales"])
+print(f"training mean       MAE ${mean_absolute_error(future['sales'], mean_model.predict(future[calendar])):,.0f}")
+print(f"yesterday           MAE ${mean_absolute_error(future['sales'], future['yesterday']):,.0f}")
+print(f"same day last week  MAE ${mean_absolute_error(future['sales'], future['same_day_last_week']):,.0f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>training mean       MAE $1,967
+yesterday           MAE $1,350
+same day last week  MAE $1,072</code></pre>
+                </div>
+
+                <p>The training mean misses by almost $2,000 a day. Copying last week's same day already gets down to about $1,070, with no model at all. The forest, honestly measured at about $850, beats every baseline, so it earns its place. Measured dishonestly at about $600 it would have looked like a triumph. The shifted columns are legitimate because they only look backward: on any given day, yesterday and last week are already known.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Which Baseline?</h4>
+                    <p>Classification: the most frequent class (and, for ranking, a random list). Regression: the training mean or median, or a simple group average (each product's usual sales). Forecasting: the last value or the same period last week or last year. Recommendations: the most popular items. Always choose the <em>strongest</em> cheap baseline, not the weakest: beating "always predict the mean" proves little when "same day last week" is free.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="groups" class="lesson-section">
+                <h2>👥 Splitting by Group</h2>
+
+                <p>Rows can be related in other ways than time. <code>weekly_demand.csv</code> has 104 weeks for each of 24 products in each of 4 stores. Suppose Pinecrest plans to launch new products and wants to predict how they will sell. On opening night, the model meets products it has never seen. A random split, though, puts weeks of every product in both training and test, so the model is always tested on products it already knows.</p>
+
+                <p><code>GroupShuffleSplit</code> splits by <strong>group</strong> instead of by row: every row of a product goes to the same side. Compare it with an ordinary random split, using a random forest on the numeric columns.</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import GroupShuffleSplit
+
+demand = pd.read_csv("data/weekly_demand.csv")
+numeric = ["week_of_year", "store_sqft", "list_price", "price", "discount_pct",
+           "promo", "holiday_week", "avg_high_temp_f"]
+
+row_train, row_test = train_test_split(demand, test_size=0.25, random_state=42)
+
+splitter = GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=42)
+train_idx, test_idx = next(splitter.split(demand, groups=demand["product_id"]))
+group_train, group_test = demand.iloc[train_idx], demand.iloc[test_idx]
+
+shared = set(group_train["product_id"]) &amp; set(group_test["product_id"])
+print(f"group split: {group_test['product_id'].nunique()} test products, {len(shared)} shared with training")
+
+for name, train, test in [("random rows", row_train, row_test), ("new products", group_train, group_test)]:
+    forest = RandomForestRegressor(n_estimators=200, min_samples_leaf=3, random_state=42, n_jobs=-1)
+    forest.fit(train[numeric], train["units_sold"])
+    mean_guess = DummyRegressor().fit(train[numeric], train["units_sold"])
+    print(f"{name:12s}  forest MAE {mean_absolute_error(test['units_sold'], forest.predict(test[numeric])):5.2f}"
+          f"   mean baseline MAE {mean_absolute_error(test['units_sold'], mean_guess.predict(test[numeric])):5.2f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>group split: 6 test products, 0 shared with training
+random rows   forest MAE 10.23   mean baseline MAE 17.03
+new products  forest MAE 17.84   mean baseline MAE 20.87</code></pre>
+                </div>
+
+                <p>(<code>test_size=0.25</code> in <code>GroupShuffleSplit</code> means a quarter of the <em>groups</em>: 6 of the 24 products.) On a random split the forest looks excellent, missing by about 10 units against the baseline's 17. On products it has never seen it misses by about 18 units, barely better than guessing the average. The forest had learned each known product's usual level (its <code>list_price</code> identifies it), which is useless for a new product.</p>
+
+                <p>Neither number is wrong; they answer different questions. "How well do we forecast the products we already sell?" calls for a row split (by time, as in the previous section). "How well can we predict a product we have never sold?" calls for a group split. Choosing the split <em>is</em> choosing the question. Other common groups: the same customer appearing in many rows (split by customer), several photos of the same object, repeated visits by the same patient.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="leakage" class="lesson-section">
+                <h2>🚰 Leakage: Too Good to Be True</h2>
+
+                <p><strong>Data leakage</strong> means the model gets information during training or testing that it will not have when it is used for real. The random time split above leaked tomorrow's neighbors. Here are the main kinds:</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Kind</th><th>What leaks</th><th>Example</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Target leakage</strong></td><td>a feature recorded after, or because of, the outcome</td><td><code>cancellation_reason</code> only exists once a customer has left</td></tr>
+                            <tr><td><strong>Train-test contamination</strong></td><td>test rows influence training: a scaler, an imputer or a feature selector fitted before the split</td><td>scaling with the whole table's mean (1.1, mistake 6); choosing features on all rows (mistake 4 below)</td></tr>
+                            <tr><td><strong>Time leakage</strong></td><td>the future helps predict the past</td><td>a random split on daily sales; a "7-day average" that includes later days (mistake 5)</td></tr>
+                            <tr><td><strong>Group leakage</strong></td><td>the same entity on both sides of the split</td><td>weeks of the same product in train and test when the question is about new products</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p>Target leakage is the most dramatic. Lesson 1.1 warned you about <code>cancellation_reason</code>. Now see what it does. First, a quick count:</p>
+
+                <pre><code class="language-python">customers["has_reason"] = customers["cancellation_reason"].notna().astype(int)
+print(pd.crosstab(customers["has_reason"], customers["churned"]))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>churned        0    1
+has_reason
+0           5008  367
+1              0  625</code></pre>
+                </div>
+
+                <p>Every one of the 625 customers with a reason churned. Add that one flag to the ten honest features and retrain the Lesson 1.1 logistic regression on the Lesson 1.1 split:</p>
+
+                <pre><code class="language-python">def logreg_accuracy(columns):
+    X_tr, X_te, y_tr, y_te = train_test_split(
+        customers[columns], y, test_size=0.25, stratify=y, random_state=42
     )
-    
-    # Scale training data
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train_correct)  # Fit only on training
-    X_test_scaled = scaler.transform(X_test_correct)  # Transform only on test
-    
-    # Train model
-    model = LogisticRegression(random_state=42)
-    model.fit(X_train_scaled, y_train_correct)
-    score = model.score(X_test_scaled, y_test_correct)
-    
-    return score
+    scaler = StandardScaler().fit(X_tr)
+    model = LogisticRegression().fit(scaler.transform(X_tr), y_tr)
+    return model.score(scaler.transform(X_te), y_te)
 
-wrong_score = wrong_preprocessing()
-correct_score = correct_preprocessing()
+print(f"10 honest features:         {logreg_accuracy(features):.3f}")
+print(f"10 features + has_reason:   {logreg_accuracy(features + ['has_reason']):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>10 honest features:         0.848
+10 features + has_reason:   0.941</code></pre>
+                </div>
 
-print(f"❌ Wrong approach (with leakage): {wrong_score:.3f}")
-print(f"✅ Correct approach (no leakage): {correct_score:.3f}")
-print(f"Difference: {wrong_score - correct_score:.3f}")
+                <p>From 0.848 to 0.941 with one column. Nothing else in this course will lift a churn model that much, and that is the clue. In real use the column is always empty, because on the day you score a customer they have not cancelled yet. The real accuracy of the leaky model would be no better than the honest one, and possibly worse, because it learned to rely on a signal that never comes.</p>
 
-# More leakage examples
-class DataLeakageExamples:
-    """Common data leakage scenarios and solutions"""
-    
-    @staticmethod
-    def feature_selection_leakage():
-        """Feature selection leakage example"""
-        print("\n2. Feature Selection Leakage:")
-        
-        # ❌ WRONG: Select features on all data
-        selector = SelectKBest(f_classif, k=10)
-        X_selected_wrong = selector.fit_transform(X, y)  # Fit on all data!
-        X_train_wrong, X_test_wrong, y_train_wrong, y_test_wrong = train_test_split(
-            X_selected_wrong, y, test_size=0.2, random_state=42
-        )
-        
-        model = LogisticRegression(random_state=42)
-        model.fit(X_train_wrong, y_train_wrong)
-        wrong_score = model.score(X_test_wrong, y_test_wrong)
-        
-        # ✅ CORRECT: Select features only on training data
-        X_train_correct, X_test_correct, y_train_correct, y_test_correct = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
-        
-        selector = SelectKBest(f_classif, k=10)
-        X_train_selected = selector.fit_transform(X_train_correct, y_train_correct)
-        X_test_selected = selector.transform(X_test_correct)  # Transform only
-        
-        model = LogisticRegression(random_state=42)
-        model.fit(X_train_selected, y_train_correct)
-        correct_score = model.score(X_test_selected, y_test_correct)
-        
-        print(f"❌ With leakage: {wrong_score:.3f}")
-        print(f"✅ Without leakage: {correct_score:.3f}")
-    
-    @staticmethod
-    def duplicate_samples_leakage():
-        """Duplicate samples causing leakage"""
-        print("\n3. Duplicate Samples Leakage:")
-        
-        # Create data with duplicates
-        X_with_dups = np.vstack([X[:100], X[:100]])  # Duplicate first 100 samples
-        y_with_dups = np.hstack([y[:100], y[:100]])
-        
-        # Random split might put duplicates in both train and test
-        X_train_dups, X_test_dups, y_train_dups, y_test_dups = train_test_split(
-            X_with_dups, y_with_dups, test_size=0.2, random_state=42
-        )
-        
-        # Check for duplicates between train and test
-        train_df = pd.DataFrame(X_train_dups)
-        test_df = pd.DataFrame(X_test_dups)
-        
-        # Find duplicates
-        merged = train_df.merge(test_df, how='inner', 
-                               left_on=list(range(20)), right_on=list(range(20)))
-        
-        print(f"Number of duplicate samples between train and test: {len(merged)}")
-        print("Solution: Remove duplicates before splitting or use GroupKFold")
-    
-    @staticmethod
-    def target_leakage():
-        """Target leakage from feature engineering"""
-        print("\n4. Target Leakage from Features:")
-        
-        # Create features that leak target information
-        np.random.seed(42)
-        X_leak = np.random.randn(1000, 5)
-        y_leak = np.random.choice([0, 1], 1000)
-        
-        # Add a feature that's highly correlated with target (leakage!)
-        X_leak = np.column_stack([X_leak, y_leak + np.random.normal(0, 0.1, 1000)])
-        
-        # This will show artificially high performance
-        X_train_leak, X_test_leak, y_train_leak, y_test_leak = train_test_split(
-            X_leak, y_leak, test_size=0.2, random_state=42
-        )
-        
-        model = LogisticRegression(random_state=42)
-        model.fit(X_train_leak, y_train_leak)
-        leak_score = model.score(X_test_leak, y_test_leak)
-        
-        # Without leaky feature
-        model_clean = LogisticRegression(random_state=42)
-        model_clean.fit(X_train_leak[:, :5], y_train_leak)  # Exclude leaky feature
-        clean_score = model_clean.score(X_test_leak[:, :5], y_test_leak)
-        
-        print(f"With target leakage: {leak_score:.3f}")
-        print(f"Without target leakage: {clean_score:.3f}")
+                <h3>🔎 How to Catch a Leak</h3>
+                <p>Leaks rarely announce themselves with a name like <code>cancellation_reason</code>. Two habits catch most of them. The first is a question you ask about every column:</p>
 
-# Run leakage examples
-examples = DataLeakageExamples()
-examples.feature_selection_leakage()
-examples.duplicate_samples_leakage()
-examples.target_leakage()
+                <div class="mermaid">
+graph TD
+    A["A candidate feature"] --> B{"Known at prediction time?"}
+    B -->|"yes"| C{"Same for future rows?"}
+    B -->|"no"| D["Leak: drop it"]
+    C -->|"yes"| E["Keep it"]
+    C -->|"no"| F["Rebuild it from past data only"]
+                </div>
 
-# Best practice: Use pipelines to prevent leakage
-print("\n✅ BEST PRACTICE: Use Pipelines")
+                <p>The second is a test: train a tiny model on <strong>each feature alone</strong> and compare it with the baseline. Real signals are weak one at a time. A single column that nearly solves the problem by itself deserves suspicion until you know exactly how and when it is recorded.</p>
 
-# Create pipeline that ensures proper order of operations
-pipeline = Pipeline([
-    ('scaler', StandardScaler()),
-    ('poly', PolynomialFeatures(degree=2, include_bias=False)),
-    ('selector', SelectKBest(f_classif, k=10)),
-    ('classifier', LogisticRegression(random_state=42))
-])
-
-# Pipeline ensures transformations are fit only on training data
-X_train_pipe, X_test_pipe, y_train_pipe, y_test_pipe = train_test_split(
-    X, y, test_size=0.2, random_state=42
+                <pre><code class="language-python">X_tr, X_te, y_tr, y_te = train_test_split(
+    customers[features + ["has_reason"]], y, test_size=0.25, stratify=y, random_state=42
 )
 
-# Fit pipeline (all preprocessing steps fit only on training data)
-pipeline.fit(X_train_pipe, y_train_pipe)
+single = {}
+for column in features + ["has_reason"]:
+    stump = DecisionTreeClassifier(max_depth=2, random_state=42).fit(X_tr[[column]], y_tr)
+    single[column] = stump.score(X_te[[column]], y_te)
 
-# Score (preprocessing steps only transform test data)
-pipeline_score = pipeline.score(X_test_pipe, y_test_pipe)
-print(f"Pipeline score (no leakage): {pipeline_score:.3f}")
+print(pd.Series(single).sort_values(ascending=False).head(4).round(3))
+print(f"baseline: {1 - y_te.mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>has_reason               0.941
+days_since_last_order    0.842
+tenure_months            0.835
+spend_12m                0.835
+dtype: float64
+baseline: 0.835</code></pre>
+                </div>
 
-# Cross-validation also prevents leakage
-cv_scores = cross_val_score(pipeline, X, y, cv=5)
-print(f"Cross-validation scores: {cv_scores}")
-print(f"Mean CV score: {cv_scores.mean():.3f} (+/- {cv_scores.std() * 2:.3f})")</code></pre>
+                <p>Every honest feature on its own barely moves off the baseline's 0.835 (even the strongest real signal, recency, reaches only 0.842). One column alone reaches 0.941. That gap is the alarm. From here on, <code>has_reason</code> and <code>cancellation_reason</code> stay out of every model.</p>
 
-    <h2>Validation Strategies</h2>
-    
-    <h3>Choosing the Right Split Strategy</h3>
-    <pre class="language-python"><code># Comprehensive validation strategy guide
+                <div class="card card-warning">
+                    <h4>⚠️ Leaks in Disguise</h4>
+                    <p>Watch for columns updated after the snapshot date (a "last login" refreshed yesterday), IDs that encode the outcome (account numbers reissued after fraud), totals that include the period you are predicting, and the missingness of a field that is only filled in later. When a result jumps, ask "what does this column know that I would not?" before you celebrate.</p>
+                </div>
+            </section>
 
-class ValidationStrategyGuide:
-    """Guide for choosing appropriate validation strategies"""
-    
-    def __init__(self):
-        self.strategies = {
-            'random_split': {
-                'when_to_use': [
-                    'Independent and identically distributed (i.i.d.) data',
-                    'No temporal component',
-                    'No group structure',
-                    'Balanced classes'
-                ],
-                'avoid_when': [
-                    'Time series data',
-                    'Grouped/hierarchical data',
-                    'Severe class imbalance'
-                ],
-                'example': 'General classification/regression problems'
-            },
-            'stratified_split': {
-                'when_to_use': [
-                    'Imbalanced classification',
-                    'Small dataset with few samples per class',
-                    'Multi-class classification',
-                    'When class distribution matters'
-                ],
-                'avoid_when': [
-                    'Regression (unless binned)',
-                    'Time series data',
-                    'Grouped data'
-                ],
-                'example': 'Medical diagnosis with rare diseases'
-            },
-            'time_series_split': {
-                'when_to_use': [
-                    'Temporal data',
-                    'Stock prices, weather data',
-                    'When future depends on past',
-                    'Forecasting problems'
-                ],
-                'avoid_when': [
-                    'No temporal component',
-                    'Random order data'
-                ],
-                'example': 'Sales forecasting, stock prediction'
-            },
-            'group_split': {
-                'when_to_use': [
-                    'Multiple samples per entity',
-                    'Patient/user-based data',
-                    'Preventing information leakage between groups',
-                    'Hierarchical data'
-                ],
-                'avoid_when': [
-                    'Independent samples',
-                    'No group structure'
-                ],
-                'example': 'Medical trials (multiple measurements per patient)'
-            },
-            'nested_cv': {
-                'when_to_use': [
-                    'Small datasets',
-                    'Hyperparameter tuning + model evaluation',
-                    'Avoiding overfitting in model selection',
-                    'Publishing results'
-                ],
-                'avoid_when': [
-                    'Large datasets (computationally expensive)',
-                    'Simple models without hyperparameters'
-                ],
-                'example': 'Academic research, competitions'
-            }
-        }
-    
-    def recommend_strategy(self, data_type, n_samples, has_groups=False, 
-                          has_time=False, is_imbalanced=False):
-        """Recommend validation strategy based on data characteristics"""
-        
-        if has_time:
-            return 'time_series_split'
-        elif has_groups:
-            return 'group_split'
-        elif is_imbalanced:
-            return 'stratified_split'
-        elif n_samples < 1000:
-            return 'nested_cv'
-        else:
-            return 'random_split'
-    
-    def print_guide(self):
-        """Print comprehensive guide"""
-        for strategy, details in self.strategies.items():
-            print(f"\n{'='*50}")
-            print(f"Strategy: {strategy.replace('_', ' ').title()}")
-            print(f"{'='*50}")
-            
-            print("\n✅ When to use:")
-            for point in details['when_to_use']:
-                print(f"  • {point}")
-            
-            print("\n❌ Avoid when:")
-            for point in details['avoid_when']:
-                print(f"  • {point}")
-            
-            print(f"\n📊 Example: {details['example']}")
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
 
-# Create and print guide
-guide = ValidationStrategyGuide()
-guide.print_guide()
+                <p>Two of these raise errors. Three do not, and those are the ones to fear: the code runs and the score looks better than it should.</p>
 
-# Interactive strategy selector
-def select_validation_strategy(X, y, metadata=None):
-    """
-    Automatically select appropriate validation strategy
-    """
-    n_samples, n_features = X.shape
-    
-    # Check for imbalance
-    if len(np.unique(y)) > 1:  # Classification
-        class_counts = np.bincount(y)
-        imbalance_ratio = class_counts.max() / class_counts.min()
-        is_imbalanced = imbalance_ratio > 3
-    else:
-        is_imbalanced = False
-    
-    # Check metadata for groups or time
-    has_groups = metadata is not None and 'groups' in metadata
-    has_time = metadata is not None and 'time' in metadata
-    
-    # Get recommendation
-    strategy = guide.recommend_strategy(
-        data_type='classification' if len(np.unique(y)) < 20 else 'regression',
-        n_samples=n_samples,
-        has_groups=has_groups,
-        has_time=has_time,
-        is_imbalanced=is_imbalanced
-    )
-    
-    print(f"\nDataset Analysis:")
-    print(f"  Samples: {n_samples}")
-    print(f"  Features: {n_features}")
-    print(f"  Imbalanced: {is_imbalanced}")
-    print(f"  Has groups: {has_groups}")
-    print(f"  Has time: {has_time}")
-    print(f"\nRecommended strategy: {strategy}")
-    
-    return strategy
+                <h3>1. Unpacking the Split in the Wrong Order</h3>
+                <pre data-raises="ValueError"><code class="language-python">X_train, y_train, X_test, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
+LogisticRegression().fit(X_train, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: y should be a 1d array, got an array of shape (1500, 10) instead.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> <code>train_test_split</code> returns the X parts first, then the y parts: <code>X_train, X_test, y_train, y_test</code>. Here "y_train" actually holds the 1,500 test rows of X, a table with 10 columns, where scikit-learn expects a single target column. <strong>Fix:</strong> use the standard order; when you split a whole DataFrame instead (<code>train, test = train_test_split(df, ...)</code>), there are only two results.</p>
 
-# Test with different scenarios
-scenarios = [
-    (np.random.randn(1000, 10), np.random.choice([0, 1], 1000), None),
-    (np.random.randn(1000, 10), np.array([0]*900 + [1]*100), None),
-    (np.random.randn(1000, 10), np.random.choice([0, 1], 1000), {'groups': True}),
-    (np.random.randn(1000, 10), np.random.randn(1000), {'time': True}),
-]
+                <h3>2. Stratifying on a Number</h3>
+                <pre data-raises="ValueError"><code class="language-python">train_test_split(demand, test_size=0.25, stratify=demand["units_sold"], random_state=42)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: The least populated classes in y have only 1 member, which is too few. The minimum number of groups for any class cannot be less than 2. Classes with too few members are: [127, 131, 136, 137, 140, 141, 144, 145, 154, 156, 157, 160, 161, 163, 164, 170, 171, 173, 179, 180, 186, 191, 192, 202, 207, 213, 215, 220, 228, 239, 251, 282, 299, 420]</code></pre>
+                </div>
+                <p><strong>What it means:</strong> stratifying treats every distinct value as a class, and some sales figures occur only once. <strong>Fix:</strong> stratify only classification targets. For a skewed regression target you can stratify on bins of it, for example <code>stratify=pd.qcut(demand["units_sold"], 5)</code>, but for time-ordered data like this, split by time instead.</p>
 
-for i, (X_scenario, y_scenario, meta) in enumerate(scenarios):
-    print(f"\n{'='*50}")
-    print(f"Scenario {i+1}:")
-    strategy = select_validation_strategy(X_scenario, y_scenario, meta)</code></pre>
+                <h3>3. A Whole Number as test_size</h3>
+                <pre><code class="language-python">tiny_train, tiny_test = train_test_split(customers, test_size=25, random_state=42)
+print(len(tiny_train), len(tiny_test))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>5975 25</code></pre>
+                </div>
+                <p><strong>What happened:</strong> a float is a share (<code>0.25</code> = 25%) but an integer is a <em>count</em>: <code>25</code> means 25 rows. A test set of 25 customers wobbles enormously. <strong>Fix:</strong> write <code>test_size=0.25</code>. Integers are handy on purpose, as in the time section's <code>test_size=len(future)</code>.</p>
 
-    <h2>Practice Exercises</h2>
-    
-    <h3>Exercise 1: Custom Split Strategy</h3>
-    <p>Implement a custom splitting strategy that:</p>
-    <ol>
-        <li>Handles both stratification and groups</li>
-        <li>Ensures temporal ordering if dates are provided</li>
-        <li>Maintains class balance in all splits</li>
-        <li>Provides visualization of the splits</li>
-        <li>Calculates and reports distribution statistics</li>
-    </ol>
+                <h3>4. Choosing Features Before Splitting</h3>
+                <p>This one is subtle enough that it has fooled published research. Make 2,000 columns of pure random noise and a target that is a coin flip. No model can predict a coin flip from noise, so the honest accuracy is about 0.5. Now let a feature selector (Lesson 2.4) pick the 20 columns most related to the target, using <em>all</em> the rows, and only then split:</p>
+                <pre><code class="language-python">from sklearn.feature_selection import SelectKBest
 
-    <h3>Exercise 2: Leakage Detection Tool</h3>
-    <p>Build a tool that:</p>
-    <ol>
-        <li>Automatically detects potential data leakage</li>
-        <li>Checks for duplicate samples</li>
-        <li>Identifies suspiciously correlated features</li>
-        <li>Validates preprocessing pipeline</li>
-        <li>Generates a leakage report</li>
-    </ol>
+rng = np.random.default_rng(42)
+noise = pd.DataFrame(rng.normal(size=(200, 2000)))
+coin = pd.Series(rng.integers(0, 2, size=200))
 
-    <h3>Exercise 3: Split Optimization</h3>
-    <p>Create a framework that:</p>
-    <ol>
-        <li>Tests multiple split ratios</li>
-        <li>Evaluates distribution similarity</li>
-        <li>Recommends optimal split ratio</li>
-        <li>Handles multiple data types</li>
-        <li>Provides confidence intervals</li>
-    </ol>
+picked = noise.loc[:, SelectKBest(k=20).fit(noise, coin).get_support()]    # selected on ALL rows
+a_tr, a_te, b_tr, b_te = train_test_split(picked, coin, test_size=0.5, stratify=coin, random_state=42)
+print(f"select, then split: {LogisticRegression().fit(a_tr, b_tr).score(a_te, b_te):.2f}")
 
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>🎯 Proper splitting is crucial for reliable model evaluation</li>
-        <li>⚖️ Use stratification for imbalanced datasets</li>
-        <li>📅 Maintain temporal order for time series data</li>
-        <li>👥 Keep groups together to prevent leakage</li>
-        <li>🚫 Always split before preprocessing to avoid data leakage</li>
-        <li>🔄 Use cross-validation for robust evaluation</li>
-        <li>📊 Verify distribution similarity between splits</li>
-        <li>🛠️ Pipelines help prevent preprocessing leakage</li>
-    </ul>
+n_tr, n_te, b_tr, b_te = train_test_split(noise, coin, test_size=0.5, stratify=coin, random_state=42)
+selector = SelectKBest(k=20).fit(n_tr, b_tr)                                   # selected on training rows only
+model = LogisticRegression().fit(selector.transform(n_tr), b_tr)
+print(f"split, then select: {model.score(selector.transform(n_te), b_te):.2f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>select, then split: 0.78
+split, then select: 0.47</code></pre>
+                </div>
+                <p><strong>What happened:</strong> out of 2,000 noise columns, some match the coin flips by chance, <em>including on the test rows</em>, because the selector saw them. The "model" predicts coin flips 78% of the time, which is impossible. Done honestly, it scores 0.47: a coin flip. <strong>Fix:</strong> every step that learns from data (scaling, imputing, selecting) is fitted on the training rows only. Lesson 2.2's <code>Pipeline</code> makes that automatic.</p>
 
-    <h2>Further Resources</h2>
-    <ul>
-        <li><a href="https://scikit-learn.org/stable/modules/cross_validation.html">Scikit-learn Cross-validation Guide</a></li>
-        <li><a href="https://machinelearningmastery.com/data-leakage-machine-learning/">Data Leakage in Machine Learning</a></li>
-        <li><a href="https://www.kaggle.com/learn/intro-to-machine-learning">Kaggle: Intro to Machine Learning</a></li>
-        <li><a href="https://www.fast.ai/2017/11/13/validation-sets/">How (and why) to create a good validation set</a></li>
-        <li><a href="https://arxiv.org/abs/1811.12808">A Survey on Data Collection for Machine Learning</a></li>
-    </ul>
+                <h3>5. A Feature That Peeks at the Future</h3>
+                <p>A "typical sales level" feature sounds sensible. Computed with a centered 7-day window, though, it averages the three days <em>after</em> each date too:</p>
+                <pre><code class="language-python">sales = sales.sort_values(["store", "date"])
+sales["week_avg_centered"] = sales.groupby("store")["sales"].transform(lambda s: s.rolling(7, center=True, min_periods=1).mean())
+peeking = calendar + ["week_avg_centered"]
 
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> The gap between training and test performance tells a story. What did that
-            gap reveal about your model — was it memorizing the data or genuinely learning from it?</p>
+past, future = sales[sales["date"].dt.year &lt; 2025], sales[sales["date"].dt.year == 2025]
+forest = RandomForestRegressor(n_estimators=200, min_samples_leaf=3, random_state=42, n_jobs=-1)
+forest.fit(past[peeking], past["sales"])
+print(f"time split MAE with a peeking feature: ${mean_absolute_error(future['sales'], forest.predict(future[peeking])):,.0f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>time split MAE with a peeking feature: $504</code></pre>
+                </div>
+                <p><strong>What happened:</strong> even with an honest time split, the error collapses, because each test day's feature already contains that day and the three after it. On opening night, those days do not exist yet. <strong>Fix:</strong> build time features from the past only: <code>shift(1)</code> before any <code>rolling</code>, never <code>center=True</code>, and ask for every feature "could I have computed this the evening before?"</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: An Honest Churn Evaluation</h2>
+
+                <p>Pinecrest's marketing lead has heard that a colleague's churn model is "94% accurate" and wants to know what <em>your</em> model can really do. You will audit the columns for leaks, set aside a sealed test set, choose a model on validation data, report one honest test score next to the baseline, and write it up. Work in a new notebook called <code>lesson_1_2_project</code> or a script called <code>honest_eval.py</code>. Allow about 40 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load and split three ways <span class="step-time">(5 min)</span></h3>
+                    <p>Split the whole table, so IDs and every column stay lined up, then take the features from each part. The candidate columns include the suspicious flag on purpose: the audit should catch it.</p>
+                    <pre><code class="language-python">import pandas as pd
+from sklearn.model_selection import train_test_split
+
+customers = pd.read_csv("data/customers_churn.csv")
+customers["has_reason"] = customers["cancellation_reason"].notna().astype(int)
+candidates = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+              "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user", "has_reason"]
+
+rest, test = train_test_split(customers, test_size=0.20, stratify=customers["churned"], random_state=42)
+train, val = train_test_split(rest, test_size=0.25, stratify=rest["churned"], random_state=42)
+print(len(train), len(val), len(test))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>3600 1200 1200</code></pre>
+                    </div>
+                    <p>From now until Step 5, <code>test</code> is not touched, not even to look at its first rows.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Audit every column for leaks <span class="step-time">(10 min)</span></h3>
+                    <p>Fit a depth-2 tree on each candidate alone (training rows) and score it on the validation rows. Flag anything far above the baseline.</p>
+                    <pre><code class="language-python">from sklearn.tree import DecisionTreeClassifier
+
+baseline_acc = 1 - val["churned"].mean()
+audit = {}
+for column in candidates:
+    stump = DecisionTreeClassifier(max_depth=2, random_state=42).fit(train[[column]], train["churned"])
+    audit[column] = stump.score(val[[column]], val["churned"])
+
+audit = pd.Series(audit).sort_values(ascending=False)
+print(f"baseline {baseline_acc:.3f}")
+print(audit.head(3).round(3))
+suspects = audit[audit &gt; baseline_acc + 0.05].index.tolist()
+print("suspects:", suspects)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>baseline 0.835
+has_reason               0.942
+days_since_last_order    0.848
+tenure_months            0.835
+dtype: float64
+suspects: ['has_reason']</code></pre>
+                    </div>
+                    <p>The audit flags <code>has_reason</code>. Its origin (a field filled when an account is closed) confirms the leak, so it goes. A flag alone is not proof: always check how a suspect column is recorded before you drop it.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Remove the leak and set the baseline <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">from sklearn.dummy import DummyClassifier
+
+features = [c for c in candidates if c not in suspects]
+X_train, y_train = train[features], train["churned"]
+X_val, y_val = val[features], val["churned"]
+
+baseline = DummyClassifier(strategy="most_frequent").fit(X_train, y_train)
+print(len(features), "features kept")
+print(f"baseline validation accuracy {baseline.score(X_val, y_val):.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>10 features kept
+baseline validation accuracy 0.835</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Choose a model on validation <span class="step-time">(10 min)</span></h3>
+                    <p>Compare three candidates: logistic regression, the depth-3 tree the validation set chose in the lesson, and the random forest from Lesson 1.1. Logistic regression needs scaled inputs, so scale by hand (fit on training rows only); the tree and the forest use raw features.</p>
+                    <pre><code class="language-python">from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+
+scaler = StandardScaler().fit(X_train)
+logreg = LogisticRegression().fit(scaler.transform(X_train), y_train)
+tree = DecisionTreeClassifier(max_depth=3, random_state=42).fit(X_train, y_train)
+forest = RandomForestClassifier(n_estimators=200, min_samples_leaf=5, random_state=42, n_jobs=-1).fit(X_train, y_train)
+
+val_scores = {
+    "logistic regression": logreg.score(scaler.transform(X_val), y_val),
+    "decision tree (d=3)": tree.score(X_val, y_val),
+    "random forest": forest.score(X_val, y_val),
+}
+for name, score in val_scores.items():
+    print(f"{name:20s} {score:.3f}")
+print("chosen:", max(val_scores, key=val_scores.get))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>logistic regression  0.850
+decision tree (d=3)  0.864
+random forest        0.870
+chosen: random forest</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Open the test set, once <span class="step-time">(5 min)</span></h3>
+                    <p>Refit the chosen model and the baseline on training plus validation rows, then score both on the test set. This is the only time the test set is used.</p>
+                    <pre><code class="language-python">X_rest, y_rest = rest[features], rest["churned"]
+X_test, y_test = test[features], test["churned"]
+
+final = RandomForestClassifier(n_estimators=200, min_samples_leaf=5, random_state=42, n_jobs=-1).fit(X_rest, y_rest)
+final_baseline = DummyClassifier(strategy="most_frequent").fit(X_rest, y_rest)
+
+test_acc = final.score(X_test, y_test)
+base_acc = final_baseline.score(X_test, y_test)
+print(f"baseline test accuracy {base_acc:.3f}")
+print(f"forest   test accuracy {test_acc:.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>baseline test accuracy 0.835
+forest   test accuracy 0.866</code></pre>
+                    </div>
+                    <p>About 0.87 against a baseline of 0.835: a real but modest gain on accuracy. Lesson 1.1 showed that the same kind of model ranks customers far better than accuracy suggests, and Lesson 1.4 gives you the measures to say so properly.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Write the evaluation report <span class="step-time">(5 min)</span></h3>
+                    <p>Build the report from your variables, so it can never disagree with the code, and save it.</p>
+                    <pre><code class="language-python">report = f"""Churn model evaluation
+Split            : {len(train):,} train / {len(val):,} validation / {len(test):,} test (stratified, seed 42)
+Leak audit       : dropped {', '.join(suspects)} (filled only after a customer leaves)
+Chosen on val.   : random forest ({val_scores['random forest']:.3f} validation accuracy)
+Test accuracy    : {test_acc:.3f} (baseline {base_acc:.3f}, gain {test_acc - base_acc:+.3f})
+Note             : the test set was used once; 0.94-style results came from the leaked column"""
+
+with open("evaluation_report.txt", "w", encoding="utf-8") as f:
+    f.write(report + "\n")
+print(report)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>Churn model evaluation
+Split            : 3,600 train / 1,200 validation / 1,200 test (stratified, seed 42)
+Leak audit       : dropped has_reason (filled only after a customer leaves)
+Chosen on val.   : random forest (0.870 validation accuracy)
+Test accuracy    : 0.866 (baseline 0.835, gain +0.031)
+Note             : the test set was used once; 0.94-style results came from the leaked column</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Your split has 3,600 training, 1,200 validation and 1,200 test customers, all at the same churn rate</li>
+                        <li>The leak audit ran on training and validation rows only and flagged <code>has_reason</code></li>
+                        <li>The model was chosen by validation accuracy, not test accuracy</li>
+                        <li>The test set was used exactly once, for the final model and the baseline</li>
+                        <li><code>evaluation_report.txt</code> states the split, the dropped column, the chosen model and the test score next to the baseline</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>Exercise 1 continues from the lesson's teaching blocks (it uses <code>split_and_score</code>); the others load their own data.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Bigger Test Sets Wobble Less</h3>
+                    <p>Use <code>split_and_score(seed, test_size)</code> from the lesson to compute the standard deviation of the test accuracy over seeds 0 to 19 for test sizes 0.1, 0.25 and 0.5. How does the wobble change, and what is the price of a bigger test set?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>A list comprehension inside <code>pd.Series(...)</code>, then <code>.std()</code>, inside a loop over the three sizes.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for size in [0.1, 0.25, 0.5]:
+    accs = pd.Series([split_and_score(seed, test_size=size) for seed in range(20)])
+    print(f"test_size={size:&lt;4}  test rows {int(len(X) * size):&gt;5,}  std {accs.std():.4f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>test_size=0.1   test rows   600  std 0.0142
+test_size=0.25  test rows 1,500  std 0.0065
+test_size=0.5   test rows 3,000  std 0.0025</code></pre>
+                        </div>
+                        <p>The wobble shrinks as the test set grows, here even faster than one over the square root of its size, because the training and test rows are carved out of the same 6,000 customers. The price is fewer training rows, which usually makes the model itself a little worse. Cross-validation (Lesson 1.3) escapes the trade-off: every row is used for testing once and for training the rest of the time.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: A Time Split with train_test_split</h3>
+                    <p><code>train_test_split</code> has a <code>shuffle</code> argument. Load <code>daily_store_sales.csv</code>, sort it by date, and split it with <code>shuffle=False</code> and <code>test_size=1460</code> (365 days times 4 stores). Print the first and last date in each part. Why must you sort first, and why does <code>stratify</code> not work with <code>shuffle=False</code>?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>With <code>shuffle=False</code> the test set is simply the last rows of the table, in whatever order the table is in.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">daily = pd.read_csv("data/daily_store_sales.csv", parse_dates=["date"]).sort_values(["date", "store"])
+d_train, d_test = train_test_split(daily, test_size=1460, shuffle=False)
+
+for name, part in [("train", d_train), ("test", d_test)]:
+    print(f"{name:5s} {len(part):&gt;5,} rows  {part['date'].min():%Y-%m-%d} to {part['date'].max():%Y-%m-%d}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>train 2,924 rows  2023-01-01 to 2024-12-31
+test  1,460 rows  2025-01-01 to 2025-12-31</code></pre>
+                        </div>
+                        <p>Without shuffling, the split simply cuts the table, so it is a time split only if the rows are in time order. Stratifying needs to move rows around to balance classes, which is exactly what <code>shuffle=False</code> forbids, so scikit-learn refuses the combination. For several time-ordered folds, Lesson 1.3 introduces <code>TimeSeriesSplit</code>.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: The Future Is a Little Different</h3>
+                    <p>Load <code>transactions.csv</code> and print the fraud rate for each month. Then make a time split (January to May for training, June for testing) and compare the June fraud rate with the rate in a stratified random 30% test set. What does the difference mean for a fraud model evaluated on a random split?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Parse <code>timestamp</code> as a date and group by <code>.dt.month</code>; the mean of <code>is_fraud</code> is the fraud rate.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">tx = pd.read_csv("data/transactions.csv", parse_dates=["timestamp"])
+month = tx["timestamp"].dt.month.rename("month")
+print((tx.groupby(month)["is_fraud"].mean() * 100).round(2).rename("fraud %"))
+
+june = tx[month == 6]
+_, random_test = train_test_split(tx, test_size=0.3, stratify=tx["is_fraud"], random_state=42)
+print(f"June test fraud rate:   {june['is_fraud'].mean():.2%}")
+print(f"random test fraud rate: {random_test['is_fraud'].mean():.2%}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>month
+1    1.00
+2    0.99
+3    0.87
+4    0.87
+5    0.76
+6    0.77
+Name: fraud %, dtype: float64
+June test fraud rate:   0.77%
+random test fraud rate: 0.87%</code></pre>
+                        </div>
+                        <p>The fraud rate drifts down over the half year, so June has noticeably fewer frauds than the average month. A random split mixes the months and hides that drift; a time split shows the model the slightly different world it will really meet. Data that changes over time is called <strong>drift</strong>, and Lesson 12.2 shows how to monitor for it after deployment.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Build a Leak Detector (Stretch)</h3>
+                    <p>Write a function <code>leak_check(df, target, columns, margin=0.05)</code> that splits <code>df</code> (stratified, 25% test, seed 42), fits a depth-2 tree on each column alone, and returns the columns whose test accuracy beats the majority-class baseline by more than <code>margin</code>. Test it on <code>transactions.csv</code> after planting a leak: a <code>chargeback</code> column (the bank reversed the payment weeks later) that is 1 for 70% of the frauds, chosen at random with <code>np.random.default_rng(42)</code>, and 0 otherwise. Does it catch the leak and nothing else?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>rng.random(len(tx)) &lt; 0.7</code> gives a True/False array; combine it with <code>tx["is_fraud"] == 1</code> using <code>&amp;</code>. The baseline is <code>1 - y_test.mean()</code> when 0 is the majority class.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">def leak_check(df, target, columns, margin=0.05):
+    train, test = train_test_split(df, test_size=0.25, stratify=df[target], random_state=42)
+    baseline = test[target].value_counts(normalize=True).max()
+    flagged = {}
+    for column in columns:
+        stump = DecisionTreeClassifier(max_depth=2, random_state=42).fit(train[[column]], train[target])
+        acc = stump.score(test[[column]], test[target])
+        if acc &gt; baseline + margin:
+            flagged[column] = round(acc, 4)
+    return baseline, flagged
+
+tx = pd.read_csv("data/transactions.csv")
+rng = np.random.default_rng(42)
+tx["chargeback"] = ((tx["is_fraud"] == 1) &amp; (rng.random(len(tx)) &lt; 0.7)).astype(int)
+
+numeric_cols = ["account_age_days", "amount", "hour", "items", "device_new", "billing_shipping_mismatch",
+                "country_mismatch", "card_attempts", "velocity_24h", "chargeback"]
+base, flagged = leak_check(tx, "is_fraud", numeric_cols, margin=0.002)
+print(f"baseline {base:.4f}")
+print("flagged:", flagged)</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>baseline 0.9913
+flagged: {'chargeback': 0.998}</code></pre>
+                        </div>
+                        <p>With 99.1% legitimate payments, accuracy can only rise by 0.9 points at most, so the margin must be tiny (0.002 here); on rare-event data a ranking measure works better, which is what Lesson 1.4 adds. The detector flags only <code>chargeback</code>: no honest single column gets close. In real fraud data, chargebacks are the classic leak: they are how fraud is <em>confirmed</em>, weeks after the payment you need to score.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_a, quiz_b = train_test_split(list(range(10)), test_size=0.3, random_state=0)
+print(len(quiz_a), len(quiz_b))</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="With one input, train_test_split returns two parts. Which comes first, the training part or the test part?">
+                                A) <code>3 7</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The training part comes first. test_size=0.3 of 10 items is 3 test items, leaving 7 for training.">
+                                B) <code>7 3</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The split does not copy the data: every item ends up in exactly one part.">
+                                C) <code>10 3</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> You will use <code>weekly_demand.csv</code> (2024 and 2025) to build a model that forecasts next week's units for the products Pinecrest already sells. Which evaluation matches how the model will be used?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Stratifying fixes the class balance of a category target. Is units_sold a category, and does a random split respect the order of the weeks?">
+                                A) A random 75/25 split stratified on <code>units_sold</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Holding out whole products answers a different question. Are the products in this forecast new or already on sale?">
+                                B) A group split that holds out whole products
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="In use, the model predicts later weeks of known products from earlier weeks, so the test must be later in time than the training data: train on 2024, test on 2025.">
+                                C) Train on 2024, test on 2025
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> A colleague adds <code>refund_issued</code> to a model that predicts whether an order will be returned, and test accuracy jumps from 0.81 to 0.98. A single-feature check shows <code>refund_issued</code> alone scores 0.97. What is the most likely explanation?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="A refund is issued after a return arrives, so the column is only known once the outcome has happened. It is target leakage: the jump is too good to be true and would vanish in real use.">
+                                A) Target leakage: a refund is recorded after the return happens
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Strong features do exist, but real signals are usually weak one at a time. When is a refund recorded relative to the return?">
+                                B) <code>refund_issued</code> is simply a very strong feature; keep it
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Overfitting makes test scores worse than training scores, not dramatically better. What does this column know about the outcome?">
+                                C) The model is overfitting the training data
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> You compared 12 settings on the validation set; the best scored 0.874 on validation. You then refit it and scored 0.866 on the test set. Which number should you report as the model's expected accuracy?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The validation set was used to pick the winner. Does picking the best of 12 favor settings that got lucky on those rows?">
+                                A) 0.874, because it is the best result you found
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The validation score of the winner is optimistic, because it was selected as the maximum of 12. The test set played no part in the choice, so its score is the unbiased estimate to report.">
+                                B) 0.866, the test score
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Averaging mixes an optimistic number into an unbiased one. Which of the two sets played no part in choosing the model?">
+                                C) 0.870, the average of the two
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> When should you use <code>GroupShuffleSplit</code> instead of an ordinary random split?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Class imbalance is handled by stratify. What problem do groups solve?">
+                                A) When one class is much rarer than the other
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Size alone is not the issue. Think about rows that belong together, such as many weeks of the same product.">
+                                B) When the dataset is too large for memory
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="When several rows belong to the same entity and the model will meet new entities in use, all rows of an entity must stay on one side of the split, or the test set holds entities the model already knows.">
+                                C) When many rows share an entity (a product, a customer) and the model must work for new entities
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>How big should the test set be?</summary>
+                    <p>Big enough that its wobble is smaller than the differences you care about. With a few thousand rows, 20 to 25% is the usual choice. With millions of rows, 1% can be plenty. With a few hundred rows, any single test set wobbles badly, and cross-validation (Lesson 1.3) is the better tool. For rare classes, count the rare cases: a test set with 30 frauds cannot measure fraud detection precisely, whatever its total size.</p>
+                </details>
+                <details>
+                    <summary>Do I always need a separate validation set?</summary>
+                    <p>You need something other than the test set for making choices. A fixed validation set is the simplest. Cross-validation on the training data (Lesson 1.3) does the same job with less wobble and is what most projects use; the test set stays sealed either way.</p>
+                </details>
+                <details>
+                    <summary>After testing, should I retrain on all the data before deploying?</summary>
+                    <p>Usually yes: once the choice is final and the test score is reported, refitting on every row gives the deployed model a little more to learn from, and the test score remains a fair (slightly cautious) estimate. For time-ordered data, retraining on the most recent data is especially valuable. Module 12 covers retraining schedules.</p>
+                </details>
+                <details>
+                    <summary>Is it a leak to use features that are correlated with the target?</summary>
+                    <p>No. Correlation with the target is the whole point of a feature. A leak is about <em>timing and availability</em>: information that would not exist, or would not look the same, at the moment of prediction. A strong, honest feature such as days since the last order is exactly what you want.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Rebuild the daily-sales forecast with honest lag features: <code>yesterday</code>, <code>same_day_last_week</code> and a 7-day average built from <code>shift(1)</code> then <code>rolling(7)</code>. Train the random forest on 2023 and 2024 (drop the first rows, which have no history) and test on 2025. Does it beat the $850 calendar-only forest and the seasonal-naive baseline? Then try the centered average again and write down, in one sentence each, why the two results differ. Lesson 10.4 returns to this problem with a sequence model.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain the dress rehearsal rule in your own words. Then pick the problem you framed in Lesson 0.1's journal entry and describe its dress rehearsal: should it be split at random, by time or by group, which baseline would you compare with, and which column in your data would be most tempted to leak?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Evaluate a model under the conditions it will face in use: that one rule decides how to split</li>
+                        <li>A single test score wobbles (about ±0.007 accuracy here); differences smaller than the wobble mean nothing</li>
+                        <li>Stratify classification splits on the target so the class balance, and the baseline, stay fixed</li>
+                        <li>Training data fits, validation data chooses, test data grades once</li>
+                        <li>Time-ordered data needs a time split; related rows need a group split when the model will meet new groups</li>
+                        <li>Pick the strongest free baseline: most frequent class, mean, yesterday, same day last week</li>
+                        <li>A result that is too good to be true usually is: check single-feature scores and ask when each column is recorded</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You measured the noise in a single train/test split with 30 repeats</li>
+                        <li>You chose a tree depth with a validation set and reported one unbiased test score</li>
+                        <li>You showed that a random split flatters a sales forecast by about 30% and a new-product model even more</li>
+                        <li>You caught a planted leak with a single-feature audit and produced an honest evaluation report</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="evaluation_cross_validation.html"><strong>Lesson 1.3: Cross-Validation</strong></a> you will turn today's 30-split experiment into a standard tool: k-fold cross-validation averages over several splits automatically, reports the spread, and has versions for stratified, grouped and time-ordered data, so you can compare models without using up the test set.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>split_and_score</code> handy: Lesson 1.3 replaces it with one line.</li>
+                    <li>Look through <code>data/README.md</code> for any column, in any file, that might be recorded after the event it would help predict. Note what you find in your journal.</li>
+                    <li>Rerun the project with <code>random_state=7</code> in both splits. Does the same model win on validation? How far does the test score move?</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>Today you did something many working models never get: you tried to prove your own results wrong, and you caught three ways a score can lie. That skepticism is not pessimism. It is what makes your next good result believable. If the different kinds of leakage still blur together, that is normal; you will meet each again, and by the end of Module 2 checking for them will feel automatic.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="basics_sklearn.html" class="prev-lesson">← Previous: The scikit-learn Estimator API</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="evaluation_cross_validation.html" class="next-lesson">Next: Cross-Validation →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>A held-out test set is the only honest way to measure how a model generalizes to unseen data.</li>
-                <li>Use <code>stratify</code> for classification so the class proportions match across the train and test sets.</li>
-                <li>Set <code>random_state</code> so your splits — and your results — are reproducible.</li>
-                <li>Fit preprocessing (scalers, encoders) on the training set only, then apply it to the test set, to avoid leakage.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now carve a dataset into honest splits that reveal whether a model truly learned the underlying pattern or
-        simply memorized the examples it was shown.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>What test size should I use?</summary>
-            <p>20–30% is common. A larger test set gives a more reliable performance estimate but leaves less data to train on,
-            so it's a balance.</p>
-        </details>
-        <details>
-            <summary>Why should I stratify?</summary>
-            <p>Without stratification, a random split can distort class ratios — especially harmful for imbalanced or small
-            datasets where a fold might miss a class entirely.</p>
-        </details>
-        <details>
-            <summary>Do I need a validation set as well?</summary>
-            <p>Yes, when tuning. Use a train/validation/test split (or cross-validation) so the test set stays untouched until the
-            very end and gives an unbiased final estimate.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Next you'll replace the single split with cross-validation, which reuses the data more efficiently to give even more
-        reliable performance estimates.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Split with and without <code>stratify</code> on an imbalanced dataset and compare the resulting class ratios.</li>
-            <li>Compare training versus test scores and interpret any gap as underfitting or overfitting.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Every reliable machine learning result starts with an honest split. You've mastered the foundation the whole field
-            is built on — everything ahead rests on this. Keep going!</p>
-        </div>
-    </section>
-
-    <!-- Navigation at the bottom -->
-    <nav class="lesson-nav" aria-label="Lesson navigation">
-        <a href="ml_sklearn_basics.html" class="prev-lesson" aria-label="Previous lesson">Previous: Scikit-learn Basics</a>
-        <a href="index.html" class="home-link" aria-label="Course home">Course Home</a>
-        <a href="ml_cross_validation.html" class="next-lesson" aria-label="Next lesson">Next: Cross-validation</a>
-    </nav>
-    
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1143,8 +1066,10 @@ for i, (X_scenario, y_scenario, meta) in enumerate(scenarios):
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>

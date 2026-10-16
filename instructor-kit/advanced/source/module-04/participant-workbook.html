@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 4</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 4: Density-Based Clustering and Gaussian Mixtures</h1>
+    <p class="sub">Your workbook for Session 4: a warm-up on Lessons 8.2 and 8.3, the key ideas of Lessons 8.4 and 8.5, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>8.4–8.5</b></span>
+      <span class="chip">Session <b>4</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Explain density-based clustering with core, border and noise points, and choose eps from the data.</li>
+  <li>Say why one radius fails when clusters have different densities, and use HDBSCAN instead.</li>
+  <li>Count clusters and noise correctly, profile every cluster, and spot clusters that are artifacts of whole-number columns.</li>
+  <li>Fit a Gaussian mixture, read its means, covariances and weights, and use probabilities instead of hard labels.</li>
+  <li>Choose a covariance type and a number of components with BIC, and tell a borderline customer from an atypical one.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-Up: Choosing k and Hierarchical Clustering</h2><span class="rule"></span></div>
+<p>Five questions from Lessons 8.2 and 8.3. Two minutes, no notes. Circle your answer before the class reveals it.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> adjusted_rand_score
+a = [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">2</span>, <span class="s">2</span>]
+b = [<span class="s">2</span>, <span class="s">2</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>]
+print(adjusted_rand_score(a, b))</pre><div class="opts"><div class="opt">A) <code class="inline">0.0</code></div><div class="opt">B) <code class="inline">0.333</code></div><div class="opt">C) <code class="inline">1.0</code></div><div class="opt">D) An error: the labels do not match</div></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">Lesson 8.2 chose k for Pinecrest's customers. Which piece of evidence is NOT a reason to pick k?</div><div class="opts"><div class="opt">A) Where inertia stops dropping steeply (the elbow)</div><div class="opt">B) A high mean silhouette, checked per cluster</div><div class="opt">C) Clusters that reappear when you refit on bootstrap samples</div><div class="opt">D) The k where inertia reaches its minimum</div></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> scipy.cluster.hierarchy <span class="k">import</span> linkage
+Z = linkage([[<span class="s">0.0</span>], [<span class="s">1.0</span>], [<span class="s">10.0</span>], [<span class="s">11.0</span>]], method=<span class="s">"single"</span>)
+print(Z[:, <span class="s">2</span>])</pre><div class="opts"><div class="opt">A) <code class="inline">[ 1.  1. 10.]</code></div><div class="opt">B) <code class="inline">[1. 1. 9.]</code></div><div class="opt">C) <code class="inline">[0. 1. 9.]</code></div><div class="opt">D) <code class="inline">[ 1. 10. 11.]</code></div></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Two groups of customers are joined by a thin trail of in-between customers. Which linkage merges them too early?</div><div class="opts"><div class="opt">A) Single</div><div class="opt">B) Complete</div><div class="opt">C) Average</div><div class="opt">D) Ward</div></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Lesson 8.2 segmented customers on four columns with a log and a scaler. To segment next month's NEW customers, what do you reuse?</div><div class="opts"><div class="opt">A) Only the K-Means centers</div><div class="opt">B) The whole fitted pipeline (log, scaler, K-Means): call predict on the new rows</div><div class="opt">C) A new scaler fitted on the new customers, then the old centers</div><div class="opt">D) Nothing: refit K-Means on the new customers</div></div></div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">8.4</span><h3>Density-Based Clustering</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain core, border and noise points, and what eps and min_samples control in DBSCAN</li>
+  <li>Choose a starting eps from a k-distance plot and read the effect of changing it</li>
+  <li>Read an OPTICS reachability plot and explain why one eps fails when clusters have different densities</li>
+  <li>Cluster with HDBSCAN, count clusters and noise correctly, and profile the result</li>
+  <li>Judge whether a density-based clustering found real structure or an artifact of the features</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>A city at night.</b> A cluster is a crowded region separated by sparser space; points in sparse space are noise, label -1. The number of clusters comes out of the data.</li>
+  <li><b>DBSCAN's two settings.</b> <code class="inline">eps</code> is a radius; <code class="inline">min_samples</code> is how many points (itself included) make a neighborhood crowded. Core, border, noise.</li>
+  <li><b>Choosing eps.</b> The k-distance plot: each point's distance to its min_samples-th neighbor, sorted. Start just above the knee, then sweep a few values.</li>
+  <li><b>One radius fails</b> when clusters have different densities: small eps loses loose groups, large eps merges tight ones.</li>
+  <li><b>OPTICS</b> draws a reachability plot (clusters are valleys); <b>HDBSCAN</b> keeps the clusters stable across densities and needs mainly <code class="inline">min_cluster_size</code> (pass <code class="inline">copy=True</code>).</li>
+  <li><b>Count clusters without -1</b>, scale first, and remember these models have no <code class="inline">predict</code>.</li>
+  <li><b>Profile every cluster.</b> Whole-number columns stack points on exact values and create dense "clusters" that are artifacts.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: roles in a crowd and a trickle</div>
+<p>A crowd of 300 points and a trickle of 40 scattered around it. How do the roles change when DBSCAN asks for a bigger crowd?</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.datasets <span class="k">import</span> make_blobs
+<span class="k">from</span> sklearn.cluster <span class="k">import</span> DBSCAN
+
+rng = np.random.default_rng(<span class="s">7</span>)
+crowd, _ = make_blobs(n_samples=<span class="s">300</span>, centers=[[<span class="s">0</span>, <span class="s">0</span>]], cluster_std=<span class="s">0.5</span>, random_state=<span class="s">7</span>)
+trickle = rng.uniform(-<span class="s">4</span>, <span class="s">4</span>, size=(<span class="s">40</span>, <span class="s">2</span>))          <span class="c"># scattered points around the crowd</span>
+X = np.vstack([crowd, trickle])
+
+<span class="k">for</span> min_samples <span class="k">in</span> [<span class="s">5</span>, <span class="s">15</span>]:
+    db = DBSCAN(eps=<span class="s">0.4</span>, min_samples=min_samples).fit(X)
+    core = np.zeros(len(X), dtype=bool)
+    core[db.core_sample_indices_] = <span class="k">True</span>
+    noise = db.labels_ == -<span class="s">1</span>
+    print(<span class="s">f"min_samples={min_samples:&lt;3} clusters={len(set(db.labels_) - {-1})}  "</span>
+          <span class="s">f"core={core.sum()}  border={(~core &amp; ~noise).sum()}  noise={noise.sum()}"</span>)</pre>
+<pre class="out">min_samples=5   clusters=1  core=294  border=5  noise=41
+min_samples=15  clusters=1  core=276  border=20  noise=44</pre><p>With <code class="inline">min_samples=5</code>, 294 points are core and only 5 are border points: almost everyone in the crowd is crowded enough. Asking for 15 neighbors makes the fringe of the crowd thinner than the rule: 18 fewer core points, four times as many border points, and a few more noise points. The cluster is the same; the roles moved. A larger <code class="inline">min_samples</code> is a stricter definition of "crowded", which is why eps and min_samples must be chosen together.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li>Open <code class="inline">labs/module-04/l8_4-density-clustering/payment_density_starter.py</code> and run it once as it is.</li>
+  <li>TODO 1 and 2 (together): k-distances and an eps sweep. Is there one eps you would trust?</li>
+  <li>TODO 3 to 5 (pairs): HDBSCAN, a profile table in original units, and the fraud rate in the noise against the clusters. The fraud label is never a feature.</li>
+  <li>TODO 6: does the finding survive other values of <code class="inline">min_cluster_size</code>?</li>
+  <li>Done when your numbers match the "Expected when done" lines. Finished early? <code class="inline">rings_starter.py</code>, then <code class="inline">debug_density.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (Which points have two neighbors within 0.25?)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.cluster <span class="k">import</span> DBSCAN
+pts = np.array([[<span class="s">1.0</span>], [<span class="s">1.2</span>], [<span class="s">1.4</span>], [<span class="s">3.0</span>], [<span class="s">3.1</span>], [<span class="s">3.2</span>], [<span class="s">9.0</span>]])
+print(DBSCAN(eps=<span class="s">0.25</span>, min_samples=<span class="s">3</span>).fit_predict(pts))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (Count labels; then the share of -1.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+labels = np.array([<span class="s">0</span>, <span class="s">0</span>, -<span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">2</span>, -<span class="s">1</span>, <span class="s">2</span>])
+print(len(set(labels)), (labels == -<span class="s">1</span>).mean())</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>Core Segments and Misfits</b> (lesson page). In class: Steps 1 and 2. At home: Steps 3 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: logs and scaling. Check: <code class="inline">(6000, 4)</code>, means 0, standard deviations 1</li>
+  <li>☐ Step 2: k-distances <code class="inline">[0.28 0.41 0.6 ]</code>; no eps gives a usable answer</li>
+  <li>☐ Step 3: HDBSCAN with <code class="inline">min_cluster_size=100, min_samples=25</code>: 7 clusters, 32.3% noise</li>
+  <li>☐ Step 4: profile table with churn; spot the two pairs that differ only by a whole-number order count</li>
+  <li>☐ Step 5: merged segment names; misfits churn about 0.203</li>
+  <li>☐ Step 6: <code class="inline">customer_density_segments.csv</code>, 6,000 rows</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.cluster <span class="k">import</span> DBSCAN
+pts = np.array([[<span class="s">0.0</span>], [<span class="s">1.0</span>], [<span class="s">2.0</span>], [<span class="s">10.0</span>], [<span class="s">11.0</span>], [<span class="s">30.0</span>]])
+print(DBSCAN(eps=<span class="s">1.5</span>, min_samples=<span class="s">3</span>).fit_predict(pts))</pre><div class="opts"><div class="opt">A) <code class="inline">[0 0 0 1 1 2]</code></div><div class="opt">B) <code class="inline">[ 0  0  0  1  1 -1]</code></div><div class="opt">C) <code class="inline">[ 0  0  0 -1 -1 -1]</code></div><div class="opt">D) <code class="inline">[-1 -1 -1 -1 -1 -1]</code></div></div></div>
+<div class="q" data-sc="2"><div class="qn">Q2</div><div class="qt">You compute each point's distance to its 10th nearest neighbor (itself included), sort the distances and plot them. What is the plot for?</div><div class="opts"><div class="opt">A) Choosing the number of clusters</div><div class="opt">B) Choosing a starting eps for DBSCAN with min_samples=10: just above the knee</div><div class="opt">C) Choosing <code class="inline">min_samples</code>: the height of the knee</div><div class="opt">D) Checking whether the silhouette is high enough</div></div></div>
+<div class="q" data-sc="3" data-kind="short"><div class="qn">Q3</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+labels = np.array([<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, -<span class="s">1</span>, <span class="s">1</span>, -<span class="s">1</span>, <span class="s">2</span>])
+print(len(set(labels)), len(set(labels) - {-<span class="s">1</span>}))</pre><div class="write"></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">You switch from DBSCAN to HDBSCAN on a new data set. Which setting do you choose first, and from what?</div><div class="opts"><div class="opt">A) <code class="inline">eps</code>, from the knee of the k-distance plot</div><div class="opt">B) <code class="inline">n_clusters</code>, from the elbow of the inertia curve</div><div class="opt">C) <code class="inline">min_cluster_size</code>, from the smallest group you would act on, then check that nearby values agree</div><div class="opt">D) <code class="inline">xi</code>, from the steepest wall in the reachability plot</div></div></div>
+<div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">HDBSCAN on card payments returns clusters that each hold payments with exactly 1, 2, 3 or 4 items. What is the best reading?</div><div class="opts"><div class="opt">A) Four genuinely different kinds of shopper, sorted by basket size</div><div class="opt">B) The items column needs more weight than the others</div><div class="opt">C) The features were not scaled, so items dominated</div><div class="opt">D) items only takes whole values, so payments stack on exact values and look dense: profile further and treat the split as an artifact unless the business cares about it</div></div></div>
+<div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.cluster <span class="k">import</span> HDBSCAN
+print(hasattr(HDBSCAN(), <span class="s">"fit_predict"</span>), hasattr(HDBSCAN(), <span class="s">"predict"</span>))</pre><div class="opts"><div class="opt">A) <code class="inline">True True</code></div><div class="opt">B) <code class="inline">True False</code></div><div class="opt">C) <code class="inline">False True</code></div><div class="opt">D) <code class="inline">False False</code></div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain core, border and noise points with the city-at-night picture. Then write two sentences for Pinecrest's marketing lead about the misfit customers: how many there are, how they behave, and why "they fit no segment" is a finding rather than a failure. Finally, note one decision in this lesson that was a judgment call rather than a calculation.</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">8.5</span><h3>Gaussian Mixture Models</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain a Gaussian mixture as a weighted sum of components with means, covariances and weights</li>
+  <li>Fit a mixture with EM and read predict_proba as soft cluster membership</li>
+  <li>Choose the covariance type and the number of components with BIC and AIC</li>
+  <li>Compare a mixture with K-Means on elongated or overlapping clusters</li>
+  <li>Use a fitted mixture to score how typical a point is and to generate new samples</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>Paint from base colors.</b> A mixture is a weighted sum of Gaussian components, each with a mean (<code class="inline">means_</code>), a covariance (<code class="inline">covariances_</code>) and a weight (<code class="inline">weights_</code>).</li>
+  <li><b>EM</b> alternates soft assignments (E-step) and refitting (M-step). It finds a good answer, not always the best: use <code class="inline">n_init</code> and <code class="inline">random_state</code>.</li>
+  <li><b>Soft membership.</b> <code class="inline">predict_proba</code> rows add up to 1; keep the top probability as a confidence instead of stopping at <code class="inline">predict</code>.</li>
+  <li><b>Ellipses, not circles.</b> Full or tied covariances follow stretched groups K-Means cuts across. Compare covariance types with BIC (lower is better).</li>
+  <li><b>How many components?</b> Read where the big BIC drops stop; on real data BIC often keeps creeping down.</li>
+  <li><b>Numbers are arbitrary.</b> Name components by their profile; match runs with ARI or a crosstab.</li>
+  <li><b>A density model.</b> <code class="inline">score_samples</code> scores how typical a point is (the bridge to anomaly detection); <code class="inline">sample</code> generates synthetic data, only as realistic as the Gaussian assumption.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: borderline is not the same as atypical</div>
+<p>Two columns of fractions (discount share and return rate), four components. Which customers does the mixture find least typical, and how sure is it about them?</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+<span class="k">from</span> sklearn.mixture <span class="k">import</span> GaussianMixture
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+cols = [<span class="s">"discount_share"</span>, <span class="s">"return_rate"</span>]
+Z = StandardScaler().fit_transform(customers[cols])
+gm = GaussianMixture(n_components=<span class="s">4</span>, n_init=<span class="s">3</span>, random_state=<span class="s">42</span>).fit(Z)
+
+customers[<span class="s">"log_density"</span>] = gm.score_samples(Z)
+customers[<span class="s">"confidence"</span>] = gm.predict_proba(Z).max(axis=<span class="s">1</span>)
+print(<span class="s">"weights:"</span>, np.sort(gm.weights_).round(<span class="s">3</span>))
+print(<span class="s">f"confidence below 0.6: {(customers['confidence'] &lt; 0.6).sum()} customers"</span>)</pre>
+<pre class="out">weights: [0.14  0.187 0.276 0.397]
+confidence below 0.6: 396 customers</pre><pre class="code">print(customers.nsmallest(<span class="s">4</span>, <span class="s">"log_density"</span>)[cols + [<span class="s">"log_density"</span>, <span class="s">"confidence"</span>]].round(<span class="s">3</span>))</pre>
+<pre class="out">      discount_share  return_rate  log_density  confidence
+880            0.576        0.332      -11.365       0.995
+2966           0.593        0.261       -9.868       0.839
+4834           0.544        0.289       -9.751       0.920
+4818           0.490        0.418       -9.551       1.000</pre><p>The least typical customers combine a high discount share with a high return rate, a mix no component describes well, so their log-density is the lowest. Yet look at the confidence column: the mixture is 0.84 to 1.00 sure which component each belongs to. Confidence answers "which component is nearest?"; log-density answers "is this customer like any of them?". Borderline and atypical are different questions.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-04/l8_5-gaussian-mixtures/discount_mixture_starter.py</code>. One real column, discount share: how many bell curves does BIC see, where does the model switch its vote, and how does soft membership line up with churn?</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-04/l8_5-gaussian-mixtures/lifecycle_mixture_starter.py</code>. Lifecycle stages from tenure, recency and spend; two seeds; a brand-new customer.</li>
+  <li>Never assume a component number: find the one you want from its mean or profile.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (Three values near 0, two near 8.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.mixture <span class="k">import</span> GaussianMixture
+x = np.array([[<span class="s">0.0</span>], [<span class="s">0.2</span>], [<span class="s">0.4</span>], [<span class="s">8.0</span>], [<span class="s">8.2</span>]])
+gm = GaussianMixture(n_components=<span class="s">2</span>, random_state=<span class="s">42</span>).fit(x)
+print(np.sort(gm.weights_).round(<span class="s">1</span>))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (What does each row of predict_proba add up to?)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.mixture <span class="k">import</span> GaussianMixture
+x = np.array([[<span class="s">0.0</span>], [<span class="s">0.2</span>], [<span class="s">0.4</span>], [<span class="s">8.0</span>], [<span class="s">8.2</span>]])
+gm = GaussianMixture(n_components=<span class="s">2</span>, random_state=<span class="s">42</span>).fit(x)
+print(gm.predict_proba([[<span class="s">4.1</span>], [<span class="s">100.0</span>]]).sum(axis=<span class="s">1</span>).round(<span class="s">2</span>))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>Soft Customer Segments</b> (lesson page). In class: Steps 1 and 2. At home: Steps 3 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: scale the four raw features (not the logs: read the warning card). Check: <code class="inline">(6000, 4)</code></li>
+  <li>☐ Step 2: BIC and AIC for 1 to 8 components; the big drops stop at 5</li>
+  <li>☐ Step 3: five components, profiled and named by profile</li>
+  <li>☐ Step 4: 305 customers below 0.8 confidence, with their runner-up segment</li>
+  <li>☐ Step 5: what a sixth component adds (and whether you would keep it)</li>
+  <li>☐ Step 6: two new customers scored; <code class="inline">customer_soft_segments.csv</code>, 6,000 rows</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.mixture <span class="k">import</span> GaussianMixture
+x = np.array([[<span class="s">0.0</span>], [<span class="s">0.1</span>], [<span class="s">5.0</span>], [<span class="s">5.1</span>], [<span class="s">5.2</span>]])
+gm = GaussianMixture(n_components=<span class="s">2</span>, random_state=<span class="s">42</span>).fit(x)
+print(gm.predict_proba([[<span class="s">100.0</span>]]).max().round(<span class="s">2</span>))</pre><div class="opts"><div class="opt">A) <code class="inline">0.0</code></div><div class="opt">B) <code class="inline">0.5</code></div><div class="opt">C) <code class="inline">nan</code></div><div class="opt">D) <code class="inline">1.0</code></div></div></div>
+<div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">BIC for 1 to 6 components is 9,800, 8,100, 7,950, 7,930, 7,920 and 7,915. What is the most sensible choice?</div><div class="opts"><div class="opt">A) About 2 or 3: the big drops stop there; then check whether the third component means something</div><div class="opt">B) 6, because BIC is lowest there</div><div class="opt">C) 1, because BIC only rewards simple models</div><div class="opt">D) None: BIC needs a minimum to be usable</div></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">Three groups were made by stretching three identical round blobs with the same matrix. Which covariance_type should BIC prefer?</div><div class="opts"><div class="opt">A) <code class="inline">"spherical"</code></div><div class="opt">B) <code class="inline">"diag"</code></div><div class="opt">C) <code class="inline">"tied"</code></div><div class="opt">D) <code class="inline">"full"</code></div></div></div>
+<div class="q" data-sc="10" data-kind="short"><div class="qn">Q10</div><div class="qt">What does this print, and what does it tell you?</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> adjusted_rand_score
+run_a = [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">2</span>, <span class="s">2</span>]
+run_b = [<span class="s">1</span>, <span class="s">1</span>, <span class="s">2</span>, <span class="s">2</span>, <span class="s">0</span>, <span class="s">0</span>]
+print(adjusted_rand_score(run_a, run_b))</pre><div class="write"></div></div>
+<div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">A customer sits far from every component, yet their largest predict_proba value is 0.99. Which output flags them as unusual?</div><div class="opts"><div class="opt">A) <code class="inline">score_samples</code>: a very low log-density</div><div class="opt">B) <code class="inline">predict</code>: it returns -1 for outliers</div><div class="opt">C) <code class="inline">weights_</code>: the component's share is small</div><div class="opt">D) <code class="inline">means_</code>: the customer equals no mean</div></div></div>
+<div class="q" data-sc="12" data-kind="short"><div class="qn">Q12</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">from</span> sklearn.mixture <span class="k">import</span> GaussianMixture
+GaussianMixture(n_components=<span class="s">4</span>, random_state=<span class="s">42</span>).fit([[<span class="s">0.0</span>], [<span class="s">1.0</span>], [<span class="s">2.0</span>]])</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the paint-palette picture in your own words, then describe the difference between a borderline customer (low confidence) and an atypical customer (low density) with one example of each from your project. Which of the two would you want a marketing team to know about, and why?</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<p>Three questions, no notes.</p>
+<div class="q"><div class="qn">E1</div><div class="qt">HDBSCAN returns the labels -1, 0, 1, 2 and 30% of the points are -1. How many clusters did it find, and what do you tell the marketing team about the 30%?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">Name one thing a Gaussian mixture can do that HDBSCAN cannot, and one thing HDBSCAN can do that a mixture cannot.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">A customer far from every segment gets predict_proba 0.99 for one component. Is the model sure this is a typical member? What would you check?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish Core Segments and Misfits (Steps 3 to 6) and Soft Customer Segments (Steps 3 to 6)</li>
+  <li>☐ Lesson 8.4 Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Lesson 8.5 Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Both Quick Quizzes on the lesson pages</li>
+  <li>☐ Both journal entries</li>
+  <li>☐ 8.5 "Before the Next Lesson": look at <code class="inline">transactions.csv</code>; unusual as good news and as bad news</li>
+  <li>☐ Optional: <code class="inline">lifecycle_mixture_starter.py</code>, <code class="inline">rings_starter.py</code>, <code class="inline">debug_density.py</code></li>
+  <li>☐ Bring to Session 5: a ready laptop, <code class="inline">pinecrest-ml</code> with <code class="inline">data/</code> and <code class="inline">labs/</code>, both project notebooks and their CSV files, this workbook and my journal</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>eps</td><td>DBSCAN's neighborhood radius</td></tr>
+<tr><td>min_samples</td><td>Points (itself included) that make a neighborhood crowded</td></tr>
+<tr><td>core / border / noise point</td><td>Crowded itself / next to a core point / neither (label -1)</td></tr>
+<tr><td>k-distance plot</td><td>Sorted distances to the min_samples-th neighbor; its knee suggests eps</td></tr>
+<tr><td>reachability plot</td><td>OPTICS's picture: points in visiting order, clusters as valleys</td></tr>
+<tr><td>HDBSCAN</td><td>Keeps the clusters that are stable across density levels; main setting min_cluster_size</td></tr>
+<tr><td>Gaussian mixture</td><td>A weighted sum of bell-shaped components</td></tr>
+<tr><td>component</td><td>One Gaussian: a mean, a covariance (an ellipse), a weight</td></tr>
+<tr><td>EM</td><td>Expectation-maximization: alternate soft assignments and refits until the log-likelihood stops improving</td></tr>
+<tr><td>covariance_type</td><td>spherical, diag, tied or full: how flexible each component's shape is</td></tr>
+<tr><td>BIC / AIC</td><td>Fit minus a penalty per parameter; lower is better; AIC penalizes less</td></tr>
+<tr><td>log-density</td><td><code class="inline">score_samples</code>: how likely a point is under the whole model; low = atypical</td></tr>
+<tr><td>label switching</td><td>The same clustering with the components numbered differently</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 4 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

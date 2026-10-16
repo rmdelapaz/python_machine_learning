@@ -3,335 +3,942 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Master K-means clustering in Python. Learn the algorithm, implementation, optimization techniques, and practical applications with scikit-learn.">
-    <title>K-means Clustering Path - Python Machine Learning</title>
+    <meta name="description" content="Learn how K-Means finds groups in unlabeled data: Lloyd's assign-and-move loop, inertia, k-means++ starts, why scaling matters, and a first look at Pinecrest Outfitters customer groups. Python Machine Learning Lesson 8.1.">
+    <meta name="author" content="Ray de la Paz">
+    <title>K-Means Clustering - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
-    <main id="main-content">
-    <header role="banner">
-        <h1>K-means Clustering</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Unsupervised Learning</a>
-        <span class="separator">›</span>
-        <span class="current">K-means Clustering</span>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
     </nav>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Describe the K-means objective — minimizing the within-cluster sum of squares (inertia)</li>
-            <li>Walk through Lloyd's algorithm: the repeated "assign points, then move centroids" loop</li>
-            <li>Implement K-means from scratch in NumPy, including initialization and a convergence check</li>
-            <li>Use scikit-learn's <code>KMeans</code> and interpret <code>labels_</code>, <code>cluster_centers_</code>, and <code>inertia_</code></li>
-            <li>Recognize K-means' assumptions and limitations (spherical, similar-sized clusters; sensitivity to initialization)</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Implement K-means from scratch and confirm it matches scikit-learn's <code>KMeans</code> on the same dataset.</p>
-    </div>
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>🔵 Lesson 8.1: K-Means Clustering</h1>
+                <p class="lead">Find groups in data that has no answer column, by learning the simplest and most widely used clustering algorithm from the inside out.</p>
 
-    <h2>Discover Hidden Patterns in Your Data! 🎯</h2>
-    
-    <blockquote>
-        <p>K-means clustering is one of the most popular unsupervised learning algorithms, used to automatically group similar data points without labeled examples. From customer segmentation to image compression, K-means helps uncover natural groupings in data. Master this fundamental algorithm including initialization strategies, optimal K selection, and advanced variants.</p>
-    </blockquote>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain what clustering is for and how it differs from the supervised models of Modules 1 to 7</li>
+                        <li>Describe Lloyd's algorithm (assign each point to the nearest center, move each center to the mean) and write it in NumPy</li>
+                        <li>Fit <code>KMeans</code> and read <code>labels_</code>, <code>cluster_centers_</code>, <code>inertia_</code> and <code>n_iter_</code></li>
+                        <li>Explain why K-Means needs scaled features and several starts (<code>n_init</code>, k-means++), and show what goes wrong without them</li>
+                        <li>Profile clusters in the original units and recognize the cluster shapes K-Means cannot find</li>
+                    </ul>
+                </div>
 
-    <h2>K-means Algorithm Overview</h2>
-    
-    <div class="mermaid">
-    graph TD
-        A[K-means Clustering] --> B[Algorithm Steps]
-        A --> C[Key Concepts]
-        A --> D[Applications]
-        
-        B --> E[1. Initialize K centroids]
-        B --> F[2. Assign points to nearest centroid]
-        B --> G[3. Update centroids]
-        B --> H[4. Repeat until convergence]
-        
-        C --> I[Centroids]
-        C --> J[Inertia/SSE]
-        C --> K[Euclidean Distance]
-        C --> L[Convergence]
-        
-        D --> M[Customer Segmentation]
-        D --> N[Image Compression]
-        D --> O[Document Clustering]
-        D --> P[Anomaly Detection]
-        
-        style A fill:#f9f,stroke:#333,stroke-width:2px
-        style B fill:#bbf,stroke:#333,stroke-width:2px
-        style C fill:#fbf,stroke:#333,stroke-width:2px
-        style D fill:#bfb,stroke:#333,stroke-width:2px
-    </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 95 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="interpretability_lime.html">Lesson 7.3: LIME and Fairness Checks</a>; distances and scaling from <a href="classification_knn.html">Lesson 4.1: k-Nearest Neighbors</a></li>
+                    <li><span class="meta-label">🛠️ You will build</span> A first set of Pinecrest customer groups, profiled in dollars and orders, with each group's churn rate</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code>, plus small synthetic datasets from <code>make_blobs</code> and <code>make_moons</code></li>
+                </ul>
+            </header>
 
-    <h2>K-means Implementation from Scratch</h2>
-    
-    <h3>Understanding the Algorithm</h3>
-    <pre class="language-python"><code>import numpy as np
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Finding Groups Without Answers</a></li>
+                        <li><a href="#first-fit" class="toc-link">A First K-Means</a></li>
+                        <li><a href="#lloyd" class="toc-link">Inside the Algorithm</a></li>
+                        <li><a href="#init" class="toc-link">Starting Points and Local Minima</a></li>
+                        <li><a href="#scaling" class="toc-link">Scale Before You Cluster</a></li>
+                        <li><a href="#new-points" class="toc-link">Labels, Centers and New Customers</a></li>
+                        <li><a href="#limits" class="toc-link">What K-Means Assumes</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: Pinecrest's First Customer Groups</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Finding Groups Without Answers</h2>
+
+                <p>Every model so far in this course learned from examples that came with an answer: this customer churned, that one stayed. That is <strong>supervised</strong> learning. Pinecrest's marketing team has a different question. They do not want to predict a known column; they want to know what <em>kinds</em> of customers they have, so that they can stop sending the same email to a weekly trail runner and to someone who buys one tent every three years. Nobody has labeled the customers by type. The groups, if they exist, have to be found in the data itself.</p>
+
+                <p>That is <strong>clustering</strong>, the main tool of <strong>unsupervised</strong> learning: there is an <code>X</code> but no <code>y</code>. A clustering algorithm puts similar rows together and different rows apart, and it is up to you to decide whether the groups mean anything. Module 8 covers the main families: centers (K-Means, this lesson and the next), trees of merges (hierarchical clustering, Lesson 8.3), density (DBSCAN and HDBSCAN, Lesson 8.4) and probability (Gaussian mixtures, Lesson 8.5).</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: Campfires on a Big Campground</h4>
+                    <p>Picture a campground at night with hundreds of hikers scattered around and <em>k</em> campfires lit at random spots. Each hiker walks to the nearest campfire. Then each campfire is moved to the middle of the crowd that gathered around it. Now some hikers are closer to a different fire, so they walk over to it, and the fires move again. After a few rounds nobody wants to switch any more, and each fire sits in the middle of its own group.</p>
+                    <p>That is the whole of K-Means. The fires are the <strong>centroids</strong> (cluster centers), "walk to the nearest fire" is the <strong>assign</strong> step, and "move the fire to the middle" is the <strong>update</strong> step. The <em>k</em> in K-Means is the number of fires, and you choose it.</p>
+                </div>
+
+                <div class="mermaid">
+graph TD
+    A["Place k centers"] --> B["Assign each point to nearest center"]
+    B --> C["Move each center to the mean of its points"]
+    C --> D{"Did any center move?"}
+    D -->|"yes"| B
+    D -->|"no"| E["Done: labels and centers"]
+                </div>
+
+                <p>Each round can only lower one number: the total squared distance from every point to its own center. scikit-learn calls it <strong>inertia</strong> (some books call it the within-cluster sum of squares, WCSS):</p>
+
+                <p class="text-center"><code>inertia = sum over all points of ‖x − center of x's cluster‖²</code></p>
+
+                <p>Small inertia means tight groups. K-Means is a search for the centers that make it as small as possible, and the assign-then-move loop (called <strong>Lloyd's algorithm</strong>) is how it searches.</p>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>K-Means is fast, easy to explain to a marketing team, and scales to millions of rows. It is also easy to misuse: it always returns exactly <em>k</em> groups, even in data that has no groups at all. This lesson teaches the mechanics and the pitfalls; Lesson 8.2 teaches how to choose <em>k</em> and how to check that the groups are real.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="first-fit" class="lesson-section">
+                <h2>🔵 A First K-Means</h2>
+
+                <p>Start with data where you know groups exist, so you can see whether the algorithm finds them. <code>make_blobs</code> creates round clouds of points around random centers. It also returns which cloud each point came from; the <code>_</code> throws that away, because a clustering algorithm never gets to see it.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.datasets import make_blobs, make_circles, make_moons
-from sklearn.cluster import KMeans, MiniBatchKMeans
+from sklearn.datasets import make_blobs
+from sklearn.cluster import KMeans
+
+X_toy, _ = make_blobs(n_samples=300, centers=4, cluster_std=1.0, random_state=42)
+print(X_toy.shape)
+print(X_toy[:3].round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(300, 2)
+[[-9.3   6.47]
+ [-9.7   6.94]
+ [-1.69  7.79]]</code></pre>
+                </div>
+
+                <p>300 points with two features each, so you can draw them. Now fit K-Means with four clusters. It is an estimator like every other, so the API is the one from Lesson 1.1, except that <code>fit</code> takes only <code>X</code>.</p>
+
+                <pre><code class="language-python">km = KMeans(n_clusters=4, n_init=10, random_state=42)
+km.fit(X_toy)
+
+print(km.labels_[:12])
+print(km.cluster_centers_.round(2))
+print(f"inertia: {km.inertia_:.1f}   iterations: {km.n_iter_}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>[3 3 0 1 3 1 2 1 0 2 0 2]
+[[-2.71  8.97]
+ [-6.83 -6.83]
+ [ 4.72  2.04]
+ [-8.87  7.17]]
+inertia: 564.9   iterations: 2</code></pre>
+                </div>
+
+                <p>Four learned attributes (trailing underscores, as always):</p>
+                <ul>
+                    <li><code>labels_</code>: the cluster number of each training point, from 0 to 3.</li>
+                    <li><code>cluster_centers_</code>: one row per cluster, the mean of its points, in the same units as <code>X</code>.</li>
+                    <li><code>inertia_</code>: the total squared distance from each point to its own center.</li>
+                    <li><code>n_iter_</code>: how many assign-and-move rounds the best run needed.</li>
+                </ul>
+
+                <p>Inertia is not magic. Look up each point's own center, subtract, square and add everything up:</p>
+
+                <pre><code class="language-python">own_center = km.cluster_centers_[km.labels_]      # one row per point: the center of its cluster
+inertia_by_hand = ((X_toy - own_center) ** 2).sum()
+print(f"{inertia_by_hand:.1f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>564.9</code></pre>
+                </div>
+
+                <p><code>km.cluster_centers_[km.labels_]</code> uses the 300 labels as row numbers into the 4-row table of centers, which gives a 300-row table where each row is that point's center. The same trick appears in the from-scratch version below.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Why Seeds, Again</h4>
+                    <p>K-Means starts from random centers, so two runs can end in different places. <code>random_state=42</code> makes the starts repeatable, so your numbers match this page. <code>n_init=10</code> means "run the whole algorithm ten times from ten different starts and keep the run with the lowest inertia". The next sections show why both matter.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="lloyd" class="lesson-section">
+                <h2>🔁 Inside the Algorithm: Lloyd's Loop</h2>
+
+                <p>The loop is short enough to write yourself, and writing it is the best way to understand what <code>KMeans</code> does. The only clever line is the distance table: <code>X[:, None, :] - centers[None, :, :]</code> uses broadcasting to subtract every center from every point at once, giving an array of shape (points, k, features).</p>
+
+                <pre><code class="language-python">def lloyd(X, centers, max_steps=20):
+    """Plain K-Means: assign each point to its nearest center, move each center to its points' mean."""
+    history = [centers]
+    for _ in range(max_steps):
+        sq_dist = ((X[:, None, :] - centers[None, :, :]) ** 2).sum(axis=2)   # shape (n_points, k)
+        labels = sq_dist.argmin(axis=1)                                      # step 1: assign
+        new_centers = np.array([X[labels == j].mean(axis=0) for j in range(len(centers))])  # step 2: move
+        history.append(new_centers)
+        if np.allclose(new_centers, centers):                                # nothing moved: converged
+            break
+        centers = new_centers
+    return labels, centers, history
+
+rng = np.random.default_rng(12)     # a seed whose random start is clearly poor, so there is something to watch
+start = X_toy[rng.choice(len(X_toy), size=4, replace=False)]     # 4 random points as starting centers
+labels, centers, history = lloyd(X_toy, start)
+
+my_inertia = ((X_toy - centers[labels]) ** 2).sum()
+print(f"rounds: {len(history) - 1}   inertia: {my_inertia:.1f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>rounds: 6   inertia: 564.9</code></pre>
+                </div>
+
+                <p>Your fifteen lines reach the same inertia as scikit-learn. Seeing the loop at work makes the campfire picture concrete. This block redraws the assignment at the start, after the first two rounds, and at the end:</p>
+
+                <pre><code class="language-python">def assign(X, centers):
+    return ((X[:, None, :] - centers[None, :, :]) ** 2).sum(axis=2).argmin(axis=1)
+
+fig, axes = plt.subplots(1, 4, figsize=(10, 3), layout="constrained", sharex=True, sharey=True)
+for ax, step in zip(axes, [0, 1, 2, len(history) - 1]):
+    c = history[step]
+    ax.scatter(X_toy[:, 0], X_toy[:, 1], c=assign(X_toy, c), s=8, cmap="tab10", vmin=0, vmax=9)
+    ax.scatter(c[:, 0], c[:, 1], marker="X", s=150, c="black", label="center")
+    ax.set_title("random start" if step == 0 else f"after round {step}")
+axes[0].legend(loc="lower left")
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/clustering_kmeans_lloyd_steps.png" alt="Four scatter plots of the same 300 points. In the first, four black crosses sit at random points and the colors (nearest center) cut across the visible clouds. After one and two rounds the crosses move toward the cloud middles. In the last panel each of the four clouds has its own color with a cross at its center." width="1100" height="330" loading="lazy">
+                    <figcaption>Assign, move, repeat: the centers (black crosses) drift from random points to the middle of each cloud in a handful of rounds.</figcaption>
+                </figure>
+
+                <div class="card card-warning">
+                    <h4>⚠️ What the Short Version Leaves Out</h4>
+                    <p>If a center ends up with no points at all, <code>X[labels == j].mean(axis=0)</code> is the mean of nothing and returns <code>nan</code> (with a warning). scikit-learn handles this case by moving the empty center to a far-away point, and it uses careful starting points (next section), a tolerance-based stop, and a faster variant of the loop. Use your version to understand the algorithm, and <code>KMeans</code> for real work.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="init" class="lesson-section">
+                <h2>🎲 Starting Points and Local Minima</h2>
+
+                <p>Lloyd's loop always goes downhill: every round lowers the inertia or leaves it unchanged. But "downhill from where you started" is not the same as "the lowest point there is". Run K-Means once each from five different purely random starts and compare where they end:</p>
+
+                <pre><code class="language-python">for seed in range(5):
+    one_run = KMeans(n_clusters=4, init="random", n_init=1, random_state=seed).fit(X_toy)
+    print(f"seed {seed}: inertia {one_run.inertia_:7.1f}   rounds {one_run.n_iter_}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>seed 0: inertia   564.9   rounds 3
+seed 1: inertia  8422.6   rounds 4
+seed 2: inertia  2062.1   rounds 4
+seed 3: inertia  2059.1   rounds 2
+seed 4: inertia   564.9   rounds 2</code></pre>
+                </div>
+
+                <p>Same data, same <em>k</em>, very different answers. Some runs got stuck in a <strong>local minimum</strong>: a solution where no single assign or move step helps, but which is still bad. Here is what one of those looks like next to the good one:</p>
+
+                <pre><code class="language-python">bad = KMeans(n_clusters=4, init="random", n_init=1, random_state=1).fit(X_toy)
+
+fig, axes = plt.subplots(1, 2, figsize=(9, 3.6), layout="constrained", sharex=True, sharey=True)
+for ax, model, title in [(axes[0], km, "good run"), (axes[1], bad, "stuck run")]:
+    ax.scatter(X_toy[:, 0], X_toy[:, 1], c=model.labels_, s=8, cmap="tab10", vmin=0, vmax=9)
+    ax.scatter(*model.cluster_centers_.T, marker="X", s=150, c="black", label="center")
+    ax.set_title(f"{title}: inertia {model.inertia_:.0f}")
+axes[0].legend(loc="lower left")
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/clustering_kmeans_local_minimum.png" alt="Two scatter plots of the four clouds. Left, the good run: each cloud has its own color and center. Right, the stuck run: two neighboring clouds share one center placed between them, while another cloud is split in two by two centers." width="990" height="396" loading="lazy">
+                    <figcaption>A local minimum: one center sits between two clouds while two centers split a single cloud, and no single step can fix it.</figcaption>
+                </figure>
+
+                <p>scikit-learn uses two defenses, and you should know both:</p>
+                <ul>
+                    <li><strong>k-means++ starts</strong> (the default, <code>init="k-means++"</code>): the first center is a random point, and each next one is picked at random with a probability proportional to its squared distance from the nearest center already chosen. Far-away points are likely picks, so the starting centers spread out over the data.</li>
+                    <li><strong>Several runs</strong> (<code>n_init</code>): run the whole algorithm several times from different starts and keep the run with the lowest inertia.</li>
+                </ul>
+
+                <pre><code class="language-python">for seed in range(5):
+    one_run = KMeans(n_clusters=4, init="k-means++", n_init=1, random_state=seed).fit(X_toy)
+    print(f"seed {seed}: inertia {one_run.inertia_:7.1f}")
+
+print("default n_init:", KMeans(n_clusters=4).n_init)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>seed 0: inertia   564.9
+seed 1: inertia   564.9
+seed 2: inertia   564.9
+seed 3: inertia   564.9
+seed 4: inertia   564.9
+default n_init: auto</code></pre>
+                </div>
+
+                <p>Spread-out starts fix most of the bad luck on easy data like this. The default <code>n_init="auto"</code> means one run when the start is k-means++ (and ten for <code>init="random"</code>). On messy real data one run can still land in a poor solution, so this course writes <code>n_init=10</code> explicitly whenever the result matters. Ten runs cost ten times the time, which is rarely a problem below a few hundred thousand rows.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="scaling" class="lesson-section">
+                <h2>📏 Scale Before You Cluster</h2>
+
+                <p>Now real data. Two columns describe how Pinecrest customers shop: how many orders they placed in the last twelve months and how much a typical order was worth.</p>
+
+                <pre><code class="language-python">customers = pd.read_csv("data/customers_churn.csv")
+two = customers[["orders_12m", "avg_order_value"]]
+print(two.describe().loc[["mean", "std", "min", "max"]].round(1))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>      orders_12m  avg_order_value
+mean         5.0            140.9
+std          3.2            103.6
+min          1.0             29.8
+max         21.0            625.2</code></pre>
+                </div>
+
+                <p>Orders run from 1 to 21; order values run from about $30 to $625. K-Means measures straight-line distance, so a difference of $10 in order value counts ten times as much as a difference of one whole order. Cluster the raw numbers and see what happens:</p>
+
+                <pre><code class="language-python">from sklearn.preprocessing import StandardScaler
+
+raw_km = KMeans(n_clusters=4, n_init=10, random_state=42).fit(two)
+
+scaler2 = StandardScaler().set_output(transform="pandas")
+two_scaled = scaler2.fit_transform(two)
+scaled_km = KMeans(n_clusters=4, n_init=10, random_state=42).fit(two_scaled)
+
+print("raw centers:")
+print(pd.DataFrame(raw_km.cluster_centers_, columns=two.columns).round(1).sort_values("avg_order_value"))
+print("scaled centers, back in original units:")
+print(pd.DataFrame(scaler2.inverse_transform(scaled_km.cluster_centers_), columns=two.columns)
+      .round(1).sort_values("avg_order_value"))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>raw centers:
+   orders_12m  avg_order_value
+0         5.5             80.5
+2         5.7            163.7
+1         2.7            300.6
+3         2.4            423.2
+scaled centers, back in original units:
+   orders_12m  avg_order_value
+2         2.4             94.4
+3        10.8             96.7
+0         6.4             98.7
+1         2.6            332.3</code></pre>
+                </div>
+
+                <p>Look at the raw centers: they are spaced along order value, roughly $80, $160, $300 and $420, and the order counts only follow along because big spenders happen to buy less often. The clusters are bands of dollars, and the order column had almost no say. After scaling, both columns count: three groups with similar baskets (about $95 to $99) are separated by how often they buy (2.4, 6.4 and 10.8 orders), and one group of rare, big-ticket buyers stands apart. A picture makes it obvious:</p>
+
+                <pre><code class="language-python">fig, axes = plt.subplots(1, 2, figsize=(9, 3.8), layout="constrained", sharey=True)
+for ax, model, title in [(axes[0], raw_km, "raw features"), (axes[1], scaled_km, "standardized features")]:
+    ax.scatter(two["orders_12m"], two["avg_order_value"], c=model.labels_, s=5, cmap="tab10", vmin=0, vmax=9)
+    ax.set_title(f"K-Means on {title}")
+    ax.set_xlabel("orders in the last 12 months")
+axes[0].set_ylabel("average order value ($)")
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/clustering_kmeans_scaling.png" alt="Two scatter plots of orders in the last 12 months against average order value, colored by cluster. Left, raw features: the colors form horizontal bands by order value only. Right, standardized features: the colors split the customers by both frequency and order value." width="990" height="418" loading="lazy">
+                    <figcaption>Without scaling, dollars drown out orders and the clusters are horizontal bands. With scaling, both features shape the groups.</figcaption>
+                </figure>
+
+                <div class="card card-info">
+                    <h4>💡 Scaling Is a Choice About What "Similar" Means</h4>
+                    <p>In clustering there is no target to tell you whether a feature is useful, so the scale of each feature <em>is</em> your statement about how much it matters. <code>StandardScaler</code> says "one standard deviation of anything counts the same". That is a sensible default, not a law: if a business expert says order value matters twice as much, multiplying that scaled column by 2 is a legitimate choice. Lesson 8.2 also log-transforms skewed columns before scaling.</p>
+                </div>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Where Leakage Still Applies</h4>
+                    <p>When you only want to describe the customers you have, fitting the scaler and K-Means on all of them is fine: there is no test set to leak into. Two situations change that. If you will assign <em>new</em> customers to the groups, keep the fitted scaler and reuse it (never refit on the new data). If you will use the cluster as a feature in a supervised model, the scaler and K-Means belong inside the <code>Pipeline</code>, fitted on training rows only, exactly like any other transformer (Lesson 2.2).</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="new-points" class="lesson-section">
+                <h2>🏷️ Labels, Centers and New Customers</h2>
+
+                <p>A fitted <code>KMeans</code> can place customers it has never seen. <code>predict</code> returns the nearest center's number, and <code>transform</code> returns the distance to every center, which tells you how clear-cut the assignment is. New customers go through the same fitted scaler first.</p>
+
+                <pre><code class="language-python">newcomers = pd.DataFrame({"orders_12m": [12, 2, 8.6], "avg_order_value": [80.0, 450.0, 97.0]})
+newcomers_scaled = scaler2.transform(newcomers)
+
+print(scaled_km.predict(newcomers_scaled))
+print(scaled_km.transform(newcomers_scaled).round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>[3 1 3]
+[[1.72 3.79 2.96 0.41]
+ [3.66 1.15 3.44 4.35]
+ [0.67 2.93 1.91 0.67]]</code></pre>
+                </div>
+
+                <p>Each row of the distance table has one entry per cluster, and <code>predict</code> picks the smallest. The first two newcomers are clearly closest to one center. The third, a customer halfway between the moderate and the frequent buyers, is almost the same distance from two centers: K-Means still gives it a single label, with no hint of doubt. That hard, all-or-nothing assignment is one of the things Gaussian mixtures (Lesson 8.5) soften into probabilities.</p>
+
+                <div class="card card-accent">
+                    <h4>🔑 Key Terms</h4>
+                    <p><strong>Cluster</strong>: a group of similar rows. <strong>Centroid</strong>: the mean of a cluster's rows, stored in <code>cluster_centers_</code>. <strong>Inertia</strong>: the total squared distance from each row to its centroid; lower is tighter. <strong>Local minimum</strong>: a solution the algorithm cannot improve step by step, though a better one exists. <strong>Hard assignment</strong>: each row belongs to exactly one cluster.</p>
+                </div>
+
+                <p>One more thing about labels: the numbers 0, 1, 2, 3 are just names. Cluster 2 is not "more" than cluster 1, and a run with another seed may give the same group a different number. Always describe clusters by their centers and members, never by their number alone (Common Mistakes, number 4).</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="limits" class="lesson-section">
+                <h2>🚧 What K-Means Assumes</h2>
+
+                <p>Because every point joins its nearest center, the border between two clusters is always a straight line halfway between their centers. That builds in assumptions: clusters are roughly round, of similar spread, and separated in straight lines. Three synthetic datasets break those assumptions on purpose:</p>
+
+                <pre><code class="language-python">from sklearn.datasets import make_moons
+
+X_moons, _ = make_moons(n_samples=400, noise=0.06, random_state=42)
+X_blob3, _ = make_blobs(n_samples=400, centers=3, random_state=170)
+X_stretched = X_blob3 @ np.array([[0.6, -0.64], [-0.41, 0.85]])          # shear the round blobs
+X_spread, _ = make_blobs(n_samples=400, centers=[[0, 0], [4, 0], [9, 0]],
+                         cluster_std=[0.4, 0.4, 2.2], random_state=42)     # one wide cloud, two tight ones
+
+fig, axes = plt.subplots(1, 3, figsize=(10, 3.3), layout="constrained")
+for ax, (data, k, title) in zip(axes, [(X_moons, 2, "two moons"), (X_stretched, 3, "stretched clouds"),
+                                      (X_spread, 3, "unequal spreads")]):
+    labels_k = KMeans(n_clusters=k, n_init=10, random_state=42).fit_predict(data)
+    ax.scatter(data[:, 0], data[:, 1], c=labels_k, s=8, cmap="tab10", vmin=0, vmax=9)
+    ax.set_title(f"K-Means, k={k}: {title}")
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/clustering_kmeans_limits.png" alt="Three scatter plots colored by K-Means cluster. Two interlocking half-moons are cut by a straight line, so each color takes part of both moons. Three long, parallel diagonal clouds are mixed up: each color takes pieces of two different clouds. A wide cloud next to two tight ones loses its edge points to the neighboring tight cluster." width="1100" height="363" loading="lazy">
+                    <figcaption>Straight borders halfway between centers: fine for round, similar clouds, wrong for moons, stretched shapes and very different spreads.</figcaption>
+                </figure>
+
+                <p>In every panel K-Means returned exactly the number of clusters it was asked for, and it reported no error. That is the general lesson of clustering: an algorithm always answers, so checking the answer is your job. For shapes like these, Lesson 8.3's single linkage, Lesson 8.4's density-based methods and Lesson 8.5's Gaussian mixtures do better.</p>
+
+                <div class="card card-success">
+                    <h4>✅ When K-Means Is a Good Choice</h4>
+                    <p>Numeric features that you can scale sensibly, groups that are roughly blob-shaped, and a need for speed or a simple story ("each segment is described by its average customer"). Customer segmentation on a handful of behavior features is the classic fit, which is exactly the project below.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Two of these raise errors. The other three are silent, which makes them more dangerous.</p>
+
+                <h3>1. A Text Column in X</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">KMeans(n_clusters=3, n_init=10, random_state=42).fit(customers[["orders_12m", "home_store"]])</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: could not convert string to float: 'Bend'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> K-Means computes means and distances, which need numbers. <strong>Fix:</strong> cluster numeric behavior columns. One-hot encoding a category does make it numeric, but distances between 0/1 columns and scaled numbers are hard to interpret; describe clusters with categories afterwards instead (the project does this with churn).</p>
+
+                <h3>2. Missing Values</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">KMeans(n_clusters=3, n_init=10, random_state=42).fit(customers[["orders_12m", "email_opens_90d"]])</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Input X contains NaN.
+KMeans does not accept missing values encoded as NaN natively. For supervised learning, you might want to consider sklearn.ensemble.HistGradientBoostingClassifier and Regressor which accept missing values encoded as NaNs natively. Alternatively, it is possible to preprocess the data, for instance by using an imputer transformer in a pipeline or drop samples with missing values. See https://scikit-learn.org/stable/modules/impute.html You can find a list of all estimators that handle NaN values at the following page: https://scikit-learn.org/stable/modules/impute.html#estimators-that-handle-nan-values</code></pre>
+                </div>
+                <p><strong>What it means:</strong> 537 customers have no email-open count, and a distance to a missing value is undefined. <strong>Fix:</strong> impute (Lesson 2.1) or leave the column out. Think before imputing: a cluster of "customers with a filled-in median" is an artifact of your imputation, not a real group.</p>
+
+                <h3>3. Clustering Unscaled Features</h3>
+                <p>No error, as the scaling section showed: the column with the biggest numbers (here dollars) quietly decides the clusters. <strong>Fix:</strong> scale first, and check the centers in original units to see that every feature varies across clusters.</p>
+
+                <h3>4. Treating Cluster Numbers as Stable Names</h3>
+
+                <pre><code class="language-python">rerun = KMeans(n_clusters=4, n_init=10, random_state=7).fit(two_scaled)
+print(pd.crosstab(scaled_km.labels_, rerun.labels_, rownames=["seed 42"], colnames=["seed 7"]))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>seed 7      0     1     2    3
+seed 42
+0        1978     0     0    0
+1           0  1128     0    0
+2           0     0  1993    0
+3           0     0     0  901</code></pre>
+                </div>
+                <p><strong>What happened:</strong> each row of the table has a single large count, so both runs found essentially the same four groups, but the numbers attached to them are shuffled. Code that says "cluster 2 is our premium segment" breaks the moment someone changes the seed, the data or the library version. <strong>Fix:</strong> name clusters from their profiles (sort by a center value, or map numbers to names after looking at the profile), and store the fitted model if the numbering must stay fixed.</p>
+
+                <h3>5. Reading Scaled Centers as Real Values</h3>
+
+                <pre><code class="language-python">print(scaled_km.cluster_centers_[0].round(2))
+print(scaler2.inverse_transform(scaled_km.cluster_centers_)[0].round(1))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>[ 0.44 -0.41]
+[ 6.4 98.7]</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the centers live in the space K-Means was fitted on, here standard deviations from the mean. A customer with 0.44 orders and -0.41 dollars per order does not exist; in real units this center is 6.4 orders of about $99. <strong>Fix:</strong> pass the centers through the fitted scaler's <code>inverse_transform</code>, or simply average the original columns per cluster with <code>groupby</code>, as the project does.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: Pinecrest's First Customer Groups</h2>
+
+                <p>The marketing team wants a first answer to "what kinds of customers do we have?" built from four behavior columns: how often people buy (<code>orders_12m</code>), how much they spend per order (<code>avg_order_value</code>), how much of their spending was on discount (<code>discount_share</code>) and how much they send back (<code>return_rate</code>). You will cluster all 6,000 customers into five groups, describe each group in plain units, and check one thing the clustering never saw: how often each group churned. Lesson 8.2 asks whether five is the right number; today, take it as the team's starting guess. Start a fresh notebook, <code>lesson_8_1_project</code>. Allow about 35 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load and select the behavior columns <span class="step-time">(5 min)</span></h3>
+                    <p>Keep the ID and the churn column aside for later. They do not go into the clustering.</p>
+                    <pre><code class="language-python">import pandas as pd
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score, silhouette_samples, calinski_harabasz_score
-from sklearn.metrics import davies_bouldin_score, adjusted_rand_score, adjusted_mutual_info_score
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.cluster import KMeans
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
+customers = pd.read_csv("data/customers_churn.csv")
+behavior = ["orders_12m", "avg_order_value", "discount_share", "return_rate"]
+X = customers[behavior]
 
-# Generate sample data
-np.random.seed(42)
-X, y_true = make_blobs(n_samples=300, centers=4, n_features=2,
-                       center_box=(-10.0, 10.0), cluster_std=1.5,
-                       random_state=42)
+print(X.shape, "missing:", int(X.isna().sum().sum()))
+print(X.describe().loc[["mean", "50%", "max"]].round(2))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(6000, 4) missing: 0
+      orders_12m  avg_order_value  discount_share  return_rate
+mean        5.01           140.92            0.21         0.09
+50%         4.00            96.90            0.14         0.05
+max        21.00           625.18            0.83         0.57</code></pre>
+                    </div>
+                </div>
 
-class KMeansFromScratch:
-    """K-means clustering implementation from scratch"""
-    
-    def __init__(self, n_clusters=3, max_iters=100, random_state=None):
-        self.n_clusters = n_clusters
-        self.max_iters = max_iters
-        self.random_state = random_state
-        self.centroids = None
-        self.labels = None
-        self.inertia_ = None
-        self.n_iter_ = 0
-        self.history = {'centroids': [], 'labels': [], 'inertia': []}
-        
-    def euclidean_distance(self, X, centroids):
-        """Calculate Euclidean distance between points and centroids"""
-        distances = np.zeros((X.shape[0], len(centroids)))
-        for k, centroid in enumerate(centroids):
-            distances[:, k] = np.linalg.norm(X - centroid, axis=1)
-        return distances
-    
-    def initialize_centroids(self, X, method='random'):
-        """Initialize centroids using different methods"""
-        np.random.seed(self.random_state)
-        n_samples = X.shape[0]
-        
-        if method == 'random':
-            # Random initialization
-            idx = np.random.choice(n_samples, self.n_clusters, replace=False)
-            centroids = X[idx]
-            
-        elif method == 'kmeans++':
-            # K-means++ initialization
-            centroids = []
-            
-            # Choose first centroid randomly
-            first_idx = np.random.randint(n_samples)
-            centroids.append(X[first_idx])
-            
-            for _ in range(1, self.n_clusters):
-                # Calculate distances to nearest centroid
-                distances = np.array([min([np.linalg.norm(x - c)**2 for c in centroids]) 
-                                     for x in X])
-                
-                # Choose next centroid with probability proportional to squared distance
-                probabilities = distances / distances.sum()
-                cumprobs = probabilities.cumsum()
-                r = np.random.rand()
-                
-                for j, p in enumerate(cumprobs):
-                    if r < p:
-                        centroids.append(X[j])
-                        break
-            
-            centroids = np.array(centroids)
-            
-        return centroids
-    
-    def fit(self, X, init_method='kmeans++'):
-        """Fit K-means clustering"""
-        # Initialize centroids
-        self.centroids = self.initialize_centroids(X, method=init_method)
-        
-        for iteration in range(self.max_iters):
-            # Store history
-            self.history['centroids'].append(self.centroids.copy())
-            
-            # Assign clusters
-            distances = self.euclidean_distance(X, self.centroids)
-            self.labels = np.argmin(distances, axis=1)
-            self.history['labels'].append(self.labels.copy())
-            
-            # Calculate inertia
-            self.inertia_ = 0
-            for k in range(self.n_clusters):
-                cluster_points = X[self.labels == k]
-                if len(cluster_points) > 0:
-                    self.inertia_ += np.sum((cluster_points - self.centroids[k])**2)
-            self.history['inertia'].append(self.inertia_)
-            
-            # Update centroids
-            new_centroids = np.zeros((self.n_clusters, X.shape[1]))
-            for k in range(self.n_clusters):
-                cluster_points = X[self.labels == k]
-                if len(cluster_points) > 0:
-                    new_centroids[k] = np.mean(cluster_points, axis=0)
-            
-            # Check convergence
-            if np.allclose(self.centroids, new_centroids):
-                self.n_iter_ = iteration + 1
-                break
-            
-            self.centroids = new_centroids
-        
-        return self
-    
-    def predict(self, X):
-        """Predict cluster labels for new data"""
-        distances = self.euclidean_distance(X, self.centroids)
-        return np.argmin(distances, axis=1)
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Scale and fit five clusters <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">scaler = StandardScaler().set_output(transform="pandas")
+X_scaled = scaler.fit_transform(X)
 
-# Implement K-means from scratch
-print("="*60)
-print("K-MEANS FROM SCRATCH")
-print("="*60)
+kmeans = KMeans(n_clusters=5, n_init=10, random_state=42).fit(X_scaled)
+print(f"inertia {kmeans.inertia_:.0f} after {kmeans.n_iter_} rounds")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>inertia 5713 after 5 rounds</code></pre>
+                    </div>
+                </div>
 
-kmeans_scratch = KMeansFromScratch(n_clusters=4, max_iters=100, random_state=42)
-kmeans_scratch.fit(X, init_method='kmeans++')
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Check that the answer is not a fluke of the start <span class="step-time">(5 min)</span></h3>
+                    <p>Refit with three other seeds. If the best inertia is the same, the ten runs inside each fit are finding the same solution.</p>
+                    <pre><code class="language-python">for seed in [0, 1, 2]:
+    check = KMeans(n_clusters=5, n_init=10, random_state=seed).fit(X_scaled)
+    print(f"seed {seed}: inertia {check.inertia_:.0f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>seed 0: inertia 5713
+seed 1: inertia 5713
+seed 2: inertia 5713</code></pre>
+                    </div>
+                </div>
 
-print(f"\nConverged in {kmeans_scratch.n_iter_} iterations")
-print(f"Final inertia: {kmeans_scratch.inertia_:.2f}")
-print(f"Cluster centers:\n{kmeans_scratch.centroids}")
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Profile each cluster in plain units <span class="step-time">(10 min)</span></h3>
+                    <p>Attach the labels to the original table and average the <em>original</em> columns per cluster. Add the share of app users and the churn rate: neither was used to form the clusters, so if they differ between groups, the groups capture something real about behavior.</p>
+                    <pre><code class="language-python">pd.set_option("display.width", 120)
+customers["cluster"] = kmeans.labels_
 
-# Compare with scikit-learn
-kmeans_sklearn = KMeans(n_clusters=4, random_state=42, n_init=10)
-kmeans_sklearn.fit(X)
+profile = customers.groupby("cluster")[behavior + ["app_user", "churned"]].mean()
+profile.insert(0, "customers", customers["cluster"].value_counts().sort_index())
+print(profile.round(2))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>         customers  orders_12m  avg_order_value  discount_share  return_rate  app_user  churned
+cluster
+0              812        6.26           164.64            0.18         0.28      0.49     0.10
+1             1522        2.12            97.98            0.13         0.06      0.24     0.19
+2             1331        9.29            88.76            0.10         0.04      0.54     0.03
+3             1262        5.32            65.82            0.51         0.08      0.47     0.32
+4             1073        2.48           336.92            0.11         0.05      0.31     0.16</code></pre>
+                    </div>
+                    <p>Read each row as a portrait. One group buys about nine times a year in modest baskets and almost never churns. One relies on discounts for half its spending and churns at about 30%. One spends over $300 per order but rarely. One returns about a quarter of what it buys. One buys about twice a year and is otherwise unremarkable. The churn rates range from about 3% to about 32%, though churn played no part in the clustering.</p>
+                </div>
 
-print(f"\nScikit-learn inertia: {kmeans_sklearn.inertia_:.2f}")
-print(f"ARI (scratch vs sklearn): {adjusted_rand_score(kmeans_scratch.labels, kmeans_sklearn.labels_):.3f}")</code></pre>
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Name the groups <span class="step-time">(5 min)</span></h3>
+                    <p>Names make clusters usable, and choosing them forces you to read the profile. The numbers below match this page's run; if your profile table orders the groups differently, map the names to your own numbers.</p>
+                    <pre><code class="language-python">names = {0: "Frequent Returners", 1: "Occasional Buyers", 2: "Loyal Regulars",
+         3: "Discount Seekers", 4: "Big-Ticket Buyers"}
+customers["group"] = customers["cluster"].map(names)
 
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>🎯 K-means partitions data into K spherical clusters</li>
-        <li>📏 Always scale features before clustering</li>
-        <li>🎲 Use k-means++ for better initialization</li>
-        <li>📊 Elbow method and silhouette score help choose K</li>
-        <li>⚡ Mini-batch K-means for large datasets</li>
-        <li>🔍 Sensitive to outliers - preprocess accordingly</li>
-        <li>🔄 Multiple runs with different seeds improve stability</li>
-        <li>📈 Monitor inertia to check convergence</li>
-        <li>🎨 Works well for image compression and segmentation</li>
-        <li>⚠️ Assumes spherical clusters of similar size</li>
-    </ul>
+summary = customers.groupby("group").agg(customers=("customer_id", "size"),
+                                         churn_rate=("churned", "mean"))
+print(summary.sort_values("churn_rate", ascending=False).round(3))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>                    customers  churn_rate
+group
+Discount Seekers         1262       0.317
+Occasional Buyers        1522       0.191
+Big-Ticket Buyers        1073       0.159
+Frequent Returners        812       0.105
+Loyal Regulars           1331       0.034</code></pre>
+                    </div>
+                </div>
 
-    <h2>Further Resources</h2>
-    <ul>
-        <li><a href="https://scikit-learn.org/stable/modules/clustering.html#k-means">Scikit-learn K-means Documentation</a></li>
-        <li><a href="http://ilpubs.stanford.edu:8090/778/1/2006-13.pdf">K-means++: The Advantages of Careful Seeding</a></li>
-        <li><a href="https://cs.stanford.edu/~acoates/papers/coatesng_nntot2012.pdf">K-means for Feature Learning</a></li>
-        <li><a href="https://www.naftaliharris.com/blog/visualizing-k-means-clustering/">Visualizing K-means Clustering</a></li>
-        <li><a href="https://arxiv.org/abs/1801.02949">Clustering: Science or Art?</a></li>
-        <li><a href="https://developers.google.com/machine-learning/clustering">Google's Clustering Course</a></li>
-    </ul>
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save the assignments <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">customers[["customer_id", "cluster", "group"]].to_csv("customer_groups.csv", index=False)
+saved = pd.read_csv("customer_groups.csv")
+print(saved.shape)
+print(saved.head(3))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(6000, 3)
+  customer_id  cluster              group
+0     C100001        2     Loyal Regulars
+1     C100002        2     Loyal Regulars
+2     C100003        4  Big-Ticket Buyers</code></pre>
+                    </div>
+                    <p>The file holds an ID and a group per customer, ready to join to a mailing list. Lesson 8.2 turns this into a reusable pipeline that can also place next month's new customers.</p>
+                </div>
 
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> K-means alternates between two simple steps — assign points, then move centroids —
-            yet it uncovers real structure. Where else have you seen a simple repeated rule produce surprisingly complex behavior?</p>
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>You clustered on four scaled behavior columns, with no ID, churn or text columns in <code>X</code></li>
+                        <li>Your five-cluster inertia is the same for several seeds (with <code>n_init=10</code>)</li>
+                        <li>Your profile table shows each cluster's size and its averages in original units</li>
+                        <li>You compared churn rates across clusters and noted that churn was not used to form them</li>
+                        <li>Every cluster has a descriptive name chosen from its profile, not from its number</li>
+                        <li><code>customer_groups.csv</code> has 6,000 rows with an ID, a cluster number and a name</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue in the project notebook, so <code>customers</code>, <code>X_scaled</code> and <code>kmeans</code> already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: More Clusters, Lower Inertia</h3>
+                    <p>Fit K-Means on <code>X_scaled</code> for <em>k</em> from 1 to 8 (<code>n_init=10, random_state=42</code>) and print the inertia for each. Does it ever go up? Why does that make "pick the <em>k</em> with the lowest inertia" a useless rule?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>With one more center, the old solution is still possible (put the new center anywhere useless), so the best solution can only get better or stay the same. What happens when <em>k</em> equals the number of customers?</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for k in range(1, 9):
+    fit_k = KMeans(n_clusters=k, n_init=10, random_state=42).fit(X_scaled)
+    print(f"k={k}: inertia {fit_k.inertia_:7.0f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>k=1: inertia   24000
+k=2: inertia   17625
+k=3: inertia   13031
+k=4: inertia    9014
+k=5: inertia    5713
+k=6: inertia    5191
+k=7: inertia    4738
+k=8: inertia    4405</code></pre>
+                        </div>
+                        <p>Inertia falls at every step. With one center it is the total variance (6,000 customers × 4 scaled columns = 24,000). With 6,000 centers it would be 0, every customer its own cluster. The lowest inertia always belongs to the largest <em>k</em>, so it cannot choose <em>k</em>. Look instead at where the drops get small: from 4 to 5 the inertia falls by about 3,300, from 5 to 6 by only about 500. That bend, the "elbow", is the first tool of Lesson 8.2.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Borderline Customers</h3>
+                    <p>Use <code>kmeans.transform(X_scaled)</code> to get each customer's distance to all five centers. For each customer compute the gap between the nearest and second-nearest distance. How many customers have a gap below 0.1 (almost exactly between two groups)? Which pair of groups do they sit between most often?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>np.sort(dist, axis=1)</code> sorts each row; columns 0 and 1 are then the nearest and second nearest. <code>np.argsort(dist, axis=1)[:, :2]</code> gives which clusters they are.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">import numpy as np
+
+dist = kmeans.transform(X_scaled)
+nearest_two = np.sort(dist, axis=1)[:, :2]
+gap = nearest_two[:, 1] - nearest_two[:, 0]
+border = gap &lt; 0.1
+print(f"{border.sum()} customers ({border.mean():.1%}) are within 0.1 of a second group")
+
+pairs = np.sort(np.argsort(dist, axis=1)[:, :2], axis=1)[border]
+pair_names = [f"{names[a]} / {names[b]}" for a, b in pairs]
+print(pd.Series(pair_names).value_counts().head(3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>114 customers (1.9%) are within 0.1 of a second group
+Occasional Buyers / Big-Ticket Buyers    24
+Occasional Buyers / Loyal Regulars       23
+Occasional Buyers / Discount Seekers     19
+Name: count, dtype: int64</code></pre>
+                        </div>
+                        <p>A few percent of customers are genuinely on a border. K-Means gives them a confident single label anyway. For a marketing email that hardly matters; for anything costly, borderline customers deserve a second look, or a method that reports uncertainty (Lesson 8.5).</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Does Your From-Scratch Version Agree?</h3>
+                    <p>Run your <code>lloyd</code> function from the lesson on <code>X_scaled.to_numpy()</code>, starting from the centers that scikit-learn found (<code>kmeans.cluster_centers_</code>). It should stop almost at once. Check with <code>np.allclose</code> that it ends at the same centers and that every label matches. (Copy the <code>lloyd</code> function into the project notebook if you started a fresh one.)</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>A converged solution is a fixed point of the loop: assigning and moving changes nothing.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">Xs = X_scaled.to_numpy()
+my_labels, my_centers, my_history = lloyd(Xs, kmeans.cluster_centers_)
+
+print("rounds:", len(my_history) - 1)
+print("same centers:", np.allclose(my_centers, kmeans.cluster_centers_))
+print("same labels :", (my_labels == kmeans.labels_).all())</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>rounds: 1
+same centers: True
+same labels : True</code></pre>
+                        </div>
+                        <p>One round: the assignment is unchanged, so the centers stay put and the loop stops. scikit-learn's answer is a fixed point of exactly the algorithm you wrote.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Write k-means++ Seeding (Stretch)</h3>
+                    <p>Write <code>kmeans_pp_start(X, k, rng)</code>: pick the first center uniformly at random; then, k − 1 times, compute each point's squared distance to its nearest chosen center and pick the next center with probability proportional to that distance (<code>rng.choice(len(X), p=...)</code>). Use it to start <code>lloyd</code> on <code>X_toy</code> with five different seeds and compare the final inertias with the purely random starts from the lesson.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Keep the chosen centers in a list and recompute <code>((X[:, None, :] - np.array(chosen)[None]) ** 2).sum(axis=2).min(axis=1)</code> each time. Divide by its sum to get probabilities.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">def kmeans_pp_start(X, k, rng):
+    chosen = [X[rng.integers(len(X))]]
+    for _ in range(k - 1):
+        d2 = ((X[:, None, :] - np.array(chosen)[None]) ** 2).sum(axis=2).min(axis=1)
+        chosen.append(X[rng.choice(len(X), p=d2 / d2.sum())])
+    return np.array(chosen)
+
+for seed in range(5):
+    seed_rng = np.random.default_rng(seed)
+    pp_labels, pp_centers, _ = lloyd(X_toy, kmeans_pp_start(X_toy, 4, seed_rng))
+    rand_start = X_toy[np.random.default_rng(seed).choice(len(X_toy), size=4, replace=False)]
+    r_labels, r_centers, _ = lloyd(X_toy, rand_start)
+    pp_inertia = ((X_toy - pp_centers[pp_labels]) ** 2).sum()
+    r_inertia = ((X_toy - r_centers[r_labels]) ** 2).sum()
+    print(f"seed {seed}: k-means++ {pp_inertia:7.1f}   random {r_inertia:7.1f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>seed 0: k-means++   564.9   random  2060.5
+seed 1: k-means++   564.9   random  2060.5
+seed 2: k-means++   564.9   random   564.9
+seed 3: k-means++   564.9   random  2058.7
+seed 4: k-means++   564.9   random  2059.1</code></pre>
+                        </div>
+                        <p>The spread-out starts reach the good solution far more often than random starts. k-means++ does not guarantee the best answer (that problem is too hard to solve exactly for large data), but it makes bad starts unlikely, which is why it is the default.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_km = KMeans(n_clusters=2, n_init=10, random_state=42).fit([[1], [2], [10], [11]])
+print(quiz_km.inertia_)</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Inertia adds up SQUARED distances. How far is each point from the center of its pair, and what is that number squared?">
+                                A) <code>2.0</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The two clusters are {1, 2} and {10, 11}, with centers 1.5 and 10.5. Every point is 0.5 from its center, and 0.5 squared is 0.25, so the four points add up to 1.0.">
+                                B) <code>1.0</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Inertia is a sum over all points, not an average. How many points contribute?">
+                                C) <code>0.25</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> You cluster customers on <code>orders_12m</code> (1 to 21) and <code>spend_12m</code> (55 to 2,823 dollars) without scaling. What happens?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="K-Means uses straight-line distance, so a column measured in thousands dominates one measured in ones. The clusters become bands of spend, and orders barely matter. Scaling puts both on the same footing.">
+                                A) The clusters are decided almost entirely by spend, because its numbers are much larger
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Would scikit-learn know that the columns use different units? What does it see: dollars, or just numbers?">
+                                B) scikit-learn raises an error because the columns are on different scales
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Trees ignore units, but K-Means computes distances. How much does one order count against one dollar in a distance?">
+                                C) Nothing changes, since K-Means is not affected by units
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> Five single runs of K-Means with <code>init="random"</code> on the same data end with inertias of 565, 8,423, 2,062, 2,059 and 565. What is the best explanation?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Each run converged (it stopped because nothing moved). Is converging the same as finding the best solution?">
+                                A) Three runs did not run for enough rounds; raising max_iter would fix them
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The data was identical in every run. What else changes between seeds?">
+                                B) The data changes slightly between runs
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Lloyd's loop only goes downhill from its start, so a poor start can end in a local minimum. k-means++ starts and several runs (n_init) keep the best of many starts.">
+                                C) Some starts led to local minima; use k-means++ starts and several runs with <code>n_init</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> Yesterday cluster 3 was your discount-seeking segment. Today, after adding a month of data and refitting, cluster 3 is the big-ticket segment. What happened?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Would a month of data turn discount hunters into big spenders? Look at what the cluster numbers mean in the first place.">
+                                A) The discount seekers changed their behavior overnight
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Nothing is broken; the result may be perfectly good. What do the numbers 0 to 4 actually encode?">
+                                B) The model is broken and should be thrown away
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Cluster numbers are arbitrary names. A refit can find the same groups and number them differently, so identify segments from their profiles, or keep the fitted model if numbering must stay fixed.">
+                                C) Probably nothing: cluster numbers are arbitrary, so the same groups can come back with different numbers
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> On which data will K-Means with the right <em>k</em> most likely fail to find the true groups?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="K-Means draws straight borders halfway between centers, which suits round clouds. Two curved, interlocking moons cannot be separated by such borders, so each cluster takes parts of both.">
+                                A) Two interlocking half-moon shapes
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Round, similar, well-separated clouds are the ideal case. What shape do K-Means borders have?">
+                                B) Four round, well-separated clouds of similar size
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Scaled numeric columns with blob-like groups are the classic use. Which option has a curved shape?">
+                                C) Three blob-shaped customer groups on scaled numeric features
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Why is there no train/test split in this lesson?</summary>
+                    <p>A test set measures how well predictions match known answers on unseen rows, and clustering has no answers to match. When the goal is to describe the customers you have, you cluster all of them. What you must still protect against is fooling yourself, which is why Lesson 8.2 checks the clusters' stability and usefulness. If clusters feed a supervised model, they are fitted inside a pipeline on training rows only.</p>
+                </details>
+                <details>
+                    <summary>Is the result the "true" segmentation of Pinecrest's customers?</summary>
+                    <p>Not automatically. K-Means returns <em>a</em> partition into exactly <em>k</em> groups, whether or not the data has real groups. Evidence that these are meaningful comes from outside the algorithm: the groups are stable across seeds, their profiles make business sense, and they differ in things the clustering never saw, like churn. Lesson 8.2 adds scores (silhouette) and resampling checks.</p>
+                </details>
+                <details>
+                    <summary>What is the difference between K-Means and k-nearest neighbors?</summary>
+                    <p>Both have a "k" and both use distances, which is where the similarity ends. k-NN (Lesson 4.1) is supervised: k is the number of labeled neighbors that vote on a prediction. K-Means is unsupervised: k is the number of groups to find, and there are no labels at all.</p>
+                </details>
+                <details>
+                    <summary>Can K-Means use other distances, like Manhattan or cosine?</summary>
+                    <p>Not in scikit-learn. The "move the center to the mean" step is what makes K-Means work, and the mean is the best center only for squared straight-line distance. For text-like data, normalizing each row to length 1 first makes straight-line distance behave like cosine distance. For other distances, hierarchical clustering (Lesson 8.3) accepts a <code>metric</code>.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>K-Means also compresses images: treat every pixel as a point in (red, green, blue) space, cluster the pixels into 16 colors, and replace each pixel by its cluster center. Draw a small picture yourself with NumPy (for example a smooth color gradient plus a few shapes, about 100 × 100 pixels), reshape it to <code>(n_pixels, 3)</code>, fit <code>KMeans(n_clusters=16, n_init=10, random_state=42)</code>, and rebuild the image from <code>cluster_centers_[labels_]</code>. Compare the two with <code>plt.imshow</code>. How few colors can you use before the gradient shows visible steps?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain K-Means to a Pinecrest marketer in four sentences using the campfire picture, without the words "centroid" or "inertia". Then write the one piece of evidence from your project that makes you believe the five groups are more than an artifact of the algorithm, and one reason you still are not sure.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Clustering is unsupervised: it groups rows by similarity with no target column, and it always returns an answer, so validation is your job</li>
+                        <li>K-Means alternates two steps, assign each point to its nearest center and move each center to its points' mean, until nothing changes</li>
+                        <li>It minimizes inertia, the total squared distance to the own center; inertia always falls as <em>k</em> grows</li>
+                        <li>Lloyd's loop can stop in a local minimum; k-means++ starts and <code>n_init=10</code> runs guard against it</li>
+                        <li>Distances depend on units, so scale features first; the scale you choose says how much each feature matters</li>
+                        <li>Cluster numbers are arbitrary names; describe clusters by their profiles in original units</li>
+                        <li>K-Means assumes round clusters of similar spread and draws straight borders; moons and stretched shapes defeat it</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You wrote K-Means from scratch in NumPy and matched scikit-learn's result</li>
+                        <li>You watched a bad start produce a local minimum and saw how k-means++ prevents it</li>
+                        <li>You showed with two charts how unscaled dollars hijack a clustering</li>
+                        <li>You grouped 6,000 Pinecrest customers, named five groups from their profiles and found churn rates from about 3% to about 32%</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="clustering_kmeans_optimization.html"><strong>Lesson 8.2: Choosing k and Customer Segments</strong></a> you will question today's guess of five. You will use the elbow and silhouette scores, test whether the groups survive resampling, log-transform skewed features, scale K-Means up with <code>MiniBatchKMeans</code>, and turn the segmentation into a pipeline and a short brief the marketing team can act on.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook and <code>customer_groups.csv</code>: Lesson 8.2 tests whether five was the right number of groups.</li>
+                    <li>Plot a histogram of <code>avg_order_value</code> and of <code>orders_12m</code>. Are they symmetric or skewed? Write down what that might do to a mean-based algorithm.</li>
+                    <li>Rerun the project with <code>n_clusters=4</code> and <code>6</code>. Which of your named groups merge or split?</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>Today you built a learning algorithm with your own hands and then used the professional version on 6,000 customers. Unsupervised learning can feel slippery at first because nothing says "correct". That discomfort is healthy: it is the habit of asking "is this real?" that separates a useful segmentation from a pretty chart. You already asked it today, with seeds, scaling and a churn check. Keep going.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="interpretability_lime.html" class="prev-lesson">← Previous: LIME and Fairness Checks</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="clustering_kmeans_optimization.html" class="next-lesson">Next: Choosing k and Customer Segments →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>K-means partitions data into <em>k</em> clusters by minimizing the total squared distance from points to their assigned centroid.</li>
-                <li>It alternates two steps until convergence: assign each point to the nearest centroid, then recompute each centroid as the mean of its points.</li>
-                <li>Results depend on initialization and the chosen <em>k</em>; multiple restarts (<code>n_init</code>) and k-means++ improve reliability.</li>
-                <li>K-means assumes roughly spherical, similarly sized clusters and can struggle with other shapes.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You understand K-means from the inside out — you can implement its core loop yourself and use the library version with
-        confidence, knowing exactly what happens under the hood.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>Why does K-means sometimes give different results on the same data?</summary>
-            <p>The initial centroid positions are partly random, and the algorithm converges to a local optimum. Running it several
-            times with different seeds (<code>n_init</code>) and keeping the lowest-inertia result mitigates this; k-means++ initialization also helps.</p>
-        </details>
-        <details>
-            <summary>What is inertia?</summary>
-            <p>Inertia is the sum of squared distances from each point to its assigned centroid — the quantity K-means minimizes.
-            Lower is tighter, but it always decreases as <em>k</em> grows, so it can't alone tell you the best <em>k</em>.</p>
-        </details>
-        <details>
-            <summary>Does K-means guarantee the best possible clustering?</summary>
-            <p>No. It finds a local optimum, not the global one. That's exactly why initialization strategy and multiple restarts matter.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Now that you know how K-means works, the next questions are practical: how to choose the number of clusters and how to
-        make the algorithm faster and more robust.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Run your from-scratch K-means and scikit-learn's <code>KMeans</code> on <code>make_blobs</code> data and compare the centroids.</li>
-            <li>Change the initialization and number of restarts and watch how the final inertia varies.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>You just built a real machine-learning algorithm from nothing but arithmetic and loops. That's a milestone — the
-            "magic" of unsupervised learning is now something you can write yourself.</p>
-        </div>
-    </section>
-
-    <!-- Navigation at the bottom -->
-    <nav class="lesson-nav" aria-label="Lesson navigation">
-        <a href="ml_linear_logistic_regression.html" class="prev-lesson" aria-label="Previous lesson">Previous: Linear & Logistic Regression</a>
-        <a href="index.html" class="home-link" aria-label="Course home">Course Home</a>
-        <a href="ml_kmeans_optimization.html" class="next-lesson" aria-label="Next lesson">Next: K-means Optimization & Evaluation</a>
-    </nav>
-    
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -339,8 +946,10 @@ print(f"ARI (scratch vs sklearn): {adjusted_rand_score(kmeans_scratch.labels, km
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>

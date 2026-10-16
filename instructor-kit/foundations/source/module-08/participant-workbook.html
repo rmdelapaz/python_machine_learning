@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 8</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 8: Support Vector Machines and Decision Trees</h1>
+    <p class="sub">Your workbook for Session 8: a warm-up on Session 7, the key ideas of Lessons 4.3 and 5.1, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>4.3–5.1</b></span>
+      <span class="chip">Session <b>8</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Picture an SVM as the widest street between two classes, and predict what the C and gamma dials do to it.</li>
+  <li>Explain the kernel trick with the ring example, and build a scaled, tuned, class-weighted SVM pipeline.</li>
+  <li>Read a decision tree as rules, compute a node's Gini impurity, and say where a tree's probabilities come from.</li>
+  <li>Choose a tree's size by cross-validation, and read its importances without over-reading them.</li>
+  <li>Know when to use each: readable rules, a ranked list, or neither.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-up: Nearest Neighbors and Naive Bayes</h2><span class="rule"></span></div>
+<p>Five questions on Session 7. Two minutes alone, then compare with a neighbor.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">Lesson 4.1: a kNN churn model scores a perfect 1.000 on its training data with k=1. Why, and what do you do about it?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">Two unscaled features: spend differs by $300 and days since last order by 120. What share of the squared distance comes from spend? Predict, then check.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+spend, days = <span class="s">300</span>, <span class="s">120</span>
+print(round(spend ** <span class="s">2</span> / (spend ** <span class="s">2</span> + days ** <span class="s">2</span>), <span class="s">2</span>))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Lesson 4.2: a word appears in 6% of negative reviews and 0.5% of positive ones; 25% of reviews are negative. After seeing the word, about how likely is the review to be negative?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Why does MultinomialNB need alpha above 0?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Your Naive Bayes model ranks customers well (AUC 0.81) but its probabilities pile up near 0 and 1. Can you quote them to the care team?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">4.3</span><h3>Support Vector Machines</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain the maximum-margin idea and find the support vectors of a fitted model</li>
+  <li>Predict how changing C and gamma changes the margin, the number of support vectors and the risk of overfitting</li>
+  <li>Explain the kernel trick and use the RBF kernel to learn a curved boundary</li>
+  <li>Build a scaled SVC pipeline, rank with <code class="inline">decision_function</code>, handle imbalance with <code class="inline">class_weight</code>, and tune C and gamma with cross-validation</li>
+  <li>Decide when an SVM is a sensible choice and when its training time rules it out</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The widest street.</b> An SVM picks the boundary with the widest margin. Only the support vectors (points on or inside the street, or misclassified) shape it.</li>
+  <li><b>C prices violations.</b> Small C: wide street, many support vectors, simpler model. Large C: narrow street that fits training points harder. C is the inverse of regularization strength.</li>
+  <li><b>The kernel trick.</b> Data tangled in its own features can become separable after a lift into more features (the ring plus x² + y²). A kernel computes similarities as if the lift had happened, without building the features.</li>
+  <li><b>gamma (RBF kernel).</b> How far each point's influence reaches: similarity = exp(-gamma × squared distance). Too large memorizes noise; tune C and gamma together by cross-validation (keys <code class="inline">svc__C</code>, <code class="inline">svc__gamma</code>).</li>
+  <li><b>Always scale, inside a pipeline.</b> Kernels and margins are distances.</li>
+  <li><b>No probabilities.</b> Rank with <code class="inline">decision_function</code>; calibrate with <code class="inline">CalibratedClassifierCV(SVC(), ensemble=False)</code> when you need probabilities.</li>
+  <li><b>Imbalance:</b> <code class="inline">class_weight="balanced"</code>; without it an SVM can ignore the minority class (accuracy = baseline, nobody flagged).</li>
+  <li><b>Training time</b> grows roughly with the square of the rows: kernel SVM up to about 10,000 rows, LinearSVC beyond.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: where do three new customers stand?</div>
+<p>Where do three new customers stand relative to the street? An SVM on just two scaled features, recency and discount share, so the street is a line you could draw.</p>
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+<span class="k">from</span> sklearn.svm <span class="k">import</span> SVC
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+pair = [<span class="s">"days_since_last_order"</span>, <span class="s">"discount_share"</span>]
+X_train, X_test, y_train, y_test = train_test_split(
+    customers[pair], customers[<span class="s">"churned"</span>], test_size=<span class="s">0.25</span>, stratify=customers[<span class="s">"churned"</span>], random_state=<span class="s">42</span>)
+street = make_pipeline(StandardScaler(), SVC(kernel=<span class="s">"linear"</span>, class_weight=<span class="s">"balanced"</span>)).fit(X_train, y_train)
+print(<span class="s">"support vectors per class:"</span>, street[-<span class="s">1</span>].n_support_)
+print(<span class="s">"weights (scaled features):"</span>, street[-<span class="s">1</span>].coef_[<span class="s">0</span>].round(<span class="s">2</span>))</pre>
+<pre class="out">support vectors per class: [2287  454]
+weights (scaled features): [0.87 0.7 ]</pre><p>With <code class="inline">class_weight="balanced"</code> and heavily overlapping classes, 2,741 of 4,500 customers sit on or inside the street. Both weights are positive: more days since the last order and more discount use push toward churn.</p>
+<pre class="code">new = pd.DataFrame({<span class="s">"days_since_last_order"</span>: [<span class="s">20</span>, <span class="s">150</span>, <span class="s">300</span>], <span class="s">"discount_share"</span>: [<span class="s">0.05</span>, <span class="s">0.40</span>, <span class="s">0.60</span>]})
+print(street.decision_function(new).round(<span class="s">2</span>))
+print(street.predict(new))</pre>
+<pre class="out">[-1.59  1.09  3.37]
+[0 1 1]</pre><p>The scores are signed distances in street widths. The first customer (ordered 20 days ago, rarely uses discounts) is 1.59 on the "stays" side, beyond the curb. The second (150 days, 40% discounts) is inside the street on the churn side: predicted to churn, but not confidently. The third is far out on the churn side. Sort by these scores and you have a ranking; read 3.37 as a probability and you have a mistake.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-08/l4_3-svm/review_svm_starter.py</code>. Session 7's reviews, now with a linear SVM: rank with <code class="inline">decision_function</code>, TF-IDF as the text "scaler", C by cross-validation, the strongest words, the street, calibration.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-08/l4_3-svm/kernel_by_hand_starter.py</code>. Build the degree-2 lift yourself (66 columns), then let a polynomial kernel do it without building anything.</li>
+  <li>Done when your numbers match the "Expected when done" block. Finished early? <code class="inline">debug_svm.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (Four points on a line, two classes.)</div><pre class="code"><span class="k">from</span> sklearn.svm <span class="k">import</span> SVC
+m = SVC(kernel=<span class="s">"linear"</span>, C=<span class="s">1</span>).fit([[<span class="s">0</span>], [<span class="s">1</span>], [<span class="s">3</span>], [<span class="s">4</span>]], [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>])
+print(m.support_vectors_.ravel(), m.predict([[<span class="s">1.8</span>], [<span class="s">2.2</span>]]))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (Similarity = exp(-gamma × squared distance).)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+distance_squared = <span class="s">4</span>
+<span class="k">for</span> gamma <span class="k">in</span> [<span class="s">0.1</span>, <span class="s">1</span>, <span class="s">10</span>]:
+    print(gamma, round(float(np.exp(-gamma * distance_squared)), <span class="s">4</span>))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A tuned SVM retention list</b> (lesson page, "Project: A Tuned SVM Retention List"). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: split keeps the IDs. Check: <code class="inline">4500 1500 ['C102112', 'C103063', 'C101159']</code></li>
+  <li>☐ Step 2: logistic regression CV AUC 0.829 ± 0.021</li>
+  <li>☐ Step 3: grid over <code class="inline">svc__C</code> and <code class="inline">svc__gamma</code>; best C=10, gamma=0.01, CV AUC 0.854</li>
+  <li>☐ Step 4: test once: SVM 0.848, logistic regression 0.823</li>
+  <li>☐ Step 5: churners in each top 50 (34 and 33) and the overlap (21)</li>
+  <li>☐ Step 6: <code class="inline">svm_shortlist.csv</code> (scores are distances, not probabilities)</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">On overlapping classes you lower a linear SVM's C from 1 to 0.01. What do you expect?</div><div class="opts"><div class="opt">A) A narrower street and fewer support vectors</div><div class="opt">B) A wider street held up by many more support vectors</div><div class="opt">C) No change: C only matters for the RBF kernel</div><div class="opt">D) A perfect training score, because violations are now free</div></div></div>
+<div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+<span class="k">from</span> sklearn.svm <span class="k">import</span> SVC
+pipe = make_pipeline(StandardScaler(), SVC())
+print([key <span class="k">for</span> key <span class="k">in</span> pipe.get_params() <span class="k">if</span> key.endswith(<span class="s">"gamma"</span>)])</pre><div class="write"></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">Why does an RBF <code class="inline">SVC</code> on the churn table need a <code class="inline">StandardScaler</code> in front of it?</div><div class="opts"><div class="opt">A) The SVM cannot read integer columns</div><div class="opt">B) Scaling makes the SVM train much faster, nothing else changes</div><div class="opt">C) Without scaling the model cannot output probabilities</div><div class="opt">D) The kernel and the margin are built on distances, and unscaled <code class="inline">spend_12m</code> and <code class="inline">days_since_last_order</code> would drown out the 0-to-1 columns</div></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+<span class="k">from</span> sklearn.svm <span class="k">import</span> SVC
+pipe = make_pipeline(StandardScaler(), SVC()).fit([[<span class="s">0</span>], [<span class="s">1</span>], [<span class="s">5</span>], [<span class="s">6</span>]], [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>])
+print(pipe.predict_proba([[<span class="s">3</span>]]))</pre><div class="opts"><div class="opt">A) It prints <code class="inline">[[0.5 0.5]]</code>: the point is halfway</div><div class="opt">B) <code class="inline">AttributeError: This 'Pipeline' has no attribute 'predict_proba'</code></div><div class="opt">C) It prints <code class="inline">[1]</code></div><div class="opt">D) <code class="inline">NotFittedError</code>: the pipeline was not fitted</div></div></div>
+<div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">On churn (16.5% churners) you add <code class="inline">class_weight="balanced"</code> to an RBF SVM. In the lesson, what happened?</div><div class="opts"><div class="opt">A) Recall of churners jumped (0.258 to 0.774) while accuracy fell (0.859 to 0.792)</div><div class="opt">B) Nothing: class weights only affect logistic regression</div><div class="opt">C) Accuracy rose and recall fell</div><div class="opt">D) The model started predicting churn for every customer</div></div></div>
+<div class="q" data-sc="6" data-kind="short"><div class="qn">Q6</div><div class="qt">What does this print? (RBF similarity of two points at squared distance 4, for two values of gamma.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+print(round(float(np.exp(-<span class="s">0.1</span> * <span class="s">4</span>)), <span class="s">3</span>), round(float(np.exp(-<span class="s">10</span> * <span class="s">4</span>)), <span class="s">3</span>))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the widest street, support vectors, C and gamma to a colleague who has never seen an SVM, without formulas. Then look at your project's grid table and describe which corner overfit and how you could tell from the numbers alone.</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">5.1</span><h3>Decision Trees</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain how a classification tree chooses each split by reducing Gini impurity, and compute the impurity of a node by hand</li>
+  <li>Train <code class="inline">DecisionTreeClassifier</code> and <code class="inline">DecisionTreeRegressor</code>, and read their rules with <code class="inline">export_text</code> and <code class="inline">plot_tree</code></li>
+  <li>Explain where a tree's probabilities come from and why trees do not need scaled features</li>
+  <li>Control overfitting with <code class="inline">max_depth</code>, <code class="inline">min_samples_leaf</code>, <code class="inline">max_leaf_nodes</code> and cost-complexity pruning, chosen by cross-validation</li>
+  <li>Read a tree's feature importances, including what they cannot tell you</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>Signposts, trails, campsites.</b> Each node asks one yes-or-no question about one feature; a new row walks down to a leaf and gets the leaf's prediction.</li>
+  <li><b>Gini impurity</b> = 1 - Σ p²: the chance two rows picked at random from a node disagree. 0 is pure, 0.5 is a 50/50 two-class node. Each split is the (feature, threshold) with the largest weighted decrease, tried for every midpoint.</li>
+  <li><b>Greedy.</b> The best split now, never reconsidered; the search repeats inside each child.</li>
+  <li><b>Probabilities are leaf shares.</b> Few leaves give coarse ties; pure leaves give 0s and 1s.</li>
+  <li><b>No scaling needed;</b> thresholds, U-shapes and interactions come naturally; boxes, not lines.</li>
+  <li><b>Unlimited trees overfit.</b> Control size with <code class="inline">max_depth</code>, <code class="inline">min_samples_leaf</code>, <code class="inline">max_leaf_nodes</code> or <code class="inline">ccp_alpha</code>, chosen by cross-validation.</li>
+  <li><b>Importances</b> describe the model's splits, favor many-valued columns, and say nothing about causes. A zero means "the model did not need it".</li>
+  <li><b>Unstable:</b> small data changes can change the whole tree (Session 9 turns this into a strength).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: a tree finds the night-time fraud</div>
+<p>Fraud at night: does the hour matter for every payment, or only for some? A depth-2 tree on two columns answers it.</p>
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+<span class="k">from</span> sklearn.tree <span class="k">import</span> DecisionTreeClassifier, export_text
+
+tx = pd.read_csv(<span class="s">"data/transactions.csv"</span>)
+pair = [<span class="s">"hour"</span>, <span class="s">"device_new"</span>]
+X_train, X_test, y_train, y_test = train_test_split(
+    tx[pair], tx[<span class="s">"is_fraud"</span>], test_size=<span class="s">0.3</span>, stratify=tx[<span class="s">"is_fraud"</span>], random_state=<span class="s">42</span>)
+night_tree = DecisionTreeClassifier(max_depth=<span class="s">2</span>, random_state=<span class="s">42</span>).fit(X_train, y_train)
+print(export_text(night_tree, feature_names=pair, show_weights=<span class="k">True</span>))</pre>
+<pre class="out">|--- device_new &lt;= 0.50
+|   |--- hour &lt;= 15.50
+|   |   |--- weights: [16418.00, 73.00] class: 0
+|   |--- hour &gt;  15.50
+|   |   |--- weights: [15174.00, 86.00] class: 0
+|--- device_new &gt;  0.50
+|   |--- hour &lt;= 5.50
+|   |   |--- weights: [111.00, 82.00] class: 0
+|   |--- hour &gt;  5.50
+|   |   |--- weights: [2990.00, 66.00] class: 0</pre><p>Read the weights as [legitimate, fraud]. For payments from a known device the tree's second question is about the afternoon, and both leaves are about 0.5% fraud. For a NEW device it asks about the night (hour 5 or earlier): 82 frauds among 193 payments, against 66 among 3,056 during the day. The question about the hour only matters on one side of the tree: that is an interaction.</p>
+<pre class="code">check = X_test.assign(fraud=y_test, night=X_test[<span class="s">"hour"</span>] &lt;= <span class="s">5</span>)
+print(check.groupby([<span class="s">"device_new"</span>, <span class="s">"night"</span>])[<span class="s">"fraud"</span>].mean().round(<span class="s">4</span>).to_string())</pre>
+<pre class="out">device_new  night
+0           False    0.0056
+            True     0.0066
+1           False    0.0175
+            True     0.4079</pre><p>The test payments confirm it: at night from a new device, 40.8% fraud; at night from a known device, 0.66%, no different from the day. A straight-line model with one weight for <code class="inline">hour</code> cannot say this; a tree says it with two questions.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-08/l5_1-decision-trees/fraud_rules_starter.py</code>. A rule book of at most eight rules for the payments team, judged by average precision.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-08/l5_1-decision-trees/sales_tree_starter.py</code>. A regression tree for daily store sales, trained on 2023 and 2024, tested on 2025.</li>
+  <li>Done when your numbers match the "Expected when done" block. Finished early? <code class="inline">debug_tree.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (Gini = 1 - sum of squared shares.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">def</span> gini(counts):
+    p = np.asarray(counts) / np.sum(counts)
+    <span class="k">return</span> round(float(<span class="s">1</span> - np.sum(p ** <span class="s">2</span>)), <span class="s">3</span>)
+print(gini([<span class="s">50</span>, <span class="s">50</span>]), gini([<span class="s">90</span>, <span class="s">10</span>]), gini([<span class="s">100</span>, <span class="s">0</span>]))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (A stump: one question.)</div><pre class="code"><span class="k">from</span> sklearn.tree <span class="k">import</span> DecisionTreeClassifier
+X, y = [[<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">3</span>], [<span class="s">10</span>], [<span class="s">11</span>], [<span class="s">12</span>]], [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>]
+t = DecisionTreeClassifier(max_depth=<span class="s">1</span>, random_state=<span class="s">42</span>).fit(X, y)
+print(t.tree_.threshold[<span class="s">0</span>], t.predict_proba([[<span class="s">2.4</span>], [<span class="s">11</span>]]).round(<span class="s">2</span>).tolist())</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A churn rule book</b> (lesson page, "Project: A Churn Rule Book"). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: fifteen columns, no <code class="inline">cancellation_reason</code>. Check: <code class="inline">(4500, 15) (1500, 15)</code></li>
+  <li>☐ Step 2: <code class="inline">tree_prep</code>: 35 columns after encoding</li>
+  <li>☐ Step 3: baselines: do-nothing 0.500, logistic regression 0.832</li>
+  <li>☐ Step 4: <code class="inline">max_leaf_nodes</code> by CV; 12 leaves (CV 0.834)</li>
+  <li>☐ Step 5: test once: 0.837</li>
+  <li>☐ Step 6: <code class="inline">churn_rules.txt</code> with the rules and the segment table</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print? (A node with 30 stayers and 10 churners.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+counts = np.array([<span class="s">30</span>, <span class="s">10</span>])
+p = counts / counts.sum()
+print(round(float(<span class="s">1</span> - np.sum(p ** <span class="s">2</span>)), <span class="s">3</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">Where does a decision tree's predicted churn probability for a new customer come from?</div><div class="opts"><div class="opt">A) A weighted sum of the features, squashed into 0 to 1</div><div class="opt">B) The distance from the new customer to the boundary</div><div class="opt">C) The share of churners among the training customers in the leaf the new customer lands in</div><div class="opt">D) The average of many trees' votes</div></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.tree <span class="k">import</span> DecisionTreeClassifier
+t = DecisionTreeClassifier(max_depth=<span class="s">1</span>, random_state=<span class="s">42</span>).fit([[<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">8</span>], [<span class="s">15</span>]], [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>])
+print(t.tree_.threshold[<span class="s">0</span>])</pre><div class="opts"><div class="opt">A) <code class="inline">2.0</code></div><div class="opt">B) <code class="inline">5.0</code></div><div class="opt">C) <code class="inline">8.0</code></div><div class="opt">D) <code class="inline">6.5</code></div></div></div>
+<div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">An unlimited churn tree scores 1.000 on the training set and 0.822 on the test set, below the 0.835 baseline. What is the best next move?</div><div class="opts"><div class="opt">A) Report 1.000: the tree learned the data perfectly</div><div class="opt">B) Scale the features, then refit</div><div class="opt">C) Switch the criterion from gini to entropy</div><div class="opt">D) Choose a size control such as <code class="inline">min_samples_leaf</code> by cross-validation on the training set</div></div></div>
+<div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">In the pruned churn tree, <code class="inline">spend_12m</code> gets an importance of 0.012, yet churn falls from 24% to 8% across spend quartiles. What is the right sentence?</div><div class="opts"><div class="opt">A) The tree did not need spend: other features it split on first carried the same information</div><div class="opt">B) Spend has no relationship with churn</div><div class="opt">C) Raising a customer's spend would not change their churn risk</div><div class="opt">D) The importance is wrong because the features were not scaled</div></div></div>
+<div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">from</span> sklearn.tree <span class="k">import</span> DecisionTreeClassifier
+DecisionTreeClassifier(max_depth=<span class="s">0</span>).fit([[<span class="s">1</span>], [<span class="s">2</span>]], [<span class="s">0</span>, <span class="s">1</span>])</pre><div class="opts"><div class="opt">A) A tree with no questions that predicts the majority class</div><div class="opt">B) A stump: one question</div><div class="opt">C) <code class="inline">InvalidParameterError</code>: max_depth must be at least 1 (or None)</div><div class="opt">D) An unlimited tree, because 0 means no limit</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the trail-junction signposts to someone who has never seen a decision tree, using one real rule from your rule book. Then describe in two or three sentences why an unlimited tree scores perfectly on training data and badly on test data. Which control would you reach for first, and why?</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<p>Three questions, no notes.</p>
+<div class="q"><div class="qn">E1</div><div class="qt">Your SVM scores 0.996 on the training customers and AUC 0.699 on the test set, with 4,491 of 4,500 customers as support vectors. Which dial is set wrong, and how do you choose it properly?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">A node holds 40 stayers and 10 churners. What is its Gini impurity, and what churn probability does a tree give a customer who lands there?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">The care team wants rules they can pin to the wall AND the best possible top-50 list. What do you give them from today's two models, and why not one model for both?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish the SVM retention list (Steps 4 to 6) and the churn rule book (Steps 4 to 6)</li>
+  <li>☐ Lesson 4.3 Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Lesson 5.1 Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Both Quick Quizzes; both journal entries</li>
+  <li>☐ 4.3 "Before the Next Lesson": predict, then check, the CV AUC with gamma=0.003</li>
+  <li>☐ 5.1 "Before the Next Lesson": rerun the instability block with min_samples_leaf=100; write a prediction for the bootstrap question</li>
+  <li>☐ Any unfinished lab from today</li>
+  <li>☐ Bring to Session 9: a READY laptop, <code class="inline">pinecrest-ml</code> with <code class="inline">data/</code> and <code class="inline">labs/</code>, my 5.1 and 4.3 project notebooks, this workbook and my journal</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>margin (street)</td><td>The band around an SVM's boundary; the SVM makes it as wide as it can</td></tr>
+<tr><td>support vectors</td><td>The training points on or inside the margin (or misclassified); the only ones that shape the boundary</td></tr>
+<tr><td>C</td><td>The price of a margin violation; small C = wide street, simpler model</td></tr>
+<tr><td>kernel</td><td>A similarity function that lets an SVM work as if the data were lifted into more features</td></tr>
+<tr><td>RBF kernel, gamma</td><td>Similarity exp(-gamma × squared distance); gamma sets how far each point reaches</td></tr>
+<tr><td>decision_function</td><td>An SVM's signed distance from the boundary: a ranking score, not a probability</td></tr>
+<tr><td>calibration</td><td>Learning a mapping from scores to probabilities (<code class="inline">CalibratedClassifierCV</code>)</td></tr>
+<tr><td>node, root, leaf</td><td>A point in a tree; the first node; a node that predicts instead of asking</td></tr>
+<tr><td>Gini impurity</td><td>1 - Σ p²: how mixed a node is (0 pure, 0.5 a 50/50 split of two classes)</td></tr>
+<tr><td>greedy</td><td>Choosing the best split now and never reconsidering it</td></tr>
+<tr><td>max_depth / min_samples_leaf / max_leaf_nodes</td><td>Limits on questions in a row / the smallest leaf / the number of leaves</td></tr>
+<tr><td>cost-complexity pruning (ccp_alpha)</td><td>Grow fully, then cut branches that do not earn their keep</td></tr>
+<tr><td>impurity importance (MDI)</td><td>A feature's total impurity decrease in the fitted tree, normalized to sum to 1</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 8 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

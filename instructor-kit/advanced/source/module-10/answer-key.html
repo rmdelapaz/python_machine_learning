@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Key: Session 10</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">answers &amp; solutions · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Answer Key</div>
+    <h1>Session 10: Recommendations and Reproducibility</h1>
+    <p class="sub">Answers and reasoning for every Session 10 item: the warm-up, both self-checks, the predict-then-run items, the lab reference outputs and handouts, the lesson pages' own quizzes and the exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Session <b>10</b></span>
+      <span class="chip"><b>12</b> self-check items</span>
+      <span class="chip">Confidential</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<p>Retrieval from Lessons 10.5 and 11.1. The code answers are real output.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+<span class="k">from</span> torchvision <span class="k">import</span> models
+m = models.resnet18(weights=<span class="k">None</span>)
+<span class="k">for</span> p <span class="k">in</span> m.parameters():
+    p.requires_grad = <span class="k">False</span>
+m.fc = nn.Linear(<span class="s">512</span>, <span class="s">5</span>)
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> m.parameters() <span class="k">if</span> p.requires_grad))</pre><div class="opts"><div class="opt correct"><code class="inline">2565</code></div></div><div class="why"><b>Why:</b> Frozen first, then a new 5-class head: 512 × 5 + 5 = 2,565. New layers are trainable by default.</div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+print(CountVectorizer().build_analyzer()(<span class="s">"Not bad, NOT bad at all!"</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">['not', 'bad', 'not', 'bad', 'at', 'all']</code></div></div><div class="why"><b>Why:</b> Lowercased, punctuation dropped, every occurrence kept in order by the analyzer. Counted as a bag: not 2, bad 2, at 1, all 1. A unigram model cannot tell Not bad from bad.</div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Why must the backbone be in <code class="inline">eval()</code> mode while you extract features?</div><div class="opts"><div class="opt correct">Batch normalization must use its stored ImageNet statistics; in training mode a tile's features depend on its batch and the stored statistics drift.</div></div><div class="why"><b>Why:</b> no_grad does not do this: it only switches off gradient tracking.</div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Someone fits a <code class="inline">TfidfVectorizer</code> on all reviews, then splits. What is wrong, and how do you fix it?</div><div class="opts"><div class="opt correct">Test reviews shape the vocabulary and the IDF values: a leak. Split first, fit inside a pipeline.</div></div><div class="why"><b>Why:</b> Today's recommender has the same rule in a new costume: the matrix is built from training purchases only.</div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Frozen features: 0.885 with 500 labels, 0.902 with 2,000. What is the better next step than labeling more?</div><div class="opts"><div class="opt correct">Fine-tune the top block (layer4) with a small learning rate: validation 0.876 → 0.924 in the project.</div></div><div class="why"><b>Why:</b> Measuring what more data buys, before paying for it, is the habit.</div></div>
+
+  <div class="sec"><h2>11.2 · Recommendation Systems: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">A new recommender scores HR@10 = 0.004 on the leave-last-out test, where a random list scores 0.047. What is the most likely explanation?</div><div class="opts"><div class="opt">A) A strong model on a hard dataset</div><div class="opt correct">B) A bug, such as sorting the scores ascending or forgetting to mask owned products</div><div class="opt">C) Too few factors in the SVD</div><div class="opt">D) The test item should have been chosen at random</div></div><div class="why"><b>Why:</b> A model that loses to random is almost always a bug, not a bad model. The lesson's ascending argsort scored 0.001: it picked the ten LEAST recommended products. Always compare with the random baseline.<br><b>A</b> is wrong: Even a weak model should beat random; far below it means something is inverted.<br><b>C</b> is wrong: Two factors still scored 0.220.<br><b>D</b> is wrong: The latest purchase is the right test item; it is not the cause.</div></div>
+  <div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> scipy.sparse <span class="k">import</span> csr_matrix
+<span class="k">from</span> sklearn.metrics.pairwise <span class="k">import</span> cosine_similarity
+R = csr_matrix(np.array([[<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>], [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>], [<span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>], [<span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>]]))
+print(cosine_similarity(R.T)[<span class="s">0</span>].round(<span class="s">2</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">[1.   0.41 0.41]</code></div></div><div class="why"><b>Why:</b> Columns are products. Product 0 was bought by customers 0, 1 and 3; product 1 by 1 and 2; product 2 by 0 and 2. Each pair shares one buyer: 1 / √(3 × 2) = 0.41. A product is identical to itself: 1.</div></div>
+  <div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">Why does <code class="inline">top_k</code> set the scores of owned products to minus infinity before sorting?</div><div class="opts"><div class="opt">A) Because cosine similarity is undefined for owned products</div><div class="opt">B) To make the hit rate look better than it is</div><div class="opt">C) Because SciPy cannot sort sparse matrices</div><div class="opt correct">D) Owned products are similar to what the customer bought, so they score high and crowd the list; customers would see items they already have</div></div><div class="why"><b>Why:</b> Without the mask 14% of list slots went to owned products and HR@10 fell from 0.308 to 0.270. Repeat-purchase items (socks, fuel) deserve a separate "buy it again" list.<br><b>A</b> is wrong: Cosine similarity is defined for every pair.<br><b>B</b> is wrong: The mask is honest: the test item is never owned in training. It raises the hit rate because the list is no longer wasted.<br><b>C</b> is wrong: The scores are a dense NumPy array by then.</div></div>
+  <div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">The best-seller list shows 31 different products; item-kNN shows 161 and hits more often. What does that number measure?</div><div class="opts"><div class="opt correct">A) Catalog coverage: how many different products appear on anyone's list</div><div class="opt">B) How many customers got a hit</div><div class="opt">C) How many products have at least one buyer</div><div class="opt">D) How many factors the model learned</div></div><div class="why"><b>Why:</b> Coverage is a second view next to hit rate: a list that only ever shows the head of the long tail serves the shop and its customers less well. Item-kNN reaches about 80% of the catalog.<br><b>B</b> is wrong: That is the hit rate (times 3,000).<br><b>C</b> is wrong: All 200 products have buyers.<br><b>D</b> is wrong: Item-kNN has no factors.</div></div>
+  <div class="q" data-sc="5" data-kind="short"><div class="qn">Q5</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> scipy.sparse <span class="k">import</span> csr_matrix
+<span class="k">from</span> sklearn.decomposition <span class="k">import</span> TruncatedSVD
+svd = TruncatedSVD(n_components=<span class="s">3</span>, random_state=<span class="s">42</span>)
+factors = svd.fit_transform(csr_matrix(np.eye(<span class="s">6</span>, <span class="s">8</span>)))
+print(factors.shape, svd.components_.shape)</pre><div class="opts"><div class="opt correct"><code class="inline">(6, 3) (3, 8)</code></div></div><div class="why"><b>Why:</b> fit_transform returns the row factors (one row per customer, k columns); components_ holds the column factors (k rows, one column per product). Their product rebuilds a 6 × 8 score matrix.</div></div>
+  <div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">You plot HR@10 against the number of SVD factors on the test item and pick the peak, k = 5. What is wrong with reporting 0.311?</div><div class="opts"><div class="opt">A) Nothing: the test item was never used for training</div><div class="opt">B) SVD needs more than 5 factors to be valid</div><div class="opt correct">C) k was tuned on the test item, so 0.311 is optimistic; choose k on a validation item and score the test item once</div><div class="opt">D) Hit rate cannot be used to compare SVD models</div></div><div class="why"><b>Why:</b> Choosing a setting by its test score is tuning on the test set. The project holds out each customer's second-to-last purchase for validation (k = 5 scored 0.285 there, item-kNN 0.286), then measures the chosen model once.<br><b>A</b> is wrong: Using the test item to choose k is using it, even without training on it.<br><b>B</b> is wrong: k = 5 matches the five tastes in this data.<br><b>D</b> is wrong: Hit rate is exactly how they are compared.</div></div>
+
+  <div class="sec"><h2>11.2 · Recommendation Systems: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+top = np.array([[<span class="s">3</span>, <span class="s">1</span>], [<span class="s">0</span>, <span class="s">2</span>], [<span class="s">4</span>, <span class="s">5</span>]])
+test = np.array([<span class="s">3</span>, <span class="s">2</span>, <span class="s">5</span>])
+print((top[:, :<span class="s">1</span>] == test[:, <span class="k">None</span>]).any(axis=<span class="s">1</span>).mean().round(<span class="s">3</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">0.333</code></div></div><div class="why"><b>Why:</b> Only the first column counts: customer 0's first pick 3 matches; customer 1's 0 is not 2; customer 2's 4 is not 5. One of three: 0.333. A shorter list hits less often (Exercise 1: HR@5 0.189 vs HR@10 0.308 for item-kNN).</div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+scores = np.array([<span class="s">0.9</span>, <span class="s">0.2</span>, <span class="s">0.5</span>, <span class="s">0.7</span>])
+owned = np.array([<span class="k">True</span>, <span class="k">False</span>, <span class="k">False</span>, <span class="k">True</span>])
+scores[owned] = -np.inf
+print(np.argsort(-scores)[:<span class="s">2</span>])</pre><div class="opts"><div class="opt correct"><code class="inline">[2 1]</code></div></div><div class="why"><b>Why:</b> Owned products 0 and 3 become minus infinity; the highest remaining scores are 0.5 (index 2) and 0.2 (index 1). The 0.9 product is never shown: the customer has it.</div></div>
+
+  <div class="sec"><h2>12.1 · Reproducibility and Experiment Tracking: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="7"><div class="qn">Q7</div><div class="qt">A colleague reruns your churn notebook and gets test AUC 0.8560 instead of 0.8612. The data fingerprint and every library version match. Which ingredient most likely differs?</div><div class="opts"><div class="opt">A) The data file</div><div class="opt">B) The scikit-learn version</div><div class="opt correct">C) The random seed of the forest</div><div class="opt">D) AUC is computed differently on each run</div></div><div class="why"><b>Why:</b> With the same data, code and environment, the remaining ingredients are randomness and settings. The lesson printed exactly these two numbers for seed 42 and seed 7. A third-decimal difference between seeds is noise.<br><b>A</b> is wrong: The fingerprint matches.<br><b>B</b> is wrong: The versions match.<br><b>D</b> is wrong: roc_auc_score is deterministic.</div></div>
+  <div class="q" data-sc="8" data-kind="short"><div class="qn">Q8</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> hashlib
+h = hashlib.sha256(<span class="s">b"customers_churn.csv contents"</span>).hexdigest()
+print(len(h), h == hashlib.sha256(<span class="s">b"customers_churn.csv contents"</span>).hexdigest())</pre><div class="opts"><div class="opt correct"><code class="inline">64 True</code></div></div><div class="why"><b>Why:</b> SHA-256 always gives 64 hexadecimal characters, and the same bytes always give the same fingerprint. One changed byte gives a completely different one.</div></div>
+  <div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">What happens on the last line?</div><pre class="code"><span class="k">import</span> skops.io <span class="k">as</span> sio
+<span class="k">from</span> sklearn.ensemble <span class="k">import</span> HistGradientBoostingClassifier
+sio.dump(HistGradientBoostingClassifier().fit([[<span class="s">0</span>], [<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">3</span>]], [<span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>]), <span class="s">"q9.skops"</span>)
+model = sio.load(<span class="s">"q9.skops"</span>)</pre><div class="opts"><div class="opt correct">A) <code class="inline">UntrustedTypesFoundException</code>: it names the HistGradientBoosting tree type, which you must review and pass in <code class="inline">trusted=</code></div><div class="opt">B) The model loads, because skops files are always safe</div><div class="opt">C) <code class="inline">pickle.UnpicklingError</code>: skops cannot read its own files</div><div class="opt">D) The model loads, but prints a warning about the scikit-learn version</div></div><div class="why"><b>Why:</b> skops only rebuilds types on its safe list. Here the file needs TreePredictor; the message even explains its risk. Review it, then load with a trusted= list that names exactly that type.<br><b>B</b> is wrong: Safer is not unconditional: unknown types need your decision.<br><b>C</b> is wrong: skops does not use pickle.<br><b>D</b> is wrong: Same environment; the refusal is about types, not versions.</div></div>
+  <div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">Why should a model you share with another team be saved with skops rather than joblib?</div><div class="opts"><div class="opt">A) skops files are smaller</div><div class="opt">B) joblib cannot save pipelines</div><div class="opt">C) skops makes the model more accurate</div><div class="opt correct">D) Loading a joblib file (a pickle) can run arbitrary code; skops only rebuilds known types or types you trust explicitly</div></div><div class="why"><b>Why:</b> The lesson's harmless pickle called print while LOADING. A malicious one could call anything with your permissions. Treat a model file like a program; skops removes the run-any-function attack.<br><b>A</b> is wrong: Often larger: in Lab 12.1 B the skops file was 462 kB and the joblib file 142 kB.<br><b>B</b> is wrong: joblib saved the whole pipeline in the lesson.<br><b>C</b> is wrong: Same model, same predictions.</div></div>
+  <div class="q" data-sc="11" data-kind="short"><div class="qn">Q11</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.ensemble <span class="k">import</span> RandomForestClassifier
+X, y = [[<span class="s">0</span>], [<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">3</span>], [<span class="s">4</span>], [<span class="s">5</span>]], [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>]
+a = RandomForestClassifier(n_estimators=<span class="s">5</span>, random_state=<span class="s">3</span>).fit(X, y).predict_proba(X)[:, <span class="s">1</span>]
+b = RandomForestClassifier(n_estimators=<span class="s">5</span>, random_state=<span class="s">3</span>).fit(X, y).predict_proba(X)[:, <span class="s">1</span>]
+print((a == b).all(), RandomForestClassifier().get_params()[<span class="s">"random_state"</span>])</pre><div class="opts"><div class="opt correct"><code class="inline">True None</code></div></div><div class="why"><b>Why:</b> The same random_state gives the same forest, bit for bit. The default random_state is None: every fit draws new random numbers, so an unseeded forest changes run to run.</div></div>
+  <div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">Which call lists the runs of an experiment with the best cross-validated AUC first?</div><div class="opts"><div class="opt">A) <code class="inline">mlflow.search_runs(experiment_names=["churn"], order_by=["params.cv_auc DESC"])</code></div><div class="opt correct">B) <code class="inline">mlflow.search_runs(experiment_names=["churn"], order_by=["metrics.cv_auc DESC"])</code></div><div class="opt">C) <code class="inline">mlflow.search_runs(experiment_names=["churn"], order_by=["metrics.cv_auc ASC"])</code></div><div class="opt">D) <code class="inline">mlflow.search_runs(experiment_names=["churn"], filter_string="max(cv_auc)")</code></div></div><div class="why"><b>Why:</b> cv_auc was logged as a METRIC (a number), and higher is better, so DESC. Parameters are stored as text; for an error such as MAE you would sort ASC (Lab 12.1 A).<br><b>A</b> is wrong: cv_auc is a metric, not a parameter.<br><b>C</b> is wrong: ASC puts the worst first.<br><b>D</b> is wrong: Not valid filter syntax; filters look like metrics.cv_auc > 0.85.</div></div>
+
+  <div class="sec"><h2>12.1 · Reproducibility and Experiment Tracking: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> hashlib
+same_hash = hashlib.sha256(<span class="s">b"6"</span>).hexdigest() == hashlib.sha256(<span class="s">b"6.0"</span>).hexdigest()
+print(same_hash, float(<span class="s">"6"</span>) == float(<span class="s">"6.0"</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">False True</code></div></div><div class="why"><b>Why:</b> The bytes 6 and 6.0 differ, so the fingerprints differ, although the numbers are equal. That is the lesson's Exercise 1: a re-saved CSV with the same data can have a new fingerprint.</div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+a = np.random.default_rng(<span class="s">42</span>).permutation(<span class="s">5</span>)
+b = np.random.default_rng(<span class="s">42</span>).permutation(<span class="s">5</span>)
+c = np.random.default_rng(<span class="s">7</span>).permutation(<span class="s">5</span>)
+print((a == b).all(), (a == c).all())</pre><div class="opts"><div class="opt correct"><code class="inline">True False</code></div></div><div class="why"><b>Why:</b> The same seed gives the same permutation; another seed almost surely a different one. Seeds make randomness repeatable, not absent.</div></div>
+
+  <div class="sec"><h2>Lab Reference Solutions</h2><span class="rule"></span></div>
+<div class="blk lab"><div class="h">Lab 11.2-A: labs/module-10/l11_2-recommendations/segment_baselines_starter.py → segment_baselines_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">(3000, 200) global best sellers HR@10 0.209
+stores: {'Online': 1319, 'Boise': 531, 'Bend': 409, 'Asheville': 376, 'Flagstaff': 365}
+favorite activity: {'camping': 811, 'general': 611, 'hiking': 492, 'climbing': 441, 'running': 344, 'paddling': 301}
+global best sellers             HR@10 0.209   products shown  31   top-20 slots 100%
+home-store best sellers         HR@10 0.209   products shown  36   top-20 slots 98%
+favorite-activity best sellers  HR@10 0.265   products shown 183   top-20 slots 31%
+item-kNN                        HR@10 0.308   products shown 161   top-20 slots 51%
+
+favorite 'general' (611 customers): activity list 0.229, item-kNN 0.280; everyone else: 0.274 vs 0.315</pre><p>Reading it: stores barely differ in what they sell, so the home-store list is the global list again (0.209, 98% of slots from the top 20). The favorite activity carries real taste: 0.265 and 183 products shown. Item-kNN still wins (0.308) because it uses the whole basket, not one label. Ties in <code class="inline">argmax</code> go to the first activity alphabetically (camping), one reason camping is the most common favorite. Stretch: customers whose favorite is "general" (sunscreen, first aid) get the least from either.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 11.2-B: labs/module-10/l11_2-recommendations/user_based_starter.py → user_based_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">fit 26,178  validation 3,000  test 3,000
+customer similarity matrix: (3000, 3000)
+user-kNN,   10 neighbors: validation HR@10 0.202
+user-kNN,   50 neighbors: validation HR@10 0.282
+user-kNN,  200 neighbors: validation HR@10 0.292
+user-kNN, 1000 neighbors: validation HR@10 0.266
+item-kNN               : validation HR@10 0.286
+chosen: 200 neighbors
+test HR@10: user-kNN (200) 0.321, item-kNN 0.308
+last purchase only: test HR@10 0.212
+history + 1 x last purchase: test HR@10 0.305
+history + 3 x last purchase: test HR@10 0.298</pre><p>Reading it: too few neighbors (10) is noisy, too many (1,000) drifts toward popularity; 200 is chosen on validation, and only then does the test item speak: user-kNN 0.321 beats item-kNN 0.308. The last-purchase-only list (0.212) is barely above best sellers, and extra weight on the last purchase does not help: in this synthetic data the dates within the two years carry little sequence, so the whole basket is the signal. On real shop data with strong sequences (a tent, then a footprint) the result could differ: test it.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-10/l11_2-recommendations/debug_recommender.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">ValueError: operands could not be broadcast together with shapes (3000,10) (3000,)</code> → compare with <code class="inline">test_col[:, None]</code>.</li>
+  <li><code class="inline">ValueError: matmul: dimension mismatch with signature (n,k=200),(k=3000,m)-&gt;(n,m)</code> → <code class="inline">cosine_similarity(R.T)</code>.</li>
+  <li>Silent: <code class="inline">np.argsort(scores, axis=1)</code> sorts ascending: random 0.013, best sellers 0.002, item-kNN 0.001 (below random: the giveaway) → <code class="inline">np.argsort(-scores, axis=1)</code>.</li>
+  <li>Silent: <code class="inline">.head(1)</code> holds out each customer's FIRST purchase, so the training rows contain the future (random 0.055, best sellers 0.228, item-kNN 0.310: plausible-looking numbers from the wrong question) → <code class="inline">.tail(1)</code>. Fixed: 0.047, 0.209, 0.308.</li>
+</ol>
+</div>
+<div class="blk lab"><div class="h">Lab 12.1-A: labs/module-10/l12_1-reproducibility/track_demand_starter.py → track_demand_solution.py</div>
+<p>The solution prints (MLflow's INFO lines go to the error stream and are not shown):</p>
+<pre class="out">data fingerprint: c48cd2582060519c
+fit 3,840  validation 1,248  test 4,896
+ridge   validation MAE 12.63
+forest  validation MAE 11.31
+hgb     validation MAE 10.74
+tags.mlflow.runName                tags.estimator  metrics.val_mae
+                hgb HistGradientBoostingRegressor            10.74
+             forest         RandomForestRegressor            11.31
+              ridge                         Ridge            12.63
+chosen: hgb; test MAE (2025, used once) 8.21
+runs with validation MAE below 12: ['hgb', 'forest']
+runs in the store: 4
+hgb    seed 42 twice: 10.7445 and 10.7445; seed 7: 10.7445
+forest seed 42 twice: 11.3146 and 11.3146; seed 7: 11.2821</pre><p>Reading it: the store chooses hgb (validation MAE 10.74, sorted <code class="inline">ASC</code> because lower is better); one test score on 2025, 8.21, in the same league as the lessons' 8.15 to 8.21 with other features. Validation (October to December) is harder than 2025 as a whole. The store holds 4 runs: three candidates and the final run. The HGB regressor ignores its seed here (no subsampling; early stopping is off below 10,000 rows), the forest does not: record seeds anyway, because you cannot know in advance which models use them.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 12.1-B: labs/module-10/l12_1-reproducibility/safe_handover_starter.py → safe_handover_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">train 41,738, test (June) 8,262; test average precision 0.4743
+untrusted types: ['sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor']
+load without trusted=: UntrustedTypesFoundException
+same predictions after reload: True
+logistic regression  untrusted types: []
+random forest        untrusted types: ['sklearn.tree._tree.Tree']
+card keys: ['model_file', 'estimator', 'config', 'data_sha256', 'test_average_precision', 'environment', 'skops_trusted_types', 'intended_use']
+original data  -&gt; data unchanged, score reproduced, AP: (True, True, 0.4743)
+byte-for-byte copy -&gt;  (True, True, 0.4743)
+re-saved by pandas -&gt;  (True, True, 0.4743)
+one cent changed   -&gt;  (False, True, 0.4743)
+skops 462 kB, joblib 142 kB</pre><p>Reading it: the trust list depends on the model (and on the data: this fraud pipeline needs no <code class="inline">numpy.dtype</code>, the lesson's churn pipeline did): logistic regression needs nothing reviewed, a forest needs <code class="inline">Tree</code>, HGB <code class="inline">TreePredictor</code>. A pandas re-save of THIS file is byte-identical (no missing values to turn into floats, unlike the lesson's Exercise 1), while one changed cent breaks the fingerprint although the score still reproduces: a fingerprint says the bytes differ, not what changed or whether it matters. skops is safer, not smaller (462 kB vs 142 kB).</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-10/l12_1-reproducibility/debug_reproducibility.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">MlflowException: The filesystem tracking backend (e.g., './mlruns') is in maintenance mode...</code> → <code class="inline">mlflow.set_tracking_uri(f"sqlite:///{OUTPUT / 'mlflow.db'}")</code>.</li>
+  <li><code class="inline">MlflowException: Changing param values is not allowed...</code> → one run per depth: put <code class="inline">with mlflow.start_run(run_name=f"forest-depth-{depth}"):</code> INSIDE the loop.</li>
+  <li>Silent: the forests in the loop have no <code class="inline">random_state</code>, so CV AUC changes on every run (two runs printed 0.8584 / 0.8674 and 0.8552 / 0.8662) → <code class="inline">random_state=42</code>.</li>
+  <li>Silent: <code class="inline">trusted=sio.get_untrusted_types(file=path)</code> trusts whatever the file asks for → <code class="inline">trusted=["sklearn.tree._tree.Tree"]</code>. Fixed, every run prints max_depth 4: 0.8584, max_depth 8: 0.8690, reloaded forest, test AUC 0.8637.</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>The Lesson Pages' Own Quick Quizzes</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Lesson 11.2 · Recommendation Systems</div>
+<ol class="steps">
+  <li><b>B</b> <code class="inline">0.667</code>: customers 0 and 2 have their test product in their top 2, customer 1 does not.</li>
+  <li><b>C</b> It mimics predicting the next purchase from the past, so no future information leaks into training.</li>
+  <li><b>A</b> With 40 factors the model memorizes past baskets instead of broad tastes, so it generalizes worse.</li>
+  <li><b>C</b> Content-based filtering on product attributes (collaborative methods need purchases).</li>
+  <li><b>A</b> <code class="inline">[1. 1. 0.]</code>: products 0 and 1 have exactly the same buyers; product 2 shares none.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Lesson 12.1 · Reproducibility and Experiment Tracking</div>
+<ol class="steps">
+  <li><b>C</b> Loading it can run arbitrary code on your computer.</li>
+  <li><b>A</b> <code class="inline">True False</code>: same seed, same numbers; no seed, new numbers.</li>
+  <li><b>B</b> <code class="inline">log_param("learning_rate", 0.05)</code> and <code class="inline">log_metric("cv_auc", 0.861)</code>: settings are params, results are metrics.</li>
+  <li><b>B</b> Check each type is expected for this kind of model, then pass the reviewed types explicitly.</li>
+  <li><b>A</b> The file is not byte-for-byte the one the model saw; the hash cannot say what changed.</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<ol class="steps">
+  <li><b>0.308 vs 0.209:</b> the personal row contains the product a customer really bought next for about 31% of customers against 21% for the best-seller row: about 50% more hits, measured honestly on a held-out purchase.</li>
+  <li><b>Five ingredients:</b> code (Git, a script like <code class="inline">train_churn.py</code>), data (SHA-256 fingerprint), environment (versions, <code class="inline">pip freeze</code> lock file), randomness (<code class="inline">random_state</code>, <code class="inline">default_rng(42)</code>), settings (one CONFIG, logged with <code class="inline">log_params</code> / <code class="inline">log_dict</code>).</li>
+  <li><b>model.joblib:</b> loading it runs whatever the file says. Load only if you fully trust the sender; better, ask for skops, review <code class="inline">get_untrusted_types</code>, load with a hand-written <code class="inline">trusted=</code> list.</li>
+</ol>
+
+  <div class="sec"><h2>Common Wrong Answers and What They Reveal</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li><b>Q1 A ("a strong model on a hard dataset").</b> Has not internalized the random baseline. Ask: "What would ten random picks score?"</li>
+  <li><b>Q2 written as <code class="inline">[1. 0.33 0.33]</code>.</b> Divided shared buyers by the total buyers instead of the geometric mean of the two counts.</li>
+  <li><b>Q6 A ("nothing wrong").</b> Thinks only training on the test set is a leak; choosing on it is too.</li>
+  <li><b>Q7 B ("the version").</b> Missed that the question says the versions match; seeds are the remaining ingredient.</li>
+  <li><b>Q10 A ("smaller files").</b> The opposite in Lab 12.1 B. Safety is the reason.</li>
+  <li><b>Q12 C ("ASC").</b> Correct instinct for an error metric (Lab 12.1 A), wrong for AUC.</li>
+</ul>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 10 · Answer Key · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

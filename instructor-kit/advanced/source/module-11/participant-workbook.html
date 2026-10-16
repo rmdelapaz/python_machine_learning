@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 11</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 11: Serving, Monitoring and the Churn Case Study</h1>
+    <p class="sub">Your workbook for Session 11: a warm-up, the key ideas of Lessons 12.2 and 13.1, worked examples, the guided labs, predict-then-run practice, self-checks, your capstone plan and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>12.2–13.1</b></span>
+      <span class="chip">Session <b>11</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Serve a model behind an order window: a pydantic schema, a FastAPI app, a test that the API matches the notebook.</li>
+  <li>Monitor without labels: PSI for inputs, missing rates, the mean score and offer rate against a reference; tell a data bug from a real change.</li>
+  <li>Run a whole project from a manager's brief: costs, leak check, fair comparison, tuning, a threshold from dollars, one look at the test set, a memo.</li>
+  <li>Choose your capstone problem and write its plan.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<p>Five questions on Lessons 11.2 and 12.1. Write first, then check with the class.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">Lesson 11.2 hid each customer's LATEST purchase for testing, not a random one. Why?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">Best sellers scored a hit rate at 10 of 0.209 and item-kNN 0.308. Say what 0.308 means in one sentence.</div><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Why did SVD with 40 factors recommend worse than with 5?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">A colleague emails you <code class="inline">churn_model.joblib</code>. What is the risk of loading it, and what did Lesson 12.1 use instead?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Your model card stores a SHA-256 of <code class="inline">customers_churn.csv</code>. Today the hash differs. What do you know, and what don't you?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">12.2</span><h3>Serving and Monitoring Models</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Package a fitted Pipeline with the metadata a server needs (features, dtypes, threshold, version)</li>
+  <li>Describe valid input with a pydantic model and read its validation errors</li>
+  <li>Serve predictions with FastAPI, test every endpoint with TestClient, and start the server with uvicorn</li>
+  <li>Measure input drift with the Population Stability Index and prediction drift with simple batch statistics</li>
+  <li>Tell a data-quality bug from a real change in customers, and say which one needs labels to confirm</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The kitchen and the order window.</b> FastAPI is the window, pydantic checks the order, the Pipeline is the kitchen. Bad orders get a 422 before the model runs.</li>
+  <li><b>Ship the facts the server cannot guess:</b> the feature list, the training dtypes, the threshold, a version, and reference statistics from out-of-fold predictions.</li>
+  <li><b>One function rebuilds the training table:</b> <code class="inline">to_frame</code>, with the same columns, order and dtypes as training. Prove it with a match test against the notebook, on rows with gaps.</li>
+  <li><b>NaN is not JSON:</b> missing values travel as <code class="inline">None</code> (null).</li>
+  <li><b>TestClient</b> tests endpoints in the same process; <code class="inline">uvicorn serve:app --reload</code> runs the real server, with interactive docs at <code class="inline">/docs</code>.</li>
+  <li><b>Monitoring without labels:</b> PSI per input (below 0.1 stable, 0.1 to 0.25 watch, above 0.25 shift), missing rates and rejections, the mean score and offer rate against the reference.</li>
+  <li><b>Drift is a question:</b> a data bug needs a fix (never retrain on it), a real change needs a decision, and only labels confirm the model got worse.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example</div>
+<p>A different request, the same window: store managers ask the demand model for next week's forecast. What does pydantic convert, and what does it refuse?</p>
+<pre class="code"><span class="k">from</span> datetime <span class="k">import</span> date
+<span class="k">from</span> typing <span class="k">import</span> Literal
+<span class="k">from</span> pydantic <span class="k">import</span> BaseModel, ConfigDict, Field, ValidationError
+<span class="k">class</span> StockRequest(BaseModel):
+    <span class="s">"""A store manager asks the demand model for next week's forecast."""</span>
+    model_config = ConfigDict(extra=<span class="s">"forbid"</span>)
+    store: Literal[<span class="s">"Asheville"</span>, <span class="s">"Bend"</span>, <span class="s">"Boise"</span>, <span class="s">"Flagstaff"</span>]
+    product_id: str = Field(pattern=<span class="s">r"^[A-Z]{3}-\d{4}$"</span>)
+    week_start: date
+    promo: bool
+r = StockRequest(store=<span class="s">"Bend"</span>, product_id=<span class="s">"SNW-2001"</span>, week_start=<span class="s">"2025-12-01"</span>, promo=<span class="s">"yes"</span>)
+print(r.week_start.strftime(<span class="s">"%A"</span>), r.promo, type(r.week_start).__name__)</pre>
+<pre class="out">Monday True date</pre><p>Lax mode turned the text date into a real <code class="inline">date</code> (a Monday) and the word "yes" into <code class="inline">True</code>. Now three bad requests:</p>
+<pre class="code"><span class="k">for</span> bad <span class="k">in</span> [{<span class="s">"store"</span>: <span class="s">"Bend"</span>, <span class="s">"product_id"</span>: <span class="s">"snw-2001"</span>, <span class="s">"week_start"</span>: <span class="s">"2025-12-01"</span>, <span class="s">"promo"</span>: <span class="s">1</span>},
+            {<span class="s">"store"</span>: <span class="s">"Bend"</span>, <span class="s">"product_id"</span>: <span class="s">"SNW-2001"</span>, <span class="s">"week_start"</span>: <span class="s">"2025-12-01"</span>, <span class="s">"promo"</span>: <span class="s">"maybe"</span>},
+            {<span class="s">"store"</span>: <span class="s">"Bend"</span>, <span class="s">"product_id"</span>: <span class="s">"SNW-2001"</span>, <span class="s">"week_start"</span>: <span class="s">"2025-13-01"</span>, <span class="s">"promo"</span>: <span class="s">0</span>, <span class="s">"units"</span>: <span class="s">5</span>}]:
+    <span class="k">try</span>:
+        StockRequest(**bad)
+    <span class="k">except</span> ValidationError <span class="k">as</span> err:
+        print([(e[<span class="s">"loc"</span>][<span class="s">0</span>], e[<span class="s">"type"</span>]) <span class="k">for</span> e <span class="k">in</span> err.errors()])</pre>
+<pre class="out">[('product_id', 'string_pattern_mismatch')]
+[('promo', 'bool_parsing')]
+[('week_start', 'date_from_datetime_parsing'), ('units', 'extra_forbidden')]</pre><p>A lowercase product code fails the pattern, "maybe" is not a boolean, and a request with month 13 AND an unknown field reports both problems. Finally, strict mode: no conversions at all.</p>
+<pre class="code"><span class="k">class</span> StrictStockRequest(StockRequest):
+    model_config = ConfigDict(extra=<span class="s">"forbid"</span>, strict=<span class="k">True</span>)
+<span class="k">try</span>:
+    StrictStockRequest(store=<span class="s">"Bend"</span>, product_id=<span class="s">"SNW-2001"</span>, week_start=<span class="s">"2025-12-01"</span>, promo=<span class="s">"yes"</span>)
+<span class="k">except</span> ValidationError <span class="k">as</span> err:
+    print([(e[<span class="s">"loc"</span>][<span class="s">0</span>], e[<span class="s">"type"</span>]) <span class="k">for</span> e <span class="k">in</span> err.errors()])</pre>
+<pre class="out">[('week_start', 'date_type'), ('promo', 'bool_type')]</pre><p>Strict mode refuses text where a date or a boolean belongs. Lax is friendlier to callers that send everything as text; strict catches a caller that sends the wrong kind of value. Either way, write the choice down in the schema.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li>Open <code class="inline">labs/module-11/l12_2-serving/fraud_api_starter.py</code>. A fraud model is trained for you; TODO 1 to 6 package it, write a <code class="inline">Payment</code> schema, build the app and test it.</li>
+  <li>Before TODO 4, write down how many problems pydantic will report for the bad payment.</li>
+  <li>Done when your numbers match the "Expected when done" lines.</li>
+  <li>Finished early? <code class="inline">fraud_monitor_starter.py</code> (real months, then a broken feed) or <code class="inline">debug_serving.py</code> (four bugs).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction first, then run it.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (lax mode, an optional field)</div><pre class="code"><span class="k">from</span> pydantic <span class="k">import</span> BaseModel, Field
+<span class="k">class</span> Order(BaseModel):
+    units: int = Field(ge=<span class="s">1</span>, le=<span class="s">10</span>)
+    note: str | <span class="k">None</span> = <span class="k">None</span>
+print(Order(units=<span class="s">"7"</span>).units + <span class="s">1</span>, Order(units=<span class="s">7</span>).note)</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (two PSI values)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+ref = np.array([<span class="s">0.25</span>, <span class="s">0.25</span>, <span class="s">0.25</span>, <span class="s">0.25</span>])
+<span class="k">for</span> cur <span class="k">in</span> [np.array([<span class="s">0.25</span>, <span class="s">0.25</span>, <span class="s">0.25</span>, <span class="s">0.25</span>]), np.array([<span class="s">0.10</span>, <span class="s">0.20</span>, <span class="s">0.30</span>, <span class="s">0.40</span>])]:
+    print(round(float(np.sum((cur - ref) * np.log(cur / ref))), <span class="s">3</span>))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A weekly drift report</b> (lesson page, Project). In class: Steps 1 to 3. At home: 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: <code class="inline">churn-forest-2025-06-30 (4500, 17) (1500, 16)</code></li>
+  <li>☐ Step 2: <code class="inline">monitor.py</code> with <code class="inline">psi</code> and <code class="inline">drift_report</code></li>
+  <li>☐ Step 3: three weeks (tenure 44.0 / 25.0 / 42.7; email missing 8% / 6% / 100%)</li>
+  <li>☐ Step 4: every week scored through <code class="inline">/predict_batch</code>, status 200</li>
+  <li>☐ Step 5: the summary next to the reference values</li>
+  <li>☐ Step 6: <code class="inline">drift_report.csv</code> and a different action for a data bug than for a real change</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">A caller posts a customer with <code class="inline">"home_store": "Denver"</code> to the lesson's <code class="inline">/predict</code>. What happens?</div><div class="opts"><div class="opt">A) The one-hot encoder ignores the unknown store and the caller gets status 200 with a probability</div><div class="opt">B) pydantic rejects it before the model runs: status 422, and the body names <code class="inline">home_store</code> and the allowed stores</div><div class="opt">C) uvicorn crashes and the caller gets status 500</div><div class="opt">D) <code class="inline">to_frame</code> raises a <code class="inline">KeyError</code> and the caller gets status 500</div></div></div>
+<div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> pydantic <span class="k">import</span> BaseModel, Field
+<span class="k">class</span> Visit(BaseModel):
+    days: int = Field(ge=<span class="s">0</span>, le=<span class="s">365</span>)
+    share: float = Field(ge=<span class="s">0</span>, le=<span class="s">1</span>)
+v = Visit(days=<span class="s">"30"</span>, share=<span class="s">1</span>)
+print(v.days * <span class="s">2</span>, v.share)</pre><div class="write"></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">Why does <code class="inline">to_frame</code> in <code class="inline">serve.py</code> end with <code class="inline">.astype(DTYPES)</code>?</div><div class="opts"><div class="opt">A) It makes predictions faster</div><div class="opt">B) pydantic cannot produce a DataFrame without it</div><div class="opt">C) skops refuses to load the model unless the dtypes are stored</div><div class="opt">D) A one-row table with a <code class="inline">None</code> gets the <code class="inline">object</code> dtype, the imputer does not see it as missing, and the model scores a slightly different customer with no error</div></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">This week <code class="inline">email_opens_90d</code> has a PSI of 8.4, its missing rate is 100% (9% in the reference), and the mean score barely moved. What is the best reading?</div><div class="opts"><div class="opt">A) A broken data feed: fix it and re-score the week; do not retrain on it</div><div class="opt">B) Customers changed: retrain on this week's batch</div><div class="opt">C) Nothing to do: the scores did not move, so the model is fine</div><div class="opt">D) PSI cannot be trusted above 1, so ignore it</div></div></div>
+<div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">What does this print? (A two-bin PSI.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+ref = np.array([<span class="s">0.5</span>, <span class="s">0.5</span>])
+cur = np.array([<span class="s">0.8</span>, <span class="s">0.2</span>])
+print(round(float(np.sum((cur - ref) * np.log(cur / ref))), <span class="s">3</span>))</pre><div class="opts"><div class="opt">A) <code class="inline">0.0</code></div><div class="opt">B) <code class="inline">-0.416</code></div><div class="opt">C) <code class="inline">0.416</code></div><div class="opt">D) <code class="inline">0.3</code></div></div></div>
+<div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">With 30,000 rows, a Kolmogorov-Smirnov test on discount share gives p &lt; 0.0001, while the PSI is 0.021. Should the monitor raise an alert?</div><div class="opts"><div class="opt">A) Yes: p below 0.05 means the inputs drifted</div><div class="opt">B) No: with enough rows any difference is detectable; PSI says the shift is tiny, and an alert should be about size</div><div class="opt">C) Yes: PSI is unreliable on large batches</div><div class="opt">D) No: KS tests only work on categories</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>List every place in this lesson where the model could have returned a wrong number without any error. For each, write the check that catches it. Which would you set up first on a real project, and why?</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">13.1</span><h3>Case Study: Predicting Churn</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Translate a business goal into a target, a metric and a dollar value for each kind of right and wrong prediction</li>
+  <li>Detect a target leak with cross-validation and a crosstab, and remove it before modeling</li>
+  <li>Compare and tune models inside a Pipeline with cross-validation, keeping the test set locked until one final check</li>
+  <li>Choose a decision threshold from business costs with TunedThresholdClassifierCV and report the result in dollars</li>
+  <li>Explain the model honestly and write a short recommendation for a non-technical stakeholder</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The expedition plan:</b> decision and costs first, then hazards (leaks), then comparison and tuning, the algorithm late.</li>
+  <li><b>Dollars define the rule:</b> TP +$45, FP -$15. An offer pays when p &gt; cost / value = 0.25, if the probabilities are calibrated.</li>
+  <li><b>Two baselines that matter to the manager:</b> offer to nobody ($0) and to everyone (a loss). A model must beat $0.</li>
+  <li><b>Leak check:</b> a sudden jump in score and a column filled only for one class are alarms; ask when each value becomes known.</li>
+  <li><b>Compare and tune with CV on the training data,</b> same folds and metric; a gap smaller than the spread is noise. In a Pipeline: <code class="inline">model__learning_rate</code>.</li>
+  <li><b>Confirm the threshold on data</b> with <code class="inline">TunedThresholdClassifierCV</code> and a profit scorer; then open the test set once.</li>
+  <li><b>Write for the reader:</b> the decision, the dollars against the alternative, how sure you are, what the model does NOT explain, and an experiment to learn more.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example</div>
+<p>Eight customers, their predicted churn risk and (later) what happened. Each offer costs $15; reaching a would-be churner is worth $60. What is each offer worth before we know the outcome?</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+toy = pd.DataFrame({<span class="s">"customer"</span>: list(<span class="s">"ABCDEFGH"</span>),
+                    <span class="s">"p_churn"</span>: [<span class="s">0.82</span>, <span class="s">0.61</span>, <span class="s">0.44</span>, <span class="s">0.31</span>, <span class="s">0.27</span>, <span class="s">0.22</span>, <span class="s">0.12</span>, <span class="s">0.05</span>],
+                    <span class="s">"churned"</span>: [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>]})
+OFFER_COST, CHURNER_VALUE = <span class="s">15</span>, <span class="s">60</span>
+toy[<span class="s">"expected_value"</span>] = (toy[<span class="s">"p_churn"</span>] * CHURNER_VALUE - OFFER_COST).round(<span class="s">2</span>)
+print(toy.to_string(index=<span class="k">False</span>))</pre>
+<pre class="out">customer  p_churn  churned  expected_value
+       A     0.82        1            34.2
+       B     0.61        1            21.6
+       C     0.44        0            11.4
+       D     0.31        1             3.6
+       E     0.27        0             1.2
+       F     0.22        0            -1.8
+       G     0.12        0            -7.8
+       H     0.05        0           -12.0</pre><p>Expected value = p × 60 - 15: positive exactly when p is above 0.25. Now three thresholds, scored with the real outcomes:</p>
+<pre class="code"><span class="k">def</span> campaign_profit(y_true, flagged):
+    y_true, flagged = np.asarray(y_true), np.asarray(flagged)
+    <span class="k">return</span> CHURNER_VALUE * ((flagged == <span class="s">1</span>) &amp; (y_true == <span class="s">1</span>)).sum() - OFFER_COST * flagged.sum()
+<span class="k">for</span> t <span class="k">in</span> [<span class="s">0.5</span>, <span class="s">0.25</span>, <span class="s">0.1</span>]:
+    flagged = (toy[<span class="s">"p_churn"</span>] &gt;= t).astype(int)
+    print(<span class="s">f"threshold {t:.2f}: {flagged.sum()} offers, profit ${campaign_profit(toy['churned'], flagged)}"</span>)</pre>
+<pre class="out">threshold 0.50: 2 offers, profit $90
+threshold 0.25: 5 offers, profit $105
+threshold 0.10: 7 offers, profit $75</pre><p>The 0.25 line sends five offers and earns the most here: customer D (p = 0.31) churned and paid for two wasted offers. 0.5 leaves D out; 0.1 adds two customers whose expected value was negative. On eight customers luck plays a part; the case study confirms the same rule on 4,500.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-11/l13_1-case-study/leak_audit_starter.py</code>: write <code class="inline">audit()</code> that screens every column of a table for leaks, then run it on churn and on fraud.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-11/l13_1-case-study/cost_scenarios_starter.py</code>: four offer costs, the profit of each block of 100 offers, and one look at the test set.</li>
+  <li>Done when your numbers match the "Expected when done" lines.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction first, then run it.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. ($15 an offer, $60 a churner)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+y = np.array([<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>])
+offer = np.array([<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>])
+print(<span class="s">60</span> * ((offer == <span class="s">1</span>) &amp; (y == <span class="s">1</span>)).sum() - <span class="s">15</span> * offer.sum())</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (break-even = cost / value)</div><pre class="code"><span class="k">for</span> cost, value <span class="k">in</span> [(<span class="s">15</span>, <span class="s">60</span>), (<span class="s">20</span>, <span class="s">50</span>), (<span class="s">30</span>, <span class="s">60</span>)]:
+    print(<span class="s">f"{cost / value:.2f}"</span>, end=<span class="s">"  "</span>)</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>The retention campaign plan</b> (lesson page, Project). In class: Steps 1 and 2. At home: 3 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: <code class="inline">4500 1500 offers allowed: 200</code></li>
+  <li>☐ Step 2: CV AUC with and without age (0.879 / 0.880)</li>
+  <li>☐ Step 3: the 200 riskiest, never below break-even</li>
+  <li>☐ Step 4: offer rate, churn rate and precision by age group and store</li>
+  <li>☐ Step 5: the plan against 200 random offers and the unlimited plan, in dollars</li>
+  <li>☐ Step 6: <code class="inline">campaign_list.csv</code> (IDs and priority only) and the memo update</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7"><div class="qn">Q7</div><div class="qt">Next quarter the retention offer costs $25 and is still worth $60 when it reaches a would-be churner. If the probabilities are calibrated, above which churn probability does an offer pay?</div><div class="opts"><div class="opt">A) <code class="inline">0.25</code></div><div class="opt">B) <code class="inline">0.5</code></div><div class="opt">C) <code class="inline">0.417</code></div><div class="opt">D) <code class="inline">2.4</code></div></div></div>
+<div class="q" data-sc="8" data-kind="short"><div class="qn">Q8</div><div class="qt">What does this print? ($15 an offer, $60 a churner reached.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+y = np.array([<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>])
+flagged = np.array([<span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>])
+print(<span class="s">60</span> * ((flagged == <span class="s">1</span>) &amp; (y == <span class="s">1</span>)).sum() - <span class="s">15</span> * flagged.sum())</pre><div class="write"></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">Cross-validated AUC: random forest 0.868 ± 0.020, gradient boosting (defaults) 0.861 ± 0.013. What may you conclude?</div><div class="opts"><div class="opt">A) The data does not yet say which tree family is better: the gap is inside one fold-to-fold spread</div><div class="opt">B) The forest is better and should be deployed</div><div class="opt">C) Boosting is better because its spread is smaller</div><div class="opt">D) Open the test set to break the tie</div></div></div>
+<div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">Which order matches the case study?</div><div class="opts"><div class="opt">A) Tune, split, leak check, threshold, test, explain</div><div class="opt">B) Split, threshold on the test set, compare, tune, explain</div><div class="opt">C) Compare on the test set, tune with CV, choose the threshold on the test set, explain</div><div class="opt">D) Split, leak check, compare with CV, tune with CV, threshold with CV, test once, explain and write up</div></div></div>
+<div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">The manager asks whether the coupon actually keeps customers, or only goes to people who would have stayed anyway. What does the memo suggest?</div><div class="opts"><div class="opt">A) Look at permutation importance: the top feature is the cause</div><div class="opt">B) Hold back the offer from a random 10% of the list and compare who stays</div><div class="opt">C) Compare churn of customers who used discounts with those who did not</div><div class="opt">D) Raise the threshold until precision is 100%</div></div></div>
+<div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">The budget allows 200 offers; 360 test customers are above the break-even probability. Which rule does the case-study project use?</div><div class="opts"><div class="opt">A) The 200 riskiest customers, and never anyone below the break-even probability</div><div class="opt">B) 200 customers drawn at random from the 360</div><div class="opt">C) All 360: the budget is a guideline</div><div class="opt">D) The 200 customers closest to the break-even probability</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Draw the case study as ten decisions, from "the target is churned" to "the threshold is 0.25". Next to each, the lesson where you learned it. Which decision would change the result most if you got it wrong?</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Capstone Choice</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">The five problems (Lesson 13.2)</div>
+<table class="timing">
+<thead><tr><th>Problem</th><th>Data, split, metric</th><th>Template baseline</th></tr></thead>
+<tbody>
+<tr><td>A · Demand forecasting</td><td><code class="inline">weekly_demand.csv</code>; train 2024, test 2025; MAE in units</td><td>13.419 (per-product mean)</td></tr>
+<tr><td>B · Fraud review queue</td><td><code class="inline">transactions.csv</code>; train Jan to May, test June; average precision + capacity</td><td>0.008 (no model)</td></tr>
+<tr><td>C · Review triage</td><td><code class="inline">reviews.csv</code> (3 stars dropped); stratified 75/25; accuracy + negative recall</td><td>0.745 (always positive)</td></tr>
+<tr><td>D · Recommendations</td><td><code class="inline">interactions.csv</code> + <code class="inline">products_ml.csv</code>; leave-last-out; hit rate at 10</td><td>0.209 (popular unowned)</td></tr>
+<tr><td>E · Customer segments</td><td><code class="inline">customers_churn.csv</code> behavior columns; no target; silhouette + stability + profiles</td><td>0.079 (loyalty tiers)</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk lab"><div class="h">My plan (one paragraph: decision, user, target, prediction moment, split, metric and its business meaning, baseline, and what result would make me say "do not deploy")</div>
+<p>My problem: A · B · C · D · E · own (circle one)</p>
+<div class="write tall"></div>
+</div>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">E1</div><div class="qt">Name two places where a churn API can return a wrong number with status 200, and the check that catches each.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">The offer cost rises to $20 (value $60). The new break-even probability? Would you trust it without a check?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">Your capstone: the problem letter, the decision it supports and the baseline number you must beat.</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Drift report Steps 4 to 6; retention plan Steps 3 to 6</li>
+  <li>☐ Exercises 1 to 3 of both lessons (Exercise 4 is a stretch)</li>
+  <li>☐ Both Quick Quizzes and both journal entries</li>
+  <li>☐ Before the Next Lesson items of 12.2 and 13.1</li>
+  <li>☐ Read all of Lesson 13.2; create <code class="inline">capstone.ipynb</code> with my plan in the first cell (Milestone 1)</li>
+  <li>☐ Bring to Session 12: laptop, <code class="inline">pinecrest-ml</code> with <code class="inline">data/</code> and <code class="inline">labs/</code>, my capstone folder, my 13.1 notebook, this workbook</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>serving</td><td>Letting other software call a model, usually as a web API</td></tr>
+<tr><td>endpoint</td><td>One URL and method of an API, such as <code class="inline">POST /predict</code></td></tr>
+<tr><td>pydantic model</td><td>A Python class that describes and validates input</td></tr>
+<tr><td>422</td><td>FastAPI's status for a request that fails validation</td></tr>
+<tr><td>TestClient</td><td>Sends requests to a FastAPI app in the same process, for tests</td></tr>
+<tr><td>training-serving skew</td><td>Any difference between how data was prepared for training and for serving</td></tr>
+<tr><td>PSI</td><td>Population Stability Index: how far a batch's distribution is from the reference</td></tr>
+<tr><td>covariate shift</td><td>The inputs change; the relationship may not</td></tr>
+<tr><td>concept drift</td><td>The relationship between inputs and the target changes</td></tr>
+<tr><td>break-even probability</td><td>cost / value: above it an offer pays on average</td></tr>
+<tr><td>TunedThresholdClassifierCV</td><td>Chooses a decision threshold by cross-validated score</td></tr>
+<tr><td>model card</td><td>A short document that travels with a model: use, performance, limits</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 11 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,618 +1,285 @@
 /**
- * Course Enhancement JavaScript
- * Provides interactive features, smooth scrolling, progress tracking, and more
+ * Python Machine Learning — course-enhancements.js
+ * Theme toggle, Mermaid (theme-aware), scroll progress, table of contents,
+ * quiz, mobile menu, keyboard shortcuts, table wrapping, visited-lesson marks.
+ *
+ * Design rules:
+ *  - No dependency on any syntax highlighter (there is none on this site).
+ *  - Every feature checks that its elements exist and every storage call is
+ *    guarded, so a page that lacks a component never throws.
  */
+(function () {
+    'use strict';
 
-// Wait for DOM to be ready
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Course enhancements loaded');
-    
-    // Initialize all enhancements
-    initProgressIndicator();
-    initSmoothScrolling();
-    initCodeCopyButtons();
-    initInteractiveTOC();
-    initSearchFunctionality();
-    initKeyboardShortcuts();
-    initThemeToggle();
-    initLessonProgress();
-    initQuizInteractivity();
-    initMobileMenu();
-    initAccessibilityFeatures();
-    initPrintStyles();
-    initAnalytics();
-});
-
-/**
- * Progress Indicator - Shows reading progress
- */
-function initProgressIndicator() {
-    const progressBar = document.querySelector('.progress-bar');
-    if (!progressBar) return;
-    
-    window.addEventListener('scroll', () => {
-        const windowHeight = window.innerHeight;
-        const documentHeight = document.documentElement.scrollHeight - windowHeight;
-        const scrolled = window.scrollY;
-        const progress = (scrolled / documentHeight) * 100;
-        
-        progressBar.style.width = `${Math.min(progress, 100)}%`;
-        
-        // Update ARIA attributes for accessibility
-        const progressIndicator = document.querySelector('.progress-indicator');
-        if (progressIndicator) {
-            progressIndicator.setAttribute('aria-valuenow', Math.round(progress));
-        }
-    });
-}
-
-/**
- * Smooth Scrolling for internal links
- */
-function initSmoothScrolling() {
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function(e) {
-            e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                const headerOffset = 70;
-                const elementPosition = target.getBoundingClientRect().top;
-                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-                
-                window.scrollTo({
-                    top: offsetPosition,
-                    behavior: 'smooth'
-                });
-                
-                // Update URL without jumping
-                history.pushState(null, null, this.getAttribute('href'));
-            }
-        });
-    });
-}
-
-/**
- * Code Copy Buttons - Already handled by clipboard.js
- * This function enhances it with notifications
- */
-function initCodeCopyButtons() {
-    // Add visual feedback for copy action
-    document.querySelectorAll('.copy-button').forEach(button => {
-        button.addEventListener('click', function() {
-            const originalText = this.textContent;
-            this.textContent = 'Copied!';
-            this.classList.add('copied');
-            
-            setTimeout(() => {
-                this.textContent = originalText;
-                this.classList.remove('copied');
-            }, 2000);
-        });
-    });
-}
-
-/**
- * Interactive Table of Contents
- */
-function initInteractiveTOC() {
-    // Highlight current section in TOC
-    const tocLinks = document.querySelectorAll('.toc-link');
-    const sections = document.querySelectorAll('h2, h3');
-    
-    if (tocLinks.length === 0 || sections.length === 0) return;
-    
-    const observerOptions = {
-        root: null,
-        rootMargin: '-20% 0px -70% 0px',
-        threshold: 0
+    var MERMAID_THEMES = {
+        light: { primaryColor: '#eef0fd', primaryTextColor: '#1e293b', primaryBorderColor: '#667eea', lineColor: '#586579', secondaryColor: '#f7f8fc', tertiaryColor: '#f1f3f9', fontFamily: "'Segoe UI', system-ui, sans-serif" },
+        dark: { primaryColor: '#2e3470', primaryTextColor: '#e2e8f0', primaryBorderColor: '#a5b4fc', lineColor: '#a3b1c6', secondaryColor: '#1e293b', tertiaryColor: '#0f172a', fontFamily: "'Segoe UI', system-ui, sans-serif" }
     };
-    
-    const observerCallback = (entries) => {
-        entries.forEach(entry => {
-            const id = entry.target.getAttribute('id');
-            const tocLink = document.querySelector(`.toc-link[href="#${id}"]`);
-            
-            if (tocLink) {
-                if (entry.isIntersecting) {
-                    // Remove active class from all links
-                    tocLinks.forEach(link => link.classList.remove('active'));
-                    // Add active class to current link
-                    tocLink.classList.add('active');
+    var renderCount = 0;
+
+    function store(key, value) {
+        try {
+            if (value === undefined) return window.localStorage.getItem(key);
+            window.localStorage.setItem(key, value);
+        } catch (e) { /* private mode or blocked storage: carry on without it */ }
+        return null;
+    }
+
+    function currentTheme() {
+        return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    }
+
+    /* ---------------- theme ---------------- */
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        var btn = document.getElementById('theme-toggle');
+        if (btn) {
+            btn.textContent = theme === 'light' ? '🌙' : '☀️';
+            btn.setAttribute('aria-label', theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
+        }
+        renderMermaid();
+    }
+
+    function initThemeToggle() {
+        var saved = store('theme');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        applyTheme(saved === 'dark' || saved === 'light' ? saved : (prefersDark ? 'dark' : 'light'));
+        var btn = document.getElementById('theme-toggle');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+            var next = currentTheme() === 'light' ? 'dark' : 'light';
+            applyTheme(next);
+            store('theme', next);
+        });
+    }
+
+    /* ---------------- Mermaid ----------------
+       The lesson <head> imports Mermaid as a module, stores it on window.__mermaid and fires
+       'mermaid-ready'. We render from the SOURCE STRING (kept in data-src) so a theme change can
+       re-render, and so label text is never re-parsed as HTML. */
+    function renderMermaid() {
+        var mermaid = window.__mermaid;
+        var blocks = document.querySelectorAll('.mermaid');
+        if (!mermaid || !blocks.length) return;
+        var theme = currentTheme();
+        try {
+            mermaid.initialize({ startOnLoad: false, theme: 'base', themeVariables: MERMAID_THEMES[theme] });
+        } catch (e) { console.error('Mermaid initialize failed: ' + e.message); return; }
+        blocks.forEach(function (el) {
+            if (!el.dataset.src) el.dataset.src = el.textContent.trim();
+            var id = 'mmd-' + (++renderCount);
+            Promise.resolve()
+                .then(function () { return mermaid.render(id, el.dataset.src); })
+                .then(function (out) {
+                    el.innerHTML = out.svg;
+                    el.setAttribute('data-rendered', theme);
+                    el.classList.remove('mermaid-error');
+                })
+                .catch(function (err) {
+                    el.classList.add('mermaid-error');
+                    var stray = document.getElementById('d' + id) || document.getElementById(id);
+                    if (stray && !el.contains(stray)) stray.remove();
+                    console.error('Mermaid diagram failed to render: ' + (err && err.message ? err.message : err));
+                });
+        });
+    }
+
+    /* ---------------- scroll progress ---------------- */
+    function initProgressIndicator() {
+        var bar = document.querySelector('.progress-bar');
+        if (!bar) return;
+        var ticking = false;
+        function update() {
+            ticking = false;
+            var docH = document.documentElement.scrollHeight - window.innerHeight;
+            bar.style.width = docH > 0 ? Math.min((window.scrollY / docH) * 100, 100) + '%' : '0';
+        }
+        window.addEventListener('scroll', function () {
+            if (!ticking) { ticking = true; window.requestAnimationFrame(update); }
+        }, { passive: true });
+        update();
+    }
+
+    /* ---------------- table of contents ----------------
+       Open at the top of the page. Once the reader scrolls past it, it folds into a round button
+       (bottom right). Opening it from the button shows a panel under the nav; picking a link
+       closes the panel again. */
+    function initTOC() {
+        var toc = document.querySelector('details.toc-card');
+        var links = document.querySelectorAll('.toc-link');
+        if (toc) {
+            var autoClosed = false;
+            var sentinel = document.createElement('div');
+            toc.parentNode.insertBefore(sentinel, toc.nextSibling);
+            window.addEventListener('scroll', function () {
+                if (autoClosed) return;
+                var before = sentinel.getBoundingClientRect().top;
+                if (before < 60) {
+                    autoClosed = true;
+                    toc.classList.add('toc-floating');
+                    toc.open = false;
+                    // The card just left the page flow. Keep the text the reader is looking at where it was
+                    // (browsers with scroll anchoring have already done this, so the difference is 0).
+                    var shift = sentinel.getBoundingClientRect().top - before;
+                    if (shift) window.scrollBy(0, shift);
                 }
-            }
-        });
-    };
-    
-    const observer = new IntersectionObserver(observerCallback, observerOptions);
-    sections.forEach(section => observer.observe(section));
-}
-
-/**
- * Search Functionality
- */
-function initSearchFunctionality() {
-    const searchInput = document.getElementById('search-input');
-    const searchResults = document.getElementById('search-results');
-    
-    if (!searchInput || !searchResults) return;
-    
-    let searchIndex = [];
-    
-    // Build search index from page content
-    function buildSearchIndex() {
-        const content = document.querySelectorAll('h1, h2, h3, p, li');
-        content.forEach((element, index) => {
-            searchIndex.push({
-                id: index,
-                text: element.textContent.toLowerCase(),
-                element: element,
-                type: element.tagName.toLowerCase()
+            }, { passive: true });
+            links.forEach(function (a) {
+                a.addEventListener('click', function () {
+                    if (toc.classList.contains('toc-floating')) toc.open = false;
+                });
             });
-        });
-    }
-    
-    // Perform search
-    function performSearch(query) {
-        const results = [];
-        const searchQuery = query.toLowerCase().trim();
-        
-        if (searchQuery.length < 2) {
-            searchResults.innerHTML = '';
-            searchResults.style.display = 'none';
-            return;
-        }
-        
-        searchIndex.forEach(item => {
-            if (item.text.includes(searchQuery)) {
-                results.push(item);
-            }
-        });
-        
-        displayResults(results.slice(0, 10)); // Show top 10 results
-    }
-    
-    // Display search results
-    function displayResults(results) {
-        if (results.length === 0) {
-            searchResults.innerHTML = '<div class="no-results">No results found</div>';
-            searchResults.style.display = 'block';
-            return;
-        }
-        
-        let html = '<ul class="search-results-list">';
-        results.forEach(result => {
-            const excerpt = getExcerpt(result.text, searchInput.value.toLowerCase());
-            html += `
-                <li class="search-result-item" data-index="${result.id}">
-                    <span class="result-type">${result.type.toUpperCase()}</span>
-                    <span class="result-text">${excerpt}</span>
-                </li>
-            `;
-        });
-        html += '</ul>';
-        
-        searchResults.innerHTML = html;
-        searchResults.style.display = 'block';
-        
-        // Add click handlers to results
-        document.querySelectorAll('.search-result-item').forEach(item => {
-            item.addEventListener('click', function() {
-                const index = this.getAttribute('data-index');
-                const element = searchIndex[index].element;
-                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                element.classList.add('highlight');
-                setTimeout(() => element.classList.remove('highlight'), 2000);
-                
-                // Clear search
-                searchInput.value = '';
-                searchResults.style.display = 'none';
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && toc.classList.contains('toc-floating')) toc.open = false;
             });
+        }
+        if (!links.length || !('IntersectionObserver' in window)) return;
+        var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (!entry.isIntersecting) return;
+                links.forEach(function (l) {
+                    l.classList.toggle('active', l.getAttribute('href') === '#' + entry.target.id);
+                });
+            });
+        }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+        links.forEach(function (link) {
+            var id = (link.getAttribute('href') || '').slice(1);
+            var section = id && document.getElementById(id);
+            if (section) observer.observe(section);
         });
     }
-    
-    // Get excerpt with highlighted search term
-    function getExcerpt(text, query) {
-        const index = text.indexOf(query);
-        const start = Math.max(0, index - 30);
-        const end = Math.min(text.length, index + query.length + 30);
-        
-        let excerpt = text.substring(start, end);
-        if (start > 0) excerpt = '...' + excerpt;
-        if (end < text.length) excerpt = excerpt + '...';
-        
-        // Highlight the search term
-        const regex = new RegExp(query, 'gi');
-        excerpt = excerpt.replace(regex, `<mark>$&</mark>`);
-        
-        return excerpt;
-    }
-    
-    // Initialize
-    buildSearchIndex();
-    
-    // Event listeners
-    searchInput.addEventListener('input', (e) => {
-        performSearch(e.target.value);
-    });
-    
-    // Close search results when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-            searchResults.style.display = 'none';
-        }
-    });
-}
 
-/**
- * Keyboard Shortcuts
- */
-function initKeyboardShortcuts() {
-    const shortcuts = {
-        '/': () => {
-            // Focus search
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.focus();
-                return false; // Prevent default
-            }
-        },
-        'Escape': () => {
-            // Close search or modal
-            const searchResults = document.getElementById('search-results');
-            if (searchResults) {
-                searchResults.style.display = 'none';
-            }
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.blur();
-            }
-        },
-        'ArrowLeft': () => {
-            // Previous lesson
-            const prevLink = document.querySelector('.prev-lesson');
-            if (prevLink) {
-                window.location.href = prevLink.href;
-            }
-        },
-        'ArrowRight': () => {
-            // Next lesson
-            const nextLink = document.querySelector('.next-lesson');
-            if (nextLink) {
-                window.location.href = nextLink.href;
-            }
-        },
-        'h': () => {
-            // Go home
-            window.location.href = '/index.html';
-        },
-        '?': () => {
-            // Show keyboard shortcuts help
-            showKeyboardShortcuts();
-        }
-    };
-    
-    document.addEventListener('keydown', (e) => {
-        // Don't trigger shortcuts when typing in input fields
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-            return;
-        }
-        
-        const key = e.key;
-        if (shortcuts[key]) {
-            const preventDefault = shortcuts[key]();
-            if (preventDefault === false) {
-                e.preventDefault();
-            }
-        }
-    });
-    
-    function showKeyboardShortcuts() {
-        const modal = document.createElement('div');
-        modal.className = 'shortcuts-modal';
-        modal.innerHTML = `
-            <div class="shortcuts-content">
-                <h3>Keyboard Shortcuts</h3>
-                <button class="close-modal">&times;</button>
-                <dl>
-                    <dt>/</dt><dd>Focus search</dd>
-                    <dt>ESC</dt><dd>Close search/modal</dd>
-                    <dt>←</dt><dd>Previous lesson</dd>
-                    <dt>→</dt><dd>Next lesson</dd>
-                    <dt>H</dt><dd>Go to home</dd>
-                    <dt>?</dt><dd>Show this help</dd>
-                </dl>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        // Close modal
-        modal.querySelector('.close-modal').addEventListener('click', () => {
-            modal.remove();
-        });
-        
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.remove();
-            }
-        });
-    }
-}
-
-/**
- * Theme Toggle (Light/Dark mode)
- */
-function initThemeToggle() {
-    const themeToggle = document.getElementById('theme-toggle');
-    if (!themeToggle) return;
-    
-    // Check for saved theme preference or default to light
-    const currentTheme = localStorage.getItem('theme') || 'light';
-    document.documentElement.setAttribute('data-theme', currentTheme);
-    
-    themeToggle.addEventListener('click', () => {
-        const currentTheme = document.documentElement.getAttribute('data-theme');
-        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-        
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
-        
-        // Update button text/icon
-        themeToggle.textContent = newTheme === 'light' ? '🌙' : '☀️';
-        
-        // Smooth transition
-        document.documentElement.style.transition = 'background-color 0.3s, color 0.3s';
-    });
-}
-
-/**
- * Lesson Progress Tracking
- */
-function initLessonProgress() {
-    const currentPage = window.location.pathname.split('/').pop().replace('.html', '');
-    if (!currentPage) return;
-    
-    // Get or initialize progress data
-    let progress = JSON.parse(localStorage.getItem('lessonProgress') || '{}');
-    
-    // Mark current page as visited
-    progress[currentPage] = {
-        visited: true,
-        lastVisited: new Date().toISOString(),
-        scrollPosition: 0
-    };
-    
-    // Save progress
-    localStorage.setItem('lessonProgress', JSON.stringify(progress));
-    
-    
-    // Save scroll position on page leave
-    window.addEventListener('beforeunload', () => {
-        progress[currentPage].scrollPosition = window.scrollY;
-        localStorage.setItem('lessonProgress', JSON.stringify(progress));
-    });
-    
-    // Restore scroll position
-    const savedPosition = progress[currentPage]?.scrollPosition;
-    if (savedPosition && savedPosition > 0) {
-        // Wait for content to load
-        setTimeout(() => {
-            window.scrollTo(0, savedPosition);
-        }, 100);
-    }
-}
-
-
-/**
- * Quiz Interactivity
- */
-function initQuizInteractivity() {
-    const quizzes = document.querySelectorAll('.quiz-container');
-    
-    quizzes.forEach(quiz => {
-        const questions = quiz.querySelectorAll('.quiz-question');
-        
-        questions.forEach(question => {
-            const options = question.querySelectorAll('.quiz-option');
-            const feedback = question.querySelector('.quiz-feedback');
-            
-            options.forEach(option => {
-                option.addEventListener('click', () => {
-                    // Remove previous selections
-                    options.forEach(opt => opt.classList.remove('selected', 'correct', 'incorrect'));
-                    
-                    // Mark selected
-                    option.classList.add('selected');
-                    
-                    // Check answer
-                    const isCorrect = option.dataset.correct === 'true';
-                    if (isCorrect) {
-                        option.classList.add('correct');
-                        if (feedback) {
-                            feedback.textContent = 'Correct! ' + (option.dataset.explanation || '');
-                            feedback.className = 'quiz-feedback correct';
-                        }
-                    } else {
-                        option.classList.add('incorrect');
-                        if (feedback) {
-                            feedback.textContent = 'Try again. ' + (option.dataset.hint || '');
-                            feedback.className = 'quiz-feedback incorrect';
-                        }
-                    }
+    /* ---------------- quiz ---------------- */
+    function initQuiz() {
+        document.querySelectorAll('.quiz-question').forEach(function (q) {
+            var options = q.querySelectorAll('.quiz-option');
+            var feedback = q.querySelector('.quiz-feedback');
+            if (feedback) feedback.setAttribute('aria-live', 'polite');
+            options.forEach(function (opt) {
+                opt.setAttribute('type', 'button');
+                opt.addEventListener('click', function () {
+                    options.forEach(function (o) { o.classList.remove('selected', 'correct', 'incorrect'); });
+                    var ok = opt.dataset.correct === 'true';
+                    opt.classList.add('selected', ok ? 'correct' : 'incorrect');
+                    if (!feedback) return;
+                    feedback.textContent = ok
+                        ? '✅ Correct! ' + (opt.dataset.explanation || '')
+                        : '❌ Not yet. ' + (opt.dataset.hint || 'Try another option.');
+                    feedback.className = 'quiz-feedback ' + (ok ? 'correct' : 'incorrect');
                 });
             });
         });
-    });
-}
+    }
 
-/**
- * Mobile Menu Toggle
- */
-function initMobileMenu() {
-    const menuToggle = document.getElementById('mobile-menu-toggle');
-    const navLinks = document.querySelector('.nav-links');
-    
-    if (!menuToggle || !navLinks) return;
-    
-    menuToggle.addEventListener('click', () => {
-        navLinks.classList.toggle('active');
-        menuToggle.classList.toggle('active');
-        
-        // Update ARIA attributes
-        const isOpen = navLinks.classList.contains('active');
-        menuToggle.setAttribute('aria-expanded', isOpen);
-        navLinks.setAttribute('aria-hidden', !isOpen);
-    });
-    
-    // Close menu when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!menuToggle.contains(e.target) && !navLinks.contains(e.target)) {
-            navLinks.classList.remove('active');
-            menuToggle.classList.remove('active');
+    /* ---------------- tables: every table scrolls inside its own box ---------------- */
+    function initTableWrap() {
+        document.querySelectorAll('main table').forEach(function (table) {
+            if (table.closest('.table-wrap')) return;
+            var wrap = document.createElement('div');
+            wrap.className = 'table-wrap';
+            table.parentNode.insertBefore(wrap, table);
+            wrap.appendChild(table);
+        });
+        document.querySelectorAll('.table-wrap').forEach(function (w) {
+            if (!w.hasAttribute('tabindex')) { w.setAttribute('tabindex', '0'); w.setAttribute('role', 'region'); w.setAttribute('aria-label', 'Table (scrolls sideways on small screens)'); }
+        });
+        // A table wider than its box (usually because code cells do not wrap) gets roomier prose columns,
+        // so the text beside the code is not squeezed to one word per line. See "table.is-wide" in main.css.
+        function markWide() {
+            document.querySelectorAll('.table-wrap > table').forEach(function (table) {
+                table.classList.remove('is-wide');
+                if (table.scrollWidth > table.parentNode.clientWidth + 1) table.classList.add('is-wide');
+            });
         }
-    });
-}
+        document.querySelectorAll('.table-wrap > table td').forEach(function (td) {
+            if (!td.classList.contains('num') && td.textContent.trim().length > 24) td.classList.add('cell-long');
+        });
+        markWide();
+        var wideTimer;
+        window.addEventListener('resize', function () { clearTimeout(wideTimer); wideTimer = setTimeout(markWide, 150); });
+    }
 
-/**
- * Accessibility Features
- */
-function initAccessibilityFeatures() {
-    // Skip to main content
-    const skipLink = document.querySelector('.skip-to-main');
-    if (skipLink) {
-        skipLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            const main = document.getElementById('main-content');
-            if (main) {
-                main.tabIndex = -1;
-                main.focus();
+    /* ---------------- mobile menu ---------------- */
+    function initMobileMenu() {
+        var btn = document.getElementById('mobile-menu-toggle');
+        var nav = document.getElementById('nav-links');
+        if (!btn || !nav) return;
+        function close() { nav.classList.remove('active'); btn.setAttribute('aria-expanded', 'false'); btn.textContent = '☰'; }
+        btn.setAttribute('aria-label', 'Menu');
+        btn.addEventListener('click', function () {
+            var open = nav.classList.toggle('active');
+            btn.setAttribute('aria-expanded', String(open));
+            btn.textContent = open ? '✕' : '☰';
+        });
+        document.addEventListener('click', function (e) {
+            if (!btn.contains(e.target) && !nav.contains(e.target)) close();
+        });
+    }
+
+    /* ---------------- keyboard shortcuts ---------------- */
+    function showShortcuts() {
+        if (document.querySelector('.shortcuts-modal')) return;
+        var modal = document.createElement('div');
+        modal.className = 'shortcuts-modal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-label', 'Keyboard shortcuts');
+        modal.innerHTML = '<div class="shortcuts-content"><h3>Keyboard Shortcuts</h3><button type="button" class="close-modal" aria-label="Close">&times;</button>' +
+            '<dl><dt>←</dt><dd>Previous lesson</dd><dt>→</dt><dd>Next lesson</dd><dt>H</dt><dd>Course home</dd><dt>T</dt><dd>Toggle dark mode</dd><dt>?</dt><dd>Show this help</dd><dt>Esc</dt><dd>Close</dd></dl></div>';
+        document.body.appendChild(modal);
+        modal.querySelector('.close-modal').addEventListener('click', function () { modal.remove(); });
+        modal.addEventListener('click', function (e) { if (e.target === modal) modal.remove(); });
+    }
+
+    function initKeyboardShortcuts() {
+        document.addEventListener('keydown', function (e) {
+            var t = e.target;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+            var link;
+            switch (e.key) {
+                case 'Escape': { var m = document.querySelector('.shortcuts-modal'); if (m) m.remove(); break; }
+                case 'ArrowLeft': link = document.querySelector('.prev-lesson'); if (link) window.location.href = link.href; break;
+                case 'ArrowRight': link = document.querySelector('.next-lesson'); if (link) window.location.href = link.href; break;
+                case 'h': case 'H': link = document.querySelector('.nav-logo'); if (link) window.location.href = link.href; break;
+                case 't': case 'T': { var b = document.getElementById('theme-toggle'); if (b) b.click(); break; }
+                case '?': showShortcuts(); break;
             }
         });
     }
-    
-    // Announce page changes for screen readers
-    const announcer = document.createElement('div');
-    announcer.className = 'sr-only';
-    announcer.setAttribute('aria-live', 'polite');
-    announcer.setAttribute('aria-atomic', 'true');
-    document.body.appendChild(announcer);
-    
-    // Improve focus visibility
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Tab') {
-            document.body.classList.add('keyboard-nav');
-        }
-    });
-    
-    document.addEventListener('mousedown', () => {
-        document.body.classList.remove('keyboard-nav');
-    });
-    
-    // Add ARIA labels to interactive elements
-    document.querySelectorAll('button, a, input').forEach(element => {
-        if (!element.getAttribute('aria-label') && !element.textContent.trim()) {
-            // Try to find a meaningful label
-            const title = element.getAttribute('title');
-            if (title) {
-                element.setAttribute('aria-label', title);
-            }
-        }
-    });
-}
 
-/**
- * Print Styles Enhancement
- */
-function initPrintStyles() {
-    // Add print button
-    const printButton = document.getElementById('print-button');
-    if (printButton) {
-        printButton.addEventListener('click', () => {
-            window.print();
+    /* ---------------- visited lessons (check marks on the index) ---------------- */
+    function initVisited() {
+        var visited = {};
+        try { visited = JSON.parse(store('dsVisited') || '{}') || {}; } catch (e) { visited = {}; }
+        var page = window.location.pathname.split('/').pop() || 'index.html';
+        if (document.querySelector('.lesson-nav')) {
+            visited[page] = 1;
+            store('dsVisited', JSON.stringify(visited));
+        }
+        document.querySelectorAll('a.lesson-link').forEach(function (a) {
+            var href = (a.getAttribute('href') || '').split('#')[0];
+            if (visited[href]) a.classList.add('visited');
         });
     }
-    
-    // Prepare content for printing
-    window.addEventListener('beforeprint', () => {
-        // Expand all collapsible sections
-        document.querySelectorAll('details').forEach(details => {
-            details.setAttribute('open', 'true');
+
+    function initPrint() {
+        var btn = document.getElementById('print-button');
+        if (btn) btn.addEventListener('click', function (e) { e.preventDefault(); window.print(); });
+        window.addEventListener('beforeprint', function () {
+            document.querySelectorAll('details').forEach(function (d) { d.setAttribute('open', ''); });
         });
-        
-        // Remove interactive elements
-        document.body.classList.add('printing');
-    });
-    
-    window.addEventListener('afterprint', () => {
-        document.body.classList.remove('printing');
-    });
-}
-
-/**
- * Simple Analytics (Privacy-friendly)
- */
-function initAnalytics() {
-    // Track page views
-    const pageView = {
-        page: window.location.pathname,
-        timestamp: new Date().toISOString(),
-        referrer: document.referrer
-    };
-    
-    // Store locally (no external tracking)
-    let analytics = JSON.parse(localStorage.getItem('courseAnalytics') || '[]');
-    analytics.push(pageView);
-    
-    // Keep only last 100 entries
-    if (analytics.length > 100) {
-        analytics = analytics.slice(-100);
     }
-    
-    localStorage.setItem('courseAnalytics', JSON.stringify(analytics));
-    
-    // Track time on page
-    const startTime = Date.now();
-    window.addEventListener('beforeunload', () => {
-        const timeSpent = Math.round((Date.now() - startTime) / 1000);
-        console.log(`Time on page: ${timeSpent} seconds`);
-    });
-}
 
-/**
- * Utility Functions
- */
+    function init() {
+        var steps = [initThemeToggle, initProgressIndicator, initTableWrap, initTOC, initQuiz, initMobileMenu, initKeyboardShortcuts, initVisited, initPrint];
+        steps.forEach(function (fn) {
+            try { fn(); } catch (e) { console.error('course-enhancements: ' + fn.name + ' failed: ' + e.message); }
+        });
+    }
 
-// Debounce function for performance
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
+    document.addEventListener('mermaid-ready', renderMermaid);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
 
-// Throttle function for performance
-function throttle(func, limit) {
-    let inThrottle;
-    return function(...args) {
-        if (!inThrottle) {
-            func.apply(this, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-        }
-    };
-}
-
-// Export for use in other scripts
-window.courseEnhancements = {
-    debounce,
-    throttle,
-    initProgressIndicator,
-    initSmoothScrolling
-};
-
-console.log('Course enhancements initialized successfully');
+    window.courseEnhancements = { applyTheme: applyTheme, renderMermaid: renderMermaid };
+})();

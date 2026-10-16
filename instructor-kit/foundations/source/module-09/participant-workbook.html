@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 9</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 9: Random Forests and Gradient Boosting</h1>
+    <p class="sub">Your workbook for Session 9: a warm-up on Session 8, the key ideas of Lessons 5.2 and 5.3, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>5.2–5.3</b></span>
+      <span class="chip">Session <b>9</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Explain the bootstrap and why a bootstrap sample holds about 63% of the rows.</li>
+  <li>Explain why averaging many unstable trees works, and why a forest makes its trees less alike.</li>
+  <li>Validate a forest out-of-bag, and check its importances with permutation importance.</li>
+  <li>Write the boosting loop in words (and in code), and choose the number of trees with early stopping on a validation set.</li>
+  <li>Run scikit-learn's, XGBoost's and LightGBM's boosters with native categories, and know which error each ensemble fixes.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-up: Support Vector Machines and Decision Trees</h2><span class="rule"></span></div>
+<p>Five questions on Session 8. Two minutes alone, then compare with a neighbor.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">Lesson 4.3: you raise a linear SVM's C from 0.01 to 100 on overlapping data. Street width and number of support vectors?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">An RBF SVM with gamma=1000 scores 1.000 on training data and 0.650 on test data. What happened, and what would have warned you without the test set?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">A tree node holds 40 stayers and 10 churners. Gini impurity? Predict, then check.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+p = np.array([<span class="s">40</span>, <span class="s">10</span>]) / <span class="s">50</span>
+print(round(float(<span class="s">1</span> - np.sum(p ** <span class="s">2</span>)), <span class="s">2</span>))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Why does an SVM need StandardScaler while a decision tree does not?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Homework check: a bootstrap sample of 4,500 rows drawn with replacement from 4,500. What share of the distinct customers does it contain?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">5.2</span><h3>Bagging and Random Forests</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Draw a bootstrap sample and explain why it contains about 63% of the original rows</li>
+  <li>Build a bagged ensemble by hand and with <code class="inline">BaggingClassifier(estimator=...)</code>, and explain why averaging reduces variance</li>
+  <li>Explain how a random forest decorrelates its trees with <code class="inline">max_features</code>, and tune <code class="inline">n_estimators</code>, <code class="inline">max_features</code> and <code class="inline">min_samples_leaf</code></li>
+  <li>Use out-of-bag predictions as a built-in validation estimate</li>
+  <li>Compare impurity-based and permutation importance, and recognize the bias of the first</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>A panel of new hires.</b> Many quirky models whose quirks point different ways: average them and the quirks cancel.</li>
+  <li><b>The bootstrap</b> draws n rows from n with replacement: about 63.2% of the distinct rows; the other 36.8% are out-of-bag.</li>
+  <li><b>Variance of an average</b> = ρσ² + (1 − ρ)σ²/n. More models shrink one term; less alike models shrink the other.</li>
+  <li><b>Bagging</b> helps unstable models (deep trees) and cannot fix bias. <code class="inline">BaggingClassifier(estimator=...)</code>.</li>
+  <li><b>A random forest</b> = bagged trees + a random subset of features at every split (<code class="inline">max_features</code>): weaker, less alike trees, a better average.</li>
+  <li><b>More trees never overfit;</b> the score plateaus. Leaf size matters more; forests are forgiving to tune.</li>
+  <li><b>Out-of-bag</b> predictions give a validation score from one fit (not after target-based preprocessing, not for time-ordered rows).</li>
+  <li><b>Importances:</b> MDI rewards many-valued columns and chance splits; check with permutation importance on held-out data. Both describe the model.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: how sure is a churn rate?</div>
+<p>The bootstrap is not only for forests: it tells you how sure a number is. How precise is the churn rate of Pinecrest's 475 Gold customers?</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+gold = customers.loc[customers[<span class="s">"loyalty_tier"</span>] == <span class="s">"Gold"</span>, <span class="s">"churned"</span>].to_numpy()
+print(len(gold), <span class="s">"Gold customers; churn rate"</span>, round(gold.mean(), <span class="s">4</span>))</pre>
+<pre class="out">475 Gold customers; churn rate 0.0653</pre><p>Resample the 475 customers with replacement 2,000 times and recompute the rate each time:</p>
+<pre class="code">rng = np.random.default_rng(<span class="s">42</span>)
+rates = [gold[rng.integers(<span class="s">0</span>, len(gold), size=len(gold))].mean() <span class="k">for</span> _ <span class="k">in</span> range(<span class="s">2000</span>)]
+low, high = np.percentile(rates, [<span class="s">2.5</span>, <span class="s">97.5</span>])
+print(<span class="s">f"bootstrap: 95% of resampled rates between {low:.3f} and {high:.3f}"</span>)</pre>
+<pre class="out">bootstrap: 95% of resampled rates between 0.044 and 0.088</pre><p>Each resample holds about 63% of the distinct Gold customers, some twice or more, exactly like one tree's sample in a forest. The spread of the 2,000 rates says the true Gold churn rate could plausibly be anywhere in that interval: with only 475 customers, "6.5%" deserves a plus-or-minus. Lesson 5.4 uses the same trick to ask whether one model's lead over another is real.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-09/l5_2-random-forests/fraud_forest_starter.py</code>. A forest for the fraud review queue, tuned out-of-bag, tested once against logistic regression and one tree.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-09/l5_2-random-forests/decorrelate_starter.py</code>. Measure the variance formula as max_features moves.</li>
+  <li>Done when your numbers match the "Expected when done" block. Finished early? <code class="inline">debug_forest.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (Four trees' 0/1 votes for three customers.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+votes = np.array([[<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>],      <span class="c"># tree 1's churn votes for three customers</span>
+                  [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>],      <span class="c"># tree 2</span>
+                  [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>],      <span class="c"># tree 3</span>
+                  [<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>]])     <span class="c"># tree 4</span>
+print(votes.mean(axis=<span class="s">0</span>))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (The variance of an average.)</div><pre class="code">rho, var = <span class="s">0.5</span>, <span class="s">1.0</span>
+<span class="k">for</span> n <span class="k">in</span> [<span class="s">1</span>, <span class="s">10</span>, <span class="s">1000</span>]:
+    print(n, round(rho * var + (<span class="s">1</span> - rho) * var / n, <span class="s">3</span>))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A churn forest and a call list</b> (lesson page, "Project: A Churn Forest and a Call List"). In class: Steps 1 and 2. At home: Steps 3 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: the 5.1 columns and split. Check: <code class="inline">(4500, 15) (1500, 15) C102112</code></li>
+  <li>☐ Step 2: leaf size by OOB AUC (best 0.868 at 10)</li>
+  <li>☐ Step 3: one test, four models (forest 0.863)</li>
+  <li>☐ Step 4: real churners in each top 50 (forest 41)</li>
+  <li>☐ Step 5: permutation importance on the original columns</li>
+  <li>☐ Step 6: <code class="inline">call_list.csv</code>, 50 rows, no outcome column</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1" data-kind="short"><div class="qn">Q1</div><div class="qt">What does this print? (The share of distinct rows in a bootstrap sample of n rows from n.)</div><pre class="code">n = <span class="s">1000</span>
+print(round(<span class="s">1</span> - (<span class="s">1</span> - <span class="s">1</span> / n) ** n, <span class="s">3</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="2"><div class="qn">Q2</div><div class="qt">Which change makes the trees of a random forest LESS correlated with each other?</div><div class="opts"><div class="opt">A) Raising <code class="inline">n_estimators</code></div><div class="opt">B) Setting <code class="inline">max_features=None</code></div><div class="opt">C) Lowering <code class="inline">max_features</code></div><div class="opt">D) Raising <code class="inline">min_samples_leaf</code> to 500</div></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">For one training customer, which trees produce the out-of-bag prediction?</div><div class="opts"><div class="opt">A) Only the trees whose bootstrap sample did not include that customer</div><div class="opt">B) All trees in the forest</div><div class="opt">C) Trees refitted on a held-out fold</div><div class="opt">D) The trees that predicted that customer correctly</div></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">from</span> sklearn.ensemble <span class="k">import</span> RandomForestClassifier
+RandomForestClassifier(bootstrap=<span class="k">False</span>, oob_score=<span class="k">True</span>).fit([[<span class="s">0</span>], [<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">3</span>]], [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>])</pre><div class="opts"><div class="opt">A) It fits, and oob_score_ is 1.0</div><div class="opt">B) It fits, and oob_score_ is missing</div><div class="opt">C) A warning that too few trees were used</div><div class="opt">D) <code class="inline">ValueError: Out of bag estimation only available if bootstrap=True</code></div></div></div>
+<div class="q" data-sc="5" data-kind="short"><div class="qn">Q5</div><div class="qt">What does this print? (The variance of an average of n models with correlation 0.3.)</div><pre class="code">rho, var = <span class="s">0.3</span>, <span class="s">1.0</span>
+print([round(rho * var + (<span class="s">1</span> - rho) * var / n, <span class="s">3</span>) <span class="k">for</span> n <span class="k">in</span> (<span class="s">1</span>, <span class="s">10</span>, <span class="s">100</span>)])</pre><div class="write"></div></div>
+<div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">A column of pure random noise gets an impurity importance (MDI) of 0.065 in a forest, but a permutation importance of 0.005 on the test set. Best conclusion?</div><div class="opts"><div class="opt">A) The column carries real signal that permutation importance missed</div><div class="opt">B) MDI was inflated: a many-valued column wins chance splits on the training data</div><div class="opt">C) The column has a small causal effect on churn</div><div class="opt">D) The forest needs more trees</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain to a colleague, with the panel of new hires, why 100 overfitted trees can predict better than one carefully pruned tree. Use the variance formula's two terms. Then write down your project's numbers: the forest's test AUC, the rule tree's, and the two top-50 counts. When would you still hand the care team the rule tree?</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">5.3</span><h3>Gradient Boosting</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain how boosting adds small trees one after another, each fitted to the remaining errors, and how the learning rate controls the step size</li>
+  <li>Train <code class="inline">HistGradientBoostingClassifier</code> and <code class="inline">HistGradientBoostingRegressor</code> on data with missing values and native categorical columns</li>
+  <li>Use early stopping on a validation set to choose the number of trees without touching the test set</li>
+  <li>Run the same model with <code class="inline">XGBClassifier</code> and <code class="inline">LGBMClassifier</code>, including their categorical and early-stopping options</li>
+  <li>Choose between a random forest, scikit-learn's boosting and the external libraries for a given problem</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>Putting on a golf green.</b> Start from the average; each small tree aims at what is still wrong; add a fraction of it: F = F + ν · tree.</li>
+  <li><b>Gradient:</b> for squared error the residual is the negative gradient; for churn each tree fits y − p on the log-odds scale.</li>
+  <li><b>Training error falls forever; validation error turns around.</b> Early stopping on a validation set picks the number of trees.</li>
+  <li><b>Learning rate:</b> smaller steps need more trees and usually generalize a little better. Recipe: small rate, high max_iter, early stopping, then tree size.</li>
+  <li><b>HistGradientBoosting:</b> binned features, missing values handled, <code class="inline">category</code> columns split natively; early stopping "auto" only above 10,000 rows.</li>
+  <li><b>XGBoost and LightGBM:</b> the same estimator API; you pass the validation set (<code class="inline">eval_set</code>; <code class="inline">eval_X</code>/<code class="inline">eval_y</code>), never the test set.</li>
+  <li><b>Choose the loss for the target:</b> Poisson for counts, quantile for "enough stock".</li>
+  <li><b>Forest vs boosting:</b> forests reduce variance and are hard to break; boosting reduces bias and usually wins once tuned.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: boosting daily store sales</div>
+<p>Session 8's Lab B fitted one regression tree to daily store sales. A booster on the same calendar information, with the store and the event as native categories:</p>
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.ensemble <span class="k">import</span> HistGradientBoostingRegressor
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> mean_absolute_error
+
+sales = pd.read_csv(<span class="s">"data/daily_store_sales.csv"</span>, parse_dates=[<span class="s">"date"</span>])
+X = pd.DataFrame({<span class="s">"store"</span>: sales[<span class="s">"store"</span>].astype(<span class="s">"category"</span>),
+                  <span class="s">"day_of_week"</span>: sales[<span class="s">"date"</span>].dt.dayofweek, <span class="s">"month"</span>: sales[<span class="s">"date"</span>].dt.month,
+                  <span class="s">"promo"</span>: sales[<span class="s">"promo"</span>], <span class="s">"event"</span>: sales[<span class="s">"event"</span>].fillna(<span class="s">"none"</span>).astype(<span class="s">"category"</span>)})
+is_train = sales[<span class="s">"date"</span>].dt.year &lt; <span class="s">2025</span>
+booster = HistGradientBoostingRegressor(random_state=<span class="s">42</span>).fit(X[is_train], sales.loc[is_train, <span class="s">"sales"</span>])
+pred = booster.predict(X[~is_train])
+print(<span class="s">f"test MAE ${mean_absolute_error(sales.loc[~is_train, 'sales'], pred):,.0f}   trees {booster.n_iter_}"</span>)</pre>
+<pre class="out">test MAE $969   trees 100</pre><pre class="code">check = pd.DataFrame({<span class="s">"store"</span>: sales.loc[~is_train, <span class="s">"store"</span>], <span class="s">"actual"</span>: sales.loc[~is_train, <span class="s">"sales"</span>], <span class="s">"predicted"</span>: pred})
+print(check.groupby(<span class="s">"store"</span>)[[<span class="s">"actual"</span>, <span class="s">"predicted"</span>]].mean().round(<span class="s">0</span>))</pre>
+<pre class="out">           actual  predicted
+store                       
+Asheville  4380.0     4625.0
+Bend       5527.0     5195.0
+Boise      8342.0     7332.0
+Flagstaff  6561.0     5355.0</pre><p>About the same as Session 8's depth-10 tree ($976): with only calendar information there is little left for more trees to find. And look at the store table: Boise and Flagstaff grew in 2025 and are under-predicted, Asheville shrank and is over-predicted. A boosted model is still a sum of trees, and every leaf value comes from 2023 and 2024: it cannot extrapolate a trend either. More trees do not fix a missing piece of information.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-09/l5_3-gradient-boosting/boosting_by_hand_starter.py</code>. Write the boosting loop for churn and compare it with the library.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-09/l5_3-gradient-boosting/fraud_boosters_starter.py</code>. Three libraries on fraud, early-stopped on validation; then the peeking version.</li>
+  <li>Done when your numbers match the "Expected when done" block. Finished early? <code class="inline">debug_boosting.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (Each step covers half of what is left.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+pred, truth = np.array([<span class="s">10.0</span>]), np.array([<span class="s">14.0</span>])
+<span class="k">for</span> step <span class="k">in</span> range(<span class="s">3</span>):
+    pred = pred + <span class="s">0.5</span> * (truth - pred)
+    print(pred)</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (The starting guess for a 20% churn rate.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+rate = <span class="s">0.2</span>
+start = np.log(rate / (<span class="s">1</span> - rate))
+print(round(float(start), <span class="s">3</span>), round(float(<span class="s">1</span> / (<span class="s">1</span> + np.exp(-start))), <span class="s">3</span>))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A weekly demand forecaster</b> (lesson page, "Project: Weekly Demand Forecaster"). In class: Steps 1 and 2. At home: Steps 3 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: split by year. Check: 5,088 training rows, 4,896 test</li>
+  <li>☐ Step 2: baselines 17.13 / 13.42 / 13.81</li>
+  <li>☐ Step 3: HistGradientBoosting with native categories, MAE 8.16</li>
+  <li>☐ Step 4: Poisson loss, MAE 8.05, no negative forecasts</li>
+  <li>☐ Step 5: MAE per category; one product's season</li>
+  <li>☐ Step 6: <code class="inline">demand_forecast_2025.csv</code></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print? (Current predictions 20 and 20, truths 26 and 14, learning rate 0.1, a tree that fits the residuals perfectly.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+pred = np.array([<span class="s">20.0</span>, <span class="s">20.0</span>])
+truth = np.array([<span class="s">26.0</span>, <span class="s">14.0</span>])
+print(pred + <span class="s">0.1</span> * (truth - pred))</pre><div class="write"></div></div>
+<div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">Bagging and boosting both combine trees. Which statement is right?</div><div class="opts"><div class="opt">A) Bagging averages independent deep trees and mainly reduces variance; boosting adds small trees in sequence, each fixing what is still wrong, and mainly reduces bias</div><div class="opt">B) Both grow deep trees on bootstrap samples; boosting just uses more of them</div><div class="opt">C) Boosting averages the trees; bagging adds them</div><div class="opt">D) Bagging needs early stopping; boosting never overfits</div></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">You fit <code class="inline">HistGradientBoostingClassifier()</code> with all defaults on the 4,500 training customers. How many trees does it build?</div><div class="opts"><div class="opt">A) It stops at the best number of trees on an internal validation set</div><div class="opt">B) 2,000</div><div class="opt">C) 100: early_stopping="auto" is off below 10,000 rows, so it builds max_iter=100</div><div class="opt">D) As many as there are features</div></div></div>
+<div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.ensemble <span class="k">import</span> HistGradientBoostingClassifier
+X = pd.DataFrame({<span class="s">"tenure"</span>: [<span class="s">3</span>, <span class="s">40</span>, <span class="s">5</span>, <span class="s">60</span>], <span class="s">"store"</span>: [<span class="s">"Bend"</span>, <span class="s">"Boise"</span>, <span class="s">"Bend"</span>, <span class="s">"Online"</span>]})
+HistGradientBoostingClassifier().fit(X, [<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>])</pre><div class="opts"><div class="opt">A) It fits, treating store as categorical</div><div class="opt">B) <code class="inline">ValueError: could not convert string to float: 'Bend'</code></div><div class="opt">C) It fits, one-hot encoding store automatically</div><div class="opt">D) A warning, then store is dropped</div></div></div>
+<div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">You early-stop an XGBClassifier. What goes into eval_set?</div><div class="opts"><div class="opt">A) The test set, so it stops where it will be graded</div><div class="opt">B) The training rows it is fitted on</div><div class="opt">C) Nothing: XGBoost holds out its own validation set</div><div class="opt">D) A validation set split off from the training rows</div></div></div>
+<div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">You forecast weekly units sold (counts, never negative) with HistGradientBoostingRegressor and get 45 negative forecasts. What is the best first fix?</div><div class="opts"><div class="opt">A) Clip the forecasts at zero and move on</div><div class="opt">B) Use loss="poisson", which predicts on a log scale</div><div class="opt">C) Scale the target with StandardScaler</div><div class="opt">D) Add more trees</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the difference between a random forest and gradient boosting to a Pinecrest store manager in three sentences, without the words "variance" or "gradient". Then write the two numbers from today that would convince that manager the forecaster is worth using, and one assumption they should challenge.</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<p>Three questions, no notes.</p>
+<div class="q"><div class="qn">E1</div><div class="qt">A forest and a boosted model are both made of trees. In two sentences: how are their trees different, and which kind of error does each mainly fix?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">Why is a forest's out-of-bag score free, and when should you not trust it?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">A colleague early-stops XGBoost with eval_set=[(X_test, y_test)] and reports AUC 0.867. What is wrong, and what do you tell them?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish the churn forest and call list (Steps 3 to 6) and the demand forecaster (Steps 3 to 6)</li>
+  <li>☐ Lesson 5.2 Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Lesson 5.3 Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Both Quick Quizzes; both journal entries</li>
+  <li>☐ 5.2 "Before the Next Lesson": refit the forest with 50 and 1,000 trees</li>
+  <li>☐ 5.3 "Before the Next Lesson": random_state=7 rerun; write my prediction about averaging logistic regression with boosting</li>
+  <li>☐ A first idea for my final project: churn, demand or fraud</li>
+  <li>☐ Bring to Session 10: a READY laptop, <code class="inline">pinecrest-ml</code> with <code class="inline">data/</code> and <code class="inline">labs/</code>, my 5.2 and 5.3 notebooks, my written prediction, this workbook and my journal</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>bootstrap sample</td><td>n rows drawn with replacement from n rows; about 63.2% distinct</td></tr>
+<tr><td>out-of-bag (OOB)</td><td>The rows a tree never saw; their trees' average gives a free validation prediction</td></tr>
+<tr><td>bagging</td><td>Fit one model per bootstrap sample, average the predictions</td></tr>
+<tr><td>random forest</td><td>Bagged trees with a random subset of features tried at each split (<code class="inline">max_features</code>)</td></tr>
+<tr><td>decorrelation</td><td>Making the models less alike (smaller ρ) so their average cancels more error</td></tr>
+<tr><td>permutation importance</td><td>How much a score drops on held-out data when one column is shuffled</td></tr>
+<tr><td>boosting</td><td>Adding small models one after another, each fitted to what is still wrong</td></tr>
+<tr><td>learning rate (ν)</td><td>The fraction of each new tree added to the model</td></tr>
+<tr><td>early stopping</td><td>Stopping when the validation score has not improved for a set number of rounds</td></tr>
+<tr><td>residual / negative gradient</td><td>What the current model still gets wrong; what the next tree is fitted to</td></tr>
+<tr><td>log-odds</td><td>log(p / (1 − p)): the scale on which a boosted classifier adds its trees</td></tr>
+<tr><td>Poisson loss</td><td>A loss for counts: positive predictions, multiplicative effects</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 9 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

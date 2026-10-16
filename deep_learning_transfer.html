@@ -3,645 +3,1084 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about Transfer Learning in Deep Learning - leveraging pre-trained models for new tasks in this Python Machine Learning course.">
+    <meta name="description" content="Reuse a CNN pretrained on ImageNet to classify EuroSAT satellite tiles with PyTorch and torchvision: frozen features with a small head, a from-scratch baseline, how many labels you need, and light fine-tuning. Python Machine Learning Lesson 10.5.">
+    <meta name="author" content="Ray de la Paz">
     <title>Transfer Learning - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#deep_learning">Deep Learning</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#deep_learning">Deep Learning</a></li>
-            <li aria-current="page">Transfer Learning</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>🔄 Transfer Learning: Leveraging Pre-trained Models</h1>
+        <div class="container">
+            <header>
+                <h1>🛰️ Lesson 10.5: Transfer Learning</h1>
+                <p class="lead">Borrow a network that has already learned to see from a million photos, and turn it into an accurate satellite-image classifier with two thousand labeled examples and a few minutes of CPU time.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Explain what transfer learning is and why it saves data, time, and compute</li>
-                <li>Decide when transfer learning is appropriate for a problem</li>
-                <li>Apply feature extraction by freezing a pre-trained model's convolutional base</li>
-                <li>Fine-tune a pre-trained model by unfreezing and retraining its upper layers</li>
-                <li>Choose among common pre-trained models (VGG, ResNet, Inception, MobileNet) for your task</li>
-                <li>Build a custom image classifier on top of a pre-trained backbone</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Build an image classifier from a pre-trained model — first as a feature extractor, then fine-tuned.</p>
-        </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>Transfer learning is a powerful technique that leverages knowledge gained from pre-trained models to solve new, related problems. Instead of training a neural network from scratch, we can use models trained on large datasets like ImageNet and adapt them to our specific tasks. This dramatically reduces training time, computational resources, and data requirements while often achieving better performance.</p>
-        </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain why features learned on ImageNet transfer to a new image task, and when they will not</li>
+                        <li>Load a pretrained torchvision model with the <code>weights=</code> API and prepare images the way it expects</li>
+                        <li>Use a frozen backbone as a feature extractor and train a small head on its features</li>
+                        <li>Fine-tune the last block with a lower learning rate, and compare the result with a CNN trained from scratch</li>
+                        <li>Measure how many labeled images a model needs before you pay for labeling more</li>
+                    </ul>
+                </div>
 
-        <h2>Transfer Learning Overview</h2>
-        
-        <div class="mermaid">
-        flowchart TB
-            A[Pre-trained Model<br/>e.g., VGG16, ResNet] --> B{Transfer Learning Strategy}
-            
-            B --> C[Feature Extraction]
-            C --> C1[Freeze Base Layers]
-            C --> C2[Add New Classifier]
-            C --> C3[Train Only New Layers]
-            
-            B --> D[Fine-tuning]
-            D --> D1[Start with Feature Extraction]
-            D --> D2[Unfreeze Top Layers]
-            D --> D3[Train with Low Learning Rate]
-            
-            B --> E[Using as Initializer]
-            E --> E1[Use Pre-trained Weights]
-            E --> E2[Train Entire Network]
-            E --> E3[Larger Learning Rate OK]
-            
-            C --> F[Quick Training<br/>Less Data Needed]
-            D --> G[Better Performance<br/>More Customization]
-            E --> H[Maximum Flexibility<br/>Requires More Data]
-            
-            style A fill:#e1f5fe
-            style F fill:#c8e6c9
-            style G fill:#fff9c4
-            style H fill:#ffccbc
-        </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 110 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="deep_learning_cnn.html">Lesson 10.3: Convolutional Neural Networks</a> (convolutions, shapes, <code>state_dict</code>)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A land-cover classifier: a pretrained ResNet-18 with a new head, trained frozen, then lightly fine-tuned, evaluated class by class and saved</li>
+                    <li><span class="meta-label">📂 Data</span> EuroSAT RGB, downloaded by torchvision into <code>data/</code> (94 MB download), plus ResNet-18 ImageNet weights (45 MB, downloaded once into PyTorch's cache)</li>
+                </ul>
+            </header>
 
-        <h2>When to Use Transfer Learning</h2>
-        
-        <div class="mermaid">
-        graph TD
-            A[New Task] --> B{Dataset Size}
-            
-            B -->|Small Dataset| C{Task Similarity}
-            C -->|Similar to Pre-trained| D[Feature Extraction<br/>Freeze Most Layers]
-            C -->|Different Domain| E[Fine-tune More Layers<br/>Or Train From Scratch]
-            
-            B -->|Large Dataset| F{Task Similarity}
-            F -->|Similar| G[Fine-tuning<br/>Unfreeze Many Layers]
-            F -->|Different| H[Use as Initializer<br/>Or Train From Scratch]
-            
-            D --> I[✓ Best Choice]
-            G --> I
-            
-            style D fill:#4caf50,color:#fff
-            style G fill:#4caf50,color:#fff
-            style I fill:#2196f3,color:#fff
-        </div>
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Standing on a Pretrained Network</a></li>
+                        <li><a href="#setup" class="toc-link">Data, Weights and the Cache</a></li>
+                        <li><a href="#weights" class="toc-link">Preparing Images the Way the Model Expects</a></li>
+                        <li><a href="#scratch" class="toc-link">Baseline: A CNN from Scratch</a></li>
+                        <li><a href="#features" class="toc-link">Frozen Features and a New Head</a></li>
+                        <li><a href="#labels" class="toc-link">How Many Labels Do You Need?</a></li>
+                        <li><a href="#finetune" class="toc-link">Light Fine-Tuning</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: A Land-Cover Classifier</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
 
-        <h2>Setting Up Transfer Learning</h2>
-        
-        <pre class="language-python"><code>import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras.applications import VGG16, ResNet50, MobileNetV2
-import numpy as np
-import matplotlib.pyplot as plt
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Standing on a Pretrained Network</h2>
 
-# Check TensorFlow version
-print(f"TensorFlow version: {tf.__version__}")
+                <p>Pinecrest Outfitters is planning a trip-planning feature for its website: show customers what the land looks like around a trailhead (forest, river, lake, farmland, highway). The planning team has satellite image tiles but only a few thousand of them carry a label. In Lesson 10.3 a CNN needed 20,000 labeled photos and still mixed up shirts and coats. Training one from scratch on a couple of thousand satellite tiles sounds hopeless.</p>
 
-# Set random seeds for reproducibility
-np.random.seed(42)
-tf.random.set_seed(42)</code></pre>
+                <p>It is not, because you do not have to start from scratch. Research groups have trained large CNNs on <strong>ImageNet</strong>, 1.2 million photos in 1,000 categories, and published the weights. The early layers of those networks learned edges, colors and textures; the middle layers learned patterns of those: grids, stripes, foliage, water ripples. Those detectors are useful for almost any photo, including photos taken from space. <strong>Transfer learning</strong> means reusing them and training only what is specific to your task.</p>
 
-        <h2>Method 1: Feature Extraction</h2>
-        
-        <pre class="language-python"><code>def create_feature_extraction_model(input_shape=(224, 224, 3), num_classes=10):
-    """
-    Create a model using pre-trained VGG16 as feature extractor
-    """
-    # Load pre-trained VGG16 without top layers
-    base_model = VGG16(
-        weights='imagenet',  # Pre-trained on ImageNet
-        include_top=False,   # Exclude final classification layer
-        input_shape=input_shape
-    )
-    
-    # Freeze the base model layers (no training)
-    base_model.trainable = False
-    
-    # Create new model
-    model = keras.Sequential([
-        base_model,
-        layers.GlobalAveragePooling2D(),
-        layers.Dense(128, activation='relu'),
-        layers.Dropout(0.5),
-        layers.Dense(num_classes, activation='softmax')
-    ])
-    
-    return model, base_model
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Experienced Photo Editor</h4>
+                    <p>Imagine hiring someone to sort aerial photos into ten land types. A newcomer who has never looked carefully at a photograph needs thousands of examples to learn what texture or a straight edge even is. An experienced photo editor already sees textures, edges and color gradients without thinking; shown a few dozen examples per land type, they learn which combinations mean "forest" and which mean "industrial". The pretrained network is that editor. You only teach it the last step: how its existing vocabulary maps onto <em>your</em> labels.</p>
+                </div>
 
-# Create the model
-model_fe, base_model_fe = create_feature_extraction_model(num_classes=10)
+                <p>In code, a pretrained CNN splits into two parts: the <strong>backbone</strong>, all the convolutional layers that turn an image into a vector of features, and the <strong>head</strong>, the final layer that turns those features into ImageNet's 1,000 class scores. You throw the head away, attach a new one with your 10 classes, and decide how much of the backbone to let training change:</p>
 
-# Display model architecture
-print("Feature Extraction Model Summary:")
-print(f"Base model layers: {len(base_model_fe.layers)}")
-print(f"Trainable parameters: {sum([tf.size(w).numpy() for w in model_fe.trainable_weights])}")
-print(f"Non-trainable parameters: {sum([tf.size(w).numpy() for w in model_fe.non_trainable_weights])}")
+                <div class="mermaid">
+graph TD
+    A["Satellite tile, 3 × 128 × 128"] --> B["Pretrained backbone: ResNet-18"]
+    B --> C["512 features per image"]
+    C --> D["New head: Linear 512 to 10"]
+    D --> E["10 land-cover scores"]
+    F["Frozen: weights stay fixed"] -.-> B
+    G["Trained: your labels"] -.-> D
+                </div>
 
-# Compile model
-model_fe.compile(
-    optimizer='adam',
-    loss='sparse_categorical_crossentropy',
-    metrics=['accuracy']
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Strategy</th><th>What trains</th><th>When it fits</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Feature extraction</strong> (frozen backbone)</td><td>only the new head</td><td>little labeled data; images reasonably like photos. Fast: features can be computed once.</td></tr>
+                            <tr><td><strong>Fine-tuning</strong> (unfreeze the top blocks)</td><td>the head plus the last block or two, with a small learning rate</td><td>a few thousand labels or more, or images that differ from everyday photos</td></tr>
+                            <tr><td><strong>Full fine-tuning</strong></td><td>everything, starting from the pretrained weights</td><td>lots of data and a GPU; still usually better than random weights</td></tr>
+                            <tr><td><strong>From scratch</strong></td><td>everything, from random weights</td><td>huge datasets, or inputs nothing like photos (and even then, try transfer first)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>Most real image projects have hundreds or thousands of labeled examples, not millions, and labeling is the expensive part. Transfer learning is the default way to build an image model in practice, and the same idea powers modern language models: someone pays for the huge pretraining run once, everyone else adapts the result cheaply.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="setup" class="lesson-section">
+                <h2>📦 Data, Weights and the Cache</h2>
+
+                <p><strong>EuroSAT</strong> is a public dataset (MIT license) of 27,000 Sentinel-2 satellite tiles, each 64 × 64 pixels in RGB, in 10 land-cover classes. torchvision downloads it into <code>data/eurosat/</code> on first use (94 MB, about 186 MB once unpacked); afterwards <code>download=True</code> just finds the files.</p>
+
+                <p>The pretrained weights download separately the first time you create the model: 45 MB for ResNet-18, saved in PyTorch's cache folder (<code>.cache/torch/hub/checkpoints</code> inside your home folder, on Windows, macOS and Linux alike; set the <code>TORCH_HOME</code> environment variable to put it elsewhere). Every later run loads them from disk. Start with the weights object, because it knows how its images must be prepared:</p>
+
+                <pre><code class="language-python">import time
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, Subset, TensorDataset
+from torchvision import datasets, models, transforms
+
+weights = models.ResNet18_Weights.DEFAULT
+prep = weights.transforms()
+
+print(weights)
+print(prep)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>ResNet18_Weights.IMAGENET1K_V1
+ImageClassification(
+    crop_size=[224]
+    resize_size=[256]
+    mean=[0.485, 0.456, 0.406]
+    std=[0.229, 0.224, 0.225]
+    interpolation=InterpolationMode.BILINEAR
 )</code></pre>
+                </div>
 
-        <h2>Method 2: Fine-tuning</h2>
-        
-        <pre class="language-python"><code>def create_fine_tuning_model(input_shape=(224, 224, 3), num_classes=10):
-    """
-    Create a model for fine-tuning with selective layer unfreezing
-    """
-    # Load pre-trained ResNet50
-    base_model = ResNet50(
-        weights='imagenet',
-        include_top=False,
-        input_shape=input_shape
-    )
-    
-    # First, freeze all layers
-    base_model.trainable = False
-    
-    # Build the model
-    inputs = keras.Input(shape=input_shape)
-    
-    # Pre-processing for ResNet50
-    x = keras.applications.resnet50.preprocess_input(inputs)
-    
-    # Base model
-    x = base_model(x, training=False)
-    
-    # Custom top layers
-    x = layers.GlobalAveragePooling2D()(x)
-    x = layers.Dense(256, activation='relu')(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.5)(x)
-    outputs = layers.Dense(num_classes, activation='softmax')(x)
-    
-    model = keras.Model(inputs, outputs)
-    
-    return model, base_model
+                <p><code>DEFAULT</code> is an alias for the best weights torchvision offers for this architecture, here <code>IMAGENET1K_V1</code>. Write <code>weights=</code>; the old <code>pretrained=True</code> argument is deprecated (Common Mistakes shows the warning). The printed transform is the recipe the network was trained with: resize to 256, crop the center 224 × 224, scale to 0..1, then subtract the ImageNet channel means and divide by the standard deviations.</p>
 
-# Create fine-tuning model
-model_ft, base_model_ft = create_fine_tuning_model(num_classes=10)
+                <p>Look at the data first, without any transform, so the tiles show their real colors:</p>
 
-print("\nFine-tuning Model Created")
-print(f"Total layers: {len(model_ft.layers)}")
+                <pre><code class="language-python">import matplotlib.pyplot as plt
 
-# Function to unfreeze top layers for fine-tuning
-def unfreeze_top_layers(base_model, num_layers=20):
-    """
-    Unfreeze the top 'num_layers' for fine-tuning
-    """
-    # Freeze all layers first
-    base_model.trainable = True
-    
-    # Freeze all but the top num_layers
-    for layer in base_model.layers[:-num_layers]:
-        layer.trainable = False
-    
-    print(f"Unfroze top {num_layers} layers for fine-tuning")
-    
-    # Count trainable layers
-    trainable_count = sum([1 for layer in base_model.layers if layer.trainable])
-    print(f"Trainable layers in base model: {trainable_count}/{len(base_model.layers)}")
+raw = datasets.EuroSAT("data", download=True)
+print(len(raw), raw[0][0].size)
+print(raw.classes)
 
-# Example: Unfreeze top 20 layers for fine-tuning
-# This would typically be done after initial training
-# unfreeze_top_layers(base_model_ft, 20)</code></pre>
+first_of_each = [raw.targets.index(c) for c in range(10)]
+fig, axes = plt.subplots(2, 5, figsize=(9, 4.4), layout="constrained")
+for ax, i in zip(axes.flat, first_of_each):
+    img, label = raw[i]
+    ax.imshow(img)
+    ax.set_title(raw.classes[label], fontsize=9)
+    ax.axis("off")
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>27000 (64, 64)
+['AnnualCrop', 'Forest', 'HerbaceousVegetation', 'Highway', 'Industrial', 'Pasture', 'PermanentCrop', 'Residential', 'River', 'SeaLake']</code></pre>
+                </div>
 
-        <h2>Transfer Learning Workflow</h2>
-        
-        <div class="mermaid">
-        flowchart LR
-            A[Start] --> B[Load Pre-trained Model]
-            B --> C[Remove Top Layers]
-            C --> D[Add Custom Layers]
-            D --> E[Freeze Base Layers]
-            E --> F[Train on New Data<br/>High Learning Rate]
-            F --> G{Performance OK?}
-            
-            G -->|No| H[Unfreeze Top Layers]
-            H --> I[Continue Training<br/>Low Learning Rate]
-            I --> G
-            
-            G -->|Yes| J[Save Model]
-            J --> K[Deploy]
-            
-            style A fill:#f9f
-            style K fill:#9f9
+                <figure>
+                    <img src="images/deep_learning_transfer_samples.png" alt="Ten 64 by 64 satellite tiles, one per EuroSAT class: AnnualCrop with a patchwork of fields, dark green Forest, HerbaceousVegetation, a Highway crossing the tile, gray Industrial buildings, smooth green Pasture, PermanentCrop rows, a Residential street grid, a River and a dark SeaLake tile." width="990" height="484" loading="lazy">
+                    <figcaption>One tile per class. Textures and colors carry most of the signal: field stripes, street grids, water. Those are exactly what ImageNet features describe well.</figcaption>
+                </figure>
+
+                <p>EuroSAT has no official train/test split, so make a seeded one. To keep the lesson fast on a CPU, use 2,000 random tiles for training and 1,000 others for testing; the project adds 500 more for validation. That is a realistic "we labeled a couple of thousand images" situation, and it leaves 23,500 tiles you can add later to scale up.</p>
+
+                <pre><code class="language-python">order = torch.randperm(len(raw), generator=torch.Generator().manual_seed(42))
+train_idx, test_idx = order[:2000].tolist(), order[2000:3000].tolist()
+
+targets = torch.tensor(raw.targets)
+y_train, y_test = targets[train_idx], targets[test_idx]
+print(torch.bincount(y_train))
+print(f"majority-class baseline accuracy: {(y_test == y_train.mode().values).float().mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>tensor([208, 226, 233, 189, 188, 152, 183, 212, 183, 226])
+majority-class baseline accuracy: 0.106</code></pre>
+                </div>
+
+                <p>The classes are roughly balanced (the smallest, Pasture, has 2,000 tiles in the full set against 3,000 for the largest), so the do-nothing baseline is about 11% and accuracy is a sensible headline metric.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="weights" class="lesson-section">
+                <h2>🎨 Preparing Images the Way the Model Expects</h2>
+
+                <p>A pretrained network only works if new images look, numerically, like the images it learned from. Two rules matter:</p>
+                <ul>
+                    <li><strong>Normalize with the training statistics.</strong> The first layer's filters were tuned on pixels shifted by the ImageNet mean and scaled by its standard deviation, channel by channel. Feed it plain 0..1 pixels and every activation is off (mistake 4 measures how much it costs). Read the numbers from <code>prep.mean</code> and <code>prep.std</code> rather than typing them.</li>
+                    <li><strong>Keep objects at a sensible size.</strong> The full recipe resizes to 224 pixels. EuroSAT tiles are 64 pixels, and on a CPU every doubling of the side costs four times the computation. A compromise of 128 pixels works well here (Exercise 3 measures 64), and the center crop is skipped because satellite tiles have no "main object" in the middle.</li>
+                </ul>
+
+                <pre><code class="language-python">eurosat_tf = transforms.Compose([
+    transforms.Resize(128),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=prep.mean, std=prep.std),
+])
+eurosat = datasets.EuroSAT("data", download=True, transform=eurosat_tf)
+train_set, test_set = Subset(eurosat, train_idx), Subset(eurosat, test_idx)
+
+x0, label0 = train_set[0]
+print(tuple(x0.shape), eurosat.classes[label0])
+print(f"channel means after normalizing: {x0.mean(dim=(1, 2)).numpy().round(2)}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(3, 128, 128) Forest
+channel means after normalizing: [-1.01 -0.64  0.11]</code></pre>
+                </div>
+
+                <p>The tile is now a 3 × 128 × 128 tensor with values centered near zero, the form the network expects. Satellite images are greener and darker than the average ImageNet photo, so the means are not exactly zero, and that is fine: the statistics must be the ones the model was trained with, not your dataset's.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="scratch" class="lesson-section">
+                <h2>🎯 Baseline: A CNN from Scratch</h2>
+
+                <p>To know what transfer learning buys, first train a CNN from random weights on the same 2,000 tiles, using the Lesson 10.3 recipe with one more block for the bigger color images. The tiles are small, so decode them once into tensors at their native 64 pixels; a dataset that fits in memory never needs to reopen thousands of image files every epoch.</p>
+
+                <pre><code class="language-python">plain_tf = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=prep.mean, std=prep.std)])
+eurosat64 = datasets.EuroSAT("data", download=True, transform=plain_tf)
+X64_train = torch.stack([eurosat64[i][0] for i in train_idx])
+X64_test = torch.stack([eurosat64[i][0] for i in test_idx])
+print(tuple(X64_train.shape), tuple(X64_test.shape))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(2000, 3, 64, 64) (1000, 3, 64, 64)</code></pre>
+                </div>
+
+                <pre><code class="language-python">torch.manual_seed(42)
+scratch = nn.Sequential(
+    nn.Conv2d(3, 16, kernel_size=3, padding=1), nn.ReLU(), nn.MaxPool2d(2),
+    nn.Conv2d(16, 32, kernel_size=3, padding=1), nn.ReLU(), nn.MaxPool2d(2),
+    nn.Conv2d(32, 64, kernel_size=3, padding=1), nn.ReLU(), nn.MaxPool2d(2),
+    nn.Flatten(), nn.Linear(64 * 8 * 8, 10),
+)
+print(f"parameters: {sum(p.numel() for p in scratch.parameters()):,}")
+
+torch.manual_seed(42)
+loader = DataLoader(TensorDataset(X64_train, y_train), batch_size=64, shuffle=True)
+optimizer = torch.optim.Adam(scratch.parameters(), lr=1e-3)
+for epoch in range(1, 11):
+    scratch.train()
+    total = 0.0
+    for xb, yb in loader:
+        optimizer.zero_grad()
+        loss = nn.functional.cross_entropy(scratch(xb), yb)
+        loss.backward()
+        optimizer.step()
+        total += loss.item() * len(yb)
+    if epoch % 2 == 0:
+        print(f"epoch {epoch:2d}: train loss {total / len(y_train):.3f}")
+
+scratch.eval()
+with torch.no_grad():
+    scratch_acc = (scratch(X64_test).argmax(dim=1) == y_test).float().mean().item()
+print(f"from-scratch CNN test accuracy: {scratch_acc:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>parameters: 64,554
+epoch  2: train loss 1.435
+epoch  4: train loss 1.064
+epoch  6: train loss 0.908
+epoch  8: train loss 0.795
+epoch 10: train loss 0.629
+from-scratch CNN test accuracy: 0.719</code></pre>
+                </div>
+
+                <p>About 72% on the test tiles: far better than the 11% baseline, but the training loss is still falling after 10 epochs and the network has had only 2,000 examples to learn what a field, a road or a river looks like from scratch. More epochs and augmentation would help a little. The next section helps a lot more.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="features" class="lesson-section">
+                <h2>🧊 Frozen Features and a New Head</h2>
+
+                <p>Now the pretrained route. Load ResNet-18 with its ImageNet weights and look at its last layer:</p>
+
+                <pre><code class="language-python">backbone = models.resnet18(weights=weights)
+print(backbone.fc)
+print(f"parameters: {sum(p.numel() for p in backbone.parameters()):,}")
+
+backbone.fc = nn.Identity()
+backbone.eval()
+print(tuple(backbone(torch.zeros(2, 3, 128, 128)).shape))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>Linear(in_features=512, out_features=1000, bias=True)
+parameters: 11,689,512
+(2, 512)</code></pre>
+                </div>
+
+                <p>The head, <code>fc</code>, maps 512 features to 1,000 ImageNet classes. Replacing it with <code>nn.Identity()</code> (a layer that returns its input unchanged) turns the network into a feature extractor: every image becomes 512 numbers. <code>backbone.eval()</code> matters even though nothing will train: it makes the batch-normalization layers use their stored ImageNet statistics (mistake 5 shows what happens otherwise).</p>
+
+                <p>Because the backbone is frozen, each image's features never change. So compute them <strong>once</strong>, under <code>torch.inference_mode()</code> (a stricter, slightly faster <code>no_grad</code> for code that will never need gradients):</p>
+
+                <pre><code class="language-python">def extract(model, dataset, batch_size=100):
+    feats = []
+    with torch.inference_mode():
+        for xb, _ in DataLoader(dataset, batch_size=batch_size):
+            feats.append(model(xb))
+    return torch.cat(feats)
+
+
+start = time.perf_counter()
+F_train = extract(backbone, train_set)
+F_test = extract(backbone, test_set)
+print(f"features for {len(F_train) + len(F_test):,} tiles in {time.perf_counter() - start:.0f} s")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (your numbers will differ)</h4>
+                    <pre><code>features for 3,000 tiles in 13 s</code></pre>
+                </div>
+
+                <p>That is the expensive step, a few seconds per thousand tiles on a laptop CPU. Everything after it is fast, because the 3,000 tiles are now just a table of 512 numbers each. Train a new head, a single <code>nn.Linear(512, 10)</code>, on that table:</p>
+
+                <pre><code class="language-python">print(tuple(F_train.shape), tuple(F_test.shape))
+
+torch.manual_seed(42)
+head = nn.Linear(512, 10)
+optimizer = torch.optim.Adam(head.parameters(), lr=1e-3)
+loader = DataLoader(TensorDataset(F_train, y_train), batch_size=64, shuffle=True)
+for epoch in range(1, 31):
+    for fb, yb in loader:
+        optimizer.zero_grad()
+        nn.functional.cross_entropy(head(fb), yb).backward()
+        optimizer.step()
+
+with torch.no_grad():
+    head_acc = (head(F_test).argmax(dim=1) == y_test).float().mean().item()
+print(f"frozen ResNet-18 + linear head, test accuracy: {head_acc:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>(2000, 512) (1000, 512)
+frozen ResNet-18 + linear head, test accuracy: 0.913</code></pre>
+                </div>
+
+                <p>91% from one linear layer trained for a second or two, against 72% for the CNN that had to learn everything itself. Nothing in ResNet-18 ever saw a satellite image, yet its general-purpose features (textures, edges, colors, regular patterns) already separate forests from fields from water. Training changed only 5,130 numbers: 512 × 10 weights plus 10 biases.</p>
+
+                <div class="card card-success">
+                    <h4>✅ Features Are Just a Table</h4>
+                    <p>Once the features are extracted, everything from Modules 1 to 9 applies: logistic regression, cross-validation, pipelines, even k-nearest neighbors on the 512 numbers. The next section uses scikit-learn's <code>LogisticRegression</code> on them directly. Deep learning made the features; classic machine learning can take it from there.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="labels" class="lesson-section">
+                <h2>🏷️ How Many Labels Do You Need?</h2>
+
+                <p>Labeling satellite tiles costs someone's time. Before asking for more, measure how accuracy grows with the number of labeled training tiles. With cached features, each point on the curve takes a fraction of a second. The training tiles are already in random order, so the first <em>n</em> are a random sample:</p>
+
+                <pre><code class="language-python">from sklearn.linear_model import LogisticRegression
+
+sizes = [50, 100, 250, 500, 1000, 2000]
+curve = []
+for n in sizes:
+    clf = LogisticRegression(max_iter=2000).fit(F_train[:n].numpy(), y_train[:n].numpy())
+    curve.append(clf.score(F_test.numpy(), y_test.numpy()))
+    print(f"{n:5d} labeled tiles: test accuracy {curve[-1]:.3f}")
+
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.plot(sizes, curve, marker="o", color="#667eea", label="frozen ResNet-18 + logistic regression")
+ax.axhline(scratch_acc, color="black", linestyle="--", linewidth=1, label=f"CNN from scratch, 2,000 tiles ({scratch_acc:.2f})")
+ax.set_xscale("log")
+ax.set_xticks(sizes, [str(s) for s in sizes])
+ax.set_xlabel("Labeled training tiles (log scale)")
+ax.set_ylabel("Test accuracy")
+ax.set_title("Pretrained features need far fewer labels")
+ax.legend(loc="lower right")
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>   50 labeled tiles: test accuracy 0.632
+  100 labeled tiles: test accuracy 0.755
+  250 labeled tiles: test accuracy 0.839
+  500 labeled tiles: test accuracy 0.885
+ 1000 labeled tiles: test accuracy 0.895
+ 2000 labeled tiles: test accuracy 0.902</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/deep_learning_transfer_label_curve.png" alt="Line chart of test accuracy against the number of labeled training tiles on a log scale. The frozen ResNet-18 features with logistic regression rise steeply from 50 to 500 tiles and flatten near 0.9 at 2,000 tiles. A dashed line shows the from-scratch CNN trained on all 2,000 tiles, far below most of the curve." width="990" height="440" loading="lazy">
+                    <figcaption>With only 100 labeled tiles, frozen features already beat the from-scratch CNN trained on 2,000. The curve flattens after about 500 tiles.</figcaption>
+                </figure>
+
+                <p>Read the curve like a budget. Frozen features with 100 labeled tiles (75.5%) beat the from-scratch CNN with twenty times as many (71.9%). Beyond about 500 tiles the gains shrink: going from 1,000 to 2,000 labels adds less than one point. If Pinecrest wanted more accuracy, labeling another few thousand tiles for <em>this</em> model would buy little; fine-tuning, which lets the features themselves adapt, is the better next step. (A single 1,000-tile test set has a margin of error of about ±2 points, so read the small differences at the top of the curve loosely.)</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="finetune" class="lesson-section">
+                <h2>🔧 Light Fine-Tuning</h2>
+
+                <p>Frozen features are general-purpose: they were tuned to tell dogs from teapots, not pasture from herbaceous vegetation. <strong>Fine-tuning</strong> lets the top of the backbone adjust to your images. ResNet-18 is built from a stem (<code>conv1</code>, <code>bn1</code>) and four blocks, <code>layer1</code> to <code>layer4</code>, then <code>avgpool</code> and <code>fc</code>. The later blocks hold the most task-specific features, so they are the ones worth adapting; the early edge and color detectors are fine as they are.</p>
+
+                <p>Freezing is one attribute per weight tensor: <code>requires_grad = False</code> tells autograd not to compute its gradient, so the optimizer never changes it (and the backward pass skips the work). Build the model, freeze everything, give it a fresh head, then unfreeze <code>layer4</code>:</p>
+
+                <pre><code class="language-python">def count_trainable(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+torch.manual_seed(42)
+ft_model = models.resnet18(weights=weights)
+for p in ft_model.parameters():
+    p.requires_grad = False
+ft_model.fc = nn.Linear(ft_model.fc.in_features, 10)      # new layers are trainable by default
+print(f"head only      : {count_trainable(ft_model):,} trainable")
+
+for p in ft_model.layer4.parameters():
+    p.requires_grad = True
+print(f"head + layer4  : {count_trainable(ft_model):,} trainable of {sum(p.numel() for p in ft_model.parameters()):,}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>head only      : 5,130 trainable
+head + layer4  : 8,398,858 trainable of 11,181,642</code></pre>
+                </div>
+
+                <p>Two rules keep fine-tuning from destroying what you borrowed:</p>
+                <ul>
+                    <li><strong>Train the head first.</strong> A brand-new head starts with random weights, so its first gradients are large and noisy. Let it settle with the backbone frozen, then unfreeze.</li>
+                    <li><strong>Use a smaller learning rate for pretrained layers.</strong> They already hold good weights and only need nudging. An optimizer accepts <strong>parameter groups</strong>, each with its own learning rate:</li>
+                </ul>
+
+                <pre><code class="language-python">optimizer = torch.optim.Adam([
+    {"params": ft_model.layer4.parameters(), "lr": 1e-4},
+    {"params": ft_model.fc.parameters(), "lr": 1e-3},
+])
+for group in optimizer.param_groups:
+    print(group["lr"], sum(p.numel() for p in group["params"]))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>0.0001 8393728
+0.001 5130</code></pre>
+                </div>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Batch Normalization During Fine-Tuning</h4>
+                    <p><code>model.train()</code> switches every batch-normalization layer to batch statistics and lets it update its stored running averages, <em>even in frozen blocks</em>, because those averages are not gradients. That is usually harmless with batches of 64, and it even adapts the statistics to satellite images. With very small batches (under about 16), keep the frozen parts in eval mode: call <code>model.train()</code> and then <code>.eval()</code> on the frozen submodules. While only the head trains, the simplest correct choice is to leave the whole model in <code>eval()</code> mode: gradients still flow into the head, because <code>eval()</code> changes layer behavior, not gradient tracking.</p>
+                </div>
+
+                <p>Fine-tuning has to run the full backbone forward and part of it backward for every batch of every epoch, so it costs much more than the cached-feature head. On a CPU, one epoch over 2,000 tiles at 128 pixels takes 15 to 30 seconds; on a GPU, a second or two. The project runs it: two epochs for the head, then two with <code>layer4</code> unfrozen.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Scaling Up on a GPU</h4>
+                    <p>With a CUDA GPU, move the model and each batch to <code>"cuda"</code> (Lesson 10.3, Scaling Up), use all 27,000 tiles at the full 224-pixel recipe from <code>weights.transforms()</code>, add training-only augmentation (random flips and 90-degree rotations suit satellite images, which have no "up"), unfreeze <code>layer3</code> as well, and train for 5 to 10 epochs. Published results on EuroSAT with fine-tuned ImageNet CNNs reach the high 90s in accuracy.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Transfer learning fails quietly more often than loudly: three of these five mistakes run without an error.</p>
+
+                <h3>1. Using the Old pretrained=True Argument</h3>
+
+                <pre><code class="language-python">import warnings
+
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    old_style = models.resnet18(pretrained=True)
+
+print(caught[0].category.__name__)
+print(caught[0].message)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>UserWarning
+The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> older tutorials (and older lessons) load weights with <code>pretrained=True</code>. It still works for now, with a warning, but it is scheduled for removal and cannot say <em>which</em> weights you want. <strong>Fix:</strong> <code>models.resnet18(weights=models.ResNet18_Weights.DEFAULT)</code>, or name a specific version such as <code>IMAGENET1K_V1</code> when you need results to stay reproducible.</p>
+
+                <h3>2. Feeding a Grayscale Image to an RGB Network</h3>
+
+                <pre data-raises="RuntimeError"><code class="language-python">gray_batch = torch.zeros(1, 1, 128, 128)
+backbone(gray_batch)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>RuntimeError: Given groups=1, weight of size [64, 3, 7, 7], expected input[1, 1, 128, 128] to have 3 channels, but got 1 channels instead</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the first convolution of an ImageNet model has 64 filters that each span 3 color channels, and your image has 1. You would hit this trying to reuse ResNet on Fashion-MNIST. <strong>Fix:</strong> repeat the gray channel three times, with <code>transforms.Grayscale(num_output_channels=3)</code> in the transform or <code>x.repeat(1, 3, 1, 1)</code> on a batch.</p>
+
+                <h3>3. Freezing the New Head Too</h3>
+
+                <pre data-raises="RuntimeError"><code class="language-python">frozen_all = models.resnet18(weights=weights)
+frozen_all.fc = nn.Linear(512, 10)
+for p in frozen_all.parameters():          # runs AFTER the new head was attached
+    p.requires_grad = False
+
+loss = nn.functional.cross_entropy(frozen_all(torch.zeros(2, 3, 128, 128)), torch.tensor([0, 1]))
+loss.backward()</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>RuntimeError: element 0 of tensors does not require grad and does not have a grad_fn</code></pre>
+                </div>
+                <p><strong>What it means:</strong> nothing in the model needs a gradient, so there is nothing for <code>backward()</code> to compute. If an optimizer had only some of the parameters, the symptom would instead be a loss that never moves. <strong>Fix:</strong> freeze first, then attach the new head (new layers are trainable by default), and check with <code>count_trainable(model)</code> before training.</p>
+
+                <h3>4. Skipping the ImageNet Normalization</h3>
+
+                <p>Extract features for the first 1,000 training tiles and 500 test tiles with only <code>ToTensor()</code>, and compare a logistic-regression head with the same tiles' properly normalized features:</p>
+
+                <pre><code class="language-python">unnorm = datasets.EuroSAT("data", download=True,
+                          transform=transforms.Compose([transforms.Resize(128), transforms.ToTensor()]))
+U_train = extract(backbone, Subset(unnorm, train_idx[:1000]))
+U_test = extract(backbone, Subset(unnorm, test_idx[:500]))
+
+for name, (a, b) in {"normalized": (F_train[:1000], F_test[:500]), "not normalized": (U_train, U_test)}.items():
+    clf = LogisticRegression(max_iter=2000).fit(a.numpy(), y_train[:1000].numpy())
+    print(f"{name:15s} test accuracy {clf.score(b.numpy(), y_test[:500].numpy()):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>normalized      test accuracy 0.894
+not normalized  test accuracy 0.840</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the unnormalized features cost more than 5 points of accuracy (0.840 against 0.894) without any warning. The network still produces 512 numbers per tile, they are just computed from inputs on a different scale than its filters were trained for, so they describe the tiles less well. <strong>Fix:</strong> always build the transform from the weights' own <code>mean</code> and <code>std</code>, and check one batch's channel means after loading, as the lesson did.</p>
+
+                <h3>5. Extracting Features in Training Mode</h3>
+
+                <pre><code class="language-python">probe = models.resnet18(weights=weights)
+probe.fc = nn.Identity()
+tiles = torch.stack([train_set[i][0] for i in range(8)])
+
+before = probe.bn1.running_mean.clone()
+probe.train()
+with torch.no_grad():
+    in_batch_of_8 = probe(tiles)[0]
+    in_batch_of_2 = probe(tiles[:2])[0]
+print("same tile, same features?", torch.allclose(in_batch_of_8, in_batch_of_2, atol=1e-4))
+print("stored ImageNet statistics changed?", not torch.equal(before, probe.bn1.running_mean))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>same tile, same features? False
+stored ImageNet statistics changed? True</code></pre>
+                </div>
+                <p><strong>What happened:</strong> a freshly created model is in training mode, where batch normalization normalizes with the statistics of the current batch. The features for one tile then depend on which other tiles share its batch, and every forward pass quietly overwrites the stored ImageNet statistics, even under <code>no_grad</code>. <strong>Fix:</strong> call <code>model.eval()</code> before extracting features or predicting, as the lesson did with <code>backbone.eval()</code>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: A Land-Cover Classifier</h2>
+
+                <p>Build the classifier the way you would ship it: one model object that takes a tile and returns a class, trained in two stages (head first, then <code>layer4</code>), with a validation set to watch progress, one final test, per-class results and a saved <code>state_dict</code>. Work in a new notebook called <code>lesson_10_5_project</code>; it starts from scratch. Allow about 45 minutes, including about a minute of training on a CPU.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Data, split and loaders <span class="step-time">(5 min)</span></h3>
+                    <p>Same seeded order as the lesson, so the training and test tiles are the same; the next 500 tiles become a validation set.</p>
+                    <pre><code class="language-python">import copy
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, Subset
+from torchvision import datasets, models, transforms
+
+weights = models.ResNet18_Weights.DEFAULT
+prep = weights.transforms()
+tf = transforms.Compose([transforms.Resize(128), transforms.ToTensor(),
+                         transforms.Normalize(mean=prep.mean, std=prep.std)])
+eurosat = datasets.EuroSAT("data", download=True, transform=tf)
+classes = eurosat.classes
+
+order = torch.randperm(len(eurosat), generator=torch.Generator().manual_seed(42)).tolist()
+train_set = Subset(eurosat, order[:2000])
+test_set = Subset(eurosat, order[2000:3000])
+val_set = Subset(eurosat, order[3000:3500])
+
+torch.manual_seed(42)
+train_loader = DataLoader(train_set, batch_size=64, shuffle=True)
+val_loader = DataLoader(val_set, batch_size=100)
+test_loader = DataLoader(test_set, batch_size=100)
+print(len(train_set), len(val_set), len(test_set))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>2000 500 1000</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: The model: pretrained backbone, new head <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">torch.manual_seed(42)
+model = models.resnet18(weights=weights)
+for p in model.parameters():
+    p.requires_grad = False
+model.fc = nn.Linear(model.fc.in_features, len(classes))
+
+
+def count_trainable(m):
+    return sum(p.numel() for p in m.parameters() if p.requires_grad)
+
+
+def accuracy(m, loader):
+    m.eval()
+    correct = 0
+    with torch.no_grad():
+        for xb, yb in loader:
+            correct += (m(xb).argmax(dim=1) == yb).sum().item()
+    return correct / len(loader.dataset)
+
+
+print(f"trainable parameters: {count_trainable(model):,}")
+print(f"validation accuracy before training: {accuracy(model, val_loader):.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>trainable parameters: 5,130
+validation accuracy before training: 0.164</code></pre>
+                    </div>
+                    <p>Before any training the random head scores 16%, close to the 10% of pure guessing, as it should.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Stage 1, train the head <span class="step-time">(10 min)</span></h3>
+                    <p>One reusable training function. In stage 1 the whole model stays in <code>eval()</code> mode (the backbone is frozen, so its batch-norm statistics must not move), and gradients still reach the head.</p>
+                    <pre><code class="language-python">def train_epochs(m, optimizer, epochs, train_mode):
+    loss_fn = nn.CrossEntropyLoss()
+    for epoch in range(1, epochs + 1):
+        m.train() if train_mode else m.eval()
+        total = 0.0
+        for xb, yb in train_loader:
+            optimizer.zero_grad()
+            loss = loss_fn(m(xb), yb)
+            loss.backward()
+            optimizer.step()
+            total += loss.item() * len(yb)
+        print(f"  epoch {epoch}: train loss {total / len(train_set):.3f}  validation accuracy {accuracy(m, val_loader):.3f}")
+
+
+print("stage 1: head only")
+train_epochs(model, torch.optim.Adam(model.fc.parameters(), lr=1e-3), epochs=2, train_mode=False)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output (yours may vary slightly)</h4>
+                        <pre><code>stage 1: head only
+  epoch 1: train loss 1.617  validation accuracy 0.824
+  epoch 2: train loss 0.813  validation accuracy 0.876</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Stage 2, fine-tune layer4 <span class="step-time">(10 min)</span></h3>
+                    <p>Unfreeze the last block, give it a learning rate ten times smaller than the head's, and train in <code>train()</code> mode. Keep a copy of the stage-1 weights so you can fall back if fine-tuning makes validation accuracy worse.</p>
+                    <pre><code class="language-python">stage1_state = copy.deepcopy(model.state_dict())
+stage1_val = accuracy(model, val_loader)
+
+for p in model.layer4.parameters():
+    p.requires_grad = True
+print(f"stage 2: head + layer4 ({count_trainable(model):,} trainable)")
+
+optimizer = torch.optim.Adam([
+    {"params": model.layer4.parameters(), "lr": 1e-4},
+    {"params": model.fc.parameters(), "lr": 1e-3},
+])
+train_epochs(model, optimizer, epochs=2, train_mode=True)
+
+stage2_val = accuracy(model, val_loader)
+if stage2_val &lt; stage1_val:
+    model.load_state_dict(stage1_state)
+print(f"validation: stage 1 {stage1_val:.3f}, stage 2 {stage2_val:.3f}; keeping stage {1 if stage2_val &lt; stage1_val else 2}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output (yours may vary slightly)</h4>
+                        <pre><code>stage 2: head + layer4 (8,398,858 trainable)
+  epoch 1: train loss 0.592  validation accuracy 0.894
+  epoch 2: train loss 0.080  validation accuracy 0.924
+validation: stage 1 0.876, stage 2 0.924; keeping stage 2</code></pre>
+                    </div>
+                    <p>The head alone reached 87.6% validation accuracy in two epochs (a little below the cached-feature head, which had 30 epochs). Letting <code>layer4</code> adapt pushed validation accuracy to 92.4%, so the code keeps stage 2. The training loss falling to 0.080 while validation accuracy is 0.924 is a sign that more epochs would start to overfit 2,000 tiles: two is enough here.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Test once, class by class <span class="step-time">(10 min)</span></h3>
+                    <pre><code class="language-python">import matplotlib.pyplot as plt
+from sklearn.metrics import ConfusionMatrixDisplay
+
+model.eval()
+preds, truth = [], []
+with torch.no_grad():
+    for xb, yb in test_loader:
+        preds.append(model(xb).argmax(dim=1))
+        truth.append(yb)
+preds, truth = torch.cat(preds), torch.cat(truth)
+
+test_acc = (preds == truth).float().mean().item()
+print(f"test accuracy: {test_acc:.3f}")
+per_class = {name: (preds[truth == c] == c).float().mean().item() for c, name in enumerate(classes)}
+for name, acc in sorted(per_class.items(), key=lambda item: item[1])[:3]:
+    print(f"  {name:22s} {acc:.3f}")
+
+fig, ax = plt.subplots(figsize=(8, 7), layout="constrained")
+ConfusionMatrixDisplay.from_predictions(truth.numpy(), preds.numpy(), display_labels=classes,
+                                        xticks_rotation="vertical", colorbar=False, ax=ax)
+ax.set_title("Fine-tuned ResNet-18 on 1,000 EuroSAT test tiles")
+plt.show()</code></pre>
+                    <div class="card card-output">
+                        <h4>Output (yours may vary slightly)</h4>
+                        <pre><code>test accuracy: 0.928
+  Highway                0.808
+  River                  0.867
+  Pasture                0.907</code></pre>
+                    </div>
+                    <figure>
+                        <img src="images/deep_learning_transfer_confusion.png" alt="Confusion matrix of the fine-tuned ResNet-18 on 1,000 EuroSAT test tiles. Almost all counts lie on the diagonal; the few errors are between vegetation and crop classes and between highway and river." width="880" height="770" loading="lazy">
+                        <figcaption>Almost everything sits on the diagonal. The largest error is highways read as rivers (12 tiles): both are long, thin lines across the tile. Crop and vegetation classes trade a few tiles too.</figcaption>
+                    </figure>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save, reload and summarize <span class="step-time">(5 min)</span></h3>
+                    <p>Save only the weights. To load them, rebuild the same architecture (ResNet-18 with a 10-class head; no need to download the ImageNet weights again, so <code>weights=None</code>) and load the file with <code>weights_only=True</code>.</p>
+                    <pre><code class="language-python">torch.save(model.state_dict(), "landcover_resnet18.pt")
+
+restored = models.resnet18(weights=None)
+restored.fc = nn.Linear(512, len(classes))
+restored.load_state_dict(torch.load("landcover_resnet18.pt", weights_only=True))
+restored.eval()
+
+with torch.no_grad():
+    tile, label = test_set[0]
+    probs = torch.softmax(restored(tile.unsqueeze(0)), dim=1)[0]
+print(f"first test tile: predicted {classes[probs.argmax()]} ({probs.max():.0%}), true {classes[label]}")
+
+print(f"""Land-cover classifier
+Labeled tiles      : {len(train_set):,} train, {len(val_set)} validation, {len(test_set):,} test
+Backbone           : ResNet-18, ImageNet weights, layer4 fine-tuned
+Test accuracy      : {test_acc:.3f}
+Weakest class      : {min(per_class, key=per_class.get)} ({min(per_class.values()):.3f})
+Saved              : landcover_resnet18.pt""")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output (yours may vary slightly)</h4>
+                        <pre><code>first test tile: predicted PermanentCrop (100%), true PermanentCrop
+Land-cover classifier
+Labeled tiles      : 2,000 train, 500 validation, 1,000 test
+Backbone           : ResNet-18, ImageNet weights, layer4 fine-tuned
+Test accuracy      : 0.928
+Weakest class      : Highway (0.808)
+Saved              : landcover_resnet18.pt</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Your split has 2,000 training, 500 validation and 1,000 test tiles from one seeded permutation</li>
+                        <li>Before stage 1 only the new head (5,130 parameters) is trainable, and validation accuracy is near chance</li>
+                        <li>Stage 2 unfroze <code>layer4</code> with a learning rate ten times smaller than the head's</li>
+                        <li>You chose between stage 1 and stage 2 on validation accuracy, then used the test set once</li>
+                        <li>You reported per-class accuracy and looked at the confusion matrix</li>
+                        <li><code>landcover_resnet18.pt</code> reloads into a fresh ResNet-18 with <code>weights_only=True</code></li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue from the lesson's notebook (not the project), so <code>weights</code>, <code>raw</code>, <code>eurosat</code>, <code>train_idx</code>, <code>test_idx</code>, <code>y_train</code>, <code>y_test</code>, <code>F_train</code>, <code>F_test</code> and <code>extract</code> already exist. If you are in the project notebook instead, rerun the lesson's setup blocks first.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: What Does ImageNet Think a Satellite Tile Is?</h3>
+                    <p>Load ResNet-18 with its original 1,000-class head and ask it about the first five test tiles. Print the top ImageNet category for each next to the true EuroSAT class. The names are in <code>weights.meta["categories"]</code>. What does this say about why you need a new head?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Do not replace <code>fc</code> this time. Remember <code>.eval()</code>, and index the categories list with <code>argmax</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">imagenet_model = models.resnet18(weights=weights).eval()
+categories = weights.meta["categories"]
+
+with torch.no_grad():
+    logits = imagenet_model(torch.stack([eurosat[i][0] for i in test_idx[:5]]))
+for i, guess in zip(test_idx[:5], logits.argmax(dim=1)):
+    print(f"{eurosat.classes[eurosat.targets[i]]:22s} -&gt; ImageNet says: {categories[guess]}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>PermanentCrop          -&gt; ImageNet says: balloon
+Industrial             -&gt; ImageNet says: vending machine
+Highway                -&gt; ImageNet says: corkscrew
+HerbaceousVegetation   -&gt; ImageNet says: dam
+SeaLake                -&gt; ImageNet says: jellyfish</code></pre>
+                        </div>
+                        <p>The original network does its best with the 1,000 everyday categories it knows: a lake becomes a jellyfish, a highway a corkscrew. Its features are useful, but its final layer answers the wrong question. That is exactly why transfer learning keeps the backbone and replaces the head.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: A Smaller Backbone</h3>
+                    <p>Repeat the frozen-feature experiment with <code>models.mobilenet_v3_small</code> and its <code>MobileNet_V3_Small_Weights.DEFAULT</code> weights (a 10 MB download), a network designed for phones. Its head is <code>model.classifier</code>; replace that with <code>nn.Identity()</code>. Fit <code>LogisticRegression(max_iter=2000)</code> on the features and compare accuracy, feature size and extraction time with ResNet-18.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Its weights use the same ImageNet mean and standard deviation, so <code>train_set</code> and <code>test_set</code> can be reused as they are. Time the extraction with <code>time.perf_counter()</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">mobile = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+mobile.classifier = nn.Identity()
+mobile.eval()
+
+start = time.perf_counter()
+M_train, M_test = extract(mobile, train_set), extract(mobile, test_set)
+mobile_seconds = time.perf_counter() - start
+
+mobile_clf = LogisticRegression(max_iter=2000).fit(M_train.numpy(), y_train.numpy())
+print(f"MobileNetV3-small features: {M_train.shape[1]}, test accuracy {mobile_clf.score(M_test.numpy(), y_test.numpy()):.3f}")
+print(f"parameters: {sum(p.numel() for p in mobile.parameters()):,}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output (yours may vary slightly)</h4>
+                            <pre><code>MobileNetV3-small features: 576, test accuracy 0.913
+parameters: 927,008</code></pre>
+                        </div>
+                        <p>MobileNetV3-small has about 12 times fewer parameters than ResNet-18 (0.9 million against 11.7 million) and extracts its features roughly twice as fast on a CPU, yet its head scores about the same, 91.3% against 90.2% for ResNet-18 with the same logistic regression. For a phone app or a tight CPU budget, a small backbone is often the right call. Check on your own data: rankings between backbones change from task to task.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Does Resolution Matter?</h3>
+                    <p>Extract ResNet-18 features at the tiles' native 64 pixels (no <code>Resize</code>) and compare a logistic-regression head with the 128-pixel features. Before running it, predict: better, worse or the same?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Build a dataset with only <code>ToTensor()</code> and <code>Normalize</code>, wrap it in <code>Subset</code> with <code>train_idx</code> and <code>test_idx</code>, and reuse <code>extract(backbone, ...)</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">native = datasets.EuroSAT("data", download=True, transform=plain_tf)
+N_train, N_test = extract(backbone, Subset(native, train_idx)), extract(backbone, Subset(native, test_idx))
+
+for name, (a, b) in {"64 px": (N_train, N_test), "128 px": (F_train, F_test)}.items():
+    clf = LogisticRegression(max_iter=2000).fit(a.numpy(), y_train.numpy())
+    print(f"{name:7s} test accuracy {clf.score(b.numpy(), y_test.numpy()):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output (yours may vary slightly)</h4>
+                            <pre><code>64 px   test accuracy 0.883
+128 px  test accuracy 0.902</code></pre>
+                        </div>
+                        <p>Native 64-pixel tiles score 88.3% against 90.2% at 128 pixels, and extract about four times faster. Upscaling adds no new detail, but it makes objects closer to the size the ImageNet filters were trained on, and leaves more than a 2 × 2 grid of positions after ResNet's five halvings. Whether 1.9 points is worth four times the compute is a business decision, not a technical one.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Search by Similarity (Stretch)</h3>
+                    <p>Features are also a similarity measure. For the first test tile, find the five training tiles whose ResNet-18 features have the highest cosine similarity, and plot the query next to them with their classes. This is the core of "find similar images" search, with no extra training at all.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>torch.nn.functional.cosine_similarity(F_test[0:1], F_train)</code> gives one similarity per training tile; <code>.topk(5)</code> returns the best values and their positions. Use the untransformed <code>raw</code> dataset to display tiles.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">sims = nn.functional.cosine_similarity(F_test[0:1], F_train)
+best = sims.topk(5)
+print("query:", raw.classes[y_test[0]])
+print("neighbors:", [raw.classes[y_train[j]] for j in best.indices])
+print("similarity:", best.values.numpy().round(2))
+
+fig, axes = plt.subplots(1, 6, figsize=(9, 2), layout="constrained")
+axes[0].imshow(raw[test_idx[0]][0])
+axes[0].set_title("query", fontsize=9)
+for ax, j, s in zip(axes[1:], best.indices.tolist(), best.values.tolist()):
+    ax.imshow(raw[train_idx[j]][0])
+    ax.set_title(f"{raw.classes[y_train[j]]}\n{s:.2f}", fontsize=8)
+for ax in axes:
+    ax.axis("off")
+plt.show()</code></pre>
+                        <div class="card card-output">
+                            <h4>Output (yours may vary slightly)</h4>
+                            <pre><code>query: PermanentCrop
+neighbors: ['PermanentCrop', 'PermanentCrop', 'PermanentCrop', 'PermanentCrop', 'PermanentCrop']
+similarity: [0.86 0.85 0.85 0.83 0.82]</code></pre>
+                        </div>
+                        <p>All five nearest neighbors share the query's class, with cosine similarities around 0.85. A "find similar tiles" feature, or a quick check of whether your labels are consistent, needs nothing more than the features you already have.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> Why does the lesson replace <code>backbone.fc</code> with <code>nn.Identity()</code> before extracting features?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Freezing is done with requires_grad. What does the fc layer output, and what do you want instead?">
+                                A) To freeze the backbone so its weights do not change
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Identity has no weights at all and changes nothing it receives. What would the model output if fc were still there?">
+                                B) To add a trainable layer for the 10 EuroSAT classes
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="fc turns the 512 features into 1,000 ImageNet class scores. With an identity layer in its place, the network outputs the 512 features themselves, which a new head can learn from.">
+                                C) So the network outputs its 512 features instead of 1,000 ImageNet class scores
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_model = models.resnet18(weights=None)
+for p in quiz_model.parameters():
+    p.requires_grad = False
+quiz_model.fc = nn.Linear(512, 10)
+print(sum(p.numel() for p in quiz_model.parameters() if p.requires_grad))</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Everything existing was frozen first, then a brand-new Linear(512, 10) was attached. New layers are trainable by default: 512 x 10 weights + 10 biases = 5,130.">
+                                A) <code>5130</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The loop ran before fc was replaced. Is the new layer covered by that loop?">
+                                B) <code>0</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="That would be the whole network. Which parameters were frozen?">
+                                C) <code>11181642</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> When is training a CNN from scratch most likely to beat transfer learning from ImageNet?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The label curve in this lesson showed the opposite for small datasets. Which approach won with few labels?">
+                                A) When you have only a few hundred labeled images
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Pretrained features help most when data is scarce and images resemble photos. With a very large labeled dataset of images unlike everyday photos, learning features from scratch can catch up and win, although starting from pretrained weights is still worth trying.">
+                                B) When you have a very large labeled dataset of images that look nothing like everyday photos
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Satellite tiles were exactly this case here. How did the from-scratch baseline compare?">
+                                C) Whenever the images are small, like 64 by 64 tiles
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> In stage 2 of the project, <code>layer4</code> gets a learning rate of 1e-4 while the head gets 1e-3. Why?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Speed is not the issue: both groups are updated in every step. What do the layer4 weights already contain?">
+                                A) Smaller learning rates make each epoch run faster
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="layer4 already holds useful pretrained weights that only need small adjustments; large steps could wreck them before the model benefits. The new head starts from random weights and needs bigger steps.">
+                                B) The pretrained weights are already good and only need nudging; big steps could destroy them
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Adam accepts several parameter groups with different settings. Why would you want the groups to differ?">
+                                C) Adam requires different learning rates for different layers
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> Why must EuroSAT tiles be normalized with the ImageNet mean and standard deviation from <code>prep</code>, and not with EuroSAT's own statistics?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="The pretrained filters were learned on inputs scaled with the ImageNet statistics. Using the same scaling makes new images look numerically like the training images, which is what the weights expect.">
+                                A) The pretrained weights were learned on inputs scaled with exactly those numbers
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Normalization rescales pixel values; it does not change the image size. What did the network see during its own training?">
+                                B) It resizes the tiles to the size ResNet expects
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Statistics from your own data are not a leak if they come from the training set. The issue is about what the pretrained model expects. What was it trained on?">
+                                C) Using EuroSAT's statistics would leak the test set into training
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Which pretrained model should I start with?</summary>
+                    <p>Start small and fast: ResNet-18 or MobileNetV3 give a strong baseline in minutes on a CPU. If accuracy matters more than speed and you have a GPU, try a larger model from the same family (ResNet-50, EfficientNet, ConvNeXt or a vision transformer). torchvision lists every model with its weights, ImageNet accuracy and size in its documentation, and <code>weights.meta</code> holds the same numbers in code.</p>
+                </details>
+                <details>
+                    <summary>Can I use pretrained weights in a commercial product?</summary>
+                    <p>Check the license of both the weights and the data they were trained on. torchvision's documentation states the terms for its weights, and some model families use more restrictive licenses than the code that loads them. The datasets in this lesson (EuroSAT, MIT license) and the course data are fine for learning.</p>
+                </details>
+                <details>
+                    <summary>Does transfer learning work for text and tabular data too?</summary>
+                    <p>For text, yes, and it is how modern language models are used: a model pretrained on huge amounts of text is adapted to your task. For tabular data like Pinecrest's customer table there is no comparable "ImageNet of tables", because every table has different columns. Gradient boosting (Lesson 5.3) remains the strong default there.</p>
+                </details>
+                <details>
+                    <summary>Why not just compute features once and stop there?</summary>
+                    <p>Often that is the right answer: it is fast, cheap and, as the label curve showed, very strong with few labels. Fine-tune when you have enough data that the features themselves can improve, when your images differ a lot from photos, or when the last few points of accuracy are worth the extra training time. The project's validation check is how you decide on evidence rather than by default.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Go back to Fashion-MNIST from Lesson 10.3 and try transfer learning there: grayscale to 3 channels, resize to 64 or 96 pixels, ImageNet normalization, frozen ResNet-18 features on 5,000 training images, logistic-regression head. Does it beat your from-scratch <code>FashionCNN</code>? Clothing on a black background is far from ImageNet photos and far from satellite tiles, so the answer is not obvious. Write down your prediction first, then explain the result using the decision table at the top of this lesson.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain the experienced photo editor in your own words, using the words backbone, head, frozen and fine-tune. Then write the three accuracies from today side by side (CNN from scratch, frozen features, fine-tuned) and the number of labeled tiles at which frozen features passed the from-scratch CNN. If Pinecrest asked you whether to pay for 5,000 more labels, what would you answer, and what evidence would you show?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Transfer learning reuses a backbone trained on a large dataset and trains only what is specific to your task</li>
+                        <li>Load weights with <code>models.resnet18(weights=models.ResNet18_Weights.DEFAULT)</code>; <code>weights.transforms()</code> tells you the expected preprocessing</li>
+                        <li>Normalize with the weights' own mean and standard deviation, and match channels (3 for ImageNet models)</li>
+                        <li>Replace the head (<code>fc</code> or <code>classifier</code>) with <code>nn.Identity()</code> for features, or with a new <code>nn.Linear</code> for your classes</li>
+                        <li>With a frozen backbone, compute features once in <code>eval()</code> mode under <code>torch.inference_mode()</code>; any classifier can learn from them</li>
+                        <li>Fine-tune in stages: head first, then unfreeze the last block with a smaller learning rate, and keep the result only if validation improves</li>
+                        <li>A label curve tells you whether more labeled data is worth paying for</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You beat a from-scratch CNN with a pretrained backbone and a single linear layer</li>
+                        <li>You measured how accuracy grows with the number of labels, from 50 tiles to 2,000</li>
+                        <li>You froze, unfroze and fine-tuned a ResNet-18 with parameter groups, choosing the stage on validation data</li>
+                        <li>You met five transfer-learning mistakes, three of them silent, and know how to spot each</li>
+                        <li>You shipped a saved land-cover classifier that reloads safely</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>That completes Module 10. In <a href="nlp_text_preprocessing.html"><strong>Lesson 11.1: Text Classification</strong></a> you will turn Pinecrest's 4,000 product reviews into features with TF-IDF and train a sentiment classifier, and see why the word "not" matters so much. The idea from today carries over: good features first, then a simple, well-validated model on top.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>landcover_resnet18.pt</code>; Lesson 12.1 is about saving, versioning and tracking models like it.</li>
+                    <li>Rerun the project's stage 2 with <code>layer3</code> unfrozen as well (learning rate 1e-4). Does validation accuracy improve enough to justify the extra time per epoch?</li>
+                    <li>Look up the ResNet-18 entry in torchvision's model documentation and find its ImageNet accuracy. Then check <code>weights.meta</code> in code and confirm they match.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>A few lessons ago you wrote a neuron from scratch; today you adapted an eleven-million-parameter network to a brand-new problem with a couple of thousand examples, and you measured, rather than assumed, what each choice was worth. That combination, borrowing powerful tools and checking them honestly against a baseline, is what professional machine learning looks like. Congratulations on finishing the deep-learning module.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="deep_learning_rnn.html" class="prev-lesson">← Previous: Sequence Models</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="nlp_text_preprocessing.html" class="next-lesson">Next: Text Classification →</a>
+            </nav>
         </div>
-
-        <h2>Practical Example: Custom Image Classifier</h2>
-        
-        <pre class="language-python"><code>class TransferLearningClassifier:
-    """
-    Complete transfer learning pipeline for image classification
-    """
-    
-    def __init__(self, num_classes, input_shape=(224, 224, 3)):
-        self.num_classes = num_classes
-        self.input_shape = input_shape
-        self.model = None
-        self.base_model = None
-        self.history = None
-        
-    def build_model(self, base_model_name='MobileNetV2'):
-        """
-        Build model with specified pre-trained base
-        """
-        # Select base model
-        if base_model_name == 'MobileNetV2':
-            self.base_model = MobileNetV2(
-                weights='imagenet',
-                include_top=False,
-                input_shape=self.input_shape
-            )
-            preprocess_func = tf.keras.applications.mobilenet_v2.preprocess_input
-        elif base_model_name == 'VGG16':
-            self.base_model = VGG16(
-                weights='imagenet',
-                include_top=False,
-                input_shape=self.input_shape
-            )
-            preprocess_func = tf.keras.applications.vgg16.preprocess_input
-        else:
-            raise ValueError(f"Unknown base model: {base_model_name}")
-        
-        # Freeze base model
-        self.base_model.trainable = False
-        
-        # Build complete model
-        inputs = keras.Input(shape=self.input_shape)
-        x = preprocess_func(inputs)
-        x = self.base_model(x, training=False)
-        x = layers.GlobalAveragePooling2D()(x)
-        x = layers.Dense(128, activation='relu')(x)
-        x = layers.Dropout(0.5)(x)
-        outputs = layers.Dense(self.num_classes, activation='softmax')(x)
-        
-        self.model = keras.Model(inputs, outputs)
-        
-        print(f"Model built with {base_model_name} backbone")
-        print(f"Output classes: {self.num_classes}")
-        
-    def compile_model(self, learning_rate=0.001):
-        """
-        Compile the model with appropriate settings
-        """
-        self.model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-            loss='sparse_categorical_crossentropy',
-            metrics=['accuracy']
-        )
-        print(f"Model compiled with learning rate: {learning_rate}")
-        
-    def train_feature_extraction(self, train_data, val_data, epochs=10):
-        """
-        Train only the top layers (feature extraction)
-        """
-        print("\n--- Phase 1: Feature Extraction Training ---")
-        self.history_fe = self.model.fit(
-            train_data,
-            validation_data=val_data,
-            epochs=epochs,
-            callbacks=[
-                keras.callbacks.EarlyStopping(
-                    monitor='val_loss',
-                    patience=3,
-                    restore_best_weights=True
-                )
-            ]
-        )
-        return self.history_fe
-    
-    def fine_tune(self, train_data, val_data, layers_to_unfreeze=20, epochs=10):
-        """
-        Fine-tune the model by unfreezing top layers
-        """
-        print("\n--- Phase 2: Fine-tuning ---")
-        
-        # Unfreeze top layers of base model
-        self.base_model.trainable = True
-        for layer in self.base_model.layers[:-layers_to_unfreeze]:
-            layer.trainable = False
-            
-        print(f"Unfroze top {layers_to_unfreeze} layers")
-        
-        # Recompile with lower learning rate
-        self.compile_model(learning_rate=0.0001)
-        
-        # Continue training
-        self.history_ft = self.model.fit(
-            train_data,
-            validation_data=val_data,
-            epochs=epochs,
-            initial_epoch=len(self.history_fe.history['loss']),
-            callbacks=[
-                keras.callbacks.EarlyStopping(
-                    monitor='val_loss',
-                    patience=3,
-                    restore_best_weights=True
-                )
-            ]
-        )
-        return self.history_ft
-    
-    def plot_training_history(self):
-        """
-        Plot training and validation metrics
-        """
-        if not self.history_fe:
-            print("No training history available")
-            return
-            
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-        
-        # Combine histories if fine-tuning was done
-        if hasattr(self, 'history_ft'):
-            acc = self.history_fe.history['accuracy'] + self.history_ft.history['accuracy']
-            val_acc = self.history_fe.history['val_accuracy'] + self.history_ft.history['val_accuracy']
-            loss = self.history_fe.history['loss'] + self.history_ft.history['loss']
-            val_loss = self.history_fe.history['val_loss'] + self.history_ft.history['val_loss']
-            
-            # Mark fine-tuning start
-            ft_start = len(self.history_fe.history['accuracy'])
-            ax1.axvline(x=ft_start, color='red', linestyle='--', label='Fine-tuning start')
-            ax2.axvline(x=ft_start, color='red', linestyle='--', label='Fine-tuning start')
-        else:
-            acc = self.history_fe.history['accuracy']
-            val_acc = self.history_fe.history['val_accuracy']
-            loss = self.history_fe.history['loss']
-            val_loss = self.history_fe.history['val_loss']
-        
-        # Plot accuracy
-        ax1.plot(acc, label='Training Accuracy')
-        ax1.plot(val_acc, label='Validation Accuracy')
-        ax1.set_xlabel('Epoch')
-        ax1.set_ylabel('Accuracy')
-        ax1.set_title('Model Accuracy')
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
-        
-        # Plot loss
-        ax2.plot(loss, label='Training Loss')
-        ax2.plot(val_loss, label='Validation Loss')
-        ax2.set_xlabel('Epoch')
-        ax2.set_ylabel('Loss')
-        ax2.set_title('Model Loss')
-        ax2.legend()
-        ax2.grid(True, alpha=0.3)
-        
-        plt.suptitle('Transfer Learning Training Progress')
-        plt.tight_layout()
-        plt.show()
-
-# Example usage
-print("\n" + "="*60)
-print("TRANSFER LEARNING EXAMPLE")
-print("="*60)
-
-# Create classifier
-classifier = TransferLearningClassifier(num_classes=5)
-
-# Build model with MobileNetV2 (lightweight and efficient)
-classifier.build_model('MobileNetV2')
-
-# Compile
-classifier.compile_model(learning_rate=0.001)
-
-# Note: In practice, you would load your actual data here
-print("\nModel ready for training!")
-print("Steps:")
-print("1. Load and preprocess your dataset")
-print("2. Run train_feature_extraction() for initial training")
-print("3. Run fine_tune() for performance improvement")
-print("4. Use plot_training_history() to visualize results")</code></pre>
-
-        <h2>Comparing Transfer Learning Approaches</h2>
-        
-        <div class="mermaid">
-        graph TB
-            subgraph "Feature Extraction"
-                FE1[Pre-trained Base] --> FE2[Frozen]
-                FE2 --> FE3[New Classifier]
-                FE3 --> FE4[Train Only Top]
-            end
-            
-            subgraph "Fine-tuning"
-                FT1[Pre-trained Base] --> FT2[Initially Frozen]
-                FT2 --> FT3[New Classifier]
-                FT3 --> FT4[Train Top First]
-                FT4 --> FT5[Unfreeze Some Layers]
-                FT5 --> FT6[Train All with Low LR]
-            end
-            
-            subgraph "Full Training"
-                FL1[Pre-trained Weights] --> FL2[All Trainable]
-                FL2 --> FL3[New Classifier]
-                FL3 --> FL4[Train Everything]
-            end
-            
-            style FE2 fill:#ffcdd2
-            style FT2 fill:#fff9c4
-            style FT5 fill:#c8e6c9
-            style FL2 fill:#bbdefb
-        </div>
-
-        <h2>Common Pre-trained Models</h2>
-        
-        <pre class="language-python"><code># Available pre-trained models in Keras
-models_info = {
-    'VGG16': {
-        'parameters': '138M',
-        'depth': 16,
-        'use_case': 'Good baseline, simple architecture',
-        'input_size': (224, 224, 3)
-    },
-    'ResNet50': {
-        'parameters': '25.6M',
-        'depth': 50,
-        'use_case': 'Good balance of performance and size',
-        'input_size': (224, 224, 3)
-    },
-    'MobileNetV2': {
-        'parameters': '3.5M',
-        'depth': 53,
-        'use_case': 'Lightweight, mobile deployment',
-        'input_size': (224, 224, 3)
-    },
-    'InceptionV3': {
-        'parameters': '23.8M',
-        'depth': 159,
-        'use_case': 'High accuracy, complex patterns',
-        'input_size': (299, 299, 3)
-    },
-    'EfficientNet': {
-        'parameters': '5.3M - 66M',
-        'depth': 'Variable',
-        'use_case': 'State-of-the-art, scalable',
-        'input_size': 'Variable'
-    }
-}
-
-print("Popular Pre-trained Models for Transfer Learning:")
-print("-" * 60)
-for model_name, info in models_info.items():
-    print(f"\n{model_name}:")
-    for key, value in info.items():
-        print(f"  {key}: {value}")</code></pre>
-
-        <h2>Best Practices</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 Transfer Learning Guidelines</h3>
-            <ul>
-                <li><strong>Data Similarity:</strong> Choose pre-trained models from similar domains</li>
-                <li><strong>Start Simple:</strong> Begin with feature extraction before fine-tuning</li>
-                <li><strong>Learning Rates:</strong> Use lower learning rates for fine-tuning (1e-5 to 1e-4)</li>
-                <li><strong>Gradual Unfreezing:</strong> Unfreeze layers progressively, not all at once</li>
-                <li><strong>Monitor Overfitting:</strong> Watch validation metrics carefully</li>
-                <li><strong>Data Augmentation:</strong> Still important, especially with small datasets</li>
-                <li><strong>Batch Normalization:</strong> Be careful when fine-tuning models with BN layers</li>
-            </ul>
-        </div>
-
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Multi-Model Comparison</h3>
-            <p>Compare different pre-trained models on your dataset:</p>
-            <ul>
-                <li>Test VGG16, ResNet50, and MobileNetV2</li>
-                <li>Compare accuracy, training time, and model size</li>
-                <li>Determine the best model for your use case</li>
-            </ul>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: Progressive Fine-tuning</h3>
-            <p>Implement progressive unfreezing strategy:</p>
-            <ul>
-                <li>Start with all layers frozen</li>
-                <li>Gradually unfreeze blocks of layers</li>
-                <li>Track performance at each stage</li>
-                <li>Find optimal number of trainable layers</li>
-            </ul>
-        </div>
-
-        <h2>Summary</h2>
-        
-        <div class="summary-box">
-            <h3>✅ You've Learned</h3>
-            <ul>
-                <li>What transfer learning is and why it's powerful</li>
-                <li>Three main approaches: feature extraction, fine-tuning, and full training</li>
-                <li>How to implement transfer learning with Keras/TensorFlow</li>
-                <li>When to use each transfer learning strategy</li>
-                <li>Common pre-trained models and their characteristics</li>
-                <li>Best practices for successful transfer learning</li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Transfer learning reuses knowledge a model gained from a completely different
-            dataset. Where in your own learning have you transferred a skill from one area to speed up progress in another?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Transfer learning reuses features learned on large datasets (like ImageNet), so you need far less data and compute.</li>
-                <li>Feature extraction freezes the pre-trained base and trains only a new head; fine-tuning also unfreezes and retrains upper layers.</li>
-                <li>The more similar your task is to the original, the more of the pre-trained model you can reuse as-is.</li>
-                <li>Choosing a base model trades off accuracy, size, and speed (for example, MobileNet for mobile, ResNet for accuracy).</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now stand on the shoulders of models trained on millions of images — building accurate classifiers quickly with
-        feature extraction and fine-tuning.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>What's the difference between feature extraction and fine-tuning?</summary>
-            <p>Feature extraction freezes the pre-trained layers and trains only a new classifier head on top. Fine-tuning goes
-            further, unfreezing some upper pre-trained layers and retraining them at a low learning rate to adapt them to your data.</p>
-        </details>
-        <details>
-            <summary>When should I fine-tune instead of just extracting features?</summary>
-            <p>Fine-tune when you have enough data and your task differs somewhat from the original. If your dataset is small or very
-            similar to the source, feature extraction alone is safer and less prone to overfitting.</p>
-        </details>
-        <details>
-            <summary>How do I pick a pre-trained model?</summary>
-            <p>Match it to your constraints: MobileNet or EfficientNet for speed and small size, ResNet or Inception for higher
-            accuracy. Start with a well-supported model and adjust based on accuracy and latency needs.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Transfer learning caps your deep-learning toolkit — from here you can combine these techniques on real projects and
-        explore tuning, specialized domains, and deployment.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Train a classifier with a frozen base, then fine-tune the top layers and compare the accuracy.</li>
-            <li>Swap in a different pre-trained backbone and compare size, speed, and accuracy.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Transfer learning is how modern practitioners get strong results without massive datasets or budgets. You now know how
-            to reuse the field's best models for your own goals — a genuine superpower. Well done.</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="deep_learning_rnn.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="hyperparameter_tuning.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -649,24 +1088,10 @@ for model_name, info in models_info.items():
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
     <script src="js/course-enhancements.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-        mermaid.initialize({ 
-            startOnLoad: true,
-            theme: 'default',
-            themeVariables: {
-                primaryColor: '#f0f0f0',
-                primaryTextColor: '#333',
-                primaryBorderColor: '#667eea',
-                lineColor: '#667eea',
-                secondaryColor: '#e0e7ff',
-                tertiaryColor: '#fff'
-            }
-        });
-    </script>
 </body>
 </html>

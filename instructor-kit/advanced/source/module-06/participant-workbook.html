@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 6</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 6: LDA, t-SNE and UMAP</h1>
+    <p class="sub">Your workbook for Session 6: a warm-up on Lessons 8.6 and 9.1, the key ideas of Lessons 9.2 and 9.3, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, Checkpoint 1 and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>9.2–9.3</b></span>
+      <span class="chip">Session <b>6</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Explain how LDA uses the labels to find separating directions, and how that differs from PCA.</li>
+  <li>Use LDA as a reducer and as a classifier, and keep it inside the pipeline.</li>
+  <li>Make t-SNE and UMAP maps, and read them by the five rules.</li>
+  <li>Check a map with numbers, and place new rows with UMAP.</li>
+  <li>Show what you can do with Modules 7 to 9 in Checkpoint 1.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-Up: Anomaly Detection and PCA</h2><span class="rule"></span></div>
+<p>Five questions from Lessons 8.6 and 9.1. Two minutes, no notes.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+pred = np.array([<span class="s">1</span>, -<span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, -<span class="s">1</span>, <span class="s">1</span>])
+print((pred == -<span class="s">1</span>).sum(), (pred == <span class="s">1</span>).mean().round(<span class="s">2</span>))</pre><div class="opts"><div class="opt">A) <code class="inline">4 0.33</code></div><div class="opt">B) <code class="inline">2 0.67</code></div><div class="opt">C) <code class="inline">2 0.33</code></div><div class="opt">D) <code class="inline">4 0.67</code></div></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">You raise an Isolation Forest's contamination from 0.01 to 0.05. What changes?</div><div class="opts"><div class="opt">A) The scores</div><div class="opt">B) The ranking</div><div class="opt">C) Only the threshold: more rows get -1, in the same order</div><div class="opt">D) The trees</div></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.decomposition <span class="k">import</span> PCA
+x = np.arange(<span class="s">6.0</span>)
+X = np.column_stack([x, <span class="s">2</span> * x + <span class="s">1</span>])
+print(PCA().fit(X).explained_variance_ratio_.round(<span class="s">2</span>))</pre><div class="opts"><div class="opt">A) <code class="inline">[0.5 0.5]</code></div><div class="opt">B) <code class="inline">[0.67 0.33]</code></div><div class="opt">C) <code class="inline">[1. 0.]</code></div><div class="opt">D) <code class="inline">[0.8 0.2]</code></div></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Logistic regression on the first two principal components of the churn columns scored AUC 0.687, against 0.829 on all ten. Why?</div><div class="opts"><div class="opt">A) PCA leaked</div><div class="opt">B) PCA picks directions of spread, not of churn; the recency signal is spread over several components</div><div class="opt">C) Two features are too few for any model</div><div class="opt">D) The features were not scaled</div></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">When should you NOT standardize before PCA?</div><div class="opts"><div class="opt">A) Never</div><div class="opt">B) When columns have different units</div><div class="opt">C) When all columns share one meaningful unit, like monthly sales or pixels</div><div class="opt">D) When there are many rows</div></div></div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">9.2</span><h3>Linear Discriminant Analysis</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain how LDA differs from PCA: it uses the labels to find directions that separate classes</li>
+  <li>Use LDA to reduce dimensions for a plot or as a step before another model</li>
+  <li>Use LDA as a classifier and compare it with logistic regression</li>
+  <li>Know the limit on components (classes minus one) and when shrinkage helps</li>
+  <li>Keep LDA inside the pipeline so cross-validation stays honest</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The team photo.</b> PCA keeps the widest spread; LDA keeps the class means far apart relative to the spread inside each class.</li>
+  <li><b>At most classes minus one axes:</b> one for churn, two for three tiers.</li>
+  <li><b><code class="inline">scalings_</code></b> are the axis weights; <code class="inline">explained_variance_ratio_</code> is the share of class separation.</li>
+  <li><b>As a classifier</b> LDA draws straight boundaries and often matches logistic regression; QDA allows curves but needs far more data.</li>
+  <li><b>Priors</b> move the threshold, not the ranking. <b>Shrinkage</b> (<code class="inline">lsqr</code> or <code class="inline">eigen</code>) for many features and few rows.</li>
+  <li><b>Inside the pipeline.</b> A supervised reducer fitted before cross-validation can separate pure noise.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: one number as a churn risk score</div>
+<p>One number per customer as a churn risk score: the LDA axis against the first principal component, each cut into ten deciles on the test customers.</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+<span class="k">from</span> sklearn.decomposition <span class="k">import</span> PCA
+<span class="k">from</span> sklearn.discriminant_analysis <span class="k">import</span> LinearDiscriminantAnalysis
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+features = [<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"days_since_last_order"</span>,
+            <span class="s">"returns_12m"</span>, <span class="s">"return_rate"</span>, <span class="s">"support_tickets_12m"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>]
+X_train, X_test, y_train, y_test = train_test_split(customers[features], customers[<span class="s">"churned"</span>],
+                                                    test_size=<span class="s">0.25</span>, stratify=customers[<span class="s">"churned"</span>], random_state=<span class="s">42</span>)
+ld1 = make_pipeline(StandardScaler(), LinearDiscriminantAnalysis()).fit(X_train, y_train).transform(X_test)[:, <span class="s">0</span>]
+pc1 = make_pipeline(StandardScaler(), PCA(n_components=<span class="s">1</span>)).fit(X_train).transform(X_test)[:, <span class="s">0</span>]
+
+<span class="k">for</span> name, score <span class="k">in</span> [(<span class="s">"LD1"</span>, ld1), (<span class="s">"PC1"</span>, -pc1)]:          <span class="c"># PC1 negated: low activity = risk</span>
+    decile = pd.qcut(pd.Series(score).rank(method=<span class="s">"first"</span>), <span class="s">10</span>, labels=range(<span class="s">1</span>, <span class="s">11</span>))
+    rates = pd.Series(y_test.to_numpy()).groupby(decile, observed=<span class="k">True</span>).mean()
+    print(<span class="s">f"{name}: churn in the lowest decile {rates.iloc[0]:.3f}, highest decile {rates.iloc[-1]:.3f}"</span>)</pre>
+<pre class="out">LD1: churn in the lowest decile 0.013, highest decile 0.580
+PC1: churn in the lowest decile 0.080, highest decile 0.393</pre><p>The riskiest tenth by LD1 churned at 58%, the safest at 1.3%: a 45-fold spread from ONE number. PC1 (negated so that low activity means risk) spreads churn far less, from 8% to 39%. Both are a single straight direction through the same ten columns; only one was chosen with the labels.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-06/l9_2-lda/payment_category_lda_starter.py</code>. Ten categories from nine payment columns: how many axes, what LD1 is, how well it classifies.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-06/l9_2-lda/noise_leak_starter.py</code>. The leak on real customers with 290 noise columns, shuffled and true labels.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction first, then run the code.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (Three classes, five features.)</div><pre class="code"><span class="k">from</span> sklearn.datasets <span class="k">import</span> make_blobs
+<span class="k">from</span> sklearn.discriminant_analysis <span class="k">import</span> LinearDiscriminantAnalysis
+X, y = make_blobs(n_samples=<span class="s">90</span>, centers=<span class="s">3</span>, n_features=<span class="s">5</span>, random_state=<span class="s">0</span>)
+print(LinearDiscriminantAnalysis().fit(X, y).transform(X).shape)</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (Three of four labels are 0.)</div><pre class="code"><span class="k">from</span> sklearn.discriminant_analysis <span class="k">import</span> LinearDiscriminantAnalysis
+X = [[<span class="s">0.0</span>], [<span class="s">0.5</span>], [<span class="s">1.0</span>], [<span class="s">5.0</span>]]
+y = [<span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>]
+print(LinearDiscriminantAnalysis().fit(X, y).priors_)</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>The Loyalty-Tier Map</b> (lesson page). In class: Steps 1 and 2. At home: Steps 3 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: stratify on loyalty_tier (Basic 2129, Silver 2015, Gold 356)</li>
+  <li>☐ Step 2: baseline 0.473, LDA 0.909, logistic regression 0.921</li>
+  <li>☐ Step 3: LD1 carries 0.948: spend and tenure</li>
+  <li>☐ Step 4: PCA and LDA maps side by side</li>
+  <li>☐ Step 5: errors only between neighboring tiers</li>
+  <li>☐ Step 6: <code class="inline">tier_map.csv</code></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.datasets <span class="k">import</span> make_blobs
+<span class="k">from</span> sklearn.discriminant_analysis <span class="k">import</span> LinearDiscriminantAnalysis
+X, y = make_blobs(n_samples=<span class="s">200</span>, centers=<span class="s">4</span>, n_features=<span class="s">2</span>, random_state=<span class="s">1</span>)
+print(LinearDiscriminantAnalysis().fit(X, y).transform(X).shape)</pre><div class="opts"><div class="opt">A) <code class="inline">(200, 3)</code></div><div class="opt">B) <code class="inline">(200, 2)</code></div><div class="opt">C) <code class="inline">(200, 4)</code></div><div class="opt">D) <code class="inline">(200, 1)</code></div></div></div>
+<div class="q" data-sc="2"><div class="qn">Q2</div><div class="qt">What does LDA choose a direction for, compared with PCA?</div><div class="opts"><div class="opt">A) Class means far apart relative to the spread inside each class; PCA chooses the largest total spread and never sees the labels</div><div class="opt">B) The largest total spread, like PCA, but faster</div><div class="opt">C) Curved directions where PCA uses straight ones</div><div class="opt">D) The direction of the most important single feature</div></div></div>
+<div class="q" data-sc="3" data-kind="short"><div class="qn">Q3</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.discriminant_analysis <span class="k">import</span> LinearDiscriminantAnalysis
+X = [[<span class="s">1.0</span>], [<span class="s">2.0</span>], [<span class="s">3.0</span>], [<span class="s">9.0</span>], [<span class="s">10.0</span>]]
+y = [<span class="s">"a"</span>, <span class="s">"a"</span>, <span class="s">"a"</span>, <span class="s">"b"</span>, <span class="s">"b"</span>]
+print(LinearDiscriminantAnalysis(priors=[<span class="s">0.5</span>, <span class="s">0.5</span>]).fit(X, y).priors_)</pre><div class="write"></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">LDA on ten payment categories gives nine axes, but the first carries 0.995 of the separation and leans on amount (+1.42) and items (-0.59). What is the best reading?</div><div class="opts"><div class="opt">A) Nine useful directions: plot them all</div><div class="opt">B) The categories are perfectly separable</div><div class="opt">C) The payment details separate categories along essentially one direction, price per item, and only weakly (accuracy 0.290 against 0.219)</div><div class="opt">D) Amount and items were not scaled</div></div></div>
+<div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">On 400 customers with 290 added noise columns and SHUFFLED churn labels, LDA fitted on all rows and then cross-validated scores AUC 0.998. Inside a pipeline it scores 0.481. Why?</div><div class="opts"><div class="opt">A) The real columns still carry churn signal</div><div class="opt">B) kNN with 15 neighbors overfits</div><div class="opt">C) Shuffling did not work</div><div class="opt">D) LDA used every row's label, including the test folds', to build its axis; with 300 columns it can separate any labels</div></div></div>
+<div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">You have 80 rows, 1,000 features, and want an LDA plot AND classification. Which setting?</div><div class="opts"><div class="opt">A) <code class="inline">LinearDiscriminantAnalysis()</code></div><div class="opt">B) <code class="inline">LinearDiscriminantAnalysis(solver="eigen", shrinkage="auto")</code></div><div class="opt">C) <code class="inline">LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto")</code></div><div class="opt">D) <code class="inline">LinearDiscriminantAnalysis(shrinkage="auto")</code></div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Describe the team photo in your own words, then write the two numbers that impressed you most today: a leaky score on random labels and the chance level it fell back to inside the pipeline. Write one sentence for a colleague who wants to "just reduce the features first, then cross-validate".</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">9.3</span><h3>t-SNE and UMAP</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain what t-SNE and UMAP preserve and what they distort</li>
+  <li>Tune perplexity (t-SNE) and n_neighbors and min_dist (UMAP), and see how the picture changes</li>
+  <li>Read an embedding without over-interpreting cluster sizes or distances</li>
+  <li>Check a map with numbers (neighbors kept, trustworthiness) instead of by eye</li>
+  <li>Choose between PCA, t-SNE and UMAP for a task, and place new rows with UMAP</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The seating chart.</b> t-SNE and UMAP keep neighbors close and bend everything else.</li>
+  <li><b>Settings:</b> perplexity (t-SNE), n_neighbors and min_dist (UMAP). Try more than one.</li>
+  <li><b>Five rules:</b> neighbors meaningful; sizes not; distances between clusters not; axes meaningless; validate clusters in the original space.</li>
+  <li><b>Low perplexity invents clumps</b> from pure noise.</li>
+  <li><b>Check with numbers:</b> neighbors kept, trustworthiness. Maps flatter separation.</li>
+  <li><b>PCA to about 50 first</b> on wide data; scale tabular data.</li>
+  <li><b>UMAP has transform</b> and can place new rows; t-SNE cannot and never goes in a model pipeline.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: two perplexities, one set of customers</div>
+<p>Two perplexities on 600 customers' four behavior columns. Which neighborhoods does each map keep?</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+<span class="k">from</span> sklearn.manifold <span class="k">import</span> TSNE, trustworthiness
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>).sample(<span class="s">600</span>, random_state=<span class="s">7</span>)
+Z = StandardScaler().fit_transform(customers[[<span class="s">"orders_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"discount_share"</span>, <span class="s">"return_rate"</span>]])
+<span class="k">for</span> perp <span class="k">in</span> [<span class="s">10</span>, <span class="s">50</span>]:
+    emb = TSNE(perplexity=perp, random_state=<span class="s">42</span>).fit_transform(Z)
+    print(<span class="s">f"perplexity {perp}: trustworthiness k=10 {trustworthiness(Z, emb, n_neighbors=10):.3f}"</span>
+          <span class="s">f"   k=50 {trustworthiness(Z, emb, n_neighbors=50):.3f}   x-span {np.ptp(emb[:, 0]):.0f}"</span>)</pre>
+<pre class="out">perplexity 10: trustworthiness k=10 0.991   k=50 0.977   x-span 120
+perplexity 50: trustworthiness k=10 0.991   k=50 0.986   x-span 51</pre><p>Both maps keep the 10 nearest neighbors equally well (0.991). The larger perplexity keeps more of the 50-neighbor structure (0.986 against 0.977), and its map is less than half as wide: the axis numbers have no units. Choose perplexity for the scale of structure you want to see.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-06/l9_3-tsne-umap/fashion_map_starter.py</code>. 1,500 training images: two maps, neighbor checks, hardest garments, 500 new images placed.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-06/l9_3-tsne-umap/fraud_map_starter.py</code>. Is fraud its own island? Check the claim against the original space.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction first, then run the code.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (Which one can place new rows?)</div><pre class="code"><span class="k">from</span> sklearn.manifold <span class="k">import</span> TSNE
+<span class="k">import</span> umap
+print(hasattr(TSNE(), <span class="s">"transform"</span>), hasattr(umap.UMAP(), <span class="s">"transform"</span>))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (25 rows, perplexity 5.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.manifold <span class="k">import</span> TSNE
+X = np.random.default_rng(<span class="s">0</span>).normal(size=(<span class="s">25</span>, <span class="s">4</span>))
+print(TSNE(perplexity=<span class="s">5</span>, random_state=<span class="s">42</span>).fit_transform(X).shape)</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>The Customer Map</b> (lesson page). In class: Steps 1 and 2. At home: Steps 3 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: four behavior columns, two logged, scaled</li>
+  <li>☐ Step 2: K-Means in 4-D, silhouette 0.479, five named segments</li>
+  <li>☐ Step 3: t-SNE and UMAP maps of 2,000 customers</li>
+  <li>☐ Step 4: neighbors kept; silhouette on the maps vs in 4-D</li>
+  <li>☐ Step 5: place the other 4,000 with UMAP's transform</li>
+  <li>☐ Step 6: <code class="inline">customer_map.csv</code> (no churn column)</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7"><div class="qn">Q7</div><div class="qt">On a t-SNE map, segment A is a big island and segment B a small island far away. What can you conclude?</div><div class="opts"><div class="opt">A) A is more varied than B</div><div class="opt">B) B is very different from every other segment</div><div class="opt">C) Little about size or distance: check spread and separation in the original data</div><div class="opt">D) B is noise</div></div></div>
+<div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">In today's fraud-map lab, 0.630 of a fraud's map neighbors are frauds, and 0.614 of its neighbors in the original space are. What does that tell you about the colleague's "fraud is an island" map?</div><div class="opts"><div class="opt">A) The map reproduces a neighborhood structure that exists in the data; now confirm any group in the original space (a clustering found 239 frauds together, 199 elsewhere)</div><div class="opt">B) The map created the fraud island</div><div class="opt">C) The map is wrong because the numbers differ</div><div class="opt">D) Use a lower perplexity to make the island clearer</div></div></div>
+<div class="q" data-sc="9" data-kind="short"><div class="qn">Q9</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.manifold <span class="k">import</span> TSNE
+X = np.random.default_rng(<span class="s">0</span>).normal(size=(<span class="s">12</span>, <span class="s">3</span>))
+TSNE(random_state=<span class="s">42</span>).fit_transform(X)</pre><div class="write"></div></div>
+<div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">Each day's new customers must be placed on an existing map, and the same embedding should feed a model inside a pipeline. Which method?</div><div class="opts"><div class="opt">A) t-SNE with a fixed random_state</div><div class="opt">B) t-SNE rerun every day on all customers</div><div class="opt">C) PCA to 2 components, because only PCA has transform</div><div class="opt">D) UMAP: fit once, then transform new rows; it can sit in a pipeline</div></div></div>
+<div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">Why reduce 784 pixels to about 50 PCA components before t-SNE?</div><div class="opts"><div class="opt">A) t-SNE refuses more than 50 columns</div><div class="opt">B) Speed, and the last few hundred components of image data are mostly noise</div><div class="opt">C) PCA adds the labels</div><div class="opt">D) It makes the map's axes interpretable</div></div></div>
+<div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">A t-SNE map of 200 rows at perplexity 5 shows six clumps. What do you do before telling anyone there are six groups?</div><div class="opts"><div class="opt">A) Nothing: clumps are clusters</div><div class="opt">B) Change the seed until the clumps are clearer</div><div class="opt">C) Raise min_dist</div><div class="opt">D) Try several perplexities and confirm with a clustering and its profiles in the original space</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the seating chart in your own words, then write the five reading rules from memory. Which one would you have broken before this lesson? Finally, write the one number from your project you would show next to the customer map so that nobody over-reads it.</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Checkpoint 1: Modules 7 to 9 (30 minutes)</h2><span class="rule"></span></div>
+<p>Open notebook: your lesson notebooks and the lesson pages are allowed; another person is not. Open <code class="inline">labs/module-06/checkpoint-1/checkpoint_starter.py</code>, run it once, then answer in order. Write your key numbers here as you go.</p>
+<table class="timing">
+<thead><tr><th>Part</th><th>Question</th><th>Your answer</th></tr></thead>
+<tbody>
+<tr><td>A (Module 7)</td><td>Which three columns does the churn model rely on most (permutation importance on the test rows)?</td><td>&nbsp;</td></tr>
+<tr><td>B (Module 8)</td><td>Five soft segments: which one would you act on first, with its churn rate? How many customers are borderline (below 0.8)?</td><td>&nbsp;</td></tr>
+<tr><td>C (Module 9)</td><td>Components for 90% of the variance; largest LD1 weight; largest PC1 loading; AUC of PC1 alone and of LD1 alone</td><td>&nbsp;</td></tr>
+</tbody>
+</table>
+<p><b>Part D:</b> three sentences for the retention lead, one number in each.</p>
+<div class="write tall"></div>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<p>Three questions, no notes.</p>
+<div class="q"><div class="qn">E1</div><div class="qt">LDA on churn gives one axis, PCA gives ten components. Why the difference?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">Name two things you must NOT read off a t-SNE map.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">You need tomorrow's customers on today's map. Which method, and how?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish The Loyalty-Tier Map (Steps 3 to 6) and The Customer Map (Steps 3 to 6)</li>
+  <li>☐ Lesson 9.2 Exercises 1 to 3; Lesson 9.3 Exercises 1 to 3 (Exercise 4 of each is a stretch)</li>
+  <li>☐ Both Quick Quizzes and both journal entries</li>
+  <li>☐ Check that <code class="inline">import torch</code> works</li>
+  <li>☐ Bring to Session 7: a laptop with PyTorch, <code class="inline">pinecrest-ml</code> with <code class="inline">data/</code> (keep Fashion-MNIST) and <code class="inline">labs/</code>, this workbook and my journal</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>LDA</td><td>Linear discriminant analysis: directions that separate labeled classes</td></tr>
+<tr><td>Fisher's criterion</td><td>Between-class spread divided by within-class spread along a direction</td></tr>
+<tr><td>scalings_</td><td>The weights of LDA's axes</td></tr>
+<tr><td>priors</td><td>Assumed class shares; they move LDA's decision threshold</td></tr>
+<tr><td>shrinkage</td><td>Pulls a noisy covariance estimate toward a stabler shape</td></tr>
+<tr><td>QDA</td><td>Quadratic discriminant analysis: one covariance per class, curved boundaries</td></tr>
+<tr><td>t-SNE</td><td>A nonlinear map that keeps each point's neighbors close</td></tr>
+<tr><td>perplexity</td><td>Roughly how many neighbors each point attends to in t-SNE</td></tr>
+<tr><td>UMAP</td><td>A neighbor-graph map; n_neighbors and min_dist; has transform</td></tr>
+<tr><td>trustworthiness</td><td>0 to 1: penalizes map neighbors that were far apart in the original data</td></tr>
+<tr><td>neighbors kept</td><td>Share of each point's k nearest original neighbors that are also map neighbors</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 6 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

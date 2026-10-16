@@ -3,1143 +3,891 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about LDA: Linear Discriminant Analysis in this comprehensive Python Machine Learning course lesson.">
-    <title>LDA: Linear Discriminant Analysis - Python Machine Learning</title>
+    <meta name="description" content="Learn linear discriminant analysis with scikit-learn: supervised dimensionality reduction that separates classes, the C minus 1 rule, LDA as a classifier, shrinkage, and the leakage trap of supervised reducers. Python Machine Learning Lesson 9.2.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Linear Discriminant Analysis - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#dimensionality">Dimensionality</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#dimensionality">Dimensionality</a></li>
-            <li aria-current="page">LDA: Supervised Dimensionality Reduction</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>📊 LDA: Supervised Dimensionality Reduction</h1>
+        <div class="container">
+            <header>
+                <h1>🧲 Lesson 9.2: Linear Discriminant Analysis</h1>
+                <p class="lead">Let the labels choose the angle: find the few directions that pull classes apart, and get a fast, honest linear classifier from the same model.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Explain how LDA uses class labels to find axes that maximize between-class separation while minimizing within-class scatter</li>
-                <li>Contrast LDA (supervised) with PCA (unsupervised) and choose between them</li>
-                <li>Understand why LDA yields at most (number of classes − 1) discriminant components</li>
-                <li>Apply <code>LinearDiscriminantAnalysis</code> in scikit-learn for both dimensionality reduction and classification</li>
-                <li>Recognize LDA's assumptions (Gaussian classes, equal covariance) and when to reach for alternatives like QDA</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Project a multi-class dataset onto its LDA components, visualize the class separation, and use the same model as a classifier.</p>
-        </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>Linear Discriminant Analysis (LDA) is a supervised dimensionality reduction technique that finds linear combinations of features that best separate multiple classes. Unlike PCA which maximizes variance, LDA maximizes the ratio of between-class variance to within-class variance, making it ideal for classification tasks. LDA serves dual purposes: as a dimensionality reduction technique and as a linear classifier.</p>
-        </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain how LDA differs from PCA: it maximizes the separation between classes relative to the spread within them</li>
+                        <li>Predict how many discriminant components LDA can produce (classes minus one) and read <code>explained_variance_ratio_</code> and <code>scalings_</code></li>
+                        <li>Use <code>LinearDiscriminantAnalysis</code> as a classifier and compare it with a baseline, logistic regression and QDA</li>
+                        <li>Use shrinkage when there are many features and few rows</li>
+                        <li>Keep a supervised reducer inside a <code>Pipeline</code>, and show how badly it overfits when you do not</li>
+                    </ul>
+                </div>
 
-        </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 90 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="dimensionality_pca.html">Lesson 9.1: Principal Component Analysis</a> and <a href="evaluation_metrics.html">Lesson 1.4: Metrics for Classification and Regression</a></li>
+                    <li><span class="meta-label">🛠️ You will build</span> A loyalty-tier map: the two discriminant axes that separate Basic, Silver and Gold customers, with a tier classifier checked against a baseline</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code></li>
+                </ul>
+            </header>
 
-        <h2>Core Concepts and Theory</h2>
-        
-        <pre class="language-python"><code>import numpy as np
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Let the Labels Choose the Angle</a></li>
+                        <li><a href="#fisher" class="toc-link">PCA versus LDA on One Picture</a></li>
+                        <li><a href="#churn" class="toc-link">One Axis for Churn</a></li>
+                        <li><a href="#classifier" class="toc-link">LDA as a Classifier</a></li>
+                        <li><a href="#multiclass" class="toc-link">More Classes, More Axes</a></li>
+                        <li><a href="#shrinkage" class="toc-link">Many Features, Few Rows: Shrinkage</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: The Loyalty-Tier Map</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>📸 Let the Labels Choose the Angle</h2>
+
+                <p>In Lesson 9.1, PCA drew Pinecrest's customers on the two directions of greatest spread, and the churners were smeared across the picture. That was not a bug: PCA never saw the <code>churned</code> column, so it had no reason to look for the direction that separates churners. <strong>Linear discriminant analysis</strong> (LDA) is the supervised counterpart. It also finds straight-line directions, but it uses the labels to pick the ones along which the classes are easiest to tell apart.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Team Photo</h4>
+                    <p>Two hiking clubs pose on a field and you photograph them from the side, so the picture flattens everyone onto one line. PCA picks the camera angle that makes the crowd look as wide as possible, even if both clubs end up mixed together. LDA walks around the field until the two clubs appear as two tight, separate groups: each club bunched up, the clubs far apart. Same flattening, different goal.</p>
+                </div>
+
+                <p>That goal has a precise form. For a direction <em>w</em>, project every row onto it and compute two numbers: how far apart the class means are (<strong>between-class</strong> spread) and how spread out each class is around its own mean (<strong>within-class</strong> spread). LDA maximizes their ratio:</p>
+
+                <div class="card card-accent">
+                    <h4>🔑 Fisher's Criterion</h4>
+                    <p><em>J</em>(<em>w</em>) = (spread of the class means along <em>w</em>) / (spread within the classes along <em>w</em>) = <em>w</em><sup>T</sup> <em>S</em><sub>B</sub> <em>w</em> / <em>w</em><sup>T</sup> <em>S</em><sub>W</sub> <em>w</em>, where <em>S</em><sub>B</sub> and <em>S</em><sub>W</sub> are the between-class and within-class scatter matrices. Big means far apart, small means tightly bunched. The best directions are eigenvectors of <em>S</em><sub>W</sub><sup>-1</sup> <em>S</em><sub>B</sub>.</p>
+                </div>
+
+                <p>One consequence is worth memorizing now. The class means of <em>C</em> classes span at most <em>C</em> - 1 directions (two points define a line, three a plane), so LDA can produce <strong>at most <em>C</em> - 1 components</strong>, however many features you have. Two classes give one axis; three tiers give two.</p>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>LDA earns its place twice. As a reducer, it gives the most class-separating low-dimensional picture a linear method can, which is ideal for plots and as a compact input to other models. As a classifier, it is fast, has almost nothing to tune, and is often as accurate as logistic regression. Its supervised nature also makes it the clearest example of a trap that affects every supervised preprocessing step: fit it outside cross-validation and it will happily "separate" pure noise.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="fisher" class="lesson-section">
+                <h2>🔀 PCA versus LDA on One Picture</h2>
+
+                <p>Make two classes that are long, thin and parallel: they spread a lot along one direction but are separated along another. The seed keeps the random numbers identical to the page.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.datasets import load_iris, load_wine, make_classification
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+
+rng = np.random.default_rng(42)
+n = 200
+along = rng.normal(0, 3, 2 * n)                                  # long direction, same for both classes
+across = rng.normal(0, 0.6, 2 * n) + np.repeat([-1.0, 1.0], n)  # short direction, classes apart
+angle = np.deg2rad(30)
+rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
+toy_X = np.column_stack([along, across]) @ rotation.T
+toy_y = np.repeat([0, 1], n)
+
+toy_pca = PCA(n_components=1).fit(toy_X)
+toy_lda = LinearDiscriminantAnalysis(n_components=1).fit(toy_X, toy_y)
+lda_dir = toy_lda.scalings_[:, 0] / np.linalg.norm(toy_lda.scalings_[:, 0])
+print("PCA direction:", toy_pca.components_[0].round(3))
+print("LDA direction:", lda_dir.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>PCA direction: [0.866 0.5  ]
+LDA direction: [-0.489  0.872]</code></pre>
+                </div>
+
+                <p>The two directions are almost at right angles. PCA follows the long axis, because that is where the spread is. LDA points across the classes. Project the rows onto each direction and see what each one keeps:</p>
+
+                <pre><code class="language-python">def separation(z, labels):
+    """Distance between the two class means, in units of the average within-class std."""
+    a, b = z[labels == 0], z[labels == 1]
+    return abs(a.mean() - b.mean()) / np.sqrt((a.var() + b.var()) / 2)
+
+on_pc1 = toy_pca.transform(toy_X)[:, 0]
+on_ld1 = toy_lda.transform(toy_X)[:, 0]
+print(f"separation on PC1: {separation(on_pc1, toy_y):.2f}")
+print(f"separation on LD1: {separation(on_ld1, toy_y):.2f}")
+
+fig, axes = plt.subplots(1, 3, figsize=(10, 3.4), layout="constrained")
+for cls, color in [(0, "#667eea"), (1, "#d9480f")]:
+    axes[0].scatter(*toy_X[toy_y == cls].T, s=6, alpha=0.6, color=color, label=f"class {cls}")
+    axes[1].hist(on_pc1[toy_y == cls], bins=30, alpha=0.6, color=color, label=f"class {cls}")
+    axes[2].hist(on_ld1[toy_y == cls], bins=30, alpha=0.6, color=color, label=f"class {cls}")
+axes[0].set_aspect("equal")
+axes[0].set_title("Two long, parallel classes")
+axes[1].set_title("Projected on PC1: mixed")
+axes[2].set_title("Projected on LD1: separated")
+axes[0].legend(markerscale=3, fontsize=8)
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>separation on PC1: 0.05
+separation on LD1: 3.32</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/dimensionality_lda_pca_vs_lda.png" alt="Three panels. Left: two long, thin, parallel clouds of points, blue and orange, tilted at 30 degrees. Middle: histograms of both classes projected on the first principal component overlap completely. Right: histograms projected on the first linear discriminant form two separate humps." width="1100" height="374" loading="lazy">
+                    <figcaption>The direction of most spread (PC1) mixes the classes completely; the discriminant direction (LD1) separates them. Same data, different question.</figcaption>
+                </figure>
+
+                <p>On PC1 the class means are essentially on top of each other. On LD1 they are more than three within-class standard deviations apart. This is the whole difference between the two methods in one picture: PCA preserves <em>spread</em>, LDA preserves <em>separability</em>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="churn" class="lesson-section">
+                <h2>📉 One Axis for Churn</h2>
+
+                <p>Back to Pinecrest. Load the churn table, take the ten numeric features, split as usual and scale. (LDA's predictions do not change with scaling, but scaled inputs make its weights comparable across features, as with logistic regression in Lesson 1.1.)</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
-from scipy import linalg
-import warnings
-warnings.filterwarnings('ignore')
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
+pd.set_option("display.width", 150)
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+X = customers[features]
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
 
-print("="*60)
-print("LDA FUNDAMENTALS")
-print("="*60)
+scaler = StandardScaler().set_output(transform="pandas")
+X_train_s = scaler.fit_transform(X_train)
+X_test_s = scaler.transform(X_test)
 
-# Core concepts
-lda_concepts = """
-LDA KEY CONCEPTS:
+lda = LinearDiscriminantAnalysis()
+lda.fit(X_train_s, y_train)
+churn_axis = lda.transform(X_test_s)
+print("transformed shape:", churn_axis.shape)
+print(pd.Series(lda.scalings_[:, 0], index=features).round(2).sort_values())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>transformed shape: (1500, 1)
+app_user                -0.21
+tenure_months           -0.09
+orders_12m              -0.08
+avg_order_value         -0.05
+spend_12m               -0.04
+returns_12m             -0.03
+return_rate              0.01
+support_tickets_12m      0.30
+discount_share           0.50
+days_since_last_order    0.92
+dtype: float64</code></pre>
+                </div>
 
-1. OBJECTIVE:
-   • Find linear combinations that maximize class separation
-   • Maximize between-class scatter (S_B)
-   • Minimize within-class scatter (S_W)
-   • Optimize: J(w) = (w^T S_B w) / (w^T S_W w)
+                <p>Ten features in, <strong>one</strong> column out: two classes give at most one discriminant. The weights in <code>scalings_</code> define that axis, and they read like a churn story: days since the last order dominates, then reliance on discounts and support tickets, with app users and loyal, frequent buyers on the other side. Lesson 9.1's PCA buried <code>days_since_last_order</code> across several components; LDA puts it front and center because the labels told it to.</p>
 
-2. MATHEMATICAL FOUNDATION:
-   • Between-class scatter: S_B = Σ n_i (μ_i - μ)(μ_i - μ)^T
-   • Within-class scatter: S_W = Σ Σ (x - μ_i)(x - μ_i)^T
-   • Solution: Eigenvalue problem S_W^(-1) S_B w = λw
-   • Linear discriminants: Eigenvectors of S_W^(-1) S_B
+                <pre><code class="language-python">test_view = pd.DataFrame({"LD1": churn_axis[:, 0], "churned": y_test.to_numpy()})
+print(test_view.groupby("churned")["LD1"].describe()[["mean", "std", "25%", "75%"]].round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>         mean   std   25%   75%
+churned
+0       -0.25  0.96 -0.97  0.33
+1        1.13  1.17  0.25  2.06</code></pre>
+                </div>
 
-3. KEY PROPERTIES:
-   • Supervised method (requires labels)
-   • Linear transformation only
-   • Maximum components: min(n_features, n_classes - 1)
-   • Assumes normal distribution per class
-   • Assumes equal covariance matrices
+                <p>On test customers the model never saw, churners average more than one unit higher on the axis. The classes still overlap (compare the quartiles), because churn is genuinely hard to predict from these columns, but the single LD1 number is already a usable risk score.</p>
+            </section>
 
-4. LDA vs PCA:
-   • PCA: Unsupervised, maximizes variance
-   • LDA: Supervised, maximizes class separation
-   • PCA: Up to n_features components
-   • LDA: Up to n_classes - 1 components
+            <!-- ============================================================ -->
+            <section id="classifier" class="lesson-section">
+                <h2>🎯 LDA as a Classifier</h2>
 
-5. DUAL PURPOSE:
-   • Dimensionality reduction technique
-   • Linear classifier (Bayes optimal for normal distributions)
+                <p>The same fitted object predicts. LDA models each class as a bell-shaped (Gaussian) cloud, all with the <strong>same</strong> shape (one shared covariance matrix) but different centers, and assigns a new row to the class whose cloud makes it most likely, taking the class proportions (<code>priors_</code>) into account. Shared shape is what makes the boundary a straight line. Compare it with the baseline and with logistic regression on the same test set, using the metrics from Lesson 1.4:</p>
 
-6. ASSUMPTIONS:
-   • Features are normally distributed
-   • Classes have identical covariance matrices
-   • Features are statistically independent
-   • Large sample size relative to dimensionality
-"""
+                <pre><code class="language-python">from sklearn.dummy import DummyClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+from sklearn.metrics import accuracy_score, roc_auc_score
 
-print(lda_concepts)</code></pre>
-
-        <h2>Basic LDA Implementation</h2>
-        
-        <pre class="language-python"><code>class LDAAnalyzer:
-    """Comprehensive LDA analysis and visualization"""
-    
-    def __init__(self):
-        self.models = {}
-        self.transformations = {}
-        
-    def visualize_lda_concept(self):
-        """Visualize the core concept of LDA"""
-        
-        # Generate 2D data for visualization
-        np.random.seed(42)
-        
-        # Class 1: centered at (-2, 0)
-        class1 = np.random.randn(100, 2) + [-2, 0]
-        # Class 2: centered at (2, 0)
-        class2 = np.random.randn(100, 2) + [2, 0]
-        # Class 3: centered at (0, 3)
-        class3 = np.random.randn(100, 2) + [0, 3]
-        
-        X = np.vstack([class1, class2, class3])
-        y = np.array([0]*100 + [1]*100 + [2]*100)
-        
-        # Fit LDA
-        lda = LinearDiscriminantAnalysis(n_components=2)
-        X_lda = lda.fit_transform(X, y)
-        
-        # Fit PCA for comparison
-        pca = PCA(n_components=2)
-        X_pca = pca.fit_transform(X)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # Original data
-        for i, c in enumerate(['red', 'green', 'blue']):
-            mask = y == i
-            axes[0].scatter(X[mask, 0], X[mask, 1], c=c, alpha=0.6, 
-                          label=f'Class {i+1}')
-        axes[0].set_title('Original Data')
-        axes[0].set_xlabel('Feature 1')
-        axes[0].set_ylabel('Feature 2')
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3)
-        
-        # PCA projection
-        for i, c in enumerate(['red', 'green', 'blue']):
-            mask = y == i
-            axes[1].scatter(X_pca[mask, 0], X_pca[mask, 1], c=c, alpha=0.6,
-                          label=f'Class {i+1}')
-        axes[1].set_title('PCA Projection (Unsupervised)')
-        axes[1].set_xlabel('PC1')
-        axes[1].set_ylabel('PC2')
-        axes[1].legend()
-        axes[1].grid(True, alpha=0.3)
-        
-        # LDA projection
-        for i, c in enumerate(['red', 'green', 'blue']):
-            mask = y == i
-            axes[2].scatter(X_lda[mask, 0], X_lda[mask, 1], c=c, alpha=0.6,
-                          label=f'Class {i+1}')
-        axes[2].set_title('LDA Projection (Supervised)')
-        axes[2].set_xlabel('LD1')
-        axes[2].set_ylabel('LD2')
-        axes[2].legend()
-        axes[2].grid(True, alpha=0.3)
-        
-        plt.suptitle('LDA vs PCA: Maximizing Separation vs Variance', 
-                    fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return lda, pca, X, y
-    
-    def explained_variance_analysis(self, X, y):
-        """Analyze explained variance ratio in LDA"""
-        
-        # Fit LDA
-        lda = LinearDiscriminantAnalysis()
-        lda.fit(X, y)
-        
-        # Get eigenvalues (explained variance)
-        eigenvalues = lda.explained_variance_ratio_
-        n_components = len(eigenvalues)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Explained variance ratio
-        axes[0].bar(range(1, n_components+1), eigenvalues, 
-                   color='steelblue', alpha=0.7)
-        axes[0].set_xlabel('Linear Discriminant')
-        axes[0].set_ylabel('Explained Variance Ratio')
-        axes[0].set_title('Explained Variance by Each LD')
-        axes[0].grid(True, alpha=0.3, axis='y')
-        
-        # Add percentage labels
-        for i, v in enumerate(eigenvalues):
-            axes[0].text(i+1, v, f'{v*100:.1f}%', ha='center', va='bottom')
-        
-        # Cumulative explained variance
-        cumulative = np.cumsum(eigenvalues)
-        axes[1].plot(range(1, n_components+1), cumulative, 
-                    marker='o', linewidth=2, markersize=8)
-        axes[1].set_xlabel('Number of Components')
-        axes[1].set_ylabel('Cumulative Explained Variance')
-        axes[1].set_title('Cumulative Explained Variance')
-        axes[1].grid(True, alpha=0.3)
-        axes[1].axhline(y=0.95, color='r', linestyle='--', 
-                       label='95% threshold')
-        axes[1].legend()
-        
-        # Fill area under curve
-        axes[1].fill_between(range(1, n_components+1), 0, cumulative, 
-                            alpha=0.3)
-        
-        plt.suptitle('LDA Explained Variance Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        print(f"\nExplained Variance Ratio:")
-        for i, v in enumerate(eigenvalues):
-            print(f"  LD{i+1}: {v:.4f} ({v*100:.2f}%)")
-        print(f"  Total: {sum(eigenvalues):.4f}")
-        
-        return eigenvalues
-    
-    def compare_dimensions(self, X, y):
-        """Compare classification with different numbers of LDA components"""
-        
-        from sklearn.neighbors import KNeighborsClassifier
-        from sklearn.model_selection import cross_val_score
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.3, random_state=42
-        )
-        
-        n_classes = len(np.unique(y))
-        max_components = min(X.shape[1], n_classes - 1)
-        
-        accuracies_train = []
-        accuracies_test = []
-        
-        for n_comp in range(1, max_components + 1):
-            # Apply LDA
-            lda = LinearDiscriminantAnalysis(n_components=n_comp)
-            X_train_lda = lda.fit_transform(X_train, y_train)
-            X_test_lda = lda.transform(X_test)
-            
-            # Train classifier
-            knn = KNeighborsClassifier(n_neighbors=5)
-            knn.fit(X_train_lda, y_train)
-            
-            # Evaluate
-            acc_train = knn.score(X_train_lda, y_train)
-            acc_test = knn.score(X_test_lda, y_test)
-            
-            accuracies_train.append(acc_train)
-            accuracies_test.append(acc_test)
-        
-        # Visualization
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        x = range(1, max_components + 1)
-        ax.plot(x, accuracies_train, 'o-', label='Train', linewidth=2)
-        ax.plot(x, accuracies_test, 's-', label='Test', linewidth=2)
-        
-        ax.set_xlabel('Number of LDA Components')
-        ax.set_ylabel('Accuracy')
-        ax.set_title('Classification Performance vs Number of Components')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        
-        # Mark best test accuracy
-        best_idx = np.argmax(accuracies_test)
-        ax.axvline(x=best_idx+1, color='red', linestyle='--', alpha=0.5,
-                  label=f'Best: {best_idx+1} components')
-        
-        plt.tight_layout()
-        plt.show()
-        
-        print(f"\nOptimal number of components: {best_idx+1}")
-        print(f"Best test accuracy: {accuracies_test[best_idx]:.4f}")
-        
-        return accuracies_train, accuracies_test
-
-# Initialize analyzer
-analyzer = LDAAnalyzer()
-
-print("\n" + "="*60)
-print("LDA CONCEPT VISUALIZATION")
-print("="*60)
-
-lda_model, pca_model, X_demo, y_demo = analyzer.visualize_lda_concept()
-
-# Load real dataset
-iris = load_iris()
-X_iris = iris.data
-y_iris = iris.target
-
-# Standardize
-scaler = StandardScaler()
-X_iris_scaled = scaler.fit_transform(X_iris)
-
-print("\n" + "="*60)
-print("EXPLAINED VARIANCE ANALYSIS")
-print("="*60)
-
-eigenvalues = analyzer.explained_variance_analysis(X_iris_scaled, y_iris)
-
-print("\n" + "="*60)
-print("COMPONENT SELECTION")
-print("="*60)
-
-acc_train, acc_test = analyzer.compare_dimensions(X_iris_scaled, y_iris)</code></pre>
-
-        <h2>LDA for Multi-class Classification</h2>
-        
-        <pre class="language-python"><code>class LDAClassification:
-    """LDA as a classifier and for preprocessing"""
-    
-    def __init__(self):
-        self.models = {}
-        self.results = {}
-        
-    def lda_vs_other_classifiers(self, X, y):
-        """Compare LDA classifier with other methods"""
-        
-        from sklearn.linear_model import LogisticRegression
-        from sklearn.svm import SVC
-        from sklearn.ensemble import RandomForestClassifier
-        from sklearn.naive_bayes import GaussianNB
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.3, random_state=42, stratify=y
-        )
-        
-        # Classifiers to compare
-        classifiers = {
-            'LDA': LinearDiscriminantAnalysis(),
-            'Logistic Regression': LogisticRegression(max_iter=1000),
-            'SVM': SVC(kernel='linear', probability=True),
-            'Random Forest': RandomForestClassifier(n_estimators=100),
-            'Naive Bayes': GaussianNB()
-        }
-        
-        results = {}
-        
-        for name, clf in classifiers.items():
-            # Train
-            clf.fit(X_train, y_train)
-            
-            # Predict
-            y_pred_train = clf.predict(X_train)
-            y_pred_test = clf.predict(X_test)
-            
-            # Store results
-            results[name] = {
-                'train_acc': accuracy_score(y_train, y_pred_train),
-                'test_acc': accuracy_score(y_test, y_pred_test),
-                'model': clf
-            }
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-        
-        # Accuracy comparison
-        names = list(results.keys())
-        train_accs = [results[n]['train_acc'] for n in names]
-        test_accs = [results[n]['test_acc'] for n in names]
-        
-        x = np.arange(len(names))
-        width = 0.35
-        
-        bars1 = axes[0].bar(x - width/2, train_accs, width, label='Train',
-                           color='skyblue', alpha=0.8)
-        bars2 = axes[0].bar(x + width/2, test_accs, width, label='Test',
-                           color='orange', alpha=0.8)
-        
-        axes[0].set_xlabel('Classifier')
-        axes[0].set_ylabel('Accuracy')
-        axes[0].set_title('Classifier Performance Comparison')
-        axes[0].set_xticks(x)
-        axes[0].set_xticklabels(names, rotation=45, ha='right')
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3, axis='y')
-        
-        # Add value labels on bars
-        for bars in [bars1, bars2]:
-            for bar in bars:
-                height = bar.get_height()
-                axes[0].text(bar.get_x() + bar.get_width()/2., height,
-                           f'{height:.3f}', ha='center', va='bottom', fontsize=9)
-        
-        # Decision boundaries (2D projection for visualization)
-        lda_viz = LinearDiscriminantAnalysis(n_components=2)
-        X_2d = lda_viz.fit_transform(X, y)
-        
-        # Plot decision boundary for LDA
-        h = 0.02  # Step size in mesh
-        x_min, x_max = X_2d[:, 0].min() - 1, X_2d[:, 0].max() + 1
-        y_min, y_max = X_2d[:, 1].min() - 1, X_2d[:, 1].max() + 1
-        xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
-                            np.arange(y_min, y_max, h))
-        
-        # Train LDA on 2D data
-        lda_2d = LinearDiscriminantAnalysis()
-        lda_2d.fit(X_2d, y)
-        Z = lda_2d.predict(np.c_[xx.ravel(), yy.ravel()])
-        Z = Z.reshape(xx.shape)
-        
-        axes[1].contourf(xx, yy, Z, alpha=0.3, cmap='viridis')
-        scatter = axes[1].scatter(X_2d[:, 0], X_2d[:, 1], c=y, 
-                                 cmap='viridis', edgecolor='black', 
-                                 linewidth=0.5, alpha=0.7)
-        axes[1].set_xlabel('LD1')
-        axes[1].set_ylabel('LD2')
-        axes[1].set_title('LDA Decision Boundaries')
-        plt.colorbar(scatter, ax=axes[1])
-        axes[1].grid(True, alpha=0.3)
-        
-        plt.suptitle('LDA as a Classifier', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return results
-    
-    def lda_with_regularization(self, X, y):
-        """Compare different LDA solvers and regularization"""
-        
-        # Different LDA configurations
-        configs = {
-            'Standard LDA': LinearDiscriminantAnalysis(solver='svd'),
-            'LDA with shrinkage (auto)': LinearDiscriminantAnalysis(
-                solver='lsqr', shrinkage='auto'
-            ),
-            'LDA with shrinkage (0.5)': LinearDiscriminantAnalysis(
-                solver='lsqr', shrinkage=0.5
-            ),
-            'QDA': LinearDiscriminantAnalysis(solver='svd')  # Placeholder
-        }
-        
-        # For QDA comparison
-        from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
-        configs['QDA'] = QuadraticDiscriminantAnalysis()
-        
-        # Cross-validation scores
-        from sklearn.model_selection import cross_val_score
-        
-        cv_scores = {}
-        
-        for name, model in configs.items():
-            scores = cross_val_score(model, X, y, cv=5)
-            cv_scores[name] = scores
-            print(f"{name}: {scores.mean():.4f} (+/- {scores.std()*2:.4f})")
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-        
-        # Box plot of CV scores
-        axes[0].boxplot(cv_scores.values(), labels=cv_scores.keys())
-        axes[0].set_ylabel('Accuracy')
-        axes[0].set_title('Cross-Validation Scores')
-        axes[0].grid(True, alpha=0.3, axis='y')
-        axes[0].set_xticklabels(cv_scores.keys(), rotation=45, ha='right')
-        
-        # Mean and std comparison
-        means = [scores.mean() for scores in cv_scores.values()]
-        stds = [scores.std() for scores in cv_scores.values()]
-        names = list(cv_scores.keys())
-        
-        x = np.arange(len(names))
-        axes[1].bar(x, means, yerr=stds, capsize=5, color='steelblue', alpha=0.7)
-        axes[1].set_ylabel('Mean Accuracy')
-        axes[1].set_title('Mean CV Accuracy with Standard Deviation')
-        axes[1].set_xticks(x)
-        axes[1].set_xticklabels(names, rotation=45, ha='right')
-        axes[1].grid(True, alpha=0.3, axis='y')
-        
-        # Add value labels
-        for i, (mean, std) in enumerate(zip(means, stds)):
-            axes[1].text(i, mean + std, f'{mean:.3f}', ha='center', va='bottom')
-        
-        plt.suptitle('LDA Regularization and Solver Comparison', 
-                    fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return cv_scores
-    
-    def lda_feature_importance(self, X, y, feature_names=None):
-        """Analyze feature importance in LDA"""
-        
-        # Fit LDA
-        lda = LinearDiscriminantAnalysis()
-        lda.fit(X, y)
-        
-        # Get coefficients (for binary classification) or scalings
-        n_classes = len(np.unique(y))
-        
-        if n_classes == 2:
-            # Binary case: use coef_
-            coef = lda.coef_[0]
-            importance = np.abs(coef)
-        else:
-            # Multi-class: use scalings (eigenvectors)
-            # Take the absolute mean across components
-            importance = np.abs(lda.scalings_).mean(axis=1)
-        
-        # Sort features by importance
-        indices = np.argsort(importance)[::-1]
-        
-        if feature_names is None:
-            feature_names = [f'Feature {i}' for i in range(X.shape[1])]
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-        
-        # Bar plot of feature importance
-        n_display = min(20, len(importance))
-        axes[0].bar(range(n_display), importance[indices[:n_display]],
-                   color='steelblue', alpha=0.7)
-        axes[0].set_xlabel('Feature Index')
-        axes[0].set_ylabel('Importance')
-        axes[0].set_title(f'Top {n_display} Feature Importances')
-        axes[0].set_xticks(range(n_display))
-        axes[0].set_xticklabels([feature_names[i] for i in indices[:n_display]],
-                               rotation=45, ha='right')
-        axes[0].grid(True, alpha=0.3, axis='y')
-        
-        # Cumulative importance
-        cumsum_importance = np.cumsum(importance[indices]) / importance.sum()
-        axes[1].plot(range(len(importance)), cumsum_importance, 
-                    marker='o', markersize=4)
-        axes[1].set_xlabel('Number of Features')
-        axes[1].set_ylabel('Cumulative Importance')
-        axes[1].set_title('Cumulative Feature Importance')
-        axes[1].axhline(y=0.95, color='r', linestyle='--', 
-                       label='95% threshold')
-        axes[1].grid(True, alpha=0.3)
-        axes[1].legend()
-        
-        # Find number of features for 95% importance
-        n_features_95 = np.argmax(cumsum_importance >= 0.95) + 1
-        axes[1].axvline(x=n_features_95, color='g', linestyle='--', 
-                       label=f'{n_features_95} features')
-        
-        plt.suptitle('Feature Importance in LDA', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        print(f"\nTop 10 Most Important Features:")
-        for i in range(min(10, len(importance))):
-            idx = indices[i]
-            print(f"  {i+1}. {feature_names[idx]}: {importance[idx]:.4f}")
-        
-        print(f"\nFeatures needed for 95% importance: {n_features_95}")
-        
-        return importance, indices
-
-# Classification analysis
-classifier = LDAClassification()
-
-# Load wine dataset for multi-class classification
-wine = load_wine()
-X_wine = wine.data
-y_wine = wine.target
-
-# Standardize
-scaler = StandardScaler()
-X_wine_scaled = scaler.fit_transform(X_wine)
-
-print("\n" + "="*60)
-print("LDA VS OTHER CLASSIFIERS")
-print("="*60)
-
-results = classifier.lda_vs_other_classifiers(X_wine_scaled, y_wine)
-
-print("\n" + "="*60)
-print("LDA REGULARIZATION")
-print("="*60)
-
-cv_scores = classifier.lda_with_regularization(X_wine_scaled, y_wine)
-
-print("\n" + "="*60)
-print("FEATURE IMPORTANCE")
-print("="*60)
-
-importance, indices = classifier.lda_feature_importance(
-    X_wine_scaled, y_wine, wine.feature_names
-)</code></pre>
-
-        <h2>Advanced LDA Applications</h2>
-        
-        <pre class="language-python"><code>class AdvancedLDA:
-    """Advanced LDA techniques and applications"""
-    
-    def __init__(self):
-        self.models = {}
-        
-    def face_recognition_example(self):
-        """Demonstrate LDA for face recognition (Fisherfaces)"""
-        
-        from sklearn.datasets import fetch_olivetti_faces
-        from sklearn.model_selection import train_test_split
-        
-        # Load face dataset
-        print("Loading face dataset...")
-        faces = fetch_olivetti_faces(shuffle=True, random_state=42)
-        X_faces = faces.data
-        y_faces = faces.target
-        
-        # Only use first 20 people for visualization
-        mask = y_faces < 20
-        X_faces = X_faces[mask]
-        y_faces = y_faces[mask]
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_faces, y_faces, test_size=0.25, random_state=42
-        )
-        
-        # Apply PCA first (common in face recognition)
-        print("Applying PCA for initial reduction...")
-        pca = PCA(n_components=100, whiten=True)
-        X_train_pca = pca.fit_transform(X_train)
-        X_test_pca = pca.transform(X_test)
-        
-        # Apply LDA (Fisherfaces)
-        print("Applying LDA (Fisherfaces)...")
-        lda = LinearDiscriminantAnalysis()
-        X_train_lda = lda.fit_transform(X_train_pca, y_train)
-        X_test_lda = lda.transform(X_test_pca)
-        
-        # Classification
-        from sklearn.neighbors import KNeighborsClassifier
-        
-        # Using PCA only
-        knn_pca = KNeighborsClassifier(n_neighbors=3)
-        knn_pca.fit(X_train_pca, y_train)
-        acc_pca = knn_pca.score(X_test_pca, y_test)
-        
-        # Using PCA + LDA
-        knn_lda = KNeighborsClassifier(n_neighbors=3)
-        knn_lda.fit(X_train_lda, y_train)
-        acc_lda = knn_lda.score(X_test_lda, y_test)
-        
-        # Visualization
-        fig, axes = plt.subplots(2, 3, figsize=(14, 10))
-        
-        # Show example faces
-        for i in range(3):
-            axes[0, i].imshow(X_train[i].reshape(64, 64), cmap='gray')
-            axes[0, i].set_title(f'Person {y_train[i]}')
-            axes[0, i].axis('off')
-        
-        # Show Fisherfaces (LDA components)
-        for i in range(3):
-            # Get the i-th discriminant after PCA transformation
-            fisherface = pca.inverse_transform(lda.scalings_[:, i])
-            axes[1, i].imshow(fisherface.reshape(64, 64), cmap='gray')
-            axes[1, i].set_title(f'Fisherface {i+1}')
-            axes[1, i].axis('off')
-        
-        plt.suptitle(f'Face Recognition with LDA\nPCA: {acc_pca:.2f}, '
-                    f'PCA+LDA: {acc_lda:.2f}', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        print(f"\nFace Recognition Results:")
-        print(f"  PCA only accuracy: {acc_pca:.3f}")
-        print(f"  PCA + LDA accuracy: {acc_lda:.3f}")
-        print(f"  Improvement: {(acc_lda - acc_pca)*100:.1f}%")
-        
-        return lda, pca
-    
-    def text_classification_lda(self):
-        """LDA for text classification"""
-        
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        
-        # Sample text data
-        documents = [
-            # Technology
-            "Machine learning algorithms process big data",
-            "Artificial intelligence revolutionizes computing",
-            "Deep neural networks require GPU processing",
-            "Cloud computing enables scalable solutions",
-            "Quantum computing breaks encryption methods",
-            
-            # Sports
-            "Football teams compete for championship titles",
-            "Basketball players train for Olympic games",
-            "Tennis matches require endurance and skill",
-            "Marathon runners prepare with daily training",
-            "Swimming competitions test speed and technique",
-            
-            # Science
-            "DNA sequences reveal evolutionary relationships",
-            "Chemical reactions produce new compounds",
-            "Quantum physics explains particle behavior",
-            "Climate change affects global temperatures",
-            "Astronomy discovers distant galaxies"
-        ]
-        
-        labels = [0] * 5 + [1] * 5 + [2] * 5  # Tech, Sports, Science
-        label_names = ['Technology', 'Sports', 'Science']
-        
-        # Vectorize text
-        vectorizer = TfidfVectorizer(max_features=50)
-        X_text = vectorizer.fit_transform(documents).toarray()
-        
-        # Apply LDA
-        lda = LinearDiscriminantAnalysis(n_components=2)
-        X_lda = lda.fit_transform(X_text, labels)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-        
-        # LDA projection
-        colors = ['red', 'blue', 'green']
-        for i in range(3):
-            mask = np.array(labels) == i
-            axes[0].scatter(X_lda[mask, 0], X_lda[mask, 1],
-                          c=colors[i], label=label_names[i],
-                          s=100, alpha=0.7)
-        
-        # Add text annotations
-        for i, doc in enumerate(documents):
-            axes[0].annotate(f'{i+1}', xy=(X_lda[i, 0], X_lda[i, 1]),
-                           ha='center', va='center', fontsize=8)
-        
-        axes[0].set_xlabel('LD1')
-        axes[0].set_ylabel('LD2')
-        axes[0].set_title('Text Classification with LDA')
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3)
-        
-        # Feature importance (top words)
-        importance = np.abs(lda.coef_).mean(axis=0)
-        top_indices = np.argsort(importance)[-10:][::-1]
-        feature_names = vectorizer.get_feature_names_out()
-        top_words = [feature_names[i] for i in top_indices]
-        top_scores = importance[top_indices]
-        
-        axes[1].barh(range(10), top_scores, color='steelblue', alpha=0.7)
-        axes[1].set_yticks(range(10))
-        axes[1].set_yticklabels(top_words)
-        axes[1].set_xlabel('Importance')
-        axes[1].set_title('Top 10 Discriminative Words')
-        axes[1].grid(True, alpha=0.3, axis='x')
-        
-        plt.suptitle('LDA for Text Classification', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        print("\nTop discriminative words:")
-        for word, score in zip(top_words, top_scores):
-            print(f"  {word}: {score:.3f}")
-        
-        return lda, X_lda
-    
-    def incremental_lda(self, X, y, batch_size=50):
-        """Demonstrate incremental/online LDA"""
-        
-        from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-        
-        # Note: sklearn's LDA doesn't support incremental learning natively
-        # This is a demonstration of the concept
-        
-        n_samples = len(X)
-        n_batches = n_samples // batch_size
-        
-        accuracies = []
-        
-        # Initialize with first batch
-        lda = LinearDiscriminantAnalysis()
-        X_batch = X[:batch_size]
-        y_batch = y[:batch_size]
-        lda.fit(X_batch, y_batch)
-        
-        # Process subsequent batches
-        for i in range(1, n_batches):
-            start_idx = i * batch_size
-            end_idx = min(start_idx + batch_size, n_samples)
-            
-            X_batch = X[start_idx:end_idx]
-            y_batch = y[start_idx:end_idx]
-            
-            # In practice, you would update the model incrementally
-            # Here we retrain on all data seen so far
-            X_seen = X[:end_idx]
-            y_seen = y[:end_idx]
-            lda.fit(X_seen, y_seen)
-            
-            # Evaluate on test batch
-            if i < n_batches - 1:
-                X_test = X[end_idx:end_idx+batch_size]
-                y_test = y[end_idx:end_idx+batch_size]
-                acc = lda.score(X_test, y_test)
-                accuracies.append(acc)
-        
-        # Visualization
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        ax.plot(range(1, len(accuracies)+1), accuracies, 
-               marker='o', linewidth=2)
-        ax.set_xlabel('Batch Number')
-        ax.set_ylabel('Accuracy on Next Batch')
-        ax.set_title('Incremental LDA Performance')
-        ax.grid(True, alpha=0.3)
-        
-        # Add trend line
-        z = np.polyfit(range(len(accuracies)), accuracies, 1)
-        p = np.poly1d(z)
-        ax.plot(range(len(accuracies)), p(range(len(accuracies))), 
-               "r--", alpha=0.5, label='Trend')
-        ax.legend()
-        
-        plt.tight_layout()
-        plt.show()
-        
-        print(f"\nIncremental LDA Results:")
-        print(f"  Initial accuracy: {accuracies[0]:.3f}")
-        print(f"  Final accuracy: {accuracies[-1]:.3f}")
-        print(f"  Average accuracy: {np.mean(accuracies):.3f}")
-        
-        return lda, accuracies
-
-# Advanced applications
-advanced = AdvancedLDA()
-
-print("\n" + "="*60)
-print("FACE RECOGNITION WITH LDA")
-print("="*60)
-
-lda_faces, pca_faces = advanced.face_recognition_example()
-
-print("\n" + "="*60)
-print("TEXT CLASSIFICATION")
-print("="*60)
-
-lda_text, X_text_lda = advanced.text_classification_lda()
-
-print("\n" + "="*60)
-print("INCREMENTAL LDA")
-print("="*60)
-
-# Generate larger dataset for incremental learning
-X_incremental, y_incremental = make_classification(
-    n_samples=500, n_features=20, n_informative=15,
-    n_redundant=5, n_classes=3, random_state=42
-)
-
-lda_incremental, accuracies = advanced.incremental_lda(
-    X_incremental, y_incremental
-)</code></pre>
-
-        <h2>Best Practices and Guidelines</h2>
-        
-        <pre class="language-python"><code>print("\n" + "="*60)
-print("LDA BEST PRACTICES")
-print("="*60)
-
-best_practices = """
-KEY GUIDELINES:
-
-1. DATA PREPROCESSING:
-   • Standardize features (important!)
-   • Handle missing values
-   • Check for multicollinearity
-   • Ensure sufficient samples per class
-
-2. ASSUMPTIONS CHECK:
-   • Normal distribution: Use Q-Q plots
-   • Equal covariance: Box's M test
-   • Linear separability: Visualize data
-   • Sample size: At least 20n per class (n = features)
-
-3. WHEN TO USE LDA:
-   ✓ Supervised dimensionality reduction
-   ✓ Multi-class classification
-   ✓ Feature extraction before classification
-   ✓ Face/pattern recognition
-   ✓ When classes are well-separated
-
-4. WHEN NOT TO USE LDA:
-   ✗ Non-linear relationships
-   ✗ Severely imbalanced classes
-   ✗ High-dimensional sparse data
-   ✗ Assumptions severely violated
-   ✗ Need more than (n_classes - 1) components
-
-5. PARAMETER TUNING:
-   • solver: 'svd' for most cases, 'lsqr' for regularization
-   • shrinkage: 'auto' or tune between 0-1
-   • n_components: Usually (n_classes - 1) or less
-   • priors: Adjust for imbalanced classes
-
-6. ADVANTAGES:
-   • Simple and interpretable
-   • No hyperparameters to tune (mostly)
-   • Works well for well-separated classes
-   • Can be used as classifier
-   • Computationally efficient
-
-7. LIMITATIONS:
-   • Linear boundaries only
-   • Maximum (n_classes - 1) components
-   • Sensitive to outliers
-   • Assumes Gaussian distributions
-   • Not suitable for complex patterns
-"""
-
-print(best_practices)
-
-# Comparison with other methods
-comparison_data = {
-    'Method': ['LDA', 'PCA', 't-SNE', 'UMAP', 'QDA'],
-    'Type': ['Linear', 'Linear', 'Non-linear', 'Non-linear', 'Quadratic'],
-    'Supervised': ['Yes', 'No', 'No', 'Optional', 'Yes'],
-    'Max Components': ['c-1', 'n', '2-3', 'Any', 'N/A'],
-    'New Data': ['Yes', 'Yes', 'No', 'Yes', 'Yes'],
-    'Speed': ['Fast', 'Fast', 'Slow', 'Medium', 'Fast']
+print("class priors learned from training data:", lda.priors_.round(3))
+models = {
+    "baseline": DummyClassifier(strategy="prior"),
+    "LDA": LinearDiscriminantAnalysis(),
+    "logistic regression": LogisticRegression(),
+    "QDA": QuadraticDiscriminantAnalysis(),
 }
+for name, model in models.items():
+    model.fit(X_train_s, y_train)
+    proba = model.predict_proba(X_test_s)[:, 1]
+    acc = accuracy_score(y_test, model.predict(X_test_s))
+    print(f"{name:20s} accuracy {acc:.3f}   ROC AUC {roc_auc_score(y_test, proba):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>class priors learned from training data: [0.835 0.165]
+baseline             accuracy 0.835   ROC AUC 0.500
+LDA                  accuracy 0.853   ROC AUC 0.824
+logistic regression  accuracy 0.848   ROC AUC 0.823
+QDA                  accuracy 0.813   ROC AUC 0.803</code></pre>
+                </div>
 
-comparison_df = pd.DataFrame(comparison_data)
-print("\nDimensionality Reduction Methods Comparison:")
-print("="*60)
-print(comparison_df.to_string(index=False))
-print("\n(c = number of classes, n = number of features)")
+                <p>LDA and logistic regression are neck and neck: both draw one straight boundary, they just estimate it differently (LDA from class means and a shared covariance, logistic regression by directly maximizing the likelihood of the labels). Both clearly beat the baseline's AUC of 0.5.</p>
 
-# Implementation checklist
-checklist = """
-LDA IMPLEMENTATION CHECKLIST:
-□ Check class distribution (balanced?)
-□ Standardize/normalize features
-□ Verify assumptions (normality, equal covariance)
-□ Choose appropriate solver
-□ Consider regularization for high dimensions
-□ Set n_components (max is n_classes - 1)
-□ Split data properly (stratified for imbalanced)
-□ Evaluate with appropriate metrics
-□ Compare with PCA (unsupervised baseline)
-□ Visualize projected data
-□ Analyze feature contributions
-□ Cross-validate for stability
-"""
+                <p><strong>QDA</strong> (quadratic discriminant analysis) lets every class have its own covariance shape, which makes curved boundaries possible. Here it is worse. It has many more numbers to estimate (a full covariance matrix per class), and the Gaussian assumption fits these skewed counts and fractions poorly. Flexibility is not free.</p>
 
-print(checklist)
+                <div class="card card-info">
+                    <h4>💡 Do the Assumptions Matter?</h4>
+                    <p>LDA's derivation assumes Gaussian classes with equal covariance. Pinecrest's columns are counts, dollar amounts and fractions: clearly not bell curves. Yet LDA matched logistic regression. That is typical: as a classifier, LDA is robust to moderate violations, because a straight boundary is often good enough. Treat the assumptions as a reason to check, not a reason to avoid it, and let a held-out score decide.</p>
+                </div>
 
-# Common pitfalls
-pitfalls = """
-COMMON PITFALLS TO AVOID:
+                <div class="card card-warning">
+                    <h4>⚠️ A Risk Score Is Not a Verdict</h4>
+                    <p>A churn axis ranks customers for a retention offer; it does not decide who "deserves" one. If you ever use such a score to treat customers differently, check that it does not disadvantage a group unfairly (Lesson 7.3 shows how), and never use a protected attribute such as <code>age_group</code> as the label for LDA or any other model.</p>
+                </div>
+            </section>
 
-1. Using LDA with too few samples per class
-   → Need at least 20 * n_features per class
+            <!-- ============================================================ -->
+            <section id="multiclass" class="lesson-section">
+                <h2>🧮 More Classes, More Axes</h2>
 
-2. Ignoring assumption violations
-   → Check normality and covariance assumptions
+                <p>With more classes, LDA gives more axes, up to classes minus one, and <code>explained_variance_ratio_</code> says how much of the between-class separation each axis carries. Here is a toy with four classes in ten dimensions:</p>
 
-3. Using more components than (n_classes - 1)
-   → LDA is limited by number of classes
+                <pre><code class="language-python">from sklearn.datasets import make_blobs
 
-4. Not standardizing features
-   → LDA is sensitive to scale
+blobs_X, blobs_y = make_blobs(n_samples=400, centers=4, n_features=10, cluster_std=3.0, random_state=42)
+blob_lda = LinearDiscriminantAnalysis().fit(blobs_X, blobs_y)
 
-5. Using LDA for non-linear problems
-   → Consider kernel LDA or non-linear methods
+print("classes:", blob_lda.classes_)
+print("transform shape:", blob_lda.transform(blobs_X).shape)
+print("separation carried by each axis:", blob_lda.explained_variance_ratio_.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>classes: [0 1 2 3]
+transform shape: (400, 3)
+separation carried by each axis: [0.781 0.136 0.083]</code></pre>
+                </div>
 
-6. Ignoring class imbalance
-   → Adjust priors or use class weights
+                <p>Four classes, three discriminant axes, whatever the ten features. Note what the ratio measures: the share of <em>between-class</em> separation, not of total variance as in PCA. If the first two axes carry nearly all of it, a two-dimensional LDA plot shows almost everything that distinguishes the classes. The project does this with Pinecrest's three loyalty tiers.</p>
 
-7. Not comparing with unsupervised methods
-   → Always benchmark against PCA
-"""
+                <div class="mermaid">
+graph TD
+    A["Labeled data: C classes"] --> B{"Goal?"}
+    B -->|"picture or features"| C["transform: up to C-1 axes"]
+    B -->|"predictions"| D["predict and predict_proba"]
+    C --> E["Plot, or feed another model"]
+    D --> F["Compare with baseline and LR"]
+                </div>
+            </section>
 
-print(pitfalls)</code></pre>
+            <!-- ============================================================ -->
+            <section id="shrinkage" class="lesson-section">
+                <h2>🪢 Many Features, Few Rows: Shrinkage</h2>
 
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Multi-class Medical Diagnosis</h3>
-            <p>Implement LDA for disease classification:</p>
-            <ol>
-                <li>Load medical dataset with multiple disease classes</li>
-                <li>Check and validate LDA assumptions</li>
-                <li>Apply LDA with appropriate regularization</li>
-                <li>Compare with QDA and other classifiers</li>
-                <li>Visualize decision boundaries and interpret results</li>
-            </ol>
+                <p>LDA has to estimate a covariance matrix: for 200 features, that is about 20,000 numbers. With only 100 rows the estimate is very noisy, and the classifier suffers. <strong>Shrinkage</strong> pulls the estimated covariance toward a simpler, more stable shape. With <code>shrinkage="auto"</code>, scikit-learn picks the amount with the Ledoit-Wolf formula, so there is nothing to tune. It needs the <code>"lsqr"</code> or <code>"eigen"</code> solver.</p>
+
+                <pre><code class="language-python">from sklearn.datasets import make_classification
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+wide_X, wide_y = make_classification(n_samples=100, n_features=200, n_informative=10,
+                                     n_redundant=0, random_state=42)
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+for name, model in [("plain LDA (svd)", LinearDiscriminantAnalysis()),
+                    ("LDA with shrinkage", LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto"))]:
+    print(f"{name:20s} CV accuracy {cross_val_score(model, wide_X, wide_y, cv=cv).mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>plain LDA (svd)      CV accuracy 0.540
+LDA with shrinkage   CV accuracy 0.680</code></pre>
+                </div>
+
+                <p>Without shrinkage, LDA on 100 rows and 200 features is close to a coin flip. With it, accuracy improves substantially. Use shrinkage whenever features are many compared with rows (text, genes, pixels with few images). One catch: the <code>"lsqr"</code> solver only classifies; if you also want <code>transform</code>, use <code>solver="eigen"</code> with shrinkage.</p>
+
+                <div class="card card-success">
+                    <h4>✅ Choosing a Solver</h4>
+                    <p><code>"svd"</code> (the default): no covariance matrix, fine for many features, supports <code>transform</code>, no shrinkage. <code>"lsqr"</code>: classification only, supports shrinkage. <code>"eigen"</code>: supports both <code>transform</code> and shrinkage. When in doubt: default for ordinary tables, <code>"eigen"</code> with <code>shrinkage="auto"</code> for wide ones.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <h3>1. Asking for More Axes Than Classes Allow</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">LinearDiscriminantAnalysis(n_components=2).fit(X_train_s, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: n_components cannot be larger than min(n_features, n_classes - 1).</code></pre>
+                </div>
+                <p><strong>What it means:</strong> churn has two classes, so there is only one discriminant direction, whatever the number of features. <strong>Fix:</strong> <code>n_components</code> at most classes minus one. If you need a two-dimensional picture of a two-class problem, use LD1 plus a principal component, or the methods of Lesson 9.3.</p>
+
+                <h3>2. Forgetting the Labels</h3>
+
+                <pre data-raises="TypeError"><code class="language-python">LinearDiscriminantAnalysis().fit(X_train_s)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>TypeError: LinearDiscriminantAnalysis.fit() missing 1 required positional argument: 'y'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> unlike PCA, LDA is supervised; it cannot find class-separating directions without classes. <strong>Fix:</strong> <code>fit(X, y)</code>. If you have no labels, you want PCA (or a clustering first, then think hard about whether its labels mean anything).</p>
+
+                <h3>3. Shrinkage with the Default Solver</h3>
+
+                <pre data-raises="NotImplementedError"><code class="language-python">LinearDiscriminantAnalysis(shrinkage="auto").fit(X_train_s, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>NotImplementedError: shrinkage not supported with 'svd' solver.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the default <code>"svd"</code> solver never forms a covariance matrix, so there is nothing to shrink. <strong>Fix:</strong> <code>solver="lsqr"</code> (classification) or <code>solver="eigen"</code> (classification and <code>transform</code>).</p>
+
+                <h3>4. Fitting LDA Before Cross-Validation</h3>
+
+                <p>This one raises nothing and is the most dangerous. Make data that is <em>pure noise</em>: 500 random features and three random labels, so no model can honestly beat one-in-three. Reduce it with LDA on all rows, then cross-validate a k-nearest-neighbors classifier on the reduced data:</p>
+
+                <pre><code class="language-python">from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+
+noise_X = rng.normal(size=(100, 500))
+noise_y = rng.integers(0, 3, size=100)
+
+reduced = LinearDiscriminantAnalysis(n_components=2).fit_transform(noise_X, noise_y)
+leaky = cross_val_score(KNeighborsClassifier(n_neighbors=5), reduced, noise_y, cv=cv).mean()
+
+honest_pipe = make_pipeline(LinearDiscriminantAnalysis(n_components=2), KNeighborsClassifier(n_neighbors=5))
+honest = cross_val_score(honest_pipe, noise_X, noise_y, cv=cv).mean()
+
+print(f"LDA fitted on all rows, then CV: {leaky:.2f}")
+print(f"LDA inside the pipeline:         {honest:.2f}")
+print("chance level:                    0.33")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>LDA fitted on all rows, then CV: 0.62
+LDA inside the pipeline:         0.34
+chance level:                    0.33</code></pre>
+                </div>
+                <p><strong>What happened:</strong> with 500 features and 100 rows, LDA can always find directions along which the given labels happen to separate, even when the labels are random. Fitted on all rows, it used the test folds' labels to build the features, so the cross-validation scores the model on rows it has effectively memorized. Inside the pipeline, each fold fits LDA on its training part only, and the score falls back to chance, which is the truth. <strong>Fix:</strong> every supervised step (LDA, target encoding, feature selection that looks at <code>y</code>) belongs inside the <code>Pipeline</code>. PCA's version of this leak was small; a supervised reducer's is large.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: The Loyalty-Tier Map</h2>
+
+                <p>Pinecrest's marketing team wants a picture of its three loyalty tiers (Basic, Silver, Gold) and a quick way to tell which behaviors separate them. Three classes means LDA gives exactly two axes: a perfect fit for a flat map. You will build the map, read what defines each axis, compare it with PCA, and check how well the same model predicts a customer's tier. Work in a new notebook called <code>lesson_9_2_project</code>. Allow about 45 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load and split by tier <span class="step-time">(5 min)</span></h3>
+                    <p>The target is now <code>loyalty_tier</code>, so stratify on it.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+X = customers[features]
+tier = customers["loyalty_tier"]
+
+X_train, X_test, t_train, t_test = train_test_split(X, tier, test_size=0.25, stratify=tier, random_state=42)
+print(t_train.value_counts())</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>loyalty_tier
+Basic     2129
+Silver    2015
+Gold       356
+Name: count, dtype: int64</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Baseline and an LDA pipeline <span class="step-time">(10 min)</span></h3>
+                    <p>Put the scaler and LDA in one pipeline, so the whole thing is fitted on training rows only, and compare with the most-frequent baseline and with logistic regression.</p>
+                    <pre><code class="language-python">from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.linear_model import LogisticRegression
+from sklearn.dummy import DummyClassifier
+
+tier_lda = make_pipeline(StandardScaler(), LinearDiscriminantAnalysis())
+candidates = {
+    "baseline": DummyClassifier(strategy="most_frequent"),
+    "LDA": tier_lda,
+    "logistic regression": make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
+}
+for name, model in candidates.items():
+    model.fit(X_train, t_train)
+    print(f"{name:20s} test accuracy {model.score(X_test, t_test):.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>baseline             test accuracy 0.473
+LDA                  test accuracy 0.909
+logistic regression  test accuracy 0.921</code></pre>
+                    </div>
+                    <p>Guessing "Basic" for everyone is right about 47% of the time. LDA gets about nine customers in ten right, close to logistic regression, using only a straight boundary and no tuning.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: What defines the two axes? <span class="step-time">(10 min)</span></h3>
+                    <p>Read how much separation each axis carries, and its weights.</p>
+                    <pre><code class="language-python">lda_step = tier_lda[-1]
+print("classes:", lda_step.classes_)
+print("separation carried:", lda_step.explained_variance_ratio_.round(3))
+weights = pd.DataFrame(lda_step.scalings_, index=features, columns=["LD1", "LD2"])
+print(weights.round(2))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>classes: ['Basic' 'Gold' 'Silver']
+separation carried: [0.948 0.052]
+                        LD1   LD2
+tenure_months          0.98  0.42
+orders_12m             0.09  2.01
+spend_12m              1.58 -2.51
+avg_order_value        0.06  1.89
+days_since_last_order -0.01 -0.16
+returns_12m            0.03 -0.18
+return_rate            0.01  0.42
+support_tickets_12m    0.00 -0.03
+discount_share        -0.05 -0.23
+app_user              -0.01  0.03</code></pre>
+                    </div>
+                    <p>LD1 carries about 95% of the separation, and it is essentially <strong>spend plus tenure</strong>: every other weight is near zero. That is a real discovery about the data: the tiers are defined by how much customers spend and how long they have been members, not by how often they buy, how recently, or how much they return. LD2 carries the last 5%, and its weights are large and of opposite sign for spend, orders and average order value. Those three columns are nearly redundant (spend is about orders times average order value), so their individual weights on LD2 are unstable. Read a small axis built from redundant columns with care, exactly as with regression coefficients.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Draw PCA and LDA side by side <span class="step-time">(10 min)</span></h3>
+                    <p>Project the test customers both ways and color them by tier.</p>
+                    <pre><code class="language-python">from sklearn.decomposition import PCA
+
+tier_pca = make_pipeline(StandardScaler(), PCA(n_components=2)).fit(X_train)
+views = {"PCA (ignores the tiers)": tier_pca.transform(X_test),
+         "LDA (uses the tiers)": tier_lda.transform(X_test)}
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4.2), layout="constrained")
+colors = {"Basic": "#adb5bd", "Silver": "#667eea", "Gold": "#e8a317"}
+for ax, (title, Z) in zip(axes, views.items()):
+    for name, color in colors.items():
+        mask = (t_test == name).to_numpy()
+        ax.scatter(Z[mask, 0], Z[mask, 1], s=6, alpha=0.6, color=color, label=name)
+    ax.set_title(title)
+    ax.set_xlabel("axis 1")
+    ax.set_ylabel("axis 2")
+axes[1].legend(markerscale=3)
+plt.show()</code></pre>
+                    <figure>
+                        <img src="images/dimensionality_lda_tier_maps.png" alt="Two scatter plots of 1,500 test customers colored by loyalty tier. Left, the PCA map: Basic, Silver and Gold customers overlap a lot, with Gold drifting toward the right. Right, the LDA map: the three tiers form three bands from left to right along the first axis, Basic, then Silver, then Gold, with little overlap." width="1100" height="462" loading="lazy">
+                        <figcaption>The same customers on two maps. PCA shows a loose drift from Basic to Gold with plenty of overlap; LDA's first axis lines the tiers up in order, Basic to Silver to Gold.</figcaption>
+                    </figure>
+                    <p>The LDA map is what the marketing team asked for: three bands in tier order along one axis. Both maps were fitted on training customers and drawn with test customers, so the separation is not a memorization artifact like the noise example in Common Mistakes.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Where does it go wrong? <span class="step-time">(5 min)</span></h3>
+                    <p>A confusion matrix (Lesson 1.4) shows which tiers get mixed up.</p>
+                    <pre><code class="language-python">from sklearn.metrics import confusion_matrix
+
+order = ["Basic", "Silver", "Gold"]
+cm = confusion_matrix(t_test, tier_lda.predict(X_test), labels=order)
+print(pd.DataFrame(cm, index=[f"true {t}" for t in order], columns=[f"pred {t}" for t in order]))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>             pred Basic  pred Silver  pred Gold
+true Basic          675           34          0
+true Silver          50          602         20
+true Gold             0           33         86</code></pre>
+                    </div>
+                    <p>Mistakes happen only between neighboring tiers: Basic with Silver, and Silver with Gold. LDA never confuses Basic with Gold, because they sit at opposite ends of LD1. The errors are customers near a tier boundary, where a straight line through spend and tenure cannot match the real rule exactly.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save the map coordinates <span class="step-time">(5 min)</span></h3>
+                    <p>Save each test customer's position on the two axes for the marketing team's dashboard, with the true and predicted tier.</p>
+                    <pre><code class="language-python">tier_map = pd.DataFrame(tier_lda.transform(X_test), columns=["LD1", "LD2"], index=X_test.index)
+tier_map.insert(0, "customer_id", customers.loc[X_test.index, "customer_id"])
+tier_map["true_tier"] = t_test
+tier_map["predicted_tier"] = tier_lda.predict(X_test)
+tier_map.round(3).to_csv("tier_map.csv", index=False)
+
+print(tier_map.groupby("true_tier")[["LD1", "LD2"]].mean().round(2).loc[order])
+print("saved", len(tier_map), "rows")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>            LD1   LD2
+true_tier
+Basic     -1.69 -0.24
+Silver     0.97  0.31
+Gold       4.06 -0.79
+saved 1500 rows</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Your split is stratified on <code>loyalty_tier</code>, and the scaler and LDA live in one pipeline</li>
+                        <li>LDA beats the 0.47 baseline by a wide margin and is close to logistic regression</li>
+                        <li>You can say what LD1 is made of (spend and tenure) and why LD2's weights are unstable</li>
+                        <li>Your side-by-side figure shows the tiers overlapping on PCA and in order on LDA</li>
+                        <li>Your confusion matrix shows errors only between neighboring tiers</li>
+                        <li><code>tier_map.csv</code> holds IDs, both axes and the true and predicted tier</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue in the project notebook, so <code>X_train</code>, <code>t_train</code> and <code>tier_lda</code> already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: LDA as a Preprocessing Step</h3>
+                    <p>Compare two pipelines with 5-fold stratified cross-validation (<code>shuffle=True, random_state=42</code>) on the training rows: k-nearest neighbors (<code>n_neighbors=15</code>) on all ten scaled features, and the same k-nearest neighbors on the two LDA axes. Which is more accurate, and why might a distance-based model like the LDA version?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>make_pipeline(StandardScaler(), LinearDiscriminantAnalysis(n_components=2), KNeighborsClassifier(n_neighbors=15))</code> keeps LDA inside each fold.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+cv5 = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+knn_raw = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=15))
+knn_lda = make_pipeline(StandardScaler(), LinearDiscriminantAnalysis(n_components=2),
+                        KNeighborsClassifier(n_neighbors=15))
+for name, pipe in [("kNN on 10 features", knn_raw), ("kNN on 2 LDA axes", knn_lda)]:
+    print(f"{name:20s} CV accuracy {cross_val_score(pipe, X_train, t_train, cv=cv5).mean():.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>kNN on 10 features   CV accuracy 0.864
+kNN on 2 LDA axes    CV accuracy 0.916</code></pre>
+                        </div>
+                        <p>k-nearest neighbors measures distance in all directions equally, so the eight columns that say nothing about the tier add noise to every distance. LDA squeezes the data down to the two directions that matter, so "nearby" means "similar in tier-relevant ways". This is LDA's best use as a reducer: a compact, label-aware input for a distance-based model.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Changing the Priors</h3>
+                    <p>Back to churn. Fit <code>LinearDiscriminantAnalysis()</code> and <code>LinearDiscriminantAnalysis(priors=[0.5, 0.5])</code> on the scaled churn training data from the lesson (<code>X_train_s</code> and <code>y_train</code> are gone, so rebuild them from <code>customers</code> with the usual churn split). For each, print how many test customers are predicted to churn, the recall for churners, and the ROC AUC. What changed and what did not?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Equal priors tell LDA "assume half of all customers churn". Think about what that does to the decision threshold, and whether it changes the ranking.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.metrics import recall_score, roc_auc_score
+
+y = customers["churned"]
+Xc_train, Xc_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
+
+for priors in [None, [0.5, 0.5]]:
+    churn_lda = make_pipeline(StandardScaler(), LinearDiscriminantAnalysis(priors=priors)).fit(Xc_train, y_train)
+    pred = churn_lda.predict(Xc_test)
+    auc = roc_auc_score(y_test, churn_lda.predict_proba(Xc_test)[:, 1])
+    print(f"priors={str(priors):11s} flagged {pred.sum():4d}   recall {recall_score(y_test, pred):.3f}   AUC {auc:.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>priors=None        flagged  144   recall 0.347   AUC 0.824
+priors=[0.5, 0.5]  flagged  436   recall 0.681   AUC 0.824</code></pre>
+                        </div>
+                        <p>Equal priors move the decision threshold, so many more customers are flagged and recall jumps. The AUC is identical: the axis and the ranking did not change, only where the line is drawn. Priors are LDA's version of the threshold choice from Lesson 1.4.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Fisher's Ratio by Hand</h3>
+                    <p>Using the tier training data, compute Fisher's ratio for a single direction: project the scaled training rows onto it, then divide the variance of the three class means (weighted by class size) by the average within-class variance. Compare three directions: the <code>spend_12m</code> column alone, the <code>tenure_months</code> column alone, and LD1. Which is largest?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>A single column is a direction with a 1 in that position and 0 elsewhere. For LD1, use <code>tier_lda[-1].scalings_[:, 0]</code>. Projection is <code>Xs @ w</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">Xs_tier = np.asarray(tier_lda[0].transform(X_train))
+labels = t_train.to_numpy()
+
+def fisher_ratio(w):
+    z = Xs_tier @ w
+    overall = z.mean()
+    between = sum((labels == c).sum() * (z[labels == c].mean() - overall) ** 2 for c in order)
+    within = sum(((z[labels == c] - z[labels == c].mean()) ** 2).sum() for c in order)
+    return between / within
+
+for name in ["spend_12m", "tenure_months"]:
+    w = np.zeros(len(features))
+    w[features.index(name)] = 1.0
+    print(f"{name:14s} {fisher_ratio(w):.2f}")
+print(f"{'LD1':14s} {fisher_ratio(tier_lda[-1].scalings_[:, 0]):.2f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>spend_12m      1.42
+tenure_months  0.33
+LD1            3.08</code></pre>
+                        </div>
+                        <p>Spend alone separates the tiers well, tenure alone much less, and LD1, a weighted mix of both, beats either. LDA found the mix that maximizes this exact ratio; no other straight line through these features can do better on the training data.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Ten Clothing Classes (Stretch)</h3>
+                    <p>Load 3,000 Fashion-MNIST training images and the first 1,000 test images with torchvision (about 26 MB on first download), flattened to 784 pixel values between 0 and 1. Ten classes give at most nine discriminants. Compare k-nearest neighbors (<code>n_neighbors=5</code>) on nine LDA axes with the same model on nine PCA components, on the test images. Use <code>solver="eigen", shrinkage="auto"</code>: there are 784 strongly correlated pixels.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>datasets.FashionMNIST("data", train=True, download=True)</code> has <code>.data</code> (images) and <code>.targets</code> (labels). Fit both reducers on the training images only.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from torchvision import datasets
+
+fm_train = datasets.FashionMNIST("data", train=True, download=True)
+fm_test = datasets.FashionMNIST("data", train=False, download=True)
+img_train = fm_train.data.numpy()[:3000].reshape(3000, -1) / 255
+lab_train = fm_train.targets.numpy()[:3000]
+img_test = fm_test.data.numpy()[:1000].reshape(1000, -1) / 255
+lab_test = fm_test.targets.numpy()[:1000]
+
+reducers = {"PCA, 9 components": PCA(n_components=9, random_state=42),
+            "LDA, 9 axes": LinearDiscriminantAnalysis(n_components=9, solver="eigen", shrinkage="auto")}
+for name, reducer in reducers.items():
+    pipe = make_pipeline(reducer, KNeighborsClassifier(n_neighbors=5)).fit(img_train, lab_train)
+    print(f"{name:18s} test accuracy {pipe.score(img_test, lab_test):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>PCA, 9 components  test accuracy 0.760
+LDA, 9 axes        test accuracy 0.800</code></pre>
+                        </div>
+                        <p>With the same number of dimensions, the label-aware axes give the neighbor classifier a better space than the highest-variance axes. Pixel variance includes things that do not identify the garment (overall brightness, size), which PCA keeps and LDA discounts.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_X, quiz_y = make_blobs(n_samples=300, centers=5, n_features=3, random_state=42)
+quiz_lda = LinearDiscriminantAnalysis().fit(quiz_X, quiz_y)
+print(quiz_lda.transform(quiz_X).shape)</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Five classes allow up to four axes. Is there another limit?">
+                                A) <code>(300, 4)</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="LDA produces discriminant axes, not one column per class.">
+                                B) <code>(300, 5)</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The number of axes is at most the smaller of the number of features (3) and classes minus one (4), so LDA returns 3 columns.">
+                                C) <code>(300, 3)</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> What is the key difference between what PCA and LDA maximize?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="PCA looks only at X and keeps the directions of largest spread. LDA uses y and keeps the directions where class means are far apart relative to the spread inside each class.">
+                                A) PCA maximizes total variance; LDA maximizes between-class separation relative to within-class spread
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Both methods produce straight-line directions. What does each one measure along a direction?">
+                                B) PCA finds straight directions; LDA finds curved ones
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Accuracy is a property of a classifier on labeled data. Does PCA ever see labels?">
+                                C) PCA maximizes accuracy; LDA maximizes variance
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> On 100 rows of pure noise with random labels, LDA fitted on all rows followed by cross-validated kNN scored 0.62 for three classes. What explains it?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The data are random numbers with random labels. Can there be a real signal to find?">
+                                A) LDA found a weak but real pattern in the noise
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="LDA used every row's label, including those later used as test folds, to build its axes. With 500 features it can always separate given labels, so the score is leakage. Inside a pipeline it falls back to chance.">
+                                B) LDA saw the test folds' labels while building its axes
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A larger k would smooth predictions, but would it remove the information LDA already took from the labels?">
+                                C) kNN with k = 5 is too flexible
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> You switch a churn LDA from the learned priors to <code>priors=[0.5, 0.5]</code>. What happens on the test set?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Priors shift the decision threshold, so more customers are predicted to churn and recall rises. The discriminant axis and the ranking of customers do not change, so the AUC stays the same.">
+                                A) More customers are flagged, recall rises, and the ROC AUC stays the same
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Do priors change the direction of the axis, or only where the cut-off sits on it?">
+                                B) The ROC AUC improves because the classes are now balanced
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Priors describe how common each class is. What does assuming churn is more common do to the cut-off?">
+                                C) Fewer customers are flagged, because the model becomes more cautious
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> You have 80 rows and 1,000 features and want LDA for both classification and a 2-D plot. Which setting fits?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The default solver works with many features, but can it stabilize a covariance estimate from 80 rows?">
+                                A) The default, <code>LinearDiscriminantAnalysis()</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="This solver supports shrinkage. Does it support transform for the plot?">
+                                B) <code>solver="lsqr", shrinkage="auto"</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="With far more features than rows, the covariance estimate needs shrinkage, and the eigen solver is the one that supports both shrinkage and transform.">
+                                C) <code>solver="eigen", shrinkage="auto"</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Is this the same LDA as in topic modeling?</summary>
+                    <p>No, it is an unlucky clash of initials. <strong>Latent Dirichlet Allocation</strong>, also abbreviated LDA, is a probabilistic topic model for text (scikit-learn's <code>LatentDirichletAllocation</code>). Linear discriminant analysis, this lesson's method, is from 1936 statistics and lives in <code>sklearn.discriminant_analysis</code>. Check which one a tutorial means before copying code.</p>
+                </details>
+                <details>
+                    <summary>Should I use LDA or logistic regression as a classifier?</summary>
+                    <p>Try both; they usually land close, as they did here. LDA is very fast, has a closed-form solution and does well with small samples when its assumptions roughly hold. Logistic regression makes fewer assumptions and is more robust to outliers and very non-Gaussian features. Cross-validation decides.</p>
+                </details>
+                <details>
+                    <summary>Should I run PCA before LDA?</summary>
+                    <p>It used to be common on very wide data (faces, genes), to make the covariance matrix estimable. Shrinkage now solves the same problem more directly. If you do chain them, put both inside one pipeline and tune the number of PCA components by cross-validation, because PCA may throw away a low-variance direction that LDA needs.</p>
+                </details>
+                <details>
+                    <summary>Can LDA handle curved boundaries?</summary>
+                    <p>No; its boundaries are straight lines (hyperplanes). QDA allows curved, quadratic boundaries at the cost of many more parameters. For really nonlinear class structure, trees and boosting (Module 5) are usually a better choice than either.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Build a churn model that uses the single LD1 score as its only feature: a pipeline of <code>StandardScaler</code>, <code>LinearDiscriminantAnalysis(n_components=1)</code> and a <code>DecisionTreeClassifier(max_depth=3, random_state=42)</code>. Compare its cross-validated ROC AUC with plain LDA and with <code>HistGradientBoostingClassifier</code> on all ten features. How much does compressing everything into one straight axis cost, and what does that tell you about the nonlinear effects in churn (think of the tenure U-shape and the recency threshold)?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Describe the team photo in your own words, then write the two numbers that impressed you most today: LDA's 0.62 on pure noise when fitted outside the pipeline, and the chance level it fell back to inside. Write one sentence you could say to a colleague who wants to "just reduce the features first, then cross-validate".</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>LDA is supervised: it finds directions where class means are far apart relative to the spread inside each class (Fisher's criterion)</li>
+                        <li>It gives at most classes minus one axes: one for churn, two for three loyalty tiers</li>
+                        <li><code>scalings_</code> are the axis weights and <code>explained_variance_ratio_</code> is each axis's share of the class separation</li>
+                        <li>As a classifier, LDA assumes Gaussian classes with a shared covariance, draws straight boundaries and often matches logistic regression; QDA allows curves but needs far more data</li>
+                        <li><code>priors</code> move the decision threshold without changing the ranking</li>
+                        <li>With many features and few rows, use <code>shrinkage="auto"</code> with the <code>"lsqr"</code> or <code>"eigen"</code> solver</li>
+                        <li>A supervised reducer fitted outside cross-validation can "separate" pure noise; keep it inside the <code>Pipeline</code></li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You saw PCA and LDA choose nearly perpendicular directions on the same data</li>
+                        <li>You built a one-number churn axis whose weights tell a clear story</li>
+                        <li>You compared LDA, QDA, logistic regression and a baseline with proper metrics</li>
+                        <li>You watched a leaky pipeline score far above chance on random labels, and fixed it</li>
+                        <li>You mapped Pinecrest's loyalty tiers and found that spend and tenure define them</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="dimensionality_tsne.html"><strong>Lesson 9.3: t-SNE and UMAP</strong></a> you leave straight lines behind. These two methods bend and stretch the data to keep each point's neighbors close, producing striking maps of thousands of images or customers. They are the best tools for looking at curved structure, and the easiest to over-read, so you will learn exactly what their pictures can and cannot tell you.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>tier_map.csv</code>; comparing a straight-line map with a curved one is a good warm-up for Lesson 9.3.</li>
+                    <li>Rerun the leakage demonstration with 50 features instead of 500. Predict first: does the leaky score go up or down? Why?</li>
+                    <li>Write your journal entry while the noise result is fresh.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>Today you learned a method from 1936 that still beats many newer ones on the right problem, and, more importantly, you caught it cheating on random data and knew exactly why. Spotting leakage that raises no error is one of the most valuable skills in machine learning, and you now have a concrete example to remember it by. If scatter matrices still feel abstract, hold on to the team photo: tight groups, far apart.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="dimensionality_pca.html" class="prev-lesson">← Previous: Principal Component Analysis</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="dimensionality_tsne.html" class="next-lesson">Next: t-SNE and UMAP →</a>
+            </nav>
         </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: Kernel LDA Implementation</h3>
-            <p>Extend LDA for non-linear problems:</p>
-            <ol>
-                <li>Implement kernel LDA from scratch</li>
-                <li>Compare different kernel functions</li>
-                <li>Apply to spiral or moon datasets</li>
-                <li>Visualize non-linear decision boundaries</li>
-                <li>Compare with standard LDA and SVM</li>
-            </ol>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 3: Real-time LDA System</h3>
-            <p>Build an online LDA classification system:</p>
-            <ol>
-                <li>Implement incremental LDA algorithm</li>
-                <li>Handle streaming data updates</li>
-                <li>Monitor and adapt to concept drift</li>
-                <li>Create dashboard for real-time monitoring</li>
-                <li>Compare with batch LDA performance</li>
-            </ol>
-        </div>
-
-        <h2>Summary and Key Takeaways</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 Key Points to Remember</h3>
-            <ul>
-                <li><strong>Supervised Method:</strong> LDA requires class labels unlike PCA</li>
-                <li><strong>Maximizes Separation:</strong> Finds projections that maximize between-class variance</li>
-                <li><strong>Limited Components:</strong> Maximum of (n_classes - 1) discriminants</li>
-                <li><strong>Dual Purpose:</strong> Works as both dimensionality reduction and classifier</li>
-                <li><strong>Linear Only:</strong> Assumes linear separability (use QDA for quadratic)</li>
-                <li><strong>Assumptions Matter:</strong> Requires normal distributions and equal covariances</li>
-                <li><strong>Fast and Interpretable:</strong> Computationally efficient with clear interpretation</li>
-                <li><strong>Feature Importance:</strong> Provides direct feature contribution analysis</li>
-            </ul>
-        </div>
-
-        
-    
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> LDA uses the class labels while PCA ignores them. When you compared the
-            two projections, how did having the labels change the separation you were able to see?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>LDA is a <em>supervised</em> method: it maximizes the ratio of between-class scatter to within-class scatter.</li>
-                <li>For C classes it can produce at most C − 1 discriminant axes, because that is the rank of the between-class scatter.</li>
-                <li>LDA doubles as both a dimensionality reducer and a linear classifier.</li>
-                <li>It assumes normally distributed classes with equal covariance — consider QDA or nonlinear methods when those assumptions clearly fail.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now reduce labeled data down to a few highly discriminative axes, separate classes visually, and use those
-        same axes to classify — all in one supervised technique.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>Why can LDA give only C − 1 components?</summary>
-            <p>The between-class scatter matrix has rank at most C − 1 for C classes, so only that many directions carry
-            class-separating information — the rest add nothing.</p>
-        </details>
-        <details>
-            <summary>Should I run PCA or LDA first?</summary>
-            <p>If you have labels and want class separation, LDA is the natural choice. On very high-dimensional data it's common
-            to run PCA first to denoise and reduce, then apply LDA.</p>
-        </details>
-        <details>
-            <summary>What if my classes aren't Gaussian?</summary>
-            <p>LDA still often works as a solid linear baseline, but when its assumptions clearly break, try QDA (which allows
-            unequal covariances) or a nonlinear reduction method.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Next you'll explore reduction techniques that need no labels at all and can capture <em>nonlinear</em> structure that
-        straight-line methods like LDA and PCA cannot.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Run PCA and LDA on the same labeled dataset and compare the 2D scatter plots side by side.</li>
-            <li>Use LDA as a classifier and compare its accuracy to plain logistic regression.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>You've added a tool that reduces dimensions and sharpens class boundaries at the same time — elegant, efficient,
-            and genuinely useful. Well done, and keep exploring!</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="dimensionality_umap.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="dimensionality_feature_selection.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1147,6 +895,7 @@ print(pitfalls)</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>

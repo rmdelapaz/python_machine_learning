@@ -3,481 +3,947 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about t-SNE: t-Distributed Stochastic Neighbor Embedding in this comprehensive Python Machine Learning course lesson.">
-    <title>t-SNE: t-Distributed Stochastic Neighbor Embedding - Python Machine Learning</title>
+    <meta name="description" content="Learn t-SNE and UMAP: nonlinear embeddings that draw high-dimensional data as a two-dimensional map, how perplexity, n_neighbors and min_dist shape the picture, what the maps can and cannot tell you, and how to check them with numbers. Python Machine Learning Lesson 9.3.">
+    <meta name="author" content="Ray de la Paz">
+    <title>t-SNE and UMAP - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#dimensionality">Dimensionality</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#dimensionality">Dimensionality</a></li>
-            <li aria-current="page">t-SNE: Visualizing High-Dimensional Data</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>🌐 t-SNE: Visualizing High-Dimensional Data</h1>
+        <div class="container">
+            <header>
+                <h1>🗺️ Lesson 9.3: t-SNE and UMAP</h1>
+                <p class="lead">Draw thousands of images or customers as one revealing map, then learn the discipline that keeps a beautiful picture from telling you things that are not true.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Explain how t-SNE preserves <em>local</em> neighborhood structure to reveal clusters in 2D or 3D</li>
-                <li>Tune the key hyperparameters — perplexity, learning rate, and number of iterations</li>
-                <li>Understand why distances between clusters and cluster sizes in a t-SNE map should not be over-interpreted</li>
-                <li>Apply <code>TSNE</code> in scikit-learn, often running PCA first for speed and stability</li>
-                <li>Recognize that t-SNE is a visualization tool, not a general transform for new, unseen data</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Visualize a high-dimensional dataset (such as handwritten digits) in 2D with t-SNE and experiment with perplexity to see how the map changes.</p>
-        </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>t-SNE (t-Distributed Stochastic Neighbor Embedding) is a powerful non-linear dimensionality reduction technique particularly well-suited for visualizing high-dimensional data. Unlike PCA which preserves global structure, t-SNE excels at preserving local neighborhoods, making it ideal for exploring clusters and patterns in complex datasets. It's become the go-to method for visualizing everything from word embeddings to single-cell RNA sequences.</p>
-        </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain how t-SNE and UMAP differ from PCA: they keep each point's neighbors close instead of keeping straight-line spread</li>
+                        <li>Build t-SNE and UMAP maps with scikit-learn and <code>umap-learn</code>, and describe the effect of <code>perplexity</code>, <code>n_neighbors</code> and <code>min_dist</code></li>
+                        <li>State what a t-SNE or UMAP map cannot show (cluster sizes, distances between clusters) and demonstrate it</li>
+                        <li>Check a map with numbers: neighbors kept, trustworthiness and silhouette in the original space</li>
+                        <li>Use UMAP's <code>transform</code> to place new rows on an existing map, and explain why t-SNE cannot</li>
+                    </ul>
+                </div>
 
-        </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 100 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="dimensionality_pca.html">Lesson 9.1: Principal Component Analysis</a> and <a href="clustering_kmeans_optimization.html">Lesson 8.2: Choosing k and Customer Segments</a></li>
+                    <li><span class="meta-label">🛠️ You will build</span> A customer map: Pinecrest's behavior segments drawn with t-SNE and UMAP, checked with numbers, with new customers placed on the map</li>
+                    <li><span class="meta-label">📂 Data</span> Fashion-MNIST test images (downloaded by torchvision, about 26 MB the first time) and <code>data/customers_churn.csv</code></li>
+                </ul>
+            </header>
 
-        <h2>Core Concepts and Theory</h2>
-        
-        <pre class="language-python"><code>import numpy as np
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Keep the Neighbors, Bend the Rest</a></li>
+                        <li><a href="#first-map" class="toc-link">A First t-SNE Map</a></li>
+                        <li><a href="#perplexity" class="toc-link">Perplexity: How Many Neighbors Count</a></li>
+                        <li><a href="#caveats" class="toc-link">What a Map Cannot Tell You</a></li>
+                        <li><a href="#check" class="toc-link">Checking a Map with Numbers</a></li>
+                        <li><a href="#umap" class="toc-link">UMAP</a></li>
+                        <li><a href="#choose" class="toc-link">PCA, t-SNE or UMAP?</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: The Customer Map</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🪑 Keep the Neighbors, Bend the Rest</h2>
+
+                <p>PCA and LDA flatten data along straight lines. That works when the important structure is straight, but many datasets are curved or clumpy: images of sneakers form one cloud, images of ankle boots another, and the clouds bend through 784 pixel dimensions in ways no single flat view can show. <strong>t-SNE</strong> (t-distributed stochastic neighbor embedding) and <strong>UMAP</strong> (uniform manifold approximation and projection) give up on straight lines. They try to keep only one thing: <strong>who is near whom</strong>.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Seating Chart</h4>
+                    <p>You are seating 1,000 wedding guests in one big hall, and the only rule is: people should sit near the people they know best. You will end up with tables of friends and families, and that part of the chart is meaningful. But the hall is flat and your only goal was "friends together", so the chart says nothing reliable about how far one table is from another, and a big family does not get a bigger table, just more chairs squeezed in. t-SNE and UMAP produce exactly this kind of chart for data.</p>
+                </div>
+
+                <p>How t-SNE does it, in words: for every point it turns distances in the original space into "how likely is this other point to be my neighbor" probabilities, with a bell curve whose width adapts to how crowded the area is. It then places points on a flat map and moves them until map-neighbor probabilities, computed with a heavier-tailed curve, match the original ones as closely as possible. The heavy tail lets dissimilar points drift far apart on the map, which is why t-SNE pictures show crisp, separated islands. UMAP follows the same spirit with a different recipe: it builds a graph connecting each point to its nearest neighbors, then lays the graph out flat, pulling connected points together and pushing others apart.</p>
+
+                <div class="mermaid">
+graph TD
+    A["High-dimensional rows"] --> B["Find each row's neighbors"]
+    B --> C["Neighbor strengths"]
+    C --> D["Random or PCA start on a 2-D map"]
+    D --> E["Move points: neighbors attract"]
+    E --> F["Non-neighbors repel"]
+    F --> G["Map where neighbors sit together"]
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>A good map is one of the fastest ways to understand a dataset: does it have groups, are the labels clean, are there odd points between groups? You will see these maps in papers, dashboards and sales decks. Knowing how to make them is useful; knowing how to read them without being fooled is essential, because they are the most over-interpreted pictures in data science.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="first-map" class="lesson-section">
+                <h2>👕 A First t-SNE Map</h2>
+
+                <p>Fashion-MNIST has 28 by 28 grayscale pictures of ten kinds of clothing. Each image is a row of 784 pixel values. Load the test images with torchvision (the same dataset Lesson 10.3 uses for a neural network) and take a random 1,000 of them. The seeded generator picks the same 1,000 every time, so your output matches the page.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
+from torchvision import datasets
+
+fashion = datasets.FashionMNIST("data", train=False, download=True)
+images = fashion.data.numpy().reshape(len(fashion), -1) / 255
+labels = fashion.targets.numpy()
+class_names = fashion.classes
+
+rng = np.random.default_rng(42)
+pick = rng.choice(len(images), size=1000, replace=False)
+img, lab = images[pick], labels[pick]
+print(img.shape, img.min(), img.max())
+print(class_names)
+print(np.bincount(lab))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(1000, 784) 0.0 1.0
+['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
+[102  90  88 101  99 103 106 100 102 109]</code></pre>
+                </div>
+
+                <p>The standard recipe is to reduce to about 50 dimensions with PCA first (it removes pixel noise and makes t-SNE much faster), then run t-SNE. The labels are never given to either method; they are only used afterward to color the picture.</p>
+
+                <pre><code class="language-python">from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-from sklearn.decomposition import PCA
+
+pca50 = PCA(n_components=50, random_state=42).fit(img)
+img50 = pca50.transform(img)
+pca2 = img50[:, :2]                       # the first two principal components
+tsne = TSNE(n_components=2, perplexity=30, random_state=42)
+emb_tsne = tsne.fit_transform(img50)
+print(emb_tsne.shape, "KL divergence:", round(tsne.kl_divergence_, 3))
+
+def draw(ax, emb, title):
+    for k, name in enumerate(class_names):
+        ax.scatter(emb[lab == k, 0], emb[lab == k, 1], s=6, color=plt.cm.tab10(k), label=name)
+    ax.set_title(title)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4.6), layout="constrained")
+draw(axes[0], pca2, "PCA: first two components")
+draw(axes[1], emb_tsne, "t-SNE (perplexity 30)")
+fig.legend(*axes[1].get_legend_handles_labels(), loc="outside lower center", ncol=5, markerscale=3)
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>(1000, 2) KL divergence: 0.676</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/dimensionality_tsne_pca_vs_tsne.png" alt="Two scatter plots of 1,000 Fashion-MNIST images colored by clothing class. Left, the PCA map: footwear on one side, tops on the other, with most classes overlapping in broad smears. Right, the t-SNE map: trousers, bags and the three footwear classes form clear separate islands, dresses and T-shirts form looser groups, and shirts, pullovers and coats share one large mixed region." width="1100" height="506" loading="lazy">
+                    <figcaption>Same 1,000 images, same 50 PCA dimensions as input. t-SNE pulls trousers, bags and footwear into islands; shirts, pullovers and coats stay mixed, because they really do look alike.</figcaption>
+                </figure>
+
+                <p>PCA already sorts footwear from tops, because that is the biggest source of pixel variance. t-SNE goes further: trousers, bags, sandals, sneakers and ankle boots each get their own island, even though t-SNE never saw a label. Look at what stays mixed: shirts, pullovers and coats, with T-shirts and dresses close by. That is not a failure. These garments genuinely look alike at 28 by 28 pixels, and a classifier will confuse them too. A map that is honest about overlap is more useful than one that hides it.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Seeds and Speed</h4>
+                    <p>t-SNE starts from a layout and improves it step by step; <code>random_state=42</code> makes the run repeatable on your machine. The map is the end of a long numerical optimization, so another computer's math libraries can print slightly different digits even with the same seed (the cards say "yours may vary slightly"); the shape of the map and the conclusions should not change. Run time grows quickly with the number of rows: seconds for 1,000 images, many minutes for 50,000 on a laptop. This lesson keeps samples small so everything runs in a few minutes on a CPU; for a full dataset, sample, or use a faster implementation such as the openTSNE library (CPU) or RAPIDS cuML (GPU).</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="perplexity" class="lesson-section">
+                <h2>🎚️ Perplexity: How Many Neighbors Count</h2>
+
+                <p>t-SNE's main setting is <code>perplexity</code>, roughly the number of neighbors each point pays attention to. Small values focus on very local detail; large values take in broader structure. Typical values are 5 to 50, and it must be smaller than the number of rows. Compare three values on 500 of the images:</p>
+
+                <pre><code class="language-python">small50, small_lab = img50[:500], lab[:500]
+
+sweep = {}
+fig, axes = plt.subplots(1, 3, figsize=(10, 3.6), layout="constrained")
+for ax, perp in zip(axes, [5, 30, 100]):
+    emb = TSNE(perplexity=perp, random_state=42).fit_transform(small50)
+    sweep[perp] = emb
+    for k in range(10):
+        ax.scatter(emb[small_lab == k, 0], emb[small_lab == k, 1], s=5, color=plt.cm.tab10(k))
+    ax.set_title(f"perplexity {perp}")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    print(f"perplexity {perp:3d}: map spans {np.ptp(emb[:, 0]):.0f} by {np.ptp(emb[:, 1]):.0f} units")
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>perplexity   5: map spans 132 by 115 units
+perplexity  30: map spans 47 by 57 units
+perplexity 100: map spans 19 by 19 units</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/dimensionality_tsne_perplexity.png" alt="Three t-SNE maps of the same 500 images at perplexity 5, 30 and 100. At 5 the map is broken into many small, scattered clumps; at 30 the classes form recognizable islands; at 100 the groups run into each other in one more continuous layout." width="1100" height="396" loading="lazy">
+                    <figcaption>Low perplexity fragments the data into many small clumps; high perplexity favors broad, global arrangement and blurs the borders. None of them is "the" true picture.</figcaption>
+                </figure>
+
+                <p>At perplexity 5 each point listens only to a handful of neighbors, so the map breaks into many small clumps, some of which mean nothing. At 100 the groups run together into one continuous layout and some separation disappears. The printed spans show another thing: the scale of a t-SNE map changes with its settings, so the axis numbers have no units you can interpret. Always look at more than one perplexity before believing a structure.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="caveats" class="lesson-section">
+                <h2>🔍 What a Map Cannot Tell You</h2>
+
+                <p>The seating chart warned you about sizes and distances. Here is the proof. Make three groups where you know the truth: a very tight group, a wide group six units away from it, and a medium group thirty units from the others.</p>
+
+                <pre><code class="language-python">from sklearn.datasets import make_blobs
+
+blob_X, blob_y = make_blobs(n_samples=[100, 100, 100], centers=[[0, 0], [6, 0], [30, 0]],
+                            cluster_std=[0.3, 2.0, 1.0], random_state=42)
+blob_emb = TSNE(perplexity=30, random_state=42).fit_transform(blob_X)
+
+def spread(Z, g):
+    return Z[blob_y == g].std(axis=0).mean()
+
+def gap(Z, g1, g2):
+    return np.linalg.norm(Z[blob_y == g1].mean(axis=0) - Z[blob_y == g2].mean(axis=0))
+
+print("spread of each group  original:", "  ".join(f"{spread(blob_X, g):.2f}" for g in range(3)),
+      "   map:", "  ".join(f"{spread(blob_emb, g):.2f}" for g in range(3)))
+print(f"gap A-B vs B-C        original: {gap(blob_X, 0, 1):.1f} vs {gap(blob_X, 1, 2):.1f}"
+      f"   map: {gap(blob_emb, 0, 1):.1f} vs {gap(blob_emb, 1, 2):.1f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>spread of each group  original: 0.28  1.96  0.99    map: 3.04  4.48  3.08
+gap A-B vs B-C        original: 6.3 vs 23.7   map: 31.9 vs 41.1</code></pre>
+                </div>
+
+                <p>In the original data the wide group is about seven times as spread out as the tight one; on the map their sizes differ by less than a factor of 1.5. In the original, the third group is almost four times farther away than the first two are from each other; on the map the two gaps differ by about a third. t-SNE adapts its bell curve to local density, which equalizes cluster sizes, and its heavy tails push all groups apart by similar amounts. UMAP behaves similarly, though it often keeps a little more of the global layout.</p>
+
+                <p>The opposite trap is worse: structure that is not there. Run t-SNE with a low perplexity on pure random noise, data with no groups at all:</p>
+
+                <pre><code class="language-python">noise = rng.normal(size=(200, 10))
+noise_emb = TSNE(perplexity=5, random_state=42).fit_transform(noise)
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), layout="constrained")
+for k, color in enumerate(["#667eea", "#d9480f", "#2b8a3e"]):
+    axes[0].scatter(*blob_emb[blob_y == k].T, s=8, color=color, label=["tight", "wide", "far away"][k])
+axes[0].set_title("Three very different groups, three similar islands")
+axes[0].legend(markerscale=2)
+axes[1].scatter(*noise_emb.T, s=8, color="gray")
+axes[1].set_title("Pure noise, perplexity 5: clumps from nothing")
+for ax in axes:
+    ax.set_xticks([])
+    ax.set_yticks([])
+plt.show()
+print("rows of pure noise mapped:", len(noise_emb))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>rows of pure noise mapped: 200</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/dimensionality_tsne_caveats.png" alt="Two t-SNE maps. Left: three groups that differ greatly in spread and in distance appear as three islands of similar size at similar distances. Right: 200 rows of random noise mapped at perplexity 5 show small clumps and gaps even though the data has no groups." width="1100" height="440" loading="lazy">
+                    <figcaption>Left: sizes and gaps are not preserved. Right: at low perplexity, random noise grows clumps and gaps that a viewer could mistake for clusters.</figcaption>
+                </figure>
+
+                <div class="card card-danger">
+                    <h4>🛑 The Rules for Reading t-SNE and UMAP Maps</h4>
+                    <ul>
+                        <li><strong>Neighbors are meaningful</strong>: points close together on the map are usually similar in the data.</li>
+                        <li><strong>Cluster sizes are not</strong>: a big island is not a more varied group.</li>
+                        <li><strong>Distances between clusters are not</strong>, or only roughly: do not say "group A is closer to B than to C" from the map.</li>
+                        <li><strong>Axes have no meaning</strong>: no units, no direction, no loadings. Never label them "income" or "risk".</li>
+                        <li><strong>Clusters must be validated</strong> in the original data (silhouette, profiles, stability across settings), never by eye on the map alone.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="check" class="lesson-section">
+                <h2>📏 Checking a Map with Numbers</h2>
+
+                <p>Since the eye is easy to fool, measure what the map is supposed to preserve: neighborhoods. A direct check: for each point, take its 10 nearest neighbors in the original space and count how many are also among its 10 nearest neighbors on the map. scikit-learn's <code>trustworthiness</code> is a related score from 0 to 1 that penalizes map-neighbors that were far apart in the original data.</p>
+
+                <pre><code class="language-python">from sklearn.neighbors import NearestNeighbors
+from sklearn.manifold import trustworthiness
+
+def neighbors_kept(original, embedded, k=10):
+    """Average share of each point's k nearest original neighbors that are also map neighbors."""
+    nn_orig = NearestNeighbors(n_neighbors=k + 1).fit(original).kneighbors(original, return_distance=False)[:, 1:]
+    nn_emb = NearestNeighbors(n_neighbors=k + 1).fit(embedded).kneighbors(embedded, return_distance=False)[:, 1:]
+    return np.mean([len(set(a) &amp; set(b)) / k for a, b in zip(nn_orig, nn_emb)])
+
+for name, emb in [("PCA (2 components)", pca2), ("t-SNE", emb_tsne)]:
+    print(f"{name:20s} neighbors kept {neighbors_kept(img50, emb):.3f}"
+          f"   trustworthiness {trustworthiness(img50, emb, n_neighbors=10):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>PCA (2 components)   neighbors kept 0.235   trustworthiness 0.923
+t-SNE                neighbors kept 0.599   trustworthiness 0.988</code></pre>
+                </div>
+
+                <p>t-SNE keeps several times more of each image's true neighbors than the two-component PCA view, which is exactly what it was built to do. A second useful check is whether the labels you care about form neighborhoods: train a k-nearest-neighbors classifier on the map coordinates with cross-validation. It is a check of the picture, not a model you would deploy.</p>
+
+                <pre><code class="language-python">from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import cross_val_score
+
+for name, emb in [("PCA (2 components)", pca2), ("t-SNE", emb_tsne)]:
+    acc = cross_val_score(KNeighborsClassifier(n_neighbors=10), emb, lab, cv=5).mean()
+    print(f"{name:20s} kNN accuracy on the map {acc:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>PCA (2 components)   kNN accuracy on the map 0.543
+t-SNE                kNN accuracy on the map 0.723</code></pre>
+                </div>
+
+                <p>On the t-SNE map, a point's neighbors usually share its class; on the PCA view, far less often. (The t-SNE map was computed from all 1,000 images at once, so this is a description of the picture, not an honest model score: t-SNE cannot be fitted on training folds and applied to test folds, as you will see.)</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="umap" class="lesson-section">
+                <h2>🌐 UMAP</h2>
+
+                <p>UMAP comes from the <code>umap-learn</code> package (in the course's <code>requirements.txt</code>), and it follows the scikit-learn estimator API. Its two main settings: <code>n_neighbors</code> (default 15), how many neighbors define the local structure, playing a role like perplexity; and <code>min_dist</code> (default 0.1), how tightly points may pack on the map, small for crisp clumps and large for an even spread. Importing it takes a few seconds the first time, because it compiles its fast routines.</p>
+
+                <pre><code class="language-python">import umap
+
+reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, random_state=42)
+emb_umap = reducer.fit_transform(img50)
+print(emb_umap.shape)
+print(f"neighbors kept {neighbors_kept(img50, emb_umap):.3f}"
+      f"   trustworthiness {trustworthiness(img50, emb_umap, n_neighbors=10):.3f}")
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4.6), layout="constrained")
+draw(axes[0], emb_tsne, "t-SNE (perplexity 30)")
+draw(axes[1], emb_umap, "UMAP (n_neighbors 15, min_dist 0.1)")
+fig.legend(*axes[1].get_legend_handles_labels(), loc="outside lower center", ncol=5, markerscale=3)
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>(1000, 2)
+neighbors kept 0.519   trustworthiness 0.981</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/dimensionality_tsne_tsne_vs_umap.png" alt="Side-by-side maps of the same 1,000 Fashion-MNIST images, t-SNE on the left and UMAP on the right. Both separate trousers, bags and footwear into islands and leave the upper-body garments mixed; UMAP's islands are tighter with more empty space between them." width="1100" height="506" loading="lazy">
+                    <figcaption>t-SNE and UMAP tell the same story about these images. UMAP packs groups more tightly and leaves more white space; that white space is a setting (<code>min_dist</code>), not a measurement.</figcaption>
+                </figure>
+
+                <p>UMAP keeps slightly fewer exact nearest neighbors than t-SNE here, which is typical: t-SNE concentrates hardest on the most local structure, while UMAP trades a little of it for speed and a bit more global layout. UMAP's numeric output depends on low-level math libraries, so another computer can print slightly different digits even with the same seed; the shape of the map should be the same. With <code>random_state</code> set, UMAP runs on a single core so that results are repeatable; leave the seed out and it uses all cores, faster but different every time.</p>
+
+                <h3>➕ Placing New Rows on an Existing Map</h3>
+
+                <p>The practical difference that matters most: a fitted UMAP has a <code>transform</code> method. You can fit the map once and place new rows on it later, which t-SNE cannot do. Take 500 test images the map has never seen, transform them, and see whether a neighbors classifier trained on the map's coordinates recognizes them:</p>
+
+                <pre><code class="language-python">rest = np.setdiff1d(np.arange(len(images)), pick)
+new_pick = rng.choice(rest, size=500, replace=False)
+new_umap = reducer.transform(pca50.transform(images[new_pick]))
+
+knn_on_map = KNeighborsClassifier(n_neighbors=10).fit(emb_umap, lab)
+print("new rows placed:", new_umap.shape)
+print(f"accuracy on 500 new images: {knn_on_map.score(new_umap, labels[new_pick]):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>new rows placed: (500, 2)
+accuracy on 500 new images: 0.690</code></pre>
+                </div>
+
+                <p>About 69% of the new images land among their own kind: close to what the neighbor check found for the t-SNE map, and far better than the 54% of the PCA view. Note that the new images go through the <em>same</em> fitted PCA (<code>pca50</code>) before UMAP, exactly like the original 1,000. In real work, put both steps in a <code>Pipeline</code> (<code>make_pipeline(PCA(50), umap.UMAP(...))</code>) and call <code>transform</code> on the pipeline, so the order can never be forgotten.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="choose" class="lesson-section">
+                <h2>⚖️ PCA, t-SNE or UMAP?</h2>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Question</th><th>PCA</th><th>t-SNE</th><th>UMAP</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Keeps</td><td>Straight-line spread (global)</td><td>Local neighborhoods</td><td>Local neighborhoods, some global layout</td></tr>
+                            <tr><td>Axes mean something?</td><td>Yes: loadings</td><td>No</td><td>No</td></tr>
+                            <tr><td>New rows (<code>transform</code>)</td><td>Yes</td><td>No</td><td>Yes</td></tr>
+                            <tr><td>Deterministic</td><td>Yes</td><td>With a seed</td><td>With a seed (then single-core)</td></tr>
+                            <tr><td>Speed on large data</td><td>Very fast</td><td>Slowest</td><td>Fast</td></tr>
+                            <tr><td>Main settings</td><td><code>n_components</code></td><td><code>perplexity</code></td><td><code>n_neighbors</code>, <code>min_dist</code></td></tr>
+                            <tr><td>Use for model features?</td><td>Yes, in a pipeline</td><td>No</td><td>Sometimes, in a pipeline, with care</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card card-success">
+                    <h4>✅ A Sensible Default Workflow</h4>
+                    <p>Scale tabular features. Run PCA first: it is fast, interpretable, and its scree plot tells you how much structure is straight. For a picture of clumpy or curved structure, run UMAP or t-SNE on the PCA output (about 50 components for wide data), try two or three settings, check the map with neighbor scores, and confirm any "cluster" you see with a clustering method and profiles in the original space (Module 8).</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <h3>1. Calling transform on t-SNE</h3>
+
+                <pre data-raises="AttributeError"><code class="language-python">tsne.transform(img50[:5])</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>AttributeError: 'TSNE' object has no attribute 'transform'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> t-SNE optimizes the positions of the rows it was given; there is no learned function that maps a new row to the picture. That also means it cannot go in a <code>Pipeline</code> before a model. <strong>Fix:</strong> rerun <code>fit_transform</code> on old and new rows together (the whole layout changes), or use UMAP or PCA when you need to place new rows.</p>
+
+                <h3>2. Perplexity Too Large for the Data</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">TSNE(perplexity=30, random_state=42).fit_transform(img50[:20])</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: perplexity (30) must be less than n_samples (20)</code></pre>
+                </div>
+                <p><strong>What it means:</strong> each point cannot pay attention to 30 neighbors when there are only 20 rows. <strong>Fix:</strong> use a smaller perplexity for small samples (a common rule of thumb keeps it well below a third of the rows), or use more rows.</p>
+
+                <h3>3. Surprised by UMAP's Warning</h3>
+
+                <p>Every time you fit UMAP with a seed, it prints a warning. This code catches it so you can read it:</p>
+
+                <pre><code class="language-python">import warnings
+
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    umap.UMAP(random_state=42).fit(img50[:300])
+
+print(caught[0].category.__name__)
+print(caught[0].message)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>UserWarning
+n_jobs value 1 overridden to 1 by setting random_state. Use no seed for parallelism.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> nothing is wrong. UMAP is telling you that a fixed seed forces it onto one core so results can be repeated. <strong>Fix:</strong> keep the seed while learning and when results must be reproducible; drop it for speed on big data, and accept that each run's layout differs.</p>
+
+                <h3>4. Mapping Unscaled Business Columns</h3>
+
+                <p>t-SNE and UMAP start from distances, so columns in large units dominate, exactly as in PCA. Map 300 customers from four behavior columns, once raw and once scaled, and check how many of each customer's 10 nearest neighbors <em>in the scaled data</em> survive on each map:</p>
+
+                <pre><code class="language-python">from sklearn.preprocessing import StandardScaler
+
+shoppers = pd.read_csv("data/customers_churn.csv").sample(300, random_state=42)
+behavior = shoppers[["orders_12m", "avg_order_value", "discount_share", "return_rate"]]
+behavior_scaled = StandardScaler().fit_transform(behavior)
+
+raw_map = TSNE(random_state=42).fit_transform(behavior)
+scaled_map = TSNE(random_state=42).fit_transform(behavior_scaled)
+print(f"map of raw columns:    neighbors kept {neighbors_kept(behavior_scaled, raw_map):.3f}")
+print(f"map of scaled columns: neighbors kept {neighbors_kept(behavior_scaled, scaled_map):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>map of raw columns:    neighbors kept 0.201
+map of scaled columns: neighbors kept 0.739</code></pre>
+                </div>
+                <p><strong>What happened:</strong> on the raw columns, <code>avg_order_value</code> (in dollars) swamps the two fractions, so the raw map mostly sorts customers by order value and neighbors in discount use and returns are lost. Both maps look like plausible pictures; only the number reveals that one of them ignores half the columns. <strong>Fix:</strong> scale tabular features first (and consider a log for skewed amounts), as for PCA and k-means.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: The Customer Map</h2>
+
+                <p>In Lesson 8.2 you found behavior segments in Pinecrest's customers with k-means. The marketing team now wants a picture they can show: every customer as a dot, colored by segment, with new customers placed on the same map as they arrive. You will draw the map with t-SNE and UMAP, check it with numbers instead of trusting the picture, and place the remaining customers with UMAP's <code>transform</code>. Work in a new notebook called <code>lesson_9_3_project</code>. Allow about 45 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Build and scale the behavior features <span class="step-time">(5 min)</span></h3>
+                    <p>Use the four behavior columns from Lesson 8.2, with a log for the two skewed ones, and scale them.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
-from sklearn.datasets import load_digits, load_iris, fetch_openml
-from sklearn.metrics import pairwise_distances
-from scipy.spatial.distance import pdist, squareform
-import time
-import warnings
-warnings.filterwarnings('ignore')
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
+customers = pd.read_csv("data/customers_churn.csv")
+behavior = pd.DataFrame({
+    "log_orders": np.log1p(customers["orders_12m"]),
+    "log_avg_order_value": np.log(customers["avg_order_value"]),
+    "discount_share": customers["discount_share"],
+    "return_rate": customers["return_rate"],
+})
+scaled = StandardScaler().fit_transform(behavior)
+print(scaled.shape, scaled.mean(axis=0).round(3), scaled.std(axis=0).round(3))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(6000, 4) [ 0.  0. -0. -0.] [1. 1. 1. 1.]</code></pre>
+                    </div>
+                </div>
 
-print("="*60)
-print("t-SNE FUNDAMENTALS")
-print("="*60)
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Find the segments in the original space <span class="step-time">(5 min)</span></h3>
+                    <p>Cluster first, in the four scaled dimensions, never on the map. Then profile each segment with the raw columns.</p>
+                    <pre><code class="language-python">from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
-# Core concepts
-tsne_concepts = """
-t-SNE KEY CONCEPTS:
+kmeans = KMeans(n_clusters=5, n_init=10, random_state=42).fit(scaled)
+segment = kmeans.labels_
+print(f"silhouette in the 4-D space: {silhouette_score(scaled, segment):.3f}")
 
-1. ALGORITHM OVERVIEW:
-   • Maps high-dimensional points to low dimensions (usually 2D)
-   • Preserves local structure (nearby points stay nearby)
-   • Non-linear transformation
-   • Probabilistic approach
+cols = ["orders_12m", "avg_order_value", "discount_share", "return_rate", "churned"]
+profile = customers.groupby(segment)[cols].mean()
+profile.insert(0, "customers", np.bincount(segment))
+print(profile.round(2))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>silhouette in the 4-D space: 0.479
+   customers  orders_12m  avg_order_value  discount_share  return_rate  churned
+0       1453        1.97            95.51            0.14         0.06     0.20
+1        815        6.35           167.11            0.18         0.28     0.10
+2       1249        5.41            64.16            0.51         0.08     0.31
+3       1113        2.50           331.79            0.11         0.05     0.16
+4       1370        9.12            88.41            0.10         0.04     0.04</code></pre>
+                    </div>
+                    <p>Five recognizable groups: occasional shoppers (segment 0), heavy returners (1), discount hunters (2, with the highest churn), big-ticket buyers (3) and frequent regulars (4, with the lowest churn). These names come from the profile table, which is the evidence; the map is only an illustration of it.</p>
+                </div>
 
-2. HOW IT WORKS:
-   Step 1: Calculate pairwise similarities in high-D space (Gaussian)
-   Step 2: Calculate pairwise similarities in low-D space (t-distribution)
-   Step 3: Minimize KL divergence between distributions
-   Step 4: Use gradient descent to optimize
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Map a sample with t-SNE and UMAP <span class="step-time">(10 min)</span></h3>
+                    <p>Map 2,000 customers (t-SNE gets slow with many rows, and a sample is plenty for a picture). Keep the other 4,000 for Step 5.</p>
+                    <pre><code class="language-python">from sklearn.manifold import TSNE
+import umap
 
-3. KEY PARAMETERS:
-   • perplexity: Balance between local and global aspects (5-50)
-   • learning_rate: Step size for gradient descent (10-1000)
-   • n_iter: Number of iterations (250-5000)
-   • metric: Distance metric for high-D space
+sample = customers.sample(2000, random_state=42).index.to_numpy()
+others = np.setdiff1d(customers.index.to_numpy(), sample)
 
-4. PERPLEXITY:
-   • Roughly the number of neighbors considered
-   • Low values: Focus on local structure
-   • High values: More global structure
-   • Rule of thumb: 5-50, dataset_size/100
+map_tsne = TSNE(perplexity=30, random_state=42).fit_transform(scaled[sample])
+customer_umap = umap.UMAP(n_neighbors=15, min_dist=0.1, random_state=42).fit(scaled[sample])
+map_umap = customer_umap.embedding_
 
-5. ADVANTAGES:
-   • Excellent for visualization
-   • Reveals clusters and patterns
-   • Handles non-linear relationships
-   • Works well with many data types
+names = ["occasional", "returners", "discount hunters", "big-ticket", "regulars"]
+fig, axes = plt.subplots(1, 2, figsize=(10, 4.6), layout="constrained")
+for ax, emb, title in [(axes[0], map_tsne, "t-SNE"), (axes[1], map_umap, "UMAP")]:
+    for k in range(5):
+        mask = segment[sample] == k
+        ax.scatter(emb[mask, 0], emb[mask, 1], s=5, color=plt.cm.tab10(k), label=f"{k}: {names[k]}")
+    ax.set_title(f"{title}: 2,000 customers colored by k-means segment")
+    ax.set_xticks([])
+    ax.set_yticks([])
+fig.legend(*axes[0].get_legend_handles_labels(), loc="outside lower center", ncol=5, markerscale=3)
+plt.show()
+print(map_tsne.shape, map_umap.shape)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output (yours may vary slightly)</h4>
+                        <pre><code>(2000, 2) (2000, 2)</code></pre>
+                    </div>
+                    <figure>
+                        <img src="images/dimensionality_tsne_customer_map.png" alt="Two maps of 2,000 Pinecrest customers colored by five k-means segments: t-SNE on the left, UMAP on the right. In both, each segment occupies its own region, with some mixing where segments meet; the occasional-shopper segment is split into a large region and one or two small, separate islands." width="1100" height="506" loading="lazy">
+                        <figcaption>Both maps show regions that match the k-means segments. The sizes and positions of the regions carry no meaning, and the split blue segment is explained below.</figcaption>
+                    </figure>
+                    <p>Look at segment 0 (occasional shoppers, blue): both maps break it into pieces, and UMAP puts one small island far from everything. That island is almost entirely customers with exactly one order in the year. <code>orders_12m</code> is a whole number, so customers with one order share exactly the same value of that feature and sit on a "shelf" in the data; neighbor-based maps turn such shelves into separate islands. It is a real property of the data, but not a separate customer segment, and the distance to the island means nothing. Discrete columns are a common source of convincing-looking but trivial islands.</p>
+                </div>
 
-6. LIMITATIONS:
-   • Computational complexity O(n²)
-   • Non-deterministic (random initialization)
-   • Cannot transform new points
-   • Hyperparameter sensitive
-   • Preserves neighborhoods, not distances
-"""
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Check the map with numbers <span class="step-time">(10 min)</span></h3>
+                    <p>Measure neighbor preservation, and compare the segments' silhouette on each map with their silhouette in the original space.</p>
+                    <pre><code class="language-python">from sklearn.neighbors import NearestNeighbors
 
-print(tsne_concepts)</code></pre>
+def neighbors_kept(original, embedded, k=10):
+    nn_orig = NearestNeighbors(n_neighbors=k + 1).fit(original).kneighbors(original, return_distance=False)[:, 1:]
+    nn_emb = NearestNeighbors(n_neighbors=k + 1).fit(embedded).kneighbors(embedded, return_distance=False)[:, 1:]
+    return np.mean([len(set(a) &amp; set(b)) / k for a, b in zip(nn_orig, nn_emb)])
 
-        <h2>Basic t-SNE Implementation and Visualization</h2>
-        
-        <pre class="language-python"><code>class TSNEVisualizer:
-    """Comprehensive t-SNE visualization and analysis"""
-    
-    def __init__(self):
-        self.embeddings = {}
-        self.models = {}
-        
-    def compare_perplexities(self, X, y=None, perplexities=[5, 30, 50, 100]):
-        """Compare t-SNE with different perplexity values"""
-        
-        fig, axes = plt.subplots(2, len(perplexities)//2, figsize=(12, 10))
-        axes = axes.ravel()
-        
-        for idx, perp in enumerate(perplexities):
-            print(f"Running t-SNE with perplexity={perp}...")
-            
-            # Run t-SNE
-            tsne = TSNE(n_components=2, perplexity=perp, 
-                       random_state=42, n_iter=1000)
-            X_embedded = tsne.fit_transform(X)
-            
-            # Store results
-            self.embeddings[f'perp_{perp}'] = X_embedded
-            self.models[f'perp_{perp}'] = tsne
-            
-            # Plot
-            if y is not None:
-                scatter = axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
-                                          c=y, cmap='viridis', alpha=0.6, s=30)
-                plt.colorbar(scatter, ax=axes[idx])
-            else:
-                axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
-                                alpha=0.6, s=30)
-            
-            axes[idx].set_title(f'Perplexity = {perp}')
-            axes[idx].set_xlabel('t-SNE 1')
-            axes[idx].set_ylabel('t-SNE 2')
-            axes[idx].grid(True, alpha=0.3)
-            
-            # Add KL divergence if available
-            kl_div = tsne.kl_divergence_
-            axes[idx].text(0.02, 0.98, f'KL div: {kl_div:.2f}',
-                         transform=axes[idx].transAxes,
-                         fontsize=9, verticalalignment='top',
-                         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        
-        plt.suptitle('t-SNE: Effect of Perplexity Parameter', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return self.embeddings
-    
-    def compare_learning_rates(self, X, y=None, learning_rates=[10, 50, 200, 1000]):
-        """Compare different learning rates"""
-        
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-        axes = axes.ravel()
-        
-        for idx, lr in enumerate(learning_rates):
-            print(f"Running t-SNE with learning_rate={lr}...")
-            
-            # Run t-SNE
-            tsne = TSNE(n_components=2, learning_rate=lr,
-                       perplexity=30, random_state=42, n_iter=1000)
-            X_embedded = tsne.fit_transform(X)
-            
-            # Plot
-            if y is not None:
-                axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
-                                c=y, cmap='viridis', alpha=0.6, s=30)
-            else:
-                axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
-                                alpha=0.6, s=30)
-            
-            axes[idx].set_title(f'Learning Rate = {lr}')
-            axes[idx].set_xlabel('t-SNE 1')
-            axes[idx].set_ylabel('t-SNE 2')
-            axes[idx].grid(True, alpha=0.3)
-            
-            # Add KL divergence
-            kl_div = tsne.kl_divergence_
-            axes[idx].text(0.02, 0.98, f'KL div: {kl_div:.2f}',
-                         transform=axes[idx].transAxes,
-                         fontsize=9, verticalalignment='top',
-                         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        
-        plt.suptitle('t-SNE: Effect of Learning Rate', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-    
-    def visualize_convergence(self, X, y=None, n_iter_steps=[250, 500, 1000, 5000]):
-        """Visualize t-SNE convergence over iterations"""
-        
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-        axes = axes.ravel()
-        
-        for idx, n_iter in enumerate(n_iter_steps):
-            print(f"Running t-SNE with n_iter={n_iter}...")
-            
-            # Run t-SNE
-            tsne = TSNE(n_components=2, n_iter=n_iter,
-                       perplexity=30, random_state=42)
-            X_embedded = tsne.fit_transform(X)
-            
-            # Plot
-            if y is not None:
-                axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
-                                c=y, cmap='viridis', alpha=0.6, s=30)
-            else:
-                axes[idx].scatter(X_embedded[:, 0], X_embedded[:, 1],
-                                alpha=0.6, s=30)
-            
-            axes[idx].set_title(f'Iterations = {n_iter}')
-            axes[idx].set_xlabel('t-SNE 1')
-            axes[idx].set_ylabel('t-SNE 2')
-            axes[idx].grid(True, alpha=0.3)
-            
-            # Add KL divergence
-            kl_div = tsne.kl_divergence_
-            axes[idx].text(0.02, 0.98, f'KL div: {kl_div:.2f}',
-                         transform=axes[idx].transAxes,
-                         fontsize=9, verticalalignment='top',
-                         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        
-        plt.suptitle('t-SNE: Convergence Over Iterations', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-    
-    def stability_analysis(self, X, y=None, n_runs=5):
-        """Analyze stability across multiple runs"""
-        
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-        axes = axes.ravel()
-        
-        embeddings = []
-        
-        for run in range(n_runs):
-            print(f"Run {run+1}/{n_runs}...")
-            
-            # Run t-SNE with different random state
-            tsne = TSNE(n_components=2, perplexity=30,
-                       random_state=run*42, n_iter=1000)
-            X_embedded = tsne.fit_transform(X)
-            embeddings.append(X_embedded)
-            
-            if run < 5:  # Plot first 5 runs
-                if y is not None:
-                    axes[run].scatter(X_embedded[:, 0], X_embedded[:, 1],
-                                    c=y, cmap='viridis', alpha=0.6, s=30)
-                else:
-                    axes[run].scatter(X_embedded[:, 0], X_embedded[:, 1],
-                                    alpha=0.6, s=30)
-                
-                axes[run].set_title(f'Run {run+1}')
-                axes[run].set_xlabel('t-SNE 1')
-                axes[run].set_ylabel('t-SNE 2')
-                axes[run].grid(True, alpha=0.3)
-        
-        # Calculate pairwise correlations between embeddings
-        correlations = []
-        for i in range(n_runs):
-            for j in range(i+1, n_runs):
-                # Calculate correlation between flattened embeddings
-                corr = np.corrcoef(embeddings[i].flatten(), 
-                                  embeddings[j].flatten())[0, 1]
-                correlations.append(abs(corr))
-        
-        # Plot correlation distribution
-        axes[-1].hist(correlations, bins=20, edgecolor='black', alpha=0.7)
-        axes[-1].set_xlabel('Absolute Correlation')
-        axes[-1].set_ylabel('Frequency')
-        axes[-1].set_title(f'Stability: Mean Corr = {np.mean(correlations):.3f}')
-        axes[-1].grid(True, alpha=0.3)
-        
-        plt.suptitle('t-SNE Stability Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        print(f"\nStability Metrics:")
-        print(f"  Mean correlation: {np.mean(correlations):.3f}")
-        print(f"  Std correlation: {np.std(correlations):.3f}")
-        
-        return embeddings
+seg_sample = segment[sample]
+print(f"silhouette, original 4-D space: {silhouette_score(scaled[sample], seg_sample):.3f}")
+for name, emb in [("t-SNE", map_tsne), ("UMAP", map_umap)]:
+    print(f"{name:6s} neighbors kept {neighbors_kept(scaled[sample], emb):.3f}"
+          f"   silhouette on the map {silhouette_score(emb, seg_sample):.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output (yours may vary slightly)</h4>
+                        <pre><code>silhouette, original 4-D space: 0.477
+t-SNE  neighbors kept 0.639   silhouette on the map 0.572
+UMAP   neighbors kept 0.519   silhouette on the map 0.596</code></pre>
+                    </div>
+                    <p>Two lessons in four lines. First, both maps keep a good share of each customer's true neighbors, so local "who is like whom" is trustworthy. Second, the segments look <em>more</em> separated on the maps than they are in the data: the silhouette on each map is higher than in the original space. The picture flatters the segmentation. Report the original-space silhouette, and use the map only to illustrate.</p>
+                </div>
 
-# Load sample data
-digits = load_digits()
-X_digits = digits.data
-y_digits = digits.target
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Place the other 4,000 customers <span class="step-time">(10 min)</span></h3>
+                    <p>Use the fitted UMAP to put the customers it has never seen on the same map, and check that they land in their own segment's region: for each new customer, take the segment most common among its 10 nearest sample customers on the map.</p>
+                    <pre><code class="language-python">from sklearn.neighbors import KNeighborsClassifier
 
-# Sample for faster computation
-sample_idx = np.random.choice(len(X_digits), 500, replace=False)
-X_sample = X_digits[sample_idx]
-y_sample = y_digits[sample_idx]
+new_points = customer_umap.transform(scaled[others])
+region = KNeighborsClassifier(n_neighbors=10).fit(map_umap, seg_sample)
+agree = (region.predict(new_points) == segment[others]).mean()
+print("placed:", new_points.shape)
+print(f"new customers landing in their own segment's region: {agree:.1%}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output (yours may vary slightly)</h4>
+                        <pre><code>placed: (4000, 2)
+new customers landing in their own segment's region: 98.5%</code></pre>
+                    </div>
+                    <p>Nearly all new customers land among customers of their own segment, so the map can be extended as new customers arrive without redrawing it. With t-SNE you would have to rerun everything and get a different layout.</p>
+                </div>
 
-# Initialize visualizer
-viz = TSNEVisualizer()
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save the map for the dashboard <span class="step-time">(5 min)</span></h3>
+                    <p>Save every customer's map position and segment, but no churn outcome: the dashboard is for exploring behavior, and a map is not a churn model.</p>
+                    <pre><code class="language-python">coords = np.zeros((len(customers), 2))
+coords[sample] = map_umap
+coords[others] = new_points
 
-print("\n" + "="*60)
-print("t-SNE PARAMETER EXPLORATION")
-print("="*60)
+customer_map = pd.DataFrame({
+    "customer_id": customers["customer_id"],
+    "map_x": coords[:, 0].round(3),
+    "map_y": coords[:, 1].round(3),
+    "segment": segment,
+    "in_fitted_sample": customers.index.isin(sample),
+})
+customer_map.to_csv("customer_map.csv", index=False)
+print(customer_map["in_fitted_sample"].value_counts())
+print("saved", len(customer_map), "rows")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>in_fitted_sample
+False    4000
+True     2000
+Name: count, dtype: int64
+saved 6000 rows</code></pre>
+                    </div>
+                </div>
 
-# Compare perplexities
-print("\nComparing different perplexity values...")
-perp_embeddings = viz.compare_perplexities(X_sample, y_sample)
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Your features are scaled (two of them logged), and k-means ran on the four-dimensional data, not on a map</li>
+                        <li>Your segment profile table has five rows, and you named the segments from it</li>
+                        <li>You drew t-SNE and UMAP maps of 2,000 customers colored by segment</li>
+                        <li>You reported neighbors kept and compared the silhouette on the maps with the original-space silhouette</li>
+                        <li>You placed the other 4,000 customers with UMAP's <code>transform</code> and measured how many land in their own region</li>
+                        <li><code>customer_map.csv</code> has 6,000 rows of positions and segments and no churn column</li>
+                    </ul>
+                </div>
+            </section>
 
-# Compare learning rates
-print("\nComparing different learning rates...")
-viz.compare_learning_rates(X_sample, y_sample)
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
 
-# Visualize convergence
-print("\nVisualizing convergence...")
-viz.visualize_convergence(X_sample, y_sample)
+                <p>Exercises 1, 2 and 4 use the Fashion-MNIST variables from the lesson (<code>img</code>, <code>lab</code>, <code>small50</code>, <code>sweep</code>; rerun those cells if needed). Exercise 3 continues in the project notebook (<code>scaled</code>, <code>sample</code> and <code>neighbors_kept</code> exist).</p>
 
-# Stability analysis
-print("\nAnalyzing stability...")
-stability_embeddings = viz.stability_analysis(X_sample[:200], y_sample[:200])</code></pre>
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Does the Seed Matter?</h3>
+                    <p>Run t-SNE on <code>small50</code> three times: with the default start and <code>random_state=1</code>, then with <code>init="random"</code> and <code>random_state=1</code>, then with <code>init="random"</code> and <code>random_state=2</code>. For each, print the neighbors kept. Then print the correlation of the first map coordinate between the two <code>init="random"</code> runs. What changes between runs, and what does not?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>np.corrcoef(a[:, 0], b[:, 0])[0, 1]</code>. The default start is a PCA projection, which involves no randomness at all.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">runs = {
+    "default init, seed 1": TSNE(random_state=1).fit_transform(small50),
+    "random init, seed 1": TSNE(init="random", random_state=1).fit_transform(small50),
+    "random init, seed 2": TSNE(init="random", random_state=2).fit_transform(small50),
+}
+for name, emb in runs.items():
+    print(f"{name:22s} neighbors kept {neighbors_kept(small50, emb):.3f}")
+a, b = runs["random init, seed 1"], runs["random init, seed 2"]
+print(f"correlation of x coordinates, random seeds 1 and 2: {np.corrcoef(a[:, 0], b[:, 0])[0, 1]:.2f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output (yours may vary slightly)</h4>
+                            <pre><code>default init, seed 1   neighbors kept 0.643
+random init, seed 1    neighbors kept 0.640
+random init, seed 2    neighbors kept 0.640
+correlation of x coordinates, random seeds 1 and 2: -0.05</code></pre>
+                        </div>
+                        <p>The quality is about the same for every run, but with a random start the coordinates of two runs are not comparable: the map can come out rotated, mirrored or rearranged. scikit-learn's default PCA start removes most of that run-to-run randomness, which is one reason it is the default. Either way, map axes must never be read as variables; compare maps by neighborhoods and labels, never by coordinates.</p>
+                    </details>
+                </div>
 
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Interactive t-SNE Explorer</h3>
-            <p>Build an interactive t-SNE visualization tool:</p>
-            <ol>
-                <li>Create slider widgets for parameters</li>
-                <li>Real-time parameter updates</li>
-                <li>Show KL divergence convergence</li>
-                <li>Compare multiple perplexities side-by-side</li>
-                <li>Export results and parameters</li>
-            </ol>
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Which Perplexity Keeps Which Neighbors?</h3>
+                    <p>The lesson saved the three perplexity maps of <code>small50</code> in <code>sweep</code>. For each, compute neighbors kept with <code>k=10</code> and with <code>k=50</code>. Which perplexity preserves the 10 nearest neighbors best? Does the answer change for the 50 nearest?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Loop over <code>sweep.items()</code> and call <code>neighbors_kept(small50, emb, k=...)</code> twice per map. No new t-SNE runs are needed.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for perp, emb in sweep.items():
+    print(f"perplexity {perp:3d}: kept k=10 {neighbors_kept(small50, emb, k=10):.3f}"
+          f"   k=50 {neighbors_kept(small50, emb, k=50):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output (yours may vary slightly)</h4>
+                            <pre><code>perplexity   5: kept k=10 0.591   k=50 0.641
+perplexity  30: kept k=10 0.643   k=50 0.708
+perplexity 100: kept k=10 0.591   k=50 0.730</code></pre>
+                        </div>
+                        <p>Compare the columns: which setting wins depends on which neighborhood size you care about. Perplexity is a lens, not a quality knob, so choose it for the scale of structure you want to see, and look at more than one.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: min_dist</h3>
+                    <p>Take <code>rows = scaled[sample[:500]]</code>, 500 customers from the project. Fit UMAP on them with <code>min_dist=0.0</code> and <code>min_dist=0.8</code> (both with <code>random_state=42</code>). For each, print neighbors kept and the average distance from each point to its nearest map neighbor. What does <code>min_dist</code> change?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>NearestNeighbors(n_neighbors=2).fit(emb).kneighbors(emb)[0][:, 1]</code> gives each point's distance to its nearest other point.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">rows = scaled[sample[:500]]
+for md in [0.0, 0.8]:
+    emb = umap.UMAP(min_dist=md, random_state=42).fit_transform(rows)
+    nearest = NearestNeighbors(n_neighbors=2).fit(emb).kneighbors(emb)[0][:, 1].mean()
+    print(f"min_dist {md}: neighbors kept {neighbors_kept(rows, emb):.3f}   mean nearest-neighbor gap {nearest:.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output (yours may vary slightly)</h4>
+                            <pre><code>min_dist 0.0: neighbors kept 0.605   mean nearest-neighbor gap 0.059
+min_dist 0.8: neighbors kept 0.584   mean nearest-neighbor gap 0.258</code></pre>
+                        </div>
+                        <p><code>min_dist</code> mostly changes how tightly points pack (look at the gap), not which points are neighbors. Small values make dense, crisp clumps that look more "clustered"; large values spread points evenly. Another reason not to read cluster tightness off a map.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: UMAP Features for a Model (Stretch)</h3>
+                    <p>UMAP can produce more than two dimensions and sits in a pipeline. On the 1,000 Fashion-MNIST images from the lesson (<code>img</code>, <code>lab</code>; rerun those cells if needed), compare 3-fold cross-validated accuracy of k-nearest neighbors (<code>n_neighbors=10</code>) after <code>PCA(50)</code> alone and after <code>PCA(50)</code> then <code>umap.UMAP(n_components=10, random_state=42)</code>. Because UMAP is inside the pipeline, each fold fits it on its training part only.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>make_pipeline(PCA(n_components=50, random_state=42), umap.UMAP(n_components=10, random_state=42), KNeighborsClassifier(n_neighbors=10))</code>. Use <code>StratifiedKFold(n_splits=3, shuffle=True, random_state=42)</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.pipeline import make_pipeline
+from sklearn.decomposition import PCA
+from sklearn.model_selection import StratifiedKFold
+
+cv3 = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+pca_knn = make_pipeline(PCA(n_components=50, random_state=42), KNeighborsClassifier(n_neighbors=10))
+umap_knn = make_pipeline(PCA(n_components=50, random_state=42),
+                         umap.UMAP(n_components=10, random_state=42),
+                         KNeighborsClassifier(n_neighbors=10))
+for name, pipe in [("PCA 50 + kNN", pca_knn), ("PCA 50 + UMAP 10 + kNN", umap_knn)]:
+    print(f"{name:24s} CV accuracy {cross_val_score(pipe, img, lab, cv=cv3).mean():.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output (yours may vary slightly)</h4>
+                            <pre><code>PCA 50 + kNN             CV accuracy 0.735
+PCA 50 + UMAP 10 + kNN   CV accuracy 0.725</code></pre>
+                        </div>
+                        <p>Read the result honestly: on this small sample UMAP features do not clearly beat plain PCA features for a neighbors classifier, and they cost much more time. UMAP features can help on some problems, but they are not a free upgrade; test them inside a pipeline, as here, and keep them only if cross-validation agrees.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> On a t-SNE map of customers, segment A forms a large island and segment B a small one far to the left. What can you conclude?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Remember the three blobs: did the tight and the wide group keep their different sizes on the map?">
+                                A) Segment A is more varied than segment B
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Did the gaps between the blob groups keep their true proportions?">
+                                B) Segment B is very different from all other segments
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="t-SNE preserves neighborhoods, not sizes or distances between groups. The island sizes and the gap say little; check spread and separation in the original data.">
+                                C) Very little about size or distance; check those in the original data
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_tsne = TSNE(random_state=42)
+print(hasattr(quiz_tsne, "fit_transform"), hasattr(quiz_tsne, "transform"))</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="TSNE only has fit_transform: it positions the rows it is given and learns no function for new rows, so it has no transform method.">
+                                A) <code>True False</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Mistake 1 in this lesson called one of these methods. What happened?">
+                                B) <code>True True</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Every map in this lesson was made with one of these methods.">
+                                C) <code>False False</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> You need to place each day's new customers on an existing map without redrawing it. Which method fits?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Can t-SNE map a row it was not fitted on?">
+                                A) t-SNE with a fixed <code>random_state</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="A fitted UMAP has transform, so new rows can be placed on the existing map. In the project, nearly all new customers landed in their own segment's region.">
+                                B) UMAP, using <code>transform</code> on the new rows
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Running the method again on old and new rows works, but does the old layout survive?">
+                                C) Rerun t-SNE on all customers each day
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> In the project, the segments' silhouette was higher on the UMAP map than in the original four-dimensional space. Which is the right conclusion?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="UMAP and t-SNE pull neighbors together and push groups apart, which exaggerates separation. Report the original-space silhouette and use the map as an illustration.">
+                                A) The map makes the segments look better separated than they really are
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Clustering on the map means clustering on a picture that exaggerates gaps. Is that better segmentation or just a nicer-looking one?">
+                                B) You should run k-means on the map coordinates instead
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The map only rearranges the same customers. Can it improve the segmentation itself?">
+                                C) UMAP improved the segments
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> A t-SNE map of 200 rows at perplexity 5 shows six small clumps. What should you do before telling anyone the data has six groups?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Is the clumping itself evidence? Think of the pure-noise map.">
+                                A) Nothing: clumps on a t-SNE map are clusters
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A different seed gives a different arrangement, but would it test whether the groups exist in the data?">
+                                B) Change the random seed until the clumps look clearer
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Low perplexity can make clumps out of pure noise. Try several perplexities and confirm with a clustering method and its silhouette and profiles in the original data.">
+                                C) Try other perplexities and check for clusters in the original data
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Which is better, t-SNE or UMAP?</summary>
+                    <p>For pictures, they usually tell the same story, as they did for the images and the customers here. UMAP is faster on large data, can place new rows, and tends to keep a little more of the global arrangement; t-SNE is a long-established standard with very good local detail. Try both on your data and compare their neighbor scores. Neither one's picture is "the truth".</p>
+                </details>
+                <details>
+                    <summary>Can I cluster on the t-SNE or UMAP coordinates?</summary>
+                    <p>It is sometimes done (UMAP to about 10 dimensions, then HDBSCAN, is a known recipe for very large, curved datasets), but on a two-dimensional map you are clustering a picture that exaggerates gaps and can invent clumps. Cluster in the original (scaled) space first, as in the project, and if you do cluster on an embedding, validate the result in the original space and across several settings.</p>
+                </details>
+                <details>
+                    <summary>Why run PCA before t-SNE?</summary>
+                    <p>Two reasons. Speed: t-SNE computes many distances, and 50 columns are much cheaper than 784. Noise: the last few hundred principal components of image data are mostly noise, and dropping them makes neighborhoods cleaner. scikit-learn's <code>TSNE</code> also starts its layout from a PCA projection by default (<code>init="pca"</code>), which makes results more stable.</p>
+                </details>
+                <details>
+                    <summary>Is a t-SNE or UMAP map a privacy risk?</summary>
+                    <p>It can be. A map that shows each customer as a dot, with an ID behind it, still describes individuals, and an outlier on a map can be easy to identify. Share maps of customers the way you would share the underlying table: aggregated or anonymized where possible, and only with people who need it. That is why the project's CSV leaves out the churn outcome.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Make a "stability check" for the customer map. Run UMAP on the 2,000-customer sample with three different <code>n_neighbors</code> values (5, 15, 50) and, for each, compute neighbors kept and the silhouette of the k-means segments on the map. Then run k-means with 4 and 6 clusters in the original space and draw those labels on your favorite map. Write three sentences for the marketing team: which structure is stable across settings, which is an artifact of one setting, and how many segments the numbers in the original space support.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain the seating chart in your own words, then write the five reading rules from the red card from memory. Which rule do you think you would have broken before this lesson? Finally, write the one number from your project you would show next to the customer map so that nobody over-reads it.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>t-SNE and UMAP are nonlinear maps that keep each point's neighbors close; they reveal clumpy and curved structure that PCA's straight lines miss</li>
+                        <li><code>perplexity</code> (t-SNE) and <code>n_neighbors</code> (UMAP) set how many neighbors count; <code>min_dist</code> sets how tightly UMAP packs points</li>
+                        <li>Neighborhoods on the map are meaningful; cluster sizes, gaps between clusters and the axes are not</li>
+                        <li>Low perplexity can make clumps out of pure noise; always try several settings</li>
+                        <li>Check maps with numbers (neighbors kept, trustworthiness) and validate clusters in the original space; maps flatter separation</li>
+                        <li>Scale tabular features first, and run PCA to about 50 dimensions before t-SNE on wide data</li>
+                        <li>UMAP has <code>transform</code> and can place new rows; t-SNE cannot, so it never goes in a model pipeline</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You drew 1,000 clothing images as a map that separates garment types without ever seeing a label</li>
+                        <li>You proved, with numbers, that maps distort sizes and distances and can invent clusters</li>
+                        <li>You wrote a neighbor-preservation check and used it to catch an unscaled map</li>
+                        <li>You built t-SNE and UMAP maps of Pinecrest's customer segments and reported them honestly</li>
+                        <li>You placed 4,000 new customers on an existing map with UMAP's <code>transform</code></li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>That completes dimensionality reduction. In <a href="deep_learning_basics.html"><strong>Lesson 10.1: Neural Networks from Scratch</strong></a> you start Module 10 by building a small neural network with NumPy, one neuron at a time, and then let PyTorch's autograd compute the gradients for you. Neural networks learn their own internal representations, a learned cousin of the embeddings you made today.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>customer_map.csv</code>; it is a good input for your capstone's exploratory section.</li>
+                    <li>Take the bonus challenge or rerun the project with <code>n_neighbors=50</code> and note what changes on the map and in the numbers.</li>
+                    <li>Make sure <code>import torch</code> works in your environment (Lesson 0.1), because Module 10 uses it from the first lesson.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You can now make the most eye-catching pictures in machine learning, and, rarer, you know how to read them without being fooled. Most people who show t-SNE maps have never seen one invent clusters from noise; you have, and you measured it. Carry that healthy skepticism into Module 10, where models get more powerful and their outputs even more persuasive. You have earned this module's finish line.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="dimensionality_lda.html" class="prev-lesson">← Previous: Linear Discriminant Analysis</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="deep_learning_basics.html" class="next-lesson">Next: Neural Networks from Scratch →</a>
+            </nav>
         </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: t-SNE Quality Metrics</h3>
-            <p>Develop metrics to evaluate t-SNE quality:</p>
-            <ol>
-                <li>Implement neighborhood preservation metric</li>
-                <li>Calculate trustworthiness and continuity</li>
-                <li>Measure cluster separation</li>
-                <li>Compare with other DR methods</li>
-                <li>Create quality report</li>
-            </ol>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 3: Parametric t-SNE</h3>
-            <p>Implement parametric t-SNE using neural networks:</p>
-            <ol>
-                <li>Build neural network architecture</li>
-                <li>Implement t-SNE loss function</li>
-                <li>Train on sample dataset</li>
-                <li>Apply to new data points</li>
-                <li>Compare with standard t-SNE</li>
-            </ol>
-        </div>
-
-        <h2>Summary and Key Takeaways</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 Key Points to Remember</h3>
-            <ul>
-                <li><strong>Local Structure:</strong> t-SNE preserves local neighborhoods, not global structure</li>
-                <li><strong>Non-linear:</strong> Can capture complex, non-linear relationships</li>
-                <li><strong>Visualization Tool:</strong> Primarily for exploration, not for ML pipelines</li>
-                <li><strong>Parameter Sensitive:</strong> Perplexity greatly affects results</li>
-                <li><strong>Non-deterministic:</strong> Different runs produce different results</li>
-                <li><strong>No Transform:</strong> Cannot apply to new data points</li>
-                <li><strong>Computational Cost:</strong> O(n²) complexity, slow for large datasets</li>
-                <li><strong>Interpretation Care:</strong> Distances and densities can be misleading</li>
-            </ul>
-        </div>
-
-        
-    
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> A t-SNE map can look convincing but can also mislead. What did changing
-            the perplexity teach you about how much to trust the clusters you see?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>t-SNE preserves local structure, making clusters pop out in a 2D or 3D picture.</li>
-                <li>Perplexity, learning rate, and iteration count strongly shape the result — always try several settings.</li>
-                <li>Distances between clusters and the sizes of clusters in a t-SNE plot are <em>not</em> meaningful.</li>
-                <li>t-SNE is for visualization only: it has no reliable transform for new data and is computationally heavy.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now turn thousands of dimensions into an intuitive 2D picture that reveals hidden groupings — a powerful way
-        to build intuition about a dataset before modeling it.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>What perplexity value should I use?</summary>
-            <p>Typically somewhere between 5 and 50. Think of it loosely as the number of neighbors each point considers, and try
-            a few values to see which reveals structure most clearly.</p>
-        </details>
-        <details>
-            <summary>Can I use t-SNE outputs as features for a model?</summary>
-            <p>Not reliably — t-SNE is a visualization technique with no stable transform for unseen data. Use PCA or UMAP, or
-            supervised features, when you need embeddings for modeling.</p>
-        </details>
-        <details>
-            <summary>Why do my results change on every run?</summary>
-            <p>t-SNE is stochastic. Set <code>random_state</code> for reproducibility, and avoid reading too much into any single
-            run of the algorithm.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Next you'll meet UMAP, which often produces similar visualizations much faster, preserves more global structure, and
-        can even transform new data.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Run t-SNE at perplexity 5, 30, and 50 on the same dataset and compare the maps.</li>
-            <li>Reduce to about 50 dimensions with PCA first, then run t-SNE, and note the speed-up.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>You can now peer into high-dimensional data and see its shape — an almost magical way to understand your datasets.
-            Enjoy the view, and keep experimenting!</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="dimensionality_pca.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="dimensionality_umap.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -485,6 +951,7 @@ stability_embeddings = viz.stability_analysis(X_sample[:200], y_sample[:200])</c
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>

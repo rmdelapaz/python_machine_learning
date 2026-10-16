@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facilitator Guide: Session 4</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">contains answers &amp; timing · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Facilitator Guide</div>
+    <h1>Session 4: Density-Based Clustering and Gaussian Mixtures</h1>
+    <p class="sub">How to teach the fourth session of Advanced Machine Learning. Learners leave Session 3 able to give every customer one segment; today adds two honest answers: "fits nowhere" (noise, from DBSCAN, OPTICS and HDBSCAN) and "partly this, partly that" (probabilities, from Gaussian mixtures). They find dense payment patterns whose misfits hold most of the frauds, and soft segments whose confident members churn at very different rates.</p>
+    <div class="meta-row">
+      <span class="chip"><b>2</b> lessons</span>
+      <span class="chip"><b>3 hrs</b> session</span>
+      <span class="chip">Lessons <b>8.4–8.5</b></span>
+      <span class="chip">Session <b>4</b> of 13</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>How to Use This Guide</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Same rhythm for both lessons: frame (one mental model) → live demo (you type, they type along) → guided lab (a kit lab, new practice on the lesson's skills) → start the lesson project. Exercises, quiz and journal are homework.</li>
+  <li>Every code block below was run to produce the output printed under it (Python 3.12, pandas 3.0, scikit-learn 1.9.1, 4 CPU threads). Type it live, ask for a prediction first, read errors from the last line up.</li>
+  <li>Keep <code class="inline">clustering_dbscan.html</code> and <code class="inline">clustering_gaussian_mixture.html</code> open for the pictures (moons, k-distance plot, reachability plot, method table, weighted bell curves, stretched blobs). Labs live in <code class="inline">labs/module-04/</code>.</li>
+  <li>This session is the hinge of Module 8: Lessons 8.1 to 8.3 gave every customer one hard label; today adds two honest answers, "fits nowhere" (noise) and "partly this, partly that" (probabilities). Lesson 8.6 next session turns both into anomaly scores.</li>
+  <li>Teal blocks are hands-on, amber blocks are watch-outs. Lesson codes (8.4, 8.5) match the course site.</li>
+</ul>
+<div class="note warn"><div class="t">The #1 risk of Session 4: believing a cluster because an algorithm produced it</div>
+<p>Both lessons, and both labs, contain a cluster that is not a segment: customers or payments stacked on a whole-number value (one order, exactly two items) look like the densest crowd in the data. A learner who reports "HDBSCAN found 8 kinds of payment" without reading the profile table has learned the API and missed the lesson. Ask "what do the members of this cluster have in common, besides being in it?" at every profile table today. The second risk is quieter: treating <code class="inline">predict</code> as the whole answer of a mixture. Every mixture output today goes with its confidence.</p>
+</div>
+
+  <div class="sec"><h2>Before the Session</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ <b>Run the kit check once:</b> <code class="inline">python3 labs/check_labs.py module-04</code> from this kit's folder. Every line should say PASS (8 files, about 30 seconds).</li>
+  <li>☐ <b>Downloads:</b> none. Everything today uses the course CSV files and data generated in code.</li>
+  <li>☐ <b>Projector machine:</b> <code class="inline">(.venv)</code> active in <code class="inline">pinecrest-ml</code>, JupyterLab or VS Code started there, two empty notebooks <code class="inline">lesson_8_4</code> and <code class="inline">lesson_8_5</code>, font 18 pt or more. Browser tabs: <code class="inline">clustering_dbscan.html</code>, <code class="inline">clustering_gaussian_mixture.html</code>, and the Session 3 customer segments notebook if you kept one (8.2's five named segments come back in both projects).</li>
+  <li>☐ <b>Board, before learners arrive:</b> the core/border/noise decision diagram (three boxes), an empty method table with the columns of Lesson 8.4's "Which Clustering Method When" (You choose · Cluster shape · Noise label · Labels new data?), and three headings for the second block: means · covariances · weights.</li>
+  <li>☐ <b>Print or share:</b> the workbook pages for Session 4 and sticky notes for the exit ticket.</li>
+  <li>☐ <b>Timing note:</b> Lesson 8.5's project Step 2 fits 24 mixtures (8 values of k × 3 starts) and takes about 10 to 20 seconds on a laptop; start it running, then talk.</li>
+</ul>
+<div class="blk warn"><div class="h">Known environment traps</div>
+<table class="timing">
+<thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td><code class="inline">FutureWarning</code> about HDBSCAN's <code class="inline">copy</code> parameter</td><td>scikit-learn 1.9 is changing the default</td><td>Pass <code class="inline">copy=True</code> (as the lesson does). The warning is harmless but noisy.</td></tr>
+<tr><td><code class="inline">ValueError: Expected 2D array, got 1D array instead</code></td><td>A single column passed as a Series or a 1-D array to <code class="inline">GaussianMixture</code> or <code class="inline">DBSCAN</code></td><td>Double brackets (<code class="inline">customers[["discount_share"]]</code>) or <code class="inline">.reshape(-1, 1)</code>.</td></tr>
+<tr><td>OPTICS takes many seconds on the customers</td><td>OPTICS is slow on thousands of rows</td><td>Use it on the generated data only, as the lesson does; HDBSCAN on the customers.</td></tr>
+<tr><td>Different cluster numbers from the lesson page</td><td>Component and cluster numbers are arbitrary</td><td>Compare sizes and profiles, not numbers. Exact numbers match with the same seeds, 4 threads and scikit-learn 1.9.</td></tr>
+<tr><td><code class="inline">ConvergenceWarning</code> in the project</td><td>Unscaled features or too few iterations</td><td>Check that <code class="inline">Z</code> is the scaled table; raise <code class="inline">max_iter</code>; check <code class="inline">gm.converged_</code>.</td></tr>
+</tbody>
+</table>
+</div>
+
+  <div class="sec"><h2>Session 4 Agenda (3 hours)</h2><span class="rule"></span></div>
+  <table class="timing">
+    <thead><tr><th>Clock</th><th>Minutes</th><th>Segment</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="t">0:00</td><td class="t">10</td><td>Warm-up</td><td>Five retrieval questions on Lessons 8.2 and 8.3 (choosing k, ARI, linkage), homework check.</td></tr>
+      <tr><td class="t">0:10</td><td class="t">10</td><td><b>8.4</b> Frame and mental model</td><td>A city at night from a plane: crowded places, dark fields, the lone farmhouse.</td></tr>
+      <tr><td class="t">0:20</td><td class="t">25</td><td><b>8.4</b> Live demo</td><td>Moons, core/border/noise, eps sweep, k-distances, varying density, OPTICS, HDBSCAN, three mistakes.</td></tr>
+      <tr><td class="t">0:45</td><td class="t">25</td><td><b>8.4</b> Guided lab</td><td><code class="inline">labs/module-04/l8_4-density-clustering/payment_density_starter.py</code>: dense payment patterns and the misfits.</td></tr>
+      <tr><td class="t">1:10</td><td class="t">15</td><td><b>8.4</b> Start the lesson project</td><td>Core Segments and Misfits, Steps 1 and 2; Steps 3 to 6 go home.</td></tr>
+      <tr><td class="t">1:25</td><td class="t">10</td><td>Break</td><td>Leave the core/border/noise diagram and the method table on the board.</td></tr>
+      <tr><td class="t">1:35</td><td class="t">10</td><td><b>8.5</b> Frame and mental model</td><td>Paint mixed from a few base colors: components, weights, soft membership.</td></tr>
+      <tr><td class="t">1:45</td><td class="t">25</td><td><b>8.5</b> Live demo</td><td>One-dimensional mixture, probabilities, ellipses, covariance types and BIC, score_samples, label switching.</td></tr>
+      <tr><td class="t">2:10</td><td class="t">25</td><td><b>8.5</b> Guided lab</td><td><code class="inline">labs/module-04/l8_5-gaussian-mixtures/discount_mixture_starter.py</code>, then <code class="inline">labs/module-04/l8_5-gaussian-mixtures/lifecycle_mixture_starter.py</code> in pairs.</td></tr>
+      <tr><td class="t">2:35</td><td class="t">15</td><td><b>8.5</b> Start the lesson project</td><td>Soft Customer Segments, Steps 1 and 2 (the BIC sweep); Steps 3 to 6 go home.</td></tr>
+      <tr><td class="t">2:50</td><td class="t">10</td><td>Wrap-up</td><td>Exit ticket (3 questions), homework, bring list for Session 5.</td></tr>
+      <tr><td class="t"><b>Total</b></td><td class="t"><b>180</b></td><td></td><td>Ends at 3:00.</td></tr>
+    </tbody>
+  </table>
+<p><b>In the room.</b> The lesson pages estimate 100 + 95 = 195 minutes for a solo learner; the room has 150 after the warm-up, the break and the wrap-up. So the room does, for each lesson: the mental model, the live demo, one guided kit lab, and the first steps of the lesson project.</p>
+<p><b>Goes home (2 to 3 hours).</b> Core Segments and Misfits Steps 3 to 6 and Soft Customer Segments Steps 3 to 6; each lesson's Exercises 1 to 3 (Exercise 4 is a stretch); both Quick Quizzes; both journal entries; <code class="inline">lifecycle_mixture_starter.py</code> for anyone who did not reach it.</p>
+<p><b>Protect, in this order:</b> the varying-density demo through HDBSCAN (8.4 Steps 5 to 7: the reason HDBSCAN exists); the payment lab through TODO 5 (the noise holds most of the frauds: the bridge to 8.6); 8.5 Steps 2 and 4 (soft membership and BIC). <b>Cut first:</b> 8.4 demo Step 2 (core/border counts: say one sentence), then 8.5 Steps 8 and 9 (two mistakes: name them), then the 8.4 project start (send all six steps home with the two check numbers).</p>
+
+  <div class="sec"><h2>Opening Segment</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">0:00</span><h3>Warm-Up: Choosing k and Hierarchical Clustering</h3><span class="dur">10 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">How to run it</div>
+<ul class="tick">
+  <li>Put W1 to W5 on the slides (or read them out). Learners answer on the workbook's warm-up page, two minutes, no notes; reveal with fingers 1 to 4 for A to D. Settle W1 and W3 by running the code.</li>
+  <li>Homework check (2 minutes): who finished the 8.2 segment brief and the 8.3 product family tree? Ask one learner to read the five segment names from 8.2. They are back in both projects today.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Warm-up answers</div>
+<p>Answers: <b>W1</b> C) <code class="inline">1.0</code>; <b>W2</b> D) The k where inertia reaches its minimum; <b>W3</b> B) <code class="inline">[1. 1. 9.]</code>; <b>W4</b> A) Single; <b>W5</b> B) The whole fitted pipeline (log, scaler, K-Means): call predict on the new rows.</p>
+<ul class="tick">
+  <li><b>W1 wrong (0.0 or an error):</b> they think cluster numbers must match. Today's quiz and Lesson 8.5's label-switching mistake depend on this; spend one extra minute.</li>
+  <li><b>W2 wrong (D):</b> they still read inertia's minimum. Say: "It always falls; we read where it stops falling fast." The same reading comes back for BIC today.</li>
+  <li><b>W3 or W4 wrong:</b> single linkage and chaining. Not urgent, but the trail of in-between points is exactly what density methods call noise.</li>
+</ul>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Lesson Plans</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">8.4</span><h3>Density-Based Clustering</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Explain core, border and noise points, and what eps and min_samples control in DBSCAN</li>
+  <li>Choose a starting eps from a k-distance plot and read the effect of changing it</li>
+  <li>Read an OPTICS reachability plot and explain why one eps fails when clusters have different densities</li>
+  <li>Cluster with HDBSCAN, count clusters and noise correctly, and profile the result</li>
+  <li>Judge whether a density-based clustering found real structure or an artifact of the features</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: the city at night; why every-point-in-a-cluster is a quiet assumption</td></tr>
+<tr><td class="t">25m</td><td>Live demo: moons, roles, eps sweep, k-distances, varying density, OPTICS, HDBSCAN, three mistakes</td></tr>
+<tr><td class="t">25m</td><td>Guided lab: <code class="inline">payment_density_starter.py</code> (fast finishers: <code class="inline">rings_starter.py</code>, <code class="inline">debug_density.py</code>)</td></tr>
+<tr><td class="t">15m</td><td>Start the lesson project: Core Segments and Misfits, Steps 1 and 2</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"Look down at a region at night from a plane. Towns are where the lights are packed close together, and their shapes follow rivers and valleys, not circles. Between them are dark fields with a lone farmhouse here and there. You did not need to be told how many towns there are: you counted the bright patches. And you would not call a farmhouse a town."</p>
+<p>Then the contrast with Session 3: "K-Means and hierarchical clustering put EVERY customer in some cluster and assume roughly round blobs. Density methods give two new answers: clusters of any shape, and noise, label -1, for points that belong nowhere. The number of clusters comes out of the data."</p>
+<p>Name the three algorithms in one breath: DBSCAN (one radius, easy to reason about), OPTICS (every radius at once, a picture), HDBSCAN (keeps the clusters that are stable across densities: the one to reach for).</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook <code class="inline">lesson_8_4</code>. Steps 1 to 7 are the lesson's sections in order; 8 to 10 are its Common Mistakes. Ask for a prediction before every sweep.</p>
+<ol class="steps">
+  <li><b>K-Means cannot follow a moon (3m).</b> "Two interleaving half-moons. K-Means draws straight boundaries between centers; DBSCAN follows the crowd. Scale first: eps is a distance." Show the lesson's side-by-side figure after the run.
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.datasets <span class="k">import</span> make_moons
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+<span class="k">from</span> sklearn.cluster <span class="k">import</span> KMeans, DBSCAN
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> adjusted_rand_score
+
+<span class="k">def</span> label_counts(labels):
+    <span class="s">"""Cluster sizes as a dict; the key -1 is noise."""</span>
+    <span class="k">return</span> pd.Series(labels).value_counts().sort_index().to_dict()
+
+X_moons, y_moons = make_moons(n_samples=<span class="s">400</span>, noise=<span class="s">0.08</span>, random_state=<span class="s">42</span>)
+Z_moons = StandardScaler().fit_transform(X_moons)
+
+km_labels = KMeans(n_clusters=<span class="s">2</span>, n_init=<span class="s">10</span>, random_state=<span class="s">42</span>).fit_predict(Z_moons)
+db = DBSCAN(eps=<span class="s">0.3</span>, min_samples=<span class="s">5</span>).fit(Z_moons)
+
+print(<span class="s">"K-Means:"</span>, label_counts(km_labels), <span class="s">" ARI"</span>, round(adjusted_rand_score(y_moons, km_labels), <span class="s">3</span>))
+print(<span class="s">"DBSCAN :"</span>, label_counts(db.labels_), <span class="s">" ARI"</span>, round(adjusted_rand_score(y_moons, db.labels_), <span class="s">3</span>))</pre>
+<pre class="out">K-Means: {0: 200, 1: 200}  ARI 0.475
+DBSCAN : {-1: 1, 0: 200, 1: 199}  ARI 0.995</pre>
+The adjusted Rand index is back from Lesson 8.2 (today's warm-up): 1 means the true moons. Ask: "Did I tell DBSCAN there were two clusters?" (No: the count came out of the data.)</li>
+  <li><b>Core, border, noise (2m).</b> "Every point gets a role. Core: at least min_samples within eps, itself included. Border: not crowded itself, but next to a core point. Noise: neither, label -1." Draw the decision diagram from the lesson.
+<pre class="code">is_core = np.zeros(len(Z_moons), dtype=bool)
+is_core[db.core_sample_indices_] = <span class="k">True</span>
+is_noise = db.labels_ == -<span class="s">1</span>
+print(<span class="s">"core  :"</span>, is_core.sum())
+print(<span class="s">"border:"</span>, (~is_core &amp; ~is_noise).sum())
+print(<span class="s">"noise :"</span>, is_noise.sum())</pre>
+<pre class="out">core  : 398
+border: 1
+noise : 1</pre></li>
+  <li><b>eps is unforgiving (3m).</b> "Too small: crumbs and noise. Too large: one blob." Ask for a prediction for eps 0.1 and eps 1.0 before running.
+<pre class="code"><span class="k">for</span> eps <span class="k">in</span> [<span class="s">0.1</span>, <span class="s">0.2</span>, <span class="s">0.3</span>, <span class="s">0.5</span>, <span class="s">1.0</span>]:
+    labels = DBSCAN(eps=eps, min_samples=<span class="s">5</span>).fit_predict(Z_moons)
+    n_clusters = len(set(labels) - {-<span class="s">1</span>})
+    print(<span class="s">f"eps={eps:&lt;4} clusters={n_clusters:&lt;3} noise={(labels == -1).sum():&lt;4} ARI={adjusted_rand_score(y_moons, labels):.3f}"</span>)</pre>
+<pre class="out">eps=0.1  clusters=29  noise=157  ARI=0.031
+eps=0.2  clusters=5   noise=5    ARI=0.886
+eps=0.3  clusters=2   noise=1    ARI=0.995
+eps=0.5  clusters=2   noise=0    ARI=1.000
+eps=1.0  clusters=1   noise=0    ARI=0.000</pre>
+The useful range is 0.3 to 0.5. On real data there is no ARI to check against, which is why the next step exists.</li>
+  <li><b>A starting eps from the data (3m).</b> "For each point: the distance to its min_samples-th neighbor, itself included. That is the smallest eps that makes it core. Sort, plot, look for the knee." Show the lesson's k-distance plot.
+<pre class="code"><span class="k">from</span> sklearn.neighbors <span class="k">import</span> NearestNeighbors
+min_samples = <span class="s">5</span>
+nn = NearestNeighbors(n_neighbors=min_samples).fit(Z_moons)
+distances, _ = nn.kneighbors(Z_moons)        <span class="c"># column 0 is each point itself, at distance 0</span>
+k_dist = np.sort(distances[:, -<span class="s">1</span>])
+print(<span class="s">"k-distance percentiles (50, 90, 99):"</span>, np.percentile(k_dist, [<span class="s">50</span>, <span class="s">90</span>, <span class="s">99</span>]).round(<span class="s">3</span>))
+print(<span class="s">"share that would be core at eps=0.3:"</span>, (k_dist &lt;= <span class="s">0.3</span>).mean())</pre>
+<pre class="out">k-distance percentiles (50, 90, 99): [0.112 0.186 0.278]
+share that would be core at eps=0.3: 0.995</pre>
+Say the warning card: on real data the knee is a gentle curve. Treat it as the center of a short sweep.</li>
+  <li><b>When density varies (3m).</b> "Two tight groups close together, one loose group further away, a sprinkle of noise. True sizes 200, 200, 300. Find an eps that gets all three."
+<pre class="code"><span class="k">from</span> sklearn.datasets <span class="k">import</span> make_blobs
+rng = np.random.default_rng(<span class="s">42</span>)
+X_blobs, y_blobs = make_blobs(n_samples=[<span class="s">200</span>, <span class="s">200</span>, <span class="s">300</span>], centers=[[<span class="s">0</span>, <span class="s">0</span>], [<span class="s">2</span>, <span class="s">0</span>], [<span class="s">6</span>, <span class="s">4</span>]],
+                              cluster_std=[<span class="s">0.3</span>, <span class="s">0.3</span>, <span class="s">1.3</span>], random_state=<span class="s">42</span>)
+X_var = np.vstack([X_blobs, rng.uniform(-<span class="s">3</span>, <span class="s">10</span>, size=(<span class="s">30</span>, <span class="s">2</span>))])
+y_var = np.concatenate([y_blobs, np.full(<span class="s">30</span>, -<span class="s">1</span>)])     <span class="c"># -1 marks the sprinkled points</span>
+<span class="k">for</span> eps <span class="k">in</span> [<span class="s">0.2</span>, <span class="s">0.4</span>, <span class="s">0.6</span>, <span class="s">1.0</span>]:
+    labels = DBSCAN(eps=eps, min_samples=<span class="s">10</span>).fit_predict(X_var)
+    print(<span class="s">f"eps={eps:&lt;4} {label_counts(labels)}"</span>)</pre>
+<pre class="out">eps=0.2  {-1: 361, 0: 189, 1: 180}
+eps=0.4  {-1: 180, 0: 199, 1: 202, 2: 149}
+eps=0.6  {-1: 60, 0: 403, 1: 267}
+eps=1.0  {-1: 20, 0: 403, 1: 307}</pre>
+No eps works: small radii lose the loose group, large radii merge the tight ones. The gap between the tight groups is narrower than the spacing inside the loose one.</li>
+  <li><b>OPTICS: every eps at once (3m).</b> "OPTICS records, for every point, roughly the eps at which it would be reached. Plotted in visiting order, clusters are valleys." Show the reachability plot; point at the higher valley (the loose group).
+<pre class="code"><span class="k">from</span> sklearn.cluster <span class="k">import</span> OPTICS
+optics = OPTICS(min_samples=<span class="s">10</span>, xi=<span class="s">0.1</span>, min_cluster_size=<span class="s">0.05</span>).fit(X_var)
+print(<span class="s">"OPTICS:"</span>, label_counts(optics.labels_), <span class="s">" ARI"</span>, round(adjusted_rand_score(y_var, optics.labels_), <span class="s">3</span>))</pre>
+<pre class="out">OPTICS: {-1: 18, 0: 200, 1: 203, 2: 309}  ARI 0.959</pre>
+Running DBSCAN = drawing one horizontal line across this plot. One line cannot cut a high valley and two low ones well.</li>
+  <li><b>HDBSCAN: the practical default (3m).</b> "Build the whole hierarchy over every eps, keep the clusters that live longest. The setting you can reason about: the smallest group you care about." Mention why <code class="inline">copy=True</code> (scikit-learn 1.9 FutureWarning).
+<pre class="code"><span class="k">from</span> sklearn.cluster <span class="k">import</span> HDBSCAN
+hdb = HDBSCAN(min_cluster_size=<span class="s">20</span>, copy=<span class="k">True</span>).fit(X_var)
+print(<span class="s">"HDBSCAN:"</span>, label_counts(hdb.labels_), <span class="s">" ARI"</span>, round(adjusted_rand_score(y_var, hdb.labels_), <span class="s">3</span>))
+print(<span class="s">"membership strength of the first 5 points:"</span>, hdb.probabilities_[:<span class="s">5</span>].round(<span class="s">2</span>))</pre>
+<pre class="out">HDBSCAN: {-1: 30, 0: 302, 1: 197, 2: 201}  ARI 0.95
+membership strength of the first 5 points: [1.   0.55 0.36 0.93 0.65]</pre>
+<code class="inline">probabilities_</code>: 1 is the dense core, near 0 the fringe, noise 0. Put the lesson's method table on the board now; it is the summary of the block.</li>
+  <li><b>Mistake: counting noise as a cluster (1m).</b> "No error, wrong number."
+<pre class="code">labels_04 = DBSCAN(eps=<span class="s">0.4</span>, min_samples=<span class="s">10</span>).fit_predict(X_var)
+print(<span class="s">"len(set(labels)):"</span>, len(set(labels_04)))
+print(<span class="s">"real clusters    :"</span>, len(set(labels_04) - {-<span class="s">1</span>}))</pre>
+<pre class="out">len(set(labels)): 4
+real clusters    : 3</pre></li>
+  <li><b>Mistake: asking DBSCAN to predict (1m).</b> "These models describe the data they saw."
+<pre class="code">db.predict(Z_moons[:<span class="s">3</span>])</pre>
+<pre class="out">AttributeError: 'DBSCAN' object has no attribute 'predict'</pre>
+Fix: refit, or a nearest-neighbor assignment (Exercise 4). Gaussian mixtures, after the break, can predict.</li>
+  <li><b>Mistake: forgetting to scale, on real customers (3m).</b> "Dollars against fractions: a radius of 0.5 means 'within 50 cents of order value'."
+<pre class="code">customers_raw = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+raw = customers_raw[[<span class="s">"orders_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"discount_share"</span>, <span class="s">"return_rate"</span>]]
+raw_labels = DBSCAN(eps=<span class="s">0.5</span>, min_samples=<span class="s">10</span>).fit_predict(raw)
+print(<span class="s">"clusters:"</span>, len(set(raw_labels) - {-<span class="s">1</span>}), <span class="s">" noise share:"</span>, round((raw_labels == -<span class="s">1</span>).mean(), <span class="s">3</span>))</pre>
+<pre class="out">clusters: 57  noise share: 0.776</pre>
+57 clusters and 78% noise, no error. Transition: "The project fixes this with logs and a scaler, then finds a third of Pinecrest's customers fit no segment."</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>Counting -1 as a cluster.</b> Symptom: "HDBSCAN found 8 clusters" when it found 7 and noise. Coach: "Print <code class="inline">set(labels)</code>. Which of those is not a cluster?" Make them report noise as its own number every time.</li>
+  <li><b>Sweeping eps forever on real data.</b> Symptom: a learner in the lab tries eps 0.55, 0.6, 0.65 hoping for a clean answer. Coach: "Do the k-distances show a knee? Do the clusters have different densities?" When no eps works, that is the finding, and the cue for HDBSCAN.</li>
+  <li><b>Trusting a cluster without its profile.</b> Symptom: naming lab clusters "one-item shoppers" and "two-item shoppers" as segments. Coach: "What else differs between those clusters?" (Little.) Whole-number columns make shelves.</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<p><b>File:</b> <code class="inline">labs/module-04/l8_4-density-clustering/payment_density_starter.py</code>; reference <code class="inline">labs/module-04/l8_4-density-clustering/payment_density_solution.py</code>. The lesson's moves on a new question: 5,000 card payments, five features (log amount, log account age, hour, velocity, items), fraud never used to fit.</p>
+<ul class="tick">
+  <li><b>TODO 1 and 2 together (7m):</b> k-distances and the eps sweep. No knee, and no eps works: 69.7% noise at 0.3, 5.6% at 1.0 with clusters that split on whole numbers. Say: "Same story as the varying-density demo."</li>
+  <li><b>TODO 3 to 5 in pairs (13m):</b> HDBSCAN (8 clusters, 8.8% noise), the profile table, noise against the clusters.</li>
+  <li><b>Expected:</b> most clusters sit on one exact items count (1 to 4) and velocity value (0, 1 or 2); the noise holds 24 of the sample's 38 frauds, a fraud rate of 5.4% against 0.31% in the clusters.</li>
+  <li><b>Debrief (3m):</b> "Which result would you take to the payments team?" Not the eight clusters: the noise. "Unusual payments are where the fraud is" is exactly the idea of Lesson 8.6. TODO 6 (stability) is the habit: 50 and 100 agree; 25 and 200 still put 3.9% to 4.5% fraud in the noise.</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-04/l8_4-density-clustering/rings_starter.py</code> (a ring inside a ring; the silhouette votes 0.328 for the wrong K-Means answer and 0.158 for the right DBSCAN one), then <code class="inline">labs/module-04/l8_4-density-clustering/debug_density.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p><b>Core Segments and Misfits</b> (lesson page, Steps 1 to 6, about 45 minutes alone). In the room: Steps 1 and 2 (15 minutes).</p>
+<ul class="tick">
+  <li>Read the brief aloud: marketing wants the tight segments AND the customers who fit none. Step 1: log the two skewed columns, scale; <b>done</b> = <code class="inline">(6000, 4)</code> with means 0 and standard deviations 1.</li>
+  <li>Step 2: the k-distances <code class="inline">[0.28 0.41 0.6 ]</code> and the sweep from 19 clusters with 31.3% noise (eps 0.3) to 2 clusters holding 5,528 customers (eps 0.6). Ask: "Would you present any of these?"</li>
+  <li><b>Goes home:</b> Steps 3 to 6: HDBSCAN finds 7 clusters and 32.3% noise; two pairs differ only by a whole-number order count and are merged; misfits churn at 0.203; <code class="inline">customer_density_segments.csv</code> (6,000 rows).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these out loud during the demo and the lab:</p>
+<ul class="tick">
+  <li>Why do we scale before DBSCAN? <b>Answer:</b> eps is a distance; columns in large units would decide it alone.</li>
+  <li>What does a point with label -1 mean? <b>Answer:</b> noise: not in any crowd. It is a result to report, not a cluster.</li>
+  <li>Why can no single eps find the tight and the loose groups? <b>Answer:</b> the gap between the tight groups is narrower than the spacing inside the loose one; any radius that connects the loose group bridges the gap.</li>
+  <li>How do you label a new customer with a fitted HDBSCAN? <b>Answer:</b> you cannot predict: refit, or assign to the nearest clustered neighbor's segment and call it noise when it is too far.</li>
+</ul>
+<p>Workbook self-check, items Q1 to Q6:</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q1</b> <span data-sc="1">C) <code class="inline">[ 0  0  0 -1 -1 -1]</code></span>; <b>Q2</b> <span data-sc="2">B) Choosing a starting eps for DBSCAN with min_samples=10: just above the knee</span>; <b>Q3</b> <span data-sc="3"><code class="inline">4 3</code></span>; <b>Q4</b> <span data-sc="4">C) <code class="inline">min_cluster_size</code>, from the smallest group you would act on, then check that nearby values agree</span>; <b>Q5</b> <span data-sc="5">D) items only takes whole values, so payments stack on exact values and look dense: profile further and treat the split as an artifact unless the business cares about it</span>; <b>Q6</b> <span data-sc="6">B) <code class="inline">True False</code></span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> give strugglers the three-role card (core, border, noise) and have them label five points of the moons figure by hand before the lab. In the lab, pair them on TODO 3 to 5 only; TODO 1 and 2 are done on the projector.</p>
+<p><b>Stretch:</b> <code class="inline">rings_starter.py</code> and <code class="inline">debug_density.py</code>; then the lesson's Bonus Challenge (replace <code class="inline">log_orders</code> with <code class="inline">log(spend_12m)</code> to remove the integer artifact).</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">8.5</span><h3>Gaussian Mixture Models</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Explain a Gaussian mixture as a weighted sum of components with means, covariances and weights</li>
+  <li>Fit a mixture with EM and read predict_proba as soft cluster membership</li>
+  <li>Choose the covariance type and the number of components with BIC and AIC</li>
+  <li>Compare a mixture with K-Means on elongated or overlapping clusters</li>
+  <li>Use a fitted mixture to score how typical a point is and to generate new samples</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: paint mixed from a few base colors; hard labels to probabilities</td></tr>
+<tr><td class="t">25m</td><td>Live demo: 1-D mixture, probabilities, ellipses, covariance types and BIC, choosing k, score_samples, three mistakes</td></tr>
+<tr><td class="t">25m</td><td>Guided lab: <code class="inline">discount_mixture_starter.py</code> (everyone), then <code class="inline">lifecycle_mixture_starter.py</code> in pairs</td></tr>
+<tr><td class="t">15m</td><td>Start the lesson project: Soft Customer Segments, Steps 1 and 2</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"Every customer's behavior is a dab of paint, and all the paint on the palette was mixed from a few base colors. A Gaussian mixture works out the base colors (the components), how much of the palette each supplied (the weights), and, for any dab, how likely it is to have come from each color. A dab between two colors gets a split answer, and that split is information, not indecision."</p>
+<p>Write under the three headings on the board: <b>means_</b> (where), <b>covariances_</b> (spread and tilt: an ellipse), <b>weights_</b> (share). Then: "K-Means is close to a special case: tiny, equal, round components and all-or-nothing answers. A mixture can tilt, stretch, share, and predict for new customers, which the density methods before the break could not."</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook <code class="inline">lesson_8_5</code>. Steps 1 to 6 follow the lesson's sections; 7 to 9 are its mistakes.</p>
+<ol class="steps">
+  <li><b>One feature, two hidden groups (3m).</b> "Six hundred values from one bell curve, four hundred from another. The model never sees which is which." Remind them: scikit-learn wants 2-D X, hence the reshape.
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.mixture <span class="k">import</span> GaussianMixture
+rng = np.random.default_rng(<span class="s">42</span>)
+group_a = rng.normal(loc=<span class="s">0.0</span>, scale=<span class="s">1.0</span>, size=<span class="s">600</span>)
+group_b = rng.normal(loc=<span class="s">4.0</span>, scale=<span class="s">1.5</span>, size=<span class="s">400</span>)
+x = np.concatenate([group_a, group_b]).reshape(-<span class="s">1</span>, <span class="s">1</span>)   <span class="c"># scikit-learn wants a 2-D X</span>
+gm_1d = GaussianMixture(n_components=<span class="s">2</span>, random_state=<span class="s">42</span>).fit(x)
+print(<span class="s">"means  :"</span>, gm_1d.means_.ravel().round(<span class="s">2</span>))
+print(<span class="s">"stds   :"</span>, np.sqrt(gm_1d.covariances_.ravel()).round(<span class="s">2</span>))
+print(<span class="s">"weights:"</span>, gm_1d.weights_.round(<span class="s">3</span>))</pre>
+<pre class="out">means  : [0.03 4.16]
+stds   : [1.01 1.35]
+weights: [0.629 0.371]</pre>
+True values: means 0 and 4, spreads 1 and 1.5, weights 60/40. Recovered from the mixed-up numbers alone.</li>
+  <li><b>Soft membership (3m).</b> "predict_proba: one row per value, one column per component, each row adds up to 1." Ask the room to predict the row for 2.0 before running.
+<pre class="code">probe = np.array([[<span class="s">0.0</span>], [<span class="s">1.5</span>], [<span class="s">2.0</span>], [<span class="s">2.5</span>], [<span class="s">4.0</span>]])
+print(pd.DataFrame(gm_1d.predict_proba(probe).round(<span class="s">3</span>), index=probe.ravel(),
+                   columns=[<span class="s">f"P(component {k})"</span> <span class="k">for</span> k <span class="k">in</span> range(<span class="s">2</span>)]))
+print(<span class="s">"predict:"</span>, gm_1d.predict(probe))</pre>
+<pre class="out">     P(component 0)  P(component 1)
+0.0           0.996           0.004
+1.5           0.846           0.154
+2.0           0.550           0.450
+2.5           0.197           0.803
+4.0           0.001           0.999
+predict: [0 0 0 1 1]</pre>
+<code class="inline">predict</code> picks the larger probability and hides the 0.55 / 0.45 split: the information that makes a mixture useful. Show the lesson's figure of two weighted bell curves.</li>
+  <li><b>Ellipses, not circles (3m).</b> "Three blobs stretched the same way. K-Means slices across them; a full-covariance component bends to each shape."
+<pre class="code"><span class="k">from</span> sklearn.datasets <span class="k">import</span> make_blobs
+<span class="k">from</span> sklearn.cluster <span class="k">import</span> KMeans
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> adjusted_rand_score
+X_round, y_true = make_blobs(n_samples=<span class="s">600</span>, centers=<span class="s">3</span>, random_state=<span class="s">170</span>)
+X_stretched = X_round @ np.array([[<span class="s">0.6</span>, -<span class="s">0.6</span>], [-<span class="s">0.4</span>, <span class="s">0.8</span>]])
+km_labels = KMeans(n_clusters=<span class="s">3</span>, n_init=<span class="s">10</span>, random_state=<span class="s">42</span>).fit_predict(X_stretched)
+gm_full = GaussianMixture(n_components=<span class="s">3</span>, covariance_type=<span class="s">"full"</span>, random_state=<span class="s">42</span>).fit(X_stretched)
+gm_labels = gm_full.predict(X_stretched)
+print(<span class="s">"K-Means ARI:"</span>, round(adjusted_rand_score(y_true, km_labels), <span class="s">3</span>))
+print(<span class="s">"GMM ARI    :"</span>, round(adjusted_rand_score(y_true, gm_labels), <span class="s">3</span>))</pre>
+<pre class="out">K-Means ARI: 0.577
+GMM ARI    : 1.0</pre>
+Draw the EM loop from the lesson while it runs: E-step shares out each point, M-step refits each component; repeat until the log-likelihood stops improving.</li>
+  <li><b>Covariance types, judged by BIC (4m).</b> "BIC rewards fit and charges for every parameter. Lower is better. It never sees the true labels."
+<pre class="code"><span class="k">for</span> cov <span class="k">in</span> [<span class="s">"spherical"</span>, <span class="s">"diag"</span>, <span class="s">"tied"</span>, <span class="s">"full"</span>]:
+    gm = GaussianMixture(n_components=<span class="s">3</span>, covariance_type=cov, random_state=<span class="s">42</span>).fit(X_stretched)
+    ari = adjusted_rand_score(y_true, gm.predict(X_stretched))
+    print(<span class="s">f"{cov:10s} BIC {gm.bic(X_stretched):8.1f}   ARI {ari:.3f}"</span>)</pre>
+<pre class="out">spherical  BIC   4019.6   ARI 0.568
+diag       BIC   3988.1   ARI 0.516
+tied       BIC   3032.8   ARI 1.000
+full       BIC   3061.9   ARI 1.000</pre>
+tied wins because the groups really share one shape; full also gets them right but pays for two covariances it does not need. The axis-aligned types cannot tilt.</li>
+  <li><b>How many components (3m).</b> "Same tool, different question."
+<pre class="code"><span class="k">for</span> k <span class="k">in</span> range(<span class="s">1</span>, <span class="s">7</span>):
+    gm = GaussianMixture(n_components=k, covariance_type=<span class="s">"tied"</span>, random_state=<span class="s">42</span>).fit(X_stretched)
+    print(<span class="s">f"k={k}  BIC {gm.bic(X_stretched):8.1f}   AIC {gm.aic(X_stretched):8.1f}"</span>)</pre>
+<pre class="out">k=1  BIC   4272.7   AIC   4250.7
+k=2  BIC   3825.1   AIC   3789.9
+k=3  BIC   3032.8   AIC   2984.5
+k=4  BIC   3053.1   AIC   2991.6
+k=5  BIC   3072.4   AIC   2997.6
+k=6  BIC   3087.2   AIC   2999.2</pre>
+A clean minimum at 3 on toy data. Warn: on the customers (the project) BIC keeps creeping down; read where the big drops stop.</li>
+  <li><b>A mixture is a density model (3m).</b> "score_samples is the log of the model's density. High in the middle of a component, very low far from everything."
+<pre class="code">gm_tied = GaussianMixture(n_components=<span class="s">3</span>, covariance_type=<span class="s">"tied"</span>, random_state=<span class="s">42</span>).fit(X_stretched)
+typical_point = gm_tied.means_[:<span class="s">1</span>]                  <span class="c"># the center of one component</span>
+odd_point = np.array([[<span class="s">0.0</span>, -<span class="s">20.0</span>]])                <span class="c"># far from every group</span>
+print(<span class="s">"log-density, center of a component:"</span>, gm_tied.score_samples(typical_point).round(<span class="s">2</span>))
+print(<span class="s">"log-density, far-away point       :"</span>, gm_tied.score_samples(odd_point).round(<span class="s">2</span>))
+print(<span class="s">"lowest log-density among the data :"</span>, gm_tied.score_samples(X_stretched).min().round(<span class="s">2</span>))</pre>
+<pre class="out">log-density, center of a component: [-1.47]
+log-density, far-away point       : [-1397.33]
+lowest log-density among the data : -7.94</pre>
+Compare log-densities within one model only. This is the anomaly score of Lesson 8.6.</li>
+  <li><b>Mistake: component numbers mean nothing (3m).</b> "Two seeds, the same clustering, different numbers."
+<pre class="code">run_a = GaussianMixture(n_components=<span class="s">3</span>, covariance_type=<span class="s">"tied"</span>, random_state=<span class="s">42</span>).fit(X_stretched)
+run_b = GaussianMixture(n_components=<span class="s">3</span>, covariance_type=<span class="s">"tied"</span>, random_state=<span class="s">7</span>).fit(X_stretched)
+print(<span class="s">"first labels, run A:"</span>, run_a.predict(X_stretched)[:<span class="s">8</span>])
+print(<span class="s">"first labels, run B:"</span>, run_b.predict(X_stretched)[:<span class="s">8</span>])
+print(<span class="s">"ARI between runs   :"</span>, adjusted_rand_score(run_a.predict(X_stretched), run_b.predict(X_stretched)))</pre>
+<pre class="out">first labels, run A: [1 1 2 1 1 1 2 1]
+first labels, run B: [0 0 2 0 0 0 2 0]
+ARI between runs   : 1.0</pre>
+A report that says 'segment 2 churns most' breaks on the next refit. Name segments by their profile.</li>
+  <li><b>Mistake: more components than rows (1m).</b> "A filtered subset is how this happens."
+<pre class="code">GaussianMixture(n_components=<span class="s">5</span>, random_state=<span class="s">42</span>).fit(X_stretched[:<span class="s">3</span>])</pre>
+<pre class="out">ValueError: Expected n_samples &gt;= n_components but got n_components = 5, n_samples = 3</pre></li>
+  <li><b>Mistake: ignoring a ConvergenceWarning (2m).</b> "With max_iter=2 EM stops half-way and only warns."
+<pre class="code"><span class="k">import</span> warnings
+<span class="k">with</span> warnings.catch_warnings(record=<span class="k">True</span>) <span class="k">as</span> caught:
+    warnings.simplefilter(<span class="s">"always"</span>)
+    GaussianMixture(n_components=<span class="s">3</span>, max_iter=<span class="s">2</span>, random_state=<span class="s">42</span>).fit(X_stretched)
+print(caught[<span class="s">0</span>].category.__name__)</pre>
+<pre class="out">ConvergenceWarning</pre>
+Fix: raise max_iter, scale features, check <code class="inline">converged_</code>; try <code class="inline">n_init=3</code> or a larger <code class="inline">reg_covar</code> if a component collapses.</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>Stopping at predict.</b> Symptom: a lab answer that only lists component labels. Coach: "How sure is the model about this customer?" Every mixture result today comes with its top probability.</li>
+  <li><b>Assuming component numbers are stable.</b> Symptom: <code class="inline">deal = 1</code> hard-coded in the discount lab. It happens to be right with seed 42 and wrong with another seed. Coach: "Which component has the larger mean?" (<code class="inline">gm.means_.ravel().argmax()</code>).</li>
+  <li><b>Reading BIC's minimum on real data.</b> Symptom: "BIC is lowest at 8, so 8 segments" (project Step 2, or the lifecycle lab). Coach: "How big is each drop?" Same reading as the elbow in the warm-up.</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (15m, everyone):</b> <code class="inline">labs/module-04/l8_5-gaussian-mixtures/discount_mixture_starter.py</code>; reference <code class="inline">labs/module-04/l8_5-gaussian-mixtures/discount_mixture_solution.py</code>. The lesson's first section on a real column: is discount use one population or two?</li>
+  <li><b>Expected, Lab A:</b> BIC drops 3,596 from one to two components, then only 330; means 0.11 and 0.44 with weights 0.705 and 0.295; the vote switches between a discount share of 0.25 (P = 0.471) and 0.30 (0.911); churn 0.119 for customers with P(deal-driven) up to 0.1 and 0.305 above 0.9; 430 borderline customers (P between 0.2 and 0.8) with shares 0.219 to 0.281.</li>
+  <li><b>Circulate for:</b> a 1-D Series passed to <code class="inline">fit</code> (the 2-D error); <code class="inline">deal</code> hard-coded; <code class="inline">pd.cut</code> without <code class="inline">include_lowest=True</code> (customers at exactly 0 vanish). <b>Debrief:</b> "The mixture found the Deal Hunters from one column and never saw churn, yet its confident members churn at 30%."</li>
+  <li><b>Lab B (10m, pairs, finish at home):</b> <code class="inline">labs/module-04/l8_5-gaussian-mixtures/lifecycle_mixture_starter.py</code>; reference <code class="inline">labs/module-04/l8_5-gaussian-mixtures/lifecycle_mixture_solution.py</code>. Lifecycle stages from tenure, recency and spend.</li>
+  <li><b>Expected, Lab B:</b> BIC drops 3,408, 493, 385, 243, 40 (no minimum, a judgment call); four stages: long-tenure regulars (2,169, churn 0.109), established (1,272, 0.071), fading (1,293, median 101 days since the last order, 0.205), newcomers (1,266, 3 months, 0.317); seeds 42 and 7 give ARI 0.981 with the components renumbered; 1,340 customers below 0.8 confidence; a new two-month customer is 0.977 newcomer.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p><b>Soft Customer Segments</b> (lesson page, Steps 1 to 6, about 40 minutes alone). In the room: Steps 1 and 2 (15 minutes).</p>
+<ul class="tick">
+  <li>Read the warning card "Why Not the Logs from Lesson 8.2?" aloud: logs of whole numbers create stripes a full-covariance component collapses onto. Step 1 scales the raw four features; <b>done</b> = <code class="inline">(6000, 4)</code>.</li>
+  <li>Step 2 fits 1 to 8 components, three starts each (start it, then talk). <b>Done</b> = the BIC table: drops of thousands up to 5 (2,216 at k=5), then 185 and 187. Ask for a choice and a reason.</li>
+  <li><b>Goes home:</b> Steps 3 to 6: five named segments, 305 customers below 0.8 confidence, what a sixth component would add (it splits the Deal Hunters), two new customers scored, <code class="inline">customer_soft_segments.csv</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these out loud:</p>
+<ul class="tick">
+  <li>What do the three learned attributes of a mixture describe? <b>Answer:</b> <code class="inline">means_</code> where each component sits, <code class="inline">covariances_</code> its spread and tilt, <code class="inline">weights_</code> its share of the data.</li>
+  <li>Why can a mixture separate stretched groups that K-Means cuts across? <b>Answer:</b> a full or tied component is an ellipse with its own tilt; K-Means assumes round clusters around centers.</li>
+  <li>A customer gets probabilities 0.51 and 0.49. What do you do with that? <b>Answer:</b> treat them as borderline; keep the probability next to the label; leave them out of narrowly targeted decisions.</li>
+  <li>What tells you a customer is unlike every segment? <b>Answer:</b> a low <code class="inline">score_samples</code> (log-density), not a low probability.</li>
+</ul>
+<p>Workbook self-check, items Q7 to Q12:</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q7</b> <span data-sc="7">D) <code class="inline">1.0</code></span>; <b>Q8</b> <span data-sc="8">A) About 2 or 3: the big drops stop there; then check whether the third component means something</span>; <b>Q9</b> <span data-sc="9">C) <code class="inline">"tied"</code></span>; <b>Q10</b> <span data-sc="10"><code class="inline">1.0</code>: the two runs found the same groups under different numbers</span>; <b>Q11</b> <span data-sc="11">A) <code class="inline">score_samples</code>: a very low log-density</span>; <b>Q12</b> <span data-sc="12"><code class="inline">ValueError: Expected n_samples &gt;= n_components but got n_components = 4, n_samples = 3</code></span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> draw two overlapping bell curves and have learners shade where they would say "not sure"; that region is what <code class="inline">predict_proba</code> reports. In Lab A, give TODO 1 to them pre-typed if the loop slows them down.</p>
+<p><b>Stretch:</b> Lab B in full; then the lesson's Bonus Challenge (merge the soft segments with 8.4's misfits: are misfits borderline or atypical?).</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Closing</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Exit ticket (3 questions, no notes, 4 minutes)</div>
+<p>Learners answer in the workbook's Exit Ticket box or on a sticky note. Sort into "got it" and "not yet" before Session 5: question 3 decides how long you spend on <code class="inline">score_samples</code> in the 8.6 framing.</p>
+<ol class="steps">
+  <li>HDBSCAN returns the labels <code class="inline">-1, 0, 1, 2</code> and 30% of points are -1. How many clusters did it find, and what do you tell the marketing team about the 30%? <b>Answer:</b> three clusters. The 30% are customers in no dense crowd: report them as a group of their own (they are often mixed or unusual behavior), not as a failure.</li>
+  <li>Name one thing a Gaussian mixture can do that HDBSCAN cannot, and one thing HDBSCAN can do that a mixture cannot. <b>Answer:</b> a mixture can <code class="inline">predict</code> for new customers and gives probabilities (and a density); HDBSCAN finds clusters of any shape and labels noise.</li>
+  <li>A customer far from every segment gets <code class="inline">predict_proba</code> 0.99 for one component. Is the model sure this is a typical member? What would you check? <b>Answer:</b> no: probabilities only compare components. Check <code class="inline">score_samples</code>: a very low log-density means atypical.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Homework (about 2 to 3 hours)</div>
+<ul class="tick">
+  <li><b>Finish both lesson projects.</b> Core Segments and Misfits Steps 3 to 6 (7 clusters, 32.3% noise, merged pairs, misfits churn 0.203, <code class="inline">customer_density_segments.csv</code>) and Soft Customer Segments Steps 3 to 6 (305 below 0.8, the sixth component, <code class="inline">customer_soft_segments.csv</code>).</li>
+  <li><b>Lesson exercises.</b> 8.4: Exercises 1 to 3 (min_samples, OPTICS cuts, segment size); Exercise 4 is a stretch. 8.5: Exercises 1 to 3 (covariance types on customers, uncertainty by segment, synthetic customers); Exercise 4 is a stretch and previews 8.6.</li>
+  <li><b>Both Quick Quizzes</b> on the lesson pages (answers are in the Answer Key).</li>
+  <li><b>Journal:</b> both entries. The 8.5 prompt asks for one borderline and one atypical customer from their project.</li>
+  <li><b>Before the Next Lesson (from 8.5):</b> keep <code class="inline">customer_soft_segments.csv</code>; look at <code class="inline">data/transactions.csv</code> (how many frauds, what does a normal payment look like?); think of one situation where "unusual" is good news and one where it is bad news.</li>
+  <li><b>Optional:</b> <code class="inline">lifecycle_mixture_starter.py</code> if not finished in class; <code class="inline">rings_starter.py</code> and <code class="inline">debug_density.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Bring list for Session 5</div>
+<ul class="tick">
+  <li>A laptop with the course environment (<code class="inline">(.venv)</code> active, <code class="inline">check_environment.py</code> READY). Nothing new to install, no downloads.</li>
+  <li>The <code class="inline">pinecrest-ml</code> folder with <code class="inline">data/</code> and <code class="inline">labs/</code>; Session 5's starters are in <code class="inline">labs/module-05/</code>.</li>
+  <li>Both project notebooks from today and their files <code class="inline">customer_density_segments.csv</code> and <code class="inline">customer_soft_segments.csv</code> (8.6 compares detectors with the density ideas from today).</li>
+  <li>Your answers to the 8.5 "Before the Next Lesson" questions about <code class="inline">transactions.csv</code>.</li>
+  <li>The workbook and the journal.</li>
+</ul>
+</div>
+
+  <div class="sec"><h2>If You Run Long or Short</h2><span class="rule"></span></div>
+<div class="blk warn"><div class="h">Running long: what to protect and what to cut first</div>
+<ul class="tick">
+  <li><b>Protect:</b> 8.4 demo Steps 5 to 7 (varying density, OPTICS, HDBSCAN); the payment lab through TODO 5; 8.5 demo Steps 2 and 4.</li>
+  <li><b>Cut first (saves 4m):</b> 8.4 demo Steps 2 and 8 (roles and counting noise): one sentence each.</li>
+  <li><b>Cut second (saves 5m):</b> 8.5 demo Steps 8 and 9: name the two mistakes and show the messages on the slide.</li>
+  <li><b>Cut third (saves 15m):</b> the 8.4 project start: read the brief, give the check numbers (k-distances <code class="inline">[0.28 0.41 0.6 ]</code>, no usable eps), send all six steps home.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Running short: what to add</div>
+<ul class="tick">
+  <li>Run <code class="inline">rings_starter.py</code> for everyone and debrief the silhouette's vote: why does a score favor the wrong answer?</li>
+  <li>Lesson 8.4 Exercise 2 live: one OPTICS fit, DBSCAN cuts at 0.4 and 0.6 without refitting.</li>
+  <li>Lesson 8.5 Exercise 3 live: synthetic customers from the mixture, and the 13% that are impossible.</li>
+</ul>
+</div>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 4 · Facilitator Guide · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

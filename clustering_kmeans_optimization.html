@@ -3,947 +3,968 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="K-means clustering optimization and evaluation. Learn how to choose optimal K, perform silhouette analysis, and compare K-means variants.">
-    <title>K-means Optimization & Evaluation Path - Python Machine Learning</title>
+    <meta name="description" content="Choose the number of clusters with the elbow, silhouette scores and resampling stability, scale K-Means up with MiniBatchKMeans, and turn Pinecrest Outfitters customer clusters into named, actionable segments. Python Machine Learning Lesson 8.2.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Choosing k and Customer Segments - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
-    <main id="main-content">
-    <header role="banner">
-        <h1>K-means Optimization & Evaluation</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Unsupervised Learning</a>
-        <span class="separator">›</span>
-        <span class="current">K-means Optimization & Evaluation</span>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
     </nav>
 
-    <!-- Lesson Parts Navigation -->
-    <div class="lesson-parts">
-        <span>Related lessons: </span>
-        <a href="ml_kmeans_clustering.html">K-means Fundamentals</a>
-        <span class="separator">|</span>
-        <span class="current">Optimization & Evaluation</span>
-        <span class="separator">|</span>
-        <a href="ml_kmeans_applications.html">Applications & Advanced Topics</a>
-    </div>
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>📐 Lesson 8.2: Choosing k and Customer Segments</h1>
+                <p class="lead">Decide how many clusters your data really supports, check that they are stable, and turn them into customer segments a marketing team can act on.</p>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Apply the elbow method, silhouette analysis, and the gap statistic to choose the number of clusters</li>
-            <li>Interpret silhouette scores and diagnostic plots to validate cluster quality</li>
-            <li>Explain how k-means++ initialization reduces the risk of poor local optima</li>
-            <li>Use Mini-batch K-means to scale clustering to large datasets</li>
-            <li>Compare advanced initialization strategies and pick one for a given problem</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Determine the optimal <em>k</em> for a dataset using at least two selection methods and justify your choice.</p>
-    </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Read an elbow plot and explain why inertia alone cannot choose <em>k</em></li>
+                        <li>Compute and interpret silhouette scores, overall and per cluster, from the formula and with scikit-learn</li>
+                        <li>Test whether clusters are stable by refitting on resampled data and comparing labelings with the adjusted Rand index</li>
+                        <li>Build a reusable clustering pipeline (log transform, scaling, K-Means) and use <code>MiniBatchKMeans</code> when data gets large</li>
+                        <li>Profile, name and size segments, link them to an outcome such as churn, and write recommendations with honest limits</li>
+                    </ul>
+                </div>
 
-    <h2>Choosing Optimal K</h2>
-    
-    <h3>Methods for Determining the Number of Clusters</h3>
-    <pre class="language-python"><code>import numpy as np
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 100 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="clustering_kmeans.html">Lesson 8.1: K-Means Clustering</a>; pipelines from <a href="pipelines_composite.html">Lesson 2.2: Pipelines</a></li>
+                    <li><span class="meta-label">🛠️ You will build</span> A segmentation pipeline for Pinecrest customers and a one-page segment brief with sizes, profiles, churn and suggested actions</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code> (plus a large synthetic dataset from <code>make_blobs</code> for the speed test)</li>
+                </ul>
+            </header>
+
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#problem" class="toc-link">No Answer Key</a></li>
+                        <li><a href="#features" class="toc-link">Prepare the Features</a></li>
+                        <li><a href="#elbow" class="toc-link">The Elbow Method</a></li>
+                        <li><a href="#silhouette" class="toc-link">Silhouette Scores</a></li>
+                        <li><a href="#stability" class="toc-link">Stability Under Resampling</a></li>
+                        <li><a href="#scale-up" class="toc-link">Scaling Up with MiniBatchKMeans</a></li>
+                        <li><a href="#segments" class="toc-link">From Clusters to Segments</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: The Segment Brief</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="problem" class="lesson-section">
+                <h2>🧭 No Answer Key: How Do You Choose k?</h2>
+
+                <p>In Lesson 8.1 the marketing team guessed five groups and K-Means obliged. It would have obliged just as happily with three or twelve. In supervised learning you pick settings by checking predictions against known answers; in clustering there are no answers. So how do you decide how many groups the data supports?</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: Sorting the Returns Pile</h4>
+                    <p>Imagine the back room at a Pinecrest store, piled with returned gear that needs sorting into bins. With two bins, tents end up next to socks: each bin is a jumble. With fifty bins, near-identical headlamps end up in different bins and nobody can find anything. A good number of bins has two qualities at once: things in the same bin are alike (<strong>cohesion</strong>), and things in different bins are clearly different (<strong>separation</strong>). A third quality matters too: if a colleague sorted the same pile, they would come up with much the same bins (<strong>stability</strong>). And the bins have to be useful to whoever unpacks them.</p>
+                </div>
+
+                <p>No single number captures all of that, so you collect several kinds of evidence and look for agreement:</p>
+
+                <div class="mermaid">
+graph TD
+    A["Candidate values of k"] --> B["Elbow: where inertia bends"]
+    B --> C["Silhouette: tight and apart"]
+    C --> D["Stability: survives resampling"]
+    D --> E["Usefulness: sizes and actions"]
+    E --> F["Choose k where evidence agrees"]
+                </div>
+
+                <p>This lesson works through each kind of evidence on the same four Pinecrest behavior columns as Lesson 8.1, then turns the chosen clusters into segments. Along the way it covers the practical side: preparing skewed features, and clustering data too large for plain <code>KMeans</code>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="features" class="lesson-section">
+                <h2>🧪 Prepare the Features: Skew, Logs and Scale</h2>
+
+                <p>Start where Lesson 8.1 ended: four behavior columns. Before choosing <em>k</em>, look at their shape. K-Means works with means and squared distances, so a long right tail (a few customers with huge values) pulls centers toward the tail and stretches distances there.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.datasets import make_blobs
-from sklearn.cluster import KMeans, MiniBatchKMeans
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score, silhouette_samples, calinski_harabasz_score
-from sklearn.metrics import davies_bouldin_score, adjusted_rand_score
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.cluster import KMeans
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
+pd.set_option("display.width", 120)
+customers = pd.read_csv("data/customers_churn.csv")
+behavior = ["orders_12m", "avg_order_value", "discount_share", "return_rate"]
+X = customers[behavior]
 
-# Generate sample data
-np.random.seed(42)
-X, y_true = make_blobs(n_samples=500, centers=4, n_features=2,
-                       center_box=(-10.0, 10.0), cluster_std=1.5,
-                       random_state=42)
+print(X.skew().round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>orders_12m         0.92
+avg_order_value    1.59
+discount_share     1.18
+return_rate        1.80
+dtype: float64</code></pre>
+                </div>
 
-class OptimalKSelector:
-    """Methods for selecting optimal number of clusters"""
-    
-    def __init__(self, X, k_range=range(2, 11)):
-        self.X = X
-        self.k_range = k_range
-        self.results = {
-            'k': [],
-            'inertia': [],
-            'silhouette': [],
-            'calinski_harabasz': [],
-            'davies_bouldin': [],
-            'gap_statistic': [],
-            'gap_std': []
-        }
-        
-    def elbow_method(self):
-        """Use elbow method to find optimal K"""
-        for k in self.k_range:
-            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-            kmeans.fit(self.X)
-            
-            self.results['k'].append(k)
-            self.results['inertia'].append(kmeans.inertia_)
-            
-            # Calculate metrics
-            labels = kmeans.labels_
-            self.results['silhouette'].append(silhouette_score(self.X, labels))
-            self.results['calinski_harabasz'].append(calinski_harabasz_score(self.X, labels))
-            self.results['davies_bouldin'].append(davies_bouldin_score(self.X, labels))
-        
-        # Calculate gap statistic
-        self._calculate_gap_statistic()
-        
-        return self.results
-    
-    def _calculate_gap_statistic(self, n_references=10):
-        """Calculate gap statistic for each K"""
-        gap_stats = []
-        gap_stds = []
-        
-        for k in self.k_range:
-            # Fit to actual data
-            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-            kmeans.fit(self.X)
-            actual_inertia = kmeans.inertia_
-            
-            # Generate reference datasets
-            reference_inertias = []
-            for _ in range(n_references):
-                # Random data with same bounds as original
-                random_data = np.random.uniform(
-                    low=self.X.min(axis=0),
-                    high=self.X.max(axis=0),
-                    size=self.X.shape
-                )
-                kmeans_ref = KMeans(n_clusters=k, random_state=42, n_init=1)
-                kmeans_ref.fit(random_data)
-                reference_inertias.append(kmeans_ref.inertia_)
-            
-            # Calculate gap statistic
-            gap = np.mean(np.log(reference_inertias)) - np.log(actual_inertia)
-            gap_std = np.std(np.log(reference_inertias))
-            
-            gap_stats.append(gap)
-            gap_stds.append(gap_std)
-        
-        self.results['gap_statistic'] = gap_stats
-        self.results['gap_std'] = gap_stds
-    
-    def plot_elbow_curve(self):
-        """Plot elbow curve and other metrics"""
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-        
-        # 1. Elbow curve
-        axes[0, 0].plot(self.results['k'], self.results['inertia'], 'bo-', linewidth=2)
-        axes[0, 0].set_xlabel('Number of Clusters (k)')
-        axes[0, 0].set_ylabel('Within-cluster SSE (Inertia)')
-        axes[0, 0].set_title('Elbow Method')
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # Mark elbow point using kneedle algorithm
-        elbow_k = self._find_elbow_point()
-        axes[0, 0].axvline(x=elbow_k, color='r', linestyle='--', 
-                          label=f'Elbow at k={elbow_k}')
-        axes[0, 0].scatter(elbow_k, 
-                          self.results['inertia'][elbow_k-self.k_range[0]], 
-                          color='red', s=100, zorder=5)
-        axes[0, 0].legend()
-        
-        # 2. Silhouette Score
-        axes[0, 1].plot(self.results['k'], self.results['silhouette'], 'go-', linewidth=2)
-        axes[0, 1].set_xlabel('Number of Clusters (k)')
-        axes[0, 1].set_ylabel('Silhouette Score')
-        axes[0, 1].set_title('Silhouette Score (Higher is Better)')
-        axes[0, 1].grid(True, alpha=0.3)
-        best_k_silhouette = self.results['k'][np.argmax(self.results['silhouette'])]
-        axes[0, 1].axvline(x=best_k_silhouette, color='r', linestyle='--', 
-                          label=f'Best k={best_k_silhouette}')
-        axes[0, 1].legend()
-        
-        # 3. Calinski-Harabasz Score
-        axes[0, 2].plot(self.results['k'], self.results['calinski_harabasz'], 
-                       'mo-', linewidth=2)
-        axes[0, 2].set_xlabel('Number of Clusters (k)')
-        axes[0, 2].set_ylabel('Calinski-Harabasz Score')
-        axes[0, 2].set_title('Calinski-Harabasz Score (Higher is Better)')
-        axes[0, 2].grid(True, alpha=0.3)
-        best_k_ch = self.results['k'][np.argmax(self.results['calinski_harabasz'])]
-        axes[0, 2].axvline(x=best_k_ch, color='r', linestyle='--', 
-                          label=f'Best k={best_k_ch}')
-        axes[0, 2].legend()
-        
-        # 4. Davies-Bouldin Score
-        axes[1, 0].plot(self.results['k'], self.results['davies_bouldin'], 
-                       'co-', linewidth=2)
-        axes[1, 0].set_xlabel('Number of Clusters (k)')
-        axes[1, 0].set_ylabel('Davies-Bouldin Score')
-        axes[1, 0].set_title('Davies-Bouldin Score (Lower is Better)')
-        axes[1, 0].grid(True, alpha=0.3)
-        best_k_db = self.results['k'][np.argmin(self.results['davies_bouldin'])]
-        axes[1, 0].axvline(x=best_k_db, color='r', linestyle='--', 
-                          label=f'Best k={best_k_db}')
-        axes[1, 0].legend()
-        
-        # 5. Gap Statistic
-        axes[1, 1].errorbar(self.results['k'], self.results['gap_statistic'], 
-                           yerr=self.results['gap_std'], fmt='ro-', linewidth=2,
-                           capsize=5, capthick=2)
-        axes[1, 1].set_xlabel('Number of Clusters (k)')
-        axes[1, 1].set_ylabel('Gap Statistic')
-        axes[1, 1].set_title('Gap Statistic (Higher is Better)')
-        axes[1, 1].grid(True, alpha=0.3)
-        best_k_gap = self._find_optimal_gap()
-        axes[1, 1].axvline(x=best_k_gap, color='r', linestyle='--', 
-                          label=f'Best k={best_k_gap}')
-        axes[1, 1].legend()
-        
-        # 6. Voting Summary
-        votes = [elbow_k, best_k_silhouette, best_k_ch, best_k_db, best_k_gap]
-        vote_counts = pd.Series(votes).value_counts()
-        
-        axes[1, 2].bar(vote_counts.index, vote_counts.values, alpha=0.7, 
-                      color=['green' if k == vote_counts.index[0] else 'blue' 
-                             for k in vote_counts.index])
-        axes[1, 2].set_xlabel('Number of Clusters (k)')
-        axes[1, 2].set_ylabel('Votes from Different Methods')
-        axes[1, 2].set_title(f'Consensus: k={vote_counts.index[0]} '
-                           f'({vote_counts.values[0]} votes)')
-        axes[1, 2].grid(True, alpha=0.3)
-        
-        plt.suptitle('Optimal K Selection: Multiple Methods', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        return {
-            'elbow': elbow_k,
-            'silhouette': best_k_silhouette,
-            'calinski_harabasz': best_k_ch,
-            'davies_bouldin': best_k_db,
-            'gap_statistic': best_k_gap,
-            'consensus': vote_counts.index[0]
-        }
-    
-    def _find_elbow_point(self):
-        """Find elbow point using perpendicular distance method"""
-        k_values = self.results['k']
-        inertias = self.results['inertia']
-        
-        # Calculate the line from first to last point
-        p1 = np.array([k_values[0], inertias[0]])
-        p2 = np.array([k_values[-1], inertias[-1]])
-        
-        # Calculate perpendicular distance for each point
-        distances = []
-        for i in range(len(k_values)):
-            p = np.array([k_values[i], inertias[i]])
-            # Distance from point to line
-            distance = np.abs(np.cross(p2-p1, p1-p)) / np.linalg.norm(p2-p1)
-            distances.append(distance)
-        
-        # Find elbow point (maximum distance)
-        elbow_idx = np.argmax(distances)
-        return k_values[elbow_idx]
-    
-    def _find_optimal_gap(self):
-        """Find optimal K using gap statistic criterion"""
-        gaps = self.results['gap_statistic']
-        stds = self.results['gap_std']
-        
-        for i in range(len(gaps) - 1):
-            if gaps[i] >= gaps[i + 1] - stds[i + 1]:
-                return self.results['k'][i]
-        
-        return self.results['k'][-1]
-    
-    def silhouette_analysis(self, n_clusters):
-        """Detailed silhouette analysis for specific k"""
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-        labels = kmeans.fit_predict(self.X)
-        
-        # Calculate silhouette scores for each sample
-        silhouette_vals = silhouette_samples(self.X, labels)
-        
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Silhouette plot
-        y_lower = 10
-        for i in range(n_clusters):
-            cluster_silhouette_vals = silhouette_vals[labels == i]
-            cluster_silhouette_vals.sort()
-            
-            size_cluster_i = cluster_silhouette_vals.shape[0]
-            y_upper = y_lower + size_cluster_i
-            
-            color = plt.cm.nipy_spectral(float(i) / n_clusters)
-            ax1.fill_betweenx(np.arange(y_lower, y_upper),
-                             0, cluster_silhouette_vals,
-                             facecolor=color, edgecolor=color, alpha=0.7)
-            
-            # Label clusters
-            ax1.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
-            
-            # Mark cluster size
-            ax1.text(0.5, y_lower + 0.5 * size_cluster_i, 
-                    f'n={size_cluster_i}',
-                    fontsize=8, ha='center')
-            
-            y_lower = y_upper + 10
-        
-        ax1.set_xlabel("Silhouette Coefficient")
-        ax1.set_ylabel("Cluster")
-        ax1.set_xlim([-0.1, 1])
-        
-        # Add average silhouette score line
-        silhouette_avg = silhouette_score(self.X, labels)
-        ax1.axvline(x=silhouette_avg, color="red", linestyle="--",
-                   label=f'Average: {silhouette_avg:.3f}')
-        ax1.set_title(f"Silhouette Plot for {n_clusters} Clusters")
-        ax1.legend()
-        
-        # Scatter plot with cluster visualization
-        colors = plt.cm.nipy_spectral(labels.astype(float) / n_clusters)
-        ax2.scatter(self.X[:, 0], self.X[:, 1], marker='o', s=50, 
-                   c=colors, alpha=0.6, edgecolors='black', linewidth=0.5)
-        
-        # Plot cluster centers
-        centers = kmeans.cluster_centers_
-        ax2.scatter(centers[:, 0], centers[:, 1], marker='x',
-                   c='red', s=200, linewidths=3, label='Centroids')
-        
-        # Draw circle around each cluster
-        for i, center in enumerate(centers):
-            cluster_points = self.X[labels == i]
-            radius = np.max(np.linalg.norm(cluster_points - center, axis=1))
-            circle = plt.Circle(center, radius, fill=False, 
-                               edgecolor='red', linestyle='--', alpha=0.3)
-            ax2.add_patch(circle)
-        
-        ax2.set_xlabel("Feature 1")
-        ax2.set_ylabel("Feature 2")
-        ax2.set_title(f"Clusters Visualization (k={n_clusters})")
-        ax2.legend()
-        
-        plt.suptitle(f'Silhouette Analysis for k={n_clusters}', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        return silhouette_avg
+                <p>Skewness is 0 for a symmetric column; above 1 means a long right tail. Counts and money are the classic right-skewed columns, and a logarithm is the classic cure: it turns "twice as much" into "one step more", whether that is $50 to $100 or $300 to $600. That is usually how customers differ in practice. The two share columns are skewed too, but they are bounded between 0 and 1 and their high values (heavy discount use, many returns) are exactly what you want the clustering to notice, so leave them as they are.</p>
 
-# Find optimal K
-print("="*60)
-print("OPTIMAL K SELECTION")
-print("="*60)
+                <p>Put the log and the scaler in a pipeline, so that new customers later go through exactly the same steps. <code>ColumnTransformer</code> applies the log to two columns and passes the others through, and <code>set_output(transform="pandas")</code> keeps the column names:</p>
 
-selector = OptimalKSelector(X, k_range=range(2, 10))
-selector.elbow_method()
-best_k_dict = selector.plot_elbow_curve()
+                <pre><code class="language-python">from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
-print("\nOptimal K by different methods:")
-for method, k in best_k_dict.items():
-    print(f"  {method:20s}: k = {k}")
-
-print(f"\nConsensus recommendation: k = {best_k_dict['consensus']}")
-
-# Detailed silhouette analysis for different K values
-print("\n" + "="*60)
-print("SILHOUETTE ANALYSIS")
-print("="*60)
-
-for k in [3, 4, 5]:
-    print(f"\nAnalyzing k={k}:")
-    avg_score = selector.silhouette_analysis(k)
-    print(f"  Average silhouette score: {avg_score:.3f}")</code></pre>
-
-    <h2>Advanced K-means Variants</h2>
-    
-    <h3>K-means++ and Mini-batch K-means</h3>
-    <pre class="language-python"><code>import time
-from sklearn.cluster import MiniBatchKMeans
-
-class KMeansVariants:
-    """Compare different K-means variants"""
-    
-    def __init__(self, X, n_clusters=4):
-        self.X = X
-        self.n_clusters = n_clusters
-        self.models = {}
-        self.results = {}
-        
-    def compare_initialization_methods(self, n_trials=20):
-        """Compare different initialization methods"""
-        
-        init_methods = ['random', 'k-means++']
-        results = {method: {'inertias': [], 'times': [], 'iterations': []} 
-                  for method in init_methods}
-        
-        for init_method in init_methods:
-            for trial in range(n_trials):
-                start_time = time.time()
-                
-                kmeans = KMeans(n_clusters=self.n_clusters, 
-                              init=init_method,
-                              n_init=1,  # Single run to see effect of initialization
-                              max_iter=300,
-                              random_state=trial)
-                kmeans.fit(self.X)
-                
-                elapsed_time = time.time() - start_time
-                
-                results[init_method]['inertias'].append(kmeans.inertia_)
-                results[init_method]['times'].append(elapsed_time)
-                results[init_method]['iterations'].append(kmeans.n_iter_)
-        
-        # Visualize comparison
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # 1. Inertia distribution
-        bp1 = axes[0].boxplot([results['random']['inertias'], 
-                               results['k-means++']['inertias']], 
-                              labels=['Random', 'K-means++'],
-                              patch_artist=True)
-        axes[0].set_ylabel('Inertia')
-        axes[0].set_title('Final Inertia Distribution')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Color boxes
-        colors = ['lightblue', 'lightgreen']
-        for patch, color in zip(bp1['boxes'], colors):
-            patch.set_facecolor(color)
-        
-        # 2. Convergence speed
-        bp2 = axes[1].boxplot([results['random']['iterations'], 
-                               results['k-means++']['iterations']], 
-                              labels=['Random', 'K-means++'],
-                              patch_artist=True)
-        axes[1].set_ylabel('Iterations to Converge')
-        axes[1].set_title('Convergence Speed')
-        axes[1].grid(True, alpha=0.3)
-        
-        for patch, color in zip(bp2['boxes'], colors):
-            patch.set_facecolor(color)
-        
-        # 3. Runtime comparison
-        bp3 = axes[2].boxplot([results['random']['times'], 
-                               results['k-means++']['times']], 
-                              labels=['Random', 'K-means++'],
-                              patch_artist=True)
-        axes[2].set_ylabel('Time (seconds)')
-        axes[2].set_title('Runtime Distribution')
-        axes[2].grid(True, alpha=0.3)
-        
-        for patch, color in zip(bp3['boxes'], colors):
-            patch.set_facecolor(color)
-        
-        plt.suptitle(f'Initialization Method Comparison ({n_trials} trials)', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        # Print statistics
-        print("\nInitialization Method Comparison:")
-        print("="*60)
-        for method in init_methods:
-            print(f"\n{method}:")
-            print(f"  Inertia - Mean: {np.mean(results[method]['inertias']):.2f}, "
-                  f"Std: {np.std(results[method]['inertias']):.2f}")
-            print(f"  Iterations - Mean: {np.mean(results[method]['iterations']):.1f}, "
-                  f"Std: {np.std(results[method]['iterations']):.1f}")
-            print(f"  Time - Mean: {np.mean(results[method]['times'])*1000:.2f}ms, "
-                  f"Std: {np.std(results[method]['times'])*1000:.2f}ms")
-        
-        return results
-    
-    def mini_batch_comparison(self, batch_sizes=[10, 50, 100, 200, 'auto']):
-        """Compare Mini-batch K-means with different batch sizes"""
-        
-        # Standard K-means as baseline
-        start_time = time.time()
-        kmeans = KMeans(n_clusters=self.n_clusters, random_state=42, n_init=10)
-        kmeans.fit(self.X)
-        kmeans_time = time.time() - start_time
-        kmeans_inertia = kmeans.inertia_
-        
-        # Mini-batch K-means with different batch sizes
-        results = []
-        
-        for batch_size in batch_sizes:
-            start_time = time.time()
-            
-            if batch_size == 'auto':
-                mbkmeans = MiniBatchKMeans(n_clusters=self.n_clusters,
-                                          random_state=42)
-            else:
-                mbkmeans = MiniBatchKMeans(n_clusters=self.n_clusters,
-                                          batch_size=batch_size,
-                                          random_state=42)
-            mbkmeans.fit(self.X)
-            mb_time = time.time() - start_time
-            
-            # Calculate metrics
-            ari_score = adjusted_rand_score(kmeans.labels_, mbkmeans.labels_)
-            
-            results.append({
-                'Method': f'MiniBatch-{batch_size}',
-                'Batch Size': batch_size if batch_size != 'auto' else 'auto (100)',
-                'Time (s)': mb_time,
-                'Speedup': kmeans_time / mb_time,
-                'Inertia': mbkmeans.inertia_,
-                'Inertia Diff %': 100 * (mbkmeans.inertia_ - kmeans_inertia) / kmeans_inertia,
-                'ARI vs Standard': ari_score
-            })
-        
-        results_df = pd.DataFrame(results)
-        
-        print("\n" + "="*60)
-        print("MINI-BATCH K-MEANS COMPARISON")
-        print("="*60)
-        print(f"\nStandard K-means baseline:")
-        print(f"  Time: {kmeans_time:.4f}s")
-        print(f"  Inertia: {kmeans_inertia:.2f}")
-        print(f"\nMini-batch variants:")
-        print(results_df.to_string(index=False))
-        
-        # Visualize comparison
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-        
-        # 1. Speedup vs Batch Size
-        x_pos = np.arange(len(results_df))
-        axes[0, 0].bar(x_pos, results_df['Speedup'], alpha=0.7, color='blue')
-        axes[0, 0].set_xticks(x_pos)
-        axes[0, 0].set_xticklabels(results_df['Method'], rotation=45)
-        axes[0, 0].set_ylabel('Speedup Factor')
-        axes[0, 0].set_title('Speedup vs Batch Size')
-        axes[0, 0].axhline(y=1, color='r', linestyle='--', label='No speedup')
-        axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # 2. Quality Loss vs Batch Size
-        axes[0, 1].bar(x_pos, results_df['Inertia Diff %'], alpha=0.7, 
-                      color=['green' if x < 5 else 'orange' if x < 10 else 'red' 
-                             for x in results_df['Inertia Diff %']])
-        axes[0, 1].set_xticks(x_pos)
-        axes[0, 1].set_xticklabels(results_df['Method'], rotation=45)
-        axes[0, 1].set_ylabel('Inertia Difference (%)')
-        axes[0, 1].set_title('Quality Loss vs Batch Size')
-        axes[0, 1].axhline(y=0, color='g', linestyle='--', label='Same as standard')
-        axes[0, 1].axhline(y=5, color='orange', linestyle='--', alpha=0.5, label='5% threshold')
-        axes[0, 1].legend()
-        axes[0, 1].grid(True, alpha=0.3)
-        
-        # 3. Agreement with Standard K-means
-        axes[1, 0].bar(x_pos, results_df['ARI vs Standard'], alpha=0.7, color='purple')
-        axes[1, 0].set_xticks(x_pos)
-        axes[1, 0].set_xticklabels(results_df['Method'], rotation=45)
-        axes[1, 0].set_ylabel('Adjusted Rand Index')
-        axes[1, 0].set_title('Agreement with Standard K-means')
-        axes[1, 0].set_ylim([0, 1])
-        axes[1, 0].axhline(y=1, color='g', linestyle='--', label='Perfect agreement')
-        axes[1, 0].legend()
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # 4. Time-Quality Trade-off
-        axes[1, 1].scatter(results_df['Time (s)'], results_df['Inertia'], 
-                          s=100, alpha=0.7, c=range(len(results_df)), cmap='viridis')
-        axes[1, 1].scatter(kmeans_time, kmeans_inertia, s=200, marker='*', 
-                          color='red', label='Standard K-means', zorder=5)
-        
-        # Annotate points
-        for i, row in results_df.iterrows():
-            axes[1, 1].annotate(row['Method'], 
-                               (row['Time (s)'], row['Inertia']),
-                               fontsize=8, ha='right')
-        
-        axes[1, 1].set_xlabel('Time (seconds)')
-        axes[1, 1].set_ylabel('Inertia')
-        axes[1, 1].set_title('Time-Quality Trade-off')
-        axes[1, 1].legend()
-        axes[1, 1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Mini-batch K-means Performance Analysis', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        return results_df
-    
-    def scalability_test(self, sizes=[100, 500, 1000, 5000, 10000]):
-        """Test scalability of different K-means variants"""
-        
-        results = []
-        
-        for n_samples in sizes:
-            # Generate data
-            X_test, _ = make_blobs(n_samples=n_samples, centers=10, 
-                                  n_features=20, random_state=42)
-            
-            # Standard K-means
-            start = time.time()
-            km = KMeans(n_clusters=10, n_init=3, random_state=42)
-            km.fit(X_test)
-            km_time = time.time() - start
-            
-            # Mini-batch K-means
-            start = time.time()
-            mbkm = MiniBatchKMeans(n_clusters=10, random_state=42)
-            mbkm.fit(X_test)
-            mbkm_time = time.time() - start
-            
-            results.append({
-                'n_samples': n_samples,
-                'KMeans_time': km_time,
-                'MiniBatch_time': mbkm_time,
-                'speedup': km_time / mbkm_time
-            })
-        
-        results_df = pd.DataFrame(results)
-        
-        # Plot scalability
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-        
-        ax1.loglog(results_df['n_samples'], results_df['KMeans_time'], 
-                  'o-', label='Standard K-means', linewidth=2, markersize=8)
-        ax1.loglog(results_df['n_samples'], results_df['MiniBatch_time'], 
-                  's-', label='Mini-batch K-means', linewidth=2, markersize=8)
-        ax1.set_xlabel('Number of Samples')
-        ax1.set_ylabel('Time (seconds)')
-        ax1.set_title('Scalability Comparison')
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
-        
-        ax2.semilogx(results_df['n_samples'], results_df['speedup'], 
-                    'o-', color='green', linewidth=2, markersize=8)
-        ax2.set_xlabel('Number of Samples')
-        ax2.set_ylabel('Speedup Factor')
-        ax2.set_title('Mini-batch Speedup vs Dataset Size')
-        ax2.grid(True, alpha=0.3)
-        
-        plt.suptitle('K-means Scalability Analysis', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        print("\nScalability Test Results:")
-        print(results_df.to_string(index=False))
-        
-        return results_df
-
-# Compare K-means variants
-variants = KMeansVariants(X, n_clusters=4)
-
-# Compare initialization methods
-print("\n" + "="*60)
-print("INITIALIZATION METHODS COMPARISON")
-print("="*60)
-init_results = variants.compare_initialization_methods(n_trials=30)
-
-# For larger dataset, demonstrate Mini-batch K-means
-X_large, _ = make_blobs(n_samples=5000, centers=10, n_features=20, random_state=42)
-variants_large = KMeansVariants(X_large, n_clusters=10)
-
-# Compare mini-batch variants
-mb_results = variants_large.mini_batch_comparison(
-    batch_sizes=[50, 100, 200, 500, 1000, 'auto']
+log_some = ColumnTransformer(
+    [("log", FunctionTransformer(np.log, feature_names_out="one-to-one"), ["orders_12m", "avg_order_value"])],
+    remainder="passthrough", verbose_feature_names_out=False,
 )
+prep = make_pipeline(log_some, StandardScaler()).set_output(transform="pandas")
+Z = prep.fit_transform(X)
 
-# Test scalability
-print("\n" + "="*60)
-print("SCALABILITY ANALYSIS")
-print("="*60)
-scalability_results = variants_large.scalability_test()</code></pre>
+print(Z.skew().round(2))
+print(Z.head(3).round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>orders_12m        -0.19
+avg_order_value    0.69
+discount_share     1.18
+return_rate        1.80
+dtype: float64
+   orders_12m  avg_order_value  discount_share  return_rate
+0        1.45             0.40           -0.13         0.85
+1        1.57            -0.69           -0.65        -0.69
+2       -0.99             1.56           -0.53        -0.78</code></pre>
+                </div>
 
-    <h2>Advanced Initialization Strategies</h2>
-    
-    <h3>Beyond K-means++</h3>
-    <pre class="language-python"><code>class AdvancedInitialization:
-    """Advanced initialization strategies for K-means"""
-    
-    def __init__(self, X, n_clusters):
-        self.X = X
-        self.n_clusters = n_clusters
-        
-    def furthest_point_initialization(self):
-        """Initialize centroids using furthest point heuristic"""
-        n_samples = len(self.X)
-        centroids = []
-        
-        # Start with random point
-        first_idx = np.random.randint(n_samples)
-        centroids.append(self.X[first_idx])
-        
-        for _ in range(1, self.n_clusters):
-            # Find point furthest from existing centroids
-            distances = np.array([
-                min([np.linalg.norm(x - c) for c in centroids]) 
-                for x in self.X
-            ])
-            furthest_idx = np.argmax(distances)
-            centroids.append(self.X[furthest_idx])
-        
-        return np.array(centroids)
-    
-    def density_based_initialization(self):
-        """Initialize centroids based on local density"""
-        from sklearn.neighbors import KernelDensity
-        
-        # Estimate density
-        kde = KernelDensity(kernel='gaussian', bandwidth=1.0)
-        kde.fit(self.X)
-        densities = np.exp(kde.score_samples(self.X))
-        
-        centroids = []
-        used_indices = set()
-        
-        for _ in range(self.n_clusters):
-            # Find high-density point not too close to existing centroids
-            for idx in np.argsort(densities)[::-1]:
-                if idx in used_indices:
-                    continue
-                
-                if not centroids:
-                    centroids.append(self.X[idx])
-                    used_indices.add(idx)
-                    break
-                else:
-                    # Check distance to existing centroids
-                    min_dist = min([np.linalg.norm(self.X[idx] - c) 
-                                  for c in centroids])
-                    if min_dist > np.mean([np.linalg.norm(c1 - c2) 
-                                          for i, c1 in enumerate(centroids) 
-                                          for c2 in centroids[i+1:]]) * 0.5:
-                        centroids.append(self.X[idx])
-                        used_indices.add(idx)
-                        break
-        
-        return np.array(centroids)
-    
-    def compare_initializations(self, n_trials=10):
-        """Compare different initialization strategies"""
-        
-        strategies = {
-            'random': 'random',
-            'k-means++': 'k-means++',
-            'furthest': self.furthest_point_initialization,
-            'density': self.density_based_initialization
-        }
-        
-        results = {name: {'inertias': [], 'times': [], 'silhouettes': []} 
-                  for name in strategies.keys()}
-        
-        for trial in range(n_trials):
-            for name, strategy in strategies.items():
-                start_time = time.time()
-                
-                if isinstance(strategy, str):
-                    # sklearn built-in initialization
-                    km = KMeans(n_clusters=self.n_clusters, init=strategy,
-                               n_init=1, random_state=trial)
-                else:
-                    # Custom initialization
-                    init_centroids = strategy()
-                    km = KMeans(n_clusters=self.n_clusters, init=init_centroids,
-                               n_init=1)
-                
-                km.fit(self.X)
-                elapsed = time.time() - start_time
-                
-                results[name]['inertias'].append(km.inertia_)
-                results[name]['times'].append(elapsed)
-                results[name]['silhouettes'].append(
-                    silhouette_score(self.X, km.labels_)
-                )
-        
-        # Visualize results
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # Prepare data for plotting
-        methods = list(results.keys())
-        inertias_data = [results[m]['inertias'] for m in methods]
-        times_data = [results[m]['times'] for m in methods]
-        silhouettes_data = [results[m]['silhouettes'] for m in methods]
-        
-        # Inertia comparison
-        bp1 = axes[0].boxplot(inertias_data, labels=methods, patch_artist=True)
-        axes[0].set_ylabel('Inertia')
-        axes[0].set_title('Final Inertia by Initialization Method')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Time comparison
-        bp2 = axes[1].boxplot(times_data, labels=methods, patch_artist=True)
-        axes[1].set_ylabel('Time (seconds)')
-        axes[1].set_title('Initialization Time')
-        axes[1].grid(True, alpha=0.3)
-        
-        # Silhouette score comparison
-        bp3 = axes[2].boxplot(silhouettes_data, labels=methods, patch_artist=True)
-        axes[2].set_ylabel('Silhouette Score')
-        axes[2].set_title('Clustering Quality')
-        axes[2].grid(True, alpha=0.3)
-        
-        # Color boxes
-        colors = ['lightblue', 'lightgreen', 'lightyellow', 'lightcoral']
-        for bp in [bp1, bp2, bp3]:
-            for patch, color in zip(bp['boxes'], colors):
-                patch.set_facecolor(color)
-        
-        plt.suptitle('Initialization Strategies Comparison', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-        
-        # Print statistics
-        print("\nInitialization Strategies Statistics:")
-        print("="*60)
-        for method in methods:
-            print(f"\n{method}:")
-            print(f"  Inertia: {np.mean(results[method]['inertias']):.2f} "
-                  f"(±{np.std(results[method]['inertias']):.2f})")
-            print(f"  Silhouette: {np.mean(results[method]['silhouettes']):.3f} "
-                  f"(±{np.std(results[method]['silhouettes']):.3f})")
-            print(f"  Time: {np.mean(results[method]['times'])*1000:.2f}ms "
-                  f"(±{np.std(results[method]['times'])*1000:.2f}ms)")
+                <p>The order count is now nearly symmetric and the order value much less skewed. <code>np.log</code> is safe here because both columns are at least 1 (if a column can be 0, use <code>np.log1p</code>). Everything below clusters <code>Z</code>.</p>
+            </section>
 
-# Test advanced initialization strategies
-print("\n" + "="*60)
-print("ADVANCED INITIALIZATION STRATEGIES")
-print("="*60)
+            <!-- ============================================================ -->
+            <section id="elbow" class="lesson-section">
+                <h2>📉 The Elbow Method</h2>
 
-adv_init = AdvancedInitialization(X, n_clusters=4)
-adv_init.compare_initializations(n_trials=20)</code></pre>
+                <p>Exercise 1 of Lesson 8.1 showed that inertia always falls as <em>k</em> grows, so its minimum is useless. Its <em>shape</em> is not. While each extra cluster splits a genuine group, inertia drops a lot; once the real groups are all found, extra clusters only split groups that belong together, and the drops become small. The bend between those two phases is the <strong>elbow</strong>.</p>
 
-    <h2>Practice Exercises</h2>
-    
-    <h3>Exercise 1: Automated K Selection</h3>
-    <p>Implement a system that automatically determines the optimal number of clusters by:</p>
-    <ol>
-        <li>Running multiple metrics (elbow, silhouette, gap statistic)</li>
-        <li>Using weighted voting based on metric reliability</li>
-        <li>Providing confidence scores for the recommendation</li>
-        <li>Generating a detailed report with visualizations</li>
-    </ol>
+                <p>This loop fits K-Means for <em>k</em> from 2 to 9 and keeps each fitted model, so later sections can reuse them. It also computes the silhouette score, explained in the next section.</p>
 
-    <h3>Exercise 2: Hybrid K-means</h3>
-    <p>Create a hybrid K-means algorithm that:</p>
-    <ol>
-        <li>Starts with mini-batch K-means for speed</li>
-        <li>Refines with standard K-means for accuracy</li>
-        <li>Uses adaptive batch sizes based on data size</li>
-        <li>Implements early stopping criteria</li>
-    </ol>
+                <pre><code class="language-python">from sklearn.metrics import silhouette_score
 
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>📊 Multiple metrics provide different perspectives on optimal K</li>
-        <li>🎯 Elbow method identifies the "knee" in the inertia curve</li>
-        <li>📈 Silhouette analysis shows cluster separation quality</li>
-        <li>🔬 Gap statistic compares to random reference distribution</li>
-        <li>⚡ K-means++ significantly improves convergence speed</li>
-        <li>💨 Mini-batch K-means trades accuracy for speed</li>
-        <li>🏆 Consensus voting helps choose robust K value</li>
-        <li>📐 Different initializations affect final clustering quality</li>
-    </ul>
+fits, rows = {}, []
+for k in range(2, 10):
+    fits[k] = KMeans(n_clusters=k, n_init=10, random_state=42).fit(Z)
+    rows.append({"k": k, "inertia": fits[k].inertia_, "silhouette": silhouette_score(Z, fits[k].labels_)})
 
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Choosing <em>k</em> is part science, part judgment — the elbow and silhouette
-            methods can disagree. How comfortable are you making a decision when the metrics don't give one clear answer?</p>
+scores = pd.DataFrame(rows).set_index("k")
+scores["drop"] = -scores["inertia"].diff()
+print(scores.round({"inertia": 0, "silhouette": 3, "drop": 0}))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>   inertia  silhouette    drop
+k
+2  16849.0       0.302     NaN
+3  12131.0       0.367  4718.0
+4   8124.0       0.424  4008.0
+5   5525.0       0.479  2599.0
+6   5055.0       0.452   470.0
+7   4717.0       0.395   338.0
+8   4409.0       0.362   307.0
+9   4178.0       0.365   232.0</code></pre>
+                </div>
+
+                <pre><code class="language-python">fig, axes = plt.subplots(1, 2, figsize=(9, 3.6), layout="constrained")
+axes[0].plot(scores.index, scores["inertia"], marker="o", color="#667eea", label="inertia")
+axes[0].set_title("Elbow: inertia by k")
+axes[1].plot(scores.index, scores["silhouette"], marker="o", color="#667eea", label="mean silhouette")
+axes[1].set_title("Silhouette by k (higher is better)")
+for ax in axes:
+    ax.axvline(5, color="black", linestyle="--", linewidth=1, label="k = 5")
+    ax.set_xlabel("number of clusters k")
+    ax.legend()
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/clustering_kmeans_optimization_elbow_silhouette.png" alt="Two line charts over k from 2 to 9. Left: inertia falls steeply from 2 to 5, then flattens. Right: the mean silhouette rises from about 0.30 at k=2 to a peak of about 0.48 at k=5, then falls." width="990" height="396" loading="lazy">
+                    <figcaption>Both views point at five: the inertia curve bends at k = 5, and the silhouette peaks there.</figcaption>
+                </figure>
+
+                <p>Here the elbow is unusually clear: going from four to five clusters removes about 2,600 units of inertia, going from five to six only about 470. On a lot of real data the curve bends gently and two people will point at different elbows. That is why the elbow is a first look, never the whole decision.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="silhouette" class="lesson-section">
+                <h2>🌗 Silhouette Scores: Tight Inside, Far Apart</h2>
+
+                <p>The silhouette turns the two qualities of good bins, cohesion and separation, into a number for every single point:</p>
+                <ul>
+                    <li><strong>a</strong> = the point's average distance to the other members of its own cluster (small is good)</li>
+                    <li><strong>b</strong> = its average distance to the members of the <em>nearest other</em> cluster (large is good)</li>
+                </ul>
+
+                <p class="text-center"><code>s = (b − a) / max(a, b)</code></p>
+
+                <p>The score runs from −1 to 1. Near 1: the point sits snugly in its cluster, far from the next one. Near 0: it is on the border. Negative: it is closer, on average, to another cluster than to its own, which suggests it was misassigned. A tiny example you can check by hand: points 1, 2 and 3 in one cluster, 8 and 9 in another.</p>
+
+                <pre><code class="language-python">from sklearn.metrics import silhouette_samples
+
+tiny = np.array([[1], [2], [3], [8], [9]])
+tiny_labels = [0, 0, 0, 1, 1]
+print(silhouette_samples(tiny, tiny_labels).round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>[0.8   0.846 0.727 0.833 0.857]</code></pre>
+                </div>
+
+                <p>For the point 1: its cluster mates are 1 and 2 away, so a = 1.5; the other cluster is 7 and 8 away, so b = 7.5; s = (7.5 − 1.5) / 7.5 = 0.8. The point 3 scores lowest of its cluster because it is the closest to the other group. <code>silhouette_score</code> is simply the mean of all the per-point values, and on the customers it peaked at <em>k</em> = 5 (0.479).</p>
+
+                <h3>👀 Looking Inside the Average</h3>
+                <p>An average can hide a bad cluster. The silhouette plot sorts each cluster's per-point scores and draws them as a band, so you can see whether every cluster is solid or one is mostly border points:</p>
+
+                <pre><code class="language-python">best = fits[5]
+sil = silhouette_samples(Z, best.labels_)
+print(pd.Series(sil).groupby(best.labels_).agg(["size", "mean", "min"]).round(3))
+print(f"customers with a negative silhouette: {(sil &lt; 0).sum()}")
+
+fig, ax = plt.subplots(figsize=(9, 4.4), layout="constrained")
+bottom = 0
+for c in range(5):
+    vals = np.sort(sil[best.labels_ == c])
+    ax.fill_betweenx(np.arange(bottom, bottom + len(vals)), 0, vals, color=plt.cm.tab10(c), label=f"cluster {c}")
+    bottom += len(vals) + 60
+ax.axvline(sil.mean(), color="black", linestyle="--", linewidth=1, label=f"mean {sil.mean():.3f}")
+ax.set_xlabel("silhouette value")
+ax.set_ylabel("customers, sorted within each cluster")
+ax.set_yticks([])
+ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1))
+ax.set_title("Silhouette plot, k = 5")
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>   size   mean    min
+0  1253  0.458 -0.029
+1  1374  0.440 -0.022
+2  1449  0.528  0.011
+3   811  0.429 -0.058
+4  1113  0.521  0.001
+customers with a negative silhouette: 35</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/clustering_kmeans_optimization_silhouette_plot.png" alt="Silhouette plot with five horizontal bands, one per cluster, each sorted from high to low silhouette values. All bands reach well past the dashed mean line at about 0.48; each has only a thin tail of values near or below zero." width="990" height="484" loading="lazy">
+                    <figcaption>Every cluster has a thick body of well-placed customers and only a thin tail of border cases: no cluster is an artifact made of leftovers.</figcaption>
+                </figure>
+
+                <div class="card card-info">
+                    <h4>💡 What Counts as a Good Silhouette?</h4>
+                    <p>Rough guide for the mean: above 0.7 strong, 0.5 to 0.7 reasonable, 0.25 to 0.5 weak but possibly real, below 0.25 little structure. Customer data rarely forms crisp islands, so 0.48 is a respectable score, not a disappointing one. Compare silhouettes between values of <em>k</em> or between feature choices on the same data; comparing them across different datasets says little.</p>
+                </div>
+
+                <div class="card card-warning">
+                    <h4>⚠️ The Cost of a Silhouette</h4>
+                    <p>The score compares every point with every other point, so the work grows with the square of the number of rows: 6,000 customers means 36 million distances, which is fine; 1,000,000 customers means a trillion, which is not. For large data pass <code>sample_size=10_000, random_state=42</code> to <code>silhouette_score</code> to score a random sample. Exercise 2 checks how close that estimate is.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="stability" class="lesson-section">
+                <h2>🔁 Stability: Do the Groups Survive Resampling?</h2>
+
+                <p>Real groups should not depend on exactly which customers happened to be in the table. Test that the way Lesson 5.2 built a forest: draw a <strong>bootstrap sample</strong> (6,000 customers drawn with replacement), refit, and see whether the new model sorts the original customers the same way.</p>
+
+                <p>"The same way" needs a measure that ignores the arbitrary cluster numbers. The <strong>adjusted Rand index</strong> (ARI) looks at every pair of points and asks whether both labelings agree on "same cluster" or "different clusters", corrected so that random labels score about 0. Identical groupings score 1, even with the numbers swapped:</p>
+
+                <pre><code class="language-python">from sklearn.metrics import adjusted_rand_score
+
+print(adjusted_rand_score([0, 0, 1, 1, 2, 2], [2, 2, 0, 0, 1, 1]))   # same groups, different numbers
+print(round(adjusted_rand_score([0, 0, 1, 1, 2, 2], [0, 1, 2, 0, 1, 2]), 3))   # unrelated groups</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>1.0
+-0.25</code></pre>
+                </div>
+
+                <p>Now the stability check: for each <em>k</em>, eight bootstrap refits (five starts each, to keep it quick), each compared with the model fitted on all customers.</p>
+
+                <pre><code class="language-python">def stability(k, n_boot=8):
+    """ARI between the full-data clustering and refits on bootstrap samples."""
+    rng = np.random.default_rng(42)
+    aris = []
+    for b in range(n_boot):
+        rows_b = rng.choice(len(Z), size=len(Z), replace=True)
+        refit = KMeans(n_clusters=k, n_init=5, random_state=b).fit(Z.iloc[rows_b])
+        aris.append(adjusted_rand_score(fits[k].labels_, refit.predict(Z)))
+    return np.mean(aris), np.min(aris)
+
+for k in range(3, 8):
+    mean_ari, worst_ari = stability(k)
+    print(f"k={k}: mean ARI {mean_ari:.3f}   worst {worst_ari:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>k=3: mean ARI 0.843   worst 0.602
+k=4: mean ARI 0.991   worst 0.984
+k=5: mean ARI 0.994   worst 0.989
+k=6: mean ARI 0.975   worst 0.848
+k=7: mean ARI 0.984   worst 0.967</code></pre>
+                </div>
+
+                <p>Three clusters are unstable: some resamples split the customers quite differently (worst ARI around 0.6), a sign that three is not a natural number of groups and K-Means has to make an arbitrary choice about what to merge. Four and five are the most stable: even the worst resample agrees above 0.98. Six and seven are stable on average but less consistent (six has a worst case of 0.85, when a resample splits a different group). Stability does not single out five on its own, but it rules out three, favors four and five, and confirms that the five-cluster solution is not a fluke of this particular table.</p>
+
+                <div class="card card-success">
+                    <h4>✅ The Evidence So Far</h4>
+                    <p>Elbow: five. Silhouette: five (0.479, with no weak cluster). Stability: four and five are the most solid. Together, five is well supported. The last test, usefulness, comes in the segments section: are five groups something the marketing team can act on?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="scale-up" class="lesson-section">
+                <h2>⚡ Scaling Up with MiniBatchKMeans</h2>
+
+                <p>Each round of Lloyd's loop touches every row, and the full table has to sit in memory. <code>MiniBatchKMeans</code> instead updates the centers from small random batches of rows (1,024 by default), nudging each center a little towards the batch points assigned to it. Before reaching for it, measure: scikit-learn's plain <code>KMeans</code> is multithreaded and fast. Make a synthetic dataset of 300,000 rows with four features and time both:</p>
+
+                <pre><code class="language-python">import time
+from sklearn.cluster import MiniBatchKMeans
+from sklearn.datasets import make_blobs
+
+X_big, _ = make_blobs(n_samples=300_000, n_features=4, centers=5, cluster_std=1.5, random_state=42)
+
+for name, model in [("KMeans", KMeans(n_clusters=5, n_init=3, random_state=42)),
+                    ("MiniBatchKMeans", MiniBatchKMeans(n_clusters=5, n_init=3, random_state=42))]:
+    start = time.perf_counter()
+    model.fit(X_big)
+    print(f"{name:16s} {time.perf_counter() - start:5.2f} s")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (your numbers will differ)</h4>
+                    <pre><code>KMeans            1.40 s
+MiniBatchKMeans  17.90 s</code></pre>
+                </div>
+
+                <p>Surprise: on 300,000 clean rows, plain <code>KMeans</code> is usually the faster one here, because it converges in a couple of rounds and each round runs on all your CPU cores, while the mini-batch version takes many small steps. Timings depend heavily on the machine and the data, so measure on yours. The real strength of <code>MiniBatchKMeans</code> is different: with <code>partial_fit</code> it can learn from data that arrives in chunks and never sits in memory all at once, such as a year of website clicks read from disk day by day. Simulate that with 30 chunks of 10,000 rows:</p>
+
+                <pre><code class="language-python">full = KMeans(n_clusters=5, n_init=3, random_state=42).fit(X_big)
+
+stream = MiniBatchKMeans(n_clusters=5, n_init=3, random_state=42)
+for chunk in np.array_split(X_big, 30):          # in real life: read one chunk from disk at a time
+    stream.partial_fit(chunk)
+
+stream_inertia = -stream.score(X_big)             # score() returns minus the inertia on the data you pass
+print(f"inertia, KMeans on all rows   : {full.inertia_:,.0f}")
+print(f"inertia, MiniBatch from chunks: {stream_inertia:,.0f} ({stream_inertia / full.inertia_ - 1:+.2%})")
+print(f"agreement (ARI)               : {adjusted_rand_score(full.labels_, stream.predict(X_big)):.4f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>inertia, KMeans on all rows   : 2,704,248
+inertia, MiniBatch from chunks: 2,704,248 (+0.00%)
+agreement (ARI)               : 1.0000</code></pre>
+                </div>
+
+                <p>Learning from one chunk at a time, never holding more than 10,000 rows in its updates, the mini-batch model matches the full solution to the printed digits on this clean, well-separated data; on messier data expect it to land slightly worse. Its last digits depend on floating-point details, so they can differ slightly on another machine. Rule of thumb: at a few thousand rows, like Pinecrest's customer table, use plain <code>KMeans</code> with <code>n_init=10</code>; reach for <code>MiniBatchKMeans</code> when the data is too big for memory or so large (tens of millions of rows) that even one full pass is slow, and accept a slightly less precise answer.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="segments" class="lesson-section">
+                <h2>🏷️ From Clusters to Segments</h2>
+
+                <p>A <strong>cluster</strong> is a mathematical group. A <strong>segment</strong> is a cluster that someone can recognize, describe in a sentence and treat differently. Getting from one to the other takes three steps: profile, name, and link to outcomes.</p>
+
+                <p>Profile in original units, and add an <strong>index</strong>: each segment's average divided by the overall average, times 100. An index of 200 means "twice the typical customer", which makes a profile readable at a glance.</p>
+
+                <pre><code class="language-python">customers["cluster"] = fits[5].labels_
+profile = customers.groupby("cluster")[behavior].mean()
+index = (profile / X.mean() * 100).round(0).astype(int)
+
+print(profile.round(2))
+print(index)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>         orders_12m  avg_order_value  discount_share  return_rate
+cluster
+0              5.42            64.16            0.51         0.08
+1              1.85            96.01            0.14         0.06
+2              8.84            88.58            0.10         0.04
+3              6.35           167.26            0.18         0.28
+4              2.50           331.74            0.11         0.05
+         orders_12m  avg_order_value  discount_share  return_rate
+cluster
+0               108               46             244           92
+1                37               68              67           66
+2               176               63              50           50
+3               127              119              86          319
+4                50              235              54           57</code></pre>
+                </div>
+
+                <p>Each cluster stands out on one or two columns, which makes naming easy. Reading the index table row by row: cluster 0 has a discount share at 244% of the average; cluster 1 orders at 37% of the average and is below average on everything else; cluster 2 orders at 176%; cluster 3 has a return rate at 319%; cluster 4 has order values at 235%.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Name Segments from Behavior, Not from Who People Are</h4>
+                    <p>These segments use only shopping behavior. Do not cluster on, or name segments after, protected or sensitive attributes such as age, and check what a segment-based action does to different groups before rolling it out. A "discount seekers get fewer offers" rule, for instance, could quietly fall hardest on customers with less money to spend. Lesson 7.3's fairness check applies to segments too.</p>
+                </div>
+
+                <p>These names differ from the ones you gave your Lesson 8.1 groups on purpose: clustering the logged and scaled features moves the boundaries, so the five groups are not the same customers, and the course uses these names from here on.</p>
+
+                <p>Next, link the segments to things the clustering never used. If behavior-based segments differ sharply in churn and app use, they are capturing something real and useful:</p>
+
+                <pre><code class="language-python">names = {0: "Deal Hunters", 1: "Casual Campers", 2: "Trail Regulars", 3: "Gear Testers", 4: "Big-Trip Planners"}
+customers["segment"] = customers["cluster"].map(names)
+
+outcomes = customers.groupby("segment").agg(
+    customers=("customer_id", "size"), churn_rate=("churned", "mean"), app_users=("app_user", "mean"))
+outcomes["share"] = outcomes["customers"] / len(customers)
+print(outcomes.sort_values("churn_rate").round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>                   customers  churn_rate  app_users  share
+segment
+Trail Regulars          1449       0.041      0.540  0.242
+Gear Testers             811       0.101      0.501  0.135
+Big-Trip Planners       1113       0.163      0.316  0.186
+Casual Campers          1374       0.203      0.207  0.229
+Deal Hunters            1253       0.312      0.467  0.209</code></pre>
+                </div>
+
+                <p>Churn ranges from about 4% to about 31% across segments built without looking at churn: nearly an eight-fold difference. That is the usefulness test passed. Each segment suggests a different action: protect the Trail Regulars (thank-you perks, not discounts), wean the Deal Hunters off discount dependence before they drift, and win back the Casual Campers with seasonal reminders.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Segments Describe; They Do Not Explain</h4>
+                    <p>Deal Hunters churn at about 31%, but that does not mean discounts <em>cause</em> churn. Maybe price-sensitive customers are simply quicker to switch retailers. A segment is a description of who is together, and testing what an action does needs an experiment (send the offer to a random half of the segment and compare).</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <h3>1. Choosing k by the Lowest Inertia</h3>
+                <pre><code class="language-python">print("k with the lowest inertia:", scores["inertia"].idxmin())</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>k with the lowest inertia: 9</code></pre>
+                </div>
+                <p><strong>What happened:</strong> inertia can only fall as <em>k</em> grows, so its minimum is always the largest <em>k</em> you tried. <strong>Fix:</strong> look at the shape of the curve (the elbow) and use a score that balances cohesion and separation, such as the silhouette, plus stability.</p>
+
+                <h3>2. A Silhouette Needs at Least Two Clusters</h3>
+                <pre data-raises="ValueError"><code class="language-python">one_cluster = KMeans(n_clusters=1, n_init=10, random_state=42).fit(Z)
+silhouette_score(Z, one_cluster.labels_)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Number of labels is 1. Valid values are 2 to n_samples - 1 (inclusive)</code></pre>
+                </div>
+                <p><strong>What it means:</strong> with one cluster there is no "nearest other cluster", so b, and the score, are undefined. The same error appears if every point gets its own cluster. <strong>Fix:</strong> start the search at <em>k</em> = 2. Whether the data has any groups at all is a separate question; Exercise 3 shows one way to ask it.</p>
+
+                <h3>3. Comparing Silhouettes Computed on Different Features</h3>
+                <pre><code class="language-python">raw_Z = StandardScaler().fit_transform(X)
+raw_fit = KMeans(n_clusters=5, n_init=10, random_state=42).fit(raw_Z)
+print(f"raw features : {silhouette_score(raw_Z, raw_fit.labels_):.3f}")
+print(f"log features : {scores.loc[5, 'silhouette']:.3f}")
+print(f"agreement (ARI): {adjusted_rand_score(raw_fit.labels_, fits[5].labels_):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>raw features : 0.472
+log features : 0.479
+agreement (ARI): 0.883</code></pre>
+                </div>
+                <p><strong>What happened:</strong> both silhouettes look similar, and it is tempting to call the log version "better" because its number is higher. But each score is measured in its own space with its own distances, so the comparison is shaky: a transformation can raise a silhouette simply by squeezing the tails. <strong>Fix:</strong> choose the features for business and statistical reasons (here: skewed money and counts), then use the silhouette to compare values of <em>k</em> within that one space. The ARI shows the two versions mostly agree anyway.</p>
+
+                <h3>4. Refitting the Scaler on New Customers</h3>
+                <pre><code class="language-python">new_batch = X.sample(5, random_state=42)
+right = fits[5].predict(prep.transform(new_batch))
+wrong = fits[5].predict(make_pipeline(log_some, StandardScaler()).set_output(transform="pandas").fit_transform(new_batch))
+print("right:", right)
+print("wrong:", wrong)</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>right: [0 1 1 2 3]
+wrong: [0 4 1 2 3]</code></pre>
+                </div>
+                <p><strong>What happened:</strong> refitting the preprocessing on five new customers measures them against each other instead of against the whole customer base, so some of them land in the wrong segment (here the second customer). <strong>Fix:</strong> fit once on the full customer base and only <code>transform</code> new rows, or, simpler, put the scaler and K-Means in one pipeline and call <code>predict</code> on it (the project does this).</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: The Segment Brief</h2>
+
+                <p>Marketing wants two things: a tool that assigns any customer, including next month's new ones, to a segment, and a one-page brief describing the segments with their size, profile, churn rate and a suggested action. You will build both. Start a fresh notebook, <code>lesson_8_2_project</code>. Allow about 40 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: One pipeline from raw columns to segment <span class="step-time">(5 min)</span></h3>
+                    <p>Put the log transform, the scaler and K-Means into one pipeline. Fitting it fits all three on the customer base, and <code>predict</code> runs new rows through the same fitted steps.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
+from sklearn.cluster import KMeans
+
+pd.set_option("display.width", 120)
+customers = pd.read_csv("data/customers_churn.csv")
+behavior = ["orders_12m", "avg_order_value", "discount_share", "return_rate"]
+
+log_some = ColumnTransformer(
+    [("log", FunctionTransformer(np.log, feature_names_out="one-to-one"), ["orders_12m", "avg_order_value"])],
+    remainder="passthrough", verbose_feature_names_out=False,
+)
+segmenter = make_pipeline(log_some, StandardScaler(), KMeans(n_clusters=5, n_init=10, random_state=42))
+segmenter.fit(customers[behavior])
+customers["cluster"] = segmenter.predict(customers[behavior])
+print(customers["cluster"].value_counts().sort_index())</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>cluster
+0    1253
+1    1374
+2    1449
+3     811
+4    1113
+Name: count, dtype: int64</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Record the evidence for k = 5 <span class="step-time">(5 min)</span></h3>
+                    <p>A brief should say why five. Pull the silhouette straight from the pipeline: <code>segmenter[:-1]</code> is every step except the last, so it returns the transformed features.</p>
+                    <pre><code class="language-python">from sklearn.metrics import silhouette_score
+
+Z = segmenter[:-1].transform(customers[behavior])
+evidence = {k: silhouette_score(Z, KMeans(n_clusters=k, n_init=10, random_state=42).fit_predict(Z))
+            for k in [4, 5, 6]}
+print({k: round(v, 3) for k, v in evidence.items()})</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>{4: 0.424, 5: 0.479, 6: 0.452}</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Name the segments from their profiles <span class="step-time">(10 min)</span></h3>
+                    <p>Print the index table (100 = average customer), then write the names. Each segment is named after the column where it stands out. If your cluster numbers come out in a different order, map the names to your own profile.</p>
+                    <pre><code class="language-python">profile = customers.groupby("cluster")[behavior].mean()
+print((profile / customers[behavior].mean() * 100).round(0).astype(int))
+
+names = {0: "Deal Hunters", 1: "Casual Campers", 2: "Trail Regulars", 3: "Gear Testers", 4: "Big-Trip Planners"}
+customers["segment"] = customers["cluster"].map(names)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>         orders_12m  avg_order_value  discount_share  return_rate
+cluster
+0               108               46             244           92
+1                37               68              67           66
+2               176               63              50           50
+3               127              119              86          319
+4                50              235              54           57</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Build the brief table <span class="step-time">(10 min)</span></h3>
+                    <p>One row per segment: size, share, typical behavior in plain units, churn and app use, plus a suggested action you write yourself.</p>
+                    <pre><code class="language-python">brief = customers.groupby("segment").agg(
+    customers=("customer_id", "size"),
+    orders=("orders_12m", "median"),
+    order_value=("avg_order_value", "median"),
+    discount=("discount_share", "median"),
+    returns=("return_rate", "median"),
+    churn=("churned", "mean"),
+    app=("app_user", "mean"),
+)
+actions = {
+    "Trail Regulars": "loyalty perks, early access; no discounts needed",
+    "Casual Campers": "seasonal reminders before trips",
+    "Deal Hunters": "value bundles instead of deeper discounts",
+    "Big-Trip Planners": "expert advice and trip-planning content",
+    "Gear Testers": "fit and sizing guides to cut returns",
+}
+brief["action"] = brief.index.map(actions)
+brief = brief.sort_values("churn", ascending=False)
+print(brief.drop(columns="action").round(2))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>                   customers  orders  order_value  discount  returns  churn   app
+segment
+Deal Hunters            1253     5.0        62.58      0.50     0.07   0.31  0.47
+Casual Campers          1374     2.0        94.44      0.12     0.04   0.20  0.21
+Big-Trip Planners       1113     2.0       325.19      0.09     0.04   0.16  0.32
+Gear Testers             811     6.0       163.08      0.16     0.27   0.10  0.50
+Trail Regulars          1449     8.0        85.93      0.09     0.03   0.04  0.54</code></pre>
+                    </div>
+                    <p>Medians describe a typical member better than means when columns are skewed. The table tells a clear story: Deal Hunters are the biggest churn risk at about 31%, Trail Regulars the safest at about 4%.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Assign new customers <span class="step-time">(5 min)</span></h3>
+                    <p>Three customers who joined after the snapshot. The pipeline applies the fitted log, scaling and centers; nothing is refitted.</p>
+                    <pre><code class="language-python">newcomers = pd.DataFrame({
+    "orders_12m": [10, 2, 6],
+    "avg_order_value": [85.0, 380.0, 60.0],
+    "discount_share": [0.08, 0.10, 0.55],
+    "return_rate": [0.03, 0.04, 0.07],
+})
+print(pd.Series(segmenter.predict(newcomers)).map(names).tolist())</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>['Trail Regulars', 'Big-Trip Planners', 'Deal Hunters']</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save the assignments and print the brief <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">customers[["customer_id", "segment"]].to_csv("customer_segments.csv", index=False)
+
+print("Pinecrest customer segments (K-Means, k = 5; silhouette "
+      f"{evidence[5]:.3f}, best of k = 4..6)")
+for seg, row in brief.iterrows():
+    print(f"- {seg}: {row['customers']:,} customers ({row['customers'] / len(customers):.0%}), "
+          f"churn {row['churn']:.0%}. Action: {row['action']}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>Pinecrest customer segments (K-Means, k = 5; silhouette 0.479, best of k = 4..6)
+- Deal Hunters: 1,253 customers (21%), churn 31%. Action: value bundles instead of deeper discounts
+- Casual Campers: 1,374 customers (23%), churn 20%. Action: seasonal reminders before trips
+- Big-Trip Planners: 1,113 customers (19%), churn 16%. Action: expert advice and trip-planning content
+- Gear Testers: 811 customers (14%), churn 10%. Action: fit and sizing guides to cut returns
+- Trail Regulars: 1,449 customers (24%), churn 4%. Action: loyalty perks, early access; no discounts needed</code></pre>
+                    </div>
+                    <p>Lesson 12.1 shows how to save a fitted pipeline like <code>segmenter</code> to a file, so the marketing tool can load it without refitting.</p>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>One pipeline holds the log transform, the scaler and K-Means, fitted once on all customers</li>
+                        <li>You recorded the silhouette for k = 4, 5 and 6, and five scores highest</li>
+                        <li>Every segment is named from its index profile, not from its cluster number</li>
+                        <li>The brief table shows size, typical behavior, churn rate, app use and an action for each segment</li>
+                        <li>New customers are assigned with <code>segmenter.predict</code>, with nothing refitted</li>
+                        <li><code>customer_segments.csv</code> holds 6,000 IDs with segment names</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue in the project notebook, so <code>customers</code>, <code>Z</code> and <code>segmenter</code> already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Two More Scores</h3>
+                    <p>scikit-learn has two other internal scores. <code>calinski_harabasz_score</code> is the ratio of between-cluster to within-cluster spread (higher is better). <code>davies_bouldin_score</code> averages how similar each cluster is to its most similar neighbor (lower is better). Compute both for <em>k</em> from 3 to 7 on <code>Z</code>. Do they agree with the silhouette?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Both take the same arguments as <code>silhouette_score</code>: the data and the labels.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.metrics import calinski_harabasz_score, davies_bouldin_score
+
+for k in range(3, 8):
+    labels_k = KMeans(n_clusters=k, n_init=10, random_state=42).fit_predict(Z)
+    print(f"k={k}: Calinski-Harabasz {calinski_harabasz_score(Z, labels_k):7.0f}   "
+          f"Davies-Bouldin {davies_bouldin_score(Z, labels_k):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>k=3: Calinski-Harabasz    2934   Davies-Bouldin 1.100
+k=4: Calinski-Harabasz    3906   Davies-Bouldin 0.848
+k=5: Calinski-Harabasz    5012   Davies-Bouldin 0.735
+k=6: Calinski-Harabasz    4493   Davies-Bouldin 0.912
+k=7: Calinski-Harabasz    4084   Davies-Bouldin 1.146</code></pre>
+                        </div>
+                        <p>Both point at five, like the silhouette and the elbow. Agreement across scores built on different ideas is reassuring. These two are also much cheaper than the silhouette on big data, because they compare points with centers rather than with every other point.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: A Sampled Silhouette</h3>
+                    <p>Compute <code>silhouette_score</code> for the five-cluster labels on <code>Z</code> three times with <code>sample_size=1000</code> and <code>random_state</code> 0, 1 and 2, and once on all rows. How far are the sampled estimates from the full value?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>The labels are <code>customers["cluster"]</code>. The sample is drawn from rows, and each sampled point is compared only with the other sampled points.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.metrics import silhouette_score
+
+labels5 = customers["cluster"]
+print(f"all rows : {silhouette_score(Z, labels5):.3f}")
+for seed in [0, 1, 2]:
+    print(f"sample {seed} : {silhouette_score(Z, labels5, sample_size=1000, random_state=seed):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>all rows : 0.479
+sample 0 : 0.473
+sample 1 : 0.480
+sample 2 : 0.478</code></pre>
+                        </div>
+                        <p>A sample of 1,000 rows (one sixth of the data, and one thirty-sixth of the work) lands within about 0.01 of the full value. For choosing between values of <em>k</em>, that is plenty, as long as you use the same <code>random_state</code> for every <em>k</em>.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Clusters in Pure Noise</h3>
+                    <p>Make 3,000 rows of four columns of uniform random noise with <code>np.random.default_rng(42).uniform(size=(3000, 4))</code>, which has no groups at all. Fit K-Means with <em>k</em> from 2 to 6 and print each silhouette. Then compare with the customers' 0.479. What does this tell you about trusting a clustering just because it ran?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>K-Means will happily cut a uniform cube into slices. Look at how high the silhouettes get, and whether any <em>k</em> stands out.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">noise = np.random.default_rng(42).uniform(size=(3000, 4))
+for k in range(2, 7):
+    noise_labels = KMeans(n_clusters=k, n_init=3, random_state=42).fit_predict(noise)
+    print(f"k={k}: silhouette {silhouette_score(noise, noise_labels):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>k=2: silhouette 0.185
+k=3: silhouette 0.175
+k=4: silhouette 0.194
+k=5: silhouette 0.201
+k=6: silhouette 0.200</code></pre>
+                        </div>
+                        <p>K-Means "found" clusters in noise, with silhouettes that are not even near zero, because cutting any cloud into pieces leaves each piece somewhat tighter than the whole. What noise does not show is a clear peak: the scores stay flat, between about 0.18 and 0.20, whatever <em>k</em> you pick. The customers' silhouette is more than twice as high and has a sharp peak at five. A silhouette means most when it is compared with what structureless data of the same shape scores; that comparison is the idea behind the gap statistic in the bonus challenge.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Segments and Age Groups (Stretch)</h3>
+                    <p>Segments were built from behavior only. Check how they relate to <code>age_group</code>, which was not used: print the share of each age group within each segment with <code>pd.crosstab(..., normalize="index")</code> (use <code>dropna=False</code> handling by filling missing ages with <code>"unknown"</code> first). Is any segment dominated by one age group? Why does that matter if marketing plans to give one segment fewer discounts?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>customers["age_group"].fillna("unknown")</code> keeps the 487 customers with no age in the table instead of silently dropping them.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">ages = customers["age_group"].fillna("unknown")
+print(pd.crosstab(customers["segment"], ages, normalize="index").round(2))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>age_group          18-24  25-34  35-44  45-54  55-64   65+  unknown
+segment
+Big-Trip Planners   0.10   0.20   0.21   0.18   0.14  0.09     0.08
+Casual Campers      0.10   0.20   0.21   0.18   0.13  0.11     0.08
+Deal Hunters        0.11   0.21   0.21   0.16   0.14  0.09     0.08
+Gear Testers        0.09   0.20   0.21   0.16   0.16  0.11     0.06
+Trail Regulars      0.10   0.20   0.19   0.17   0.15  0.10     0.09</code></pre>
+                        </div>
+                        <p>Compare each row with the others: if the age mix is similar in every segment, segment-based actions treat age groups roughly alike. If one segment were dominated by, say, customers under 25, then "fewer discounts for Deal Hunters" would in effect be "fewer discounts for young customers", a policy nobody chose on purpose. Checking is cheap; finding out from a complaint is not.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> A point's average distance to its own cluster is <em>a</em> = 2, and to the nearest other cluster <em>b</em> = 8. What is its silhouette value?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The formula divides by the larger of a and b, not the smaller.">
+                                A) 3.0
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="That is a divided by b. The silhouette is (b - a) divided by the larger of the two.">
+                                B) 0.25
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="s = (b - a) / max(a, b) = (8 - 2) / 8 = 0.75: the point is much closer to its own cluster than to the next one.">
+                                C) 0.75
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> What does this print?</p>
+                        <pre><code class="language-python">print(adjusted_rand_score([0, 0, 0, 1, 1], [1, 1, 1, 0, 0]))</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="The two labelings put exactly the same points together; only the numbers are swapped. The ARI ignores the numbering, so it is a perfect 1.0.">
+                                A) <code>1.0</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Does the ARI compare label numbers directly, or whether pairs of points are grouped together?">
+                                B) <code>0.0</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Negative values mean worse-than-random agreement. Are these groupings different at all?">
+                                C) <code>-1.0</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> Your inertia curve has no clear elbow, the silhouette is about the same for k = 4, 5 and 6, and all three are stable. What is the most sensible next step?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Inertia always falls as k grows. What would the largest k do to the usefulness of the segments?">
+                                A) Pick the k with the lowest inertia
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="When the statistics cannot separate the candidates, usefulness decides: compare the profiles, the sizes and whether each segment leads to a different action, and prefer the simplest version that does.">
+                                B) Compare the profiles for k = 4, 5 and 6 and choose the one whose segments lead to distinct actions
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The scores say all three are reasonable. Does that mean there is no structure?">
+                                C) Conclude the data has no clusters and stop
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> Why does this lesson log-transform <code>orders_12m</code> and <code>avg_order_value</code> before scaling?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="StandardScaler works on any numbers. What is special about the shape of these two columns?">
+                                A) StandardScaler cannot handle money columns
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="K-Means accepts any numeric input. What does a long right tail do to means and squared distances?">
+                                B) K-Means refuses columns with large values
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Both columns have long right tails. A log turns ratios into differences, so a few big spenders no longer dominate the distances and pull the centers toward the tail.">
+                                C) They are right-skewed, and a log keeps a few extreme customers from dominating the distances
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> You need to cluster 20 million app sessions on a laptop. Which choice fits best?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="MiniBatchKMeans updates centers from small batches, and its partial_fit method learns from one chunk at a time, so it handles data that does not fit in memory with almost the same result. A sampled silhouette keeps the scoring affordable.">
+                                A) <code>MiniBatchKMeans</code>, scoring k with a sampled silhouette
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="How does the cost of a full silhouette grow with the number of rows?">
+                                B) <code>KMeans</code> with <code>n_init=50</code> and a full silhouette for every k
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Is there a version of K-Means built for exactly this situation?">
+                                C) Clustering is impossible at that size, so sample 1,000 sessions and stop there
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>What if the elbow, the silhouette and the business disagree?</summary>
+                    <p>Then the data does not have one obviously right number of groups, which is common. The statistics narrow the range; the business picks within it. A team that can only run three campaigns may prefer four segments with a 0.42 silhouette over six with 0.44. Write down the trade-off in the brief, so that the choice is visible rather than hidden.</p>
+                </details>
+                <details>
+                    <summary>How often should segments be refitted?</summary>
+                    <p>Assign new customers with the fitted pipeline daily if you like; refit the segmentation itself only when you have a reason, such as a quarterly review or a clear change in behavior. Each refit can shift borders and renumber clusters, which confuses everyone who uses the segments. When you do refit, compare old and new assignments with the ARI and map new clusters to old names by their profiles.</p>
+                </details>
+                <details>
+                    <summary>Should I put the segment into my churn model as a feature?</summary>
+                    <p>You can, but expect little gain: the segment is built from columns the churn model already sees, so a flexible model like gradient boosting usually finds the same patterns on its own. Segments earn their keep as a communication tool and for targeting. If you do add one, fit the clustering inside the model's pipeline on training rows only, so the test set stays untouched.</p>
+                </details>
+                <details>
+                    <summary>Why not use the gap statistic I have read about?</summary>
+                    <p>It is a good idea and you can build it in the bonus challenge: it compares the inertia of your data with the inertia of structureless reference data of the same size and range. scikit-learn does not include it, and on clear data like this it agrees with the silhouette. The elbow, silhouette and stability together cover most practical needs.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Implement the gap statistic. For each <em>k</em> from 2 to 8: fit K-Means on <code>Z</code> and take <code>log(inertia)</code>; then make five reference datasets of the same shape, drawn uniformly between each column's minimum and maximum (<code>rng.uniform(Z.min(), Z.max(), size=Z.shape)</code>), fit K-Means on each and average their <code>log(inertia)</code>. The gap is the reference average minus the data value. Where does the gap peak, and does it agree with the silhouette?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Write the paragraph you would put at the top of the segment brief explaining <em>why five segments</em>, citing at least three kinds of evidence from this lesson. Then name one decision marketing should not make from the segments alone, and what they would need to make it safely.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Clustering has no answer key, so choose <em>k</em> from several kinds of evidence: elbow, silhouette, stability and usefulness</li>
+                        <li>The elbow is where inertia stops dropping steeply; its minimum is meaningless</li>
+                        <li>The silhouette, (b − a) / max(a, b), rewards points that are close to their own cluster and far from the next; look at the per-cluster plot, not only the mean</li>
+                        <li>Stable clusters reappear when you refit on bootstrap samples; the adjusted Rand index compares labelings while ignoring cluster numbers</li>
+                        <li>Log-transform right-skewed counts and money before scaling, and keep all preprocessing in one fitted pipeline for new rows</li>
+                        <li><code>MiniBatchKMeans</code> and a sampled silhouette make clustering practical on very large data</li>
+                        <li>Segments are profiled clusters with names, sizes, linked outcomes and actions; they describe groups, they do not prove causes</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You showed with four independent checks that Pinecrest's customers form five groups</li>
+                        <li>You timed K-Means against MiniBatchKMeans on 300,000 rows and clustered a stream of chunks with <code>partial_fit</code></li>
+                        <li>You built one pipeline that segments any customer, old or new</li>
+                        <li>You wrote a segment brief in which churn varies nearly eight-fold between segments that never saw churn</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="clustering_hierarchical.html"><strong>Lesson 8.3: Hierarchical Clustering</strong></a> you will drop the need to fix <em>k</em> in advance. Hierarchical clustering builds a whole family tree of merges, the dendrogram, which you can cut at any level, and it works with distances K-Means cannot use. You will use it to discover how Pinecrest's products group by who buys them together.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>customer_segments.csv</code>; Lesson 8.3 compares a hierarchical clustering with it.</li>
+                    <li>Rerun the project with <code>n_clusters=4</code>. Which two segments merge? Does the merged segment still lead to one clear action?</li>
+                    <li>Think of a dataset from your own work or life where the "right" number of groups depends on what you want to do with them.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>Choosing <em>k</em> is where many people give up on clustering, because no single number gives the answer. You did not need one: you gathered evidence from four directions and made a decision you can defend. That is what real data science looks like. The segment brief you wrote today is exactly the kind of work that changes how a business treats its customers.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="clustering_kmeans.html" class="prev-lesson">← Previous: K-Means Clustering</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="clustering_hierarchical.html" class="next-lesson">Next: Hierarchical Clustering →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>No single method perfectly determines <em>k</em>; combine the elbow method, silhouette analysis, and domain knowledge.</li>
-                <li>Silhouette scores measure how well each point fits its cluster versus its neighbors, giving both per-point and average diagnostics.</li>
-                <li>k-means++ spreads initial centroids apart, giving faster convergence and better final clusterings than random initialization.</li>
-                <li>Mini-batch K-means trades a small amount of accuracy for large speedups on big datasets.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now choose the number of clusters defensibly and speed up or stabilize K-means with better initialization and
-        mini-batch training — the skills that turn a textbook algorithm into a production tool.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>The elbow method and silhouette score suggest different k values — which do I trust?</summary>
-            <p>Treat them as evidence, not verdicts. The elbow shows where adding clusters stops paying off; silhouette measures
-            separation quality. Prefer the value supported by both plus what makes sense for your problem.</p>
-        </details>
-        <details>
-            <summary>What does k-means++ actually do?</summary>
-            <p>It picks initial centroids one at a time, each chosen with probability proportional to its squared distance from the
-            nearest existing centroid. This spreads the seeds out, avoiding the bad clusterings that random initialization can cause.</p>
-        </details>
-        <details>
-            <summary>When should I use Mini-batch K-means?</summary>
-            <p>When the dataset is too large for standard K-means to be fast. It updates centroids using small random batches,
-            converging much faster with only a slight drop in cluster quality.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>With <em>k</em> selection and optimization mastered, you're ready to put K-means to work on real applications like
-        customer segmentation and image compression.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Plot both an elbow curve and a silhouette-vs-<em>k</em> curve for the same dataset and compare their suggestions.</li>
-            <li>Time standard <code>KMeans</code> against <code>MiniBatchKMeans</code> on a large dataset.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Deciding how many clusters exist is one of the trickiest judgment calls in unsupervised learning — and you now have
-            a toolkit and the confidence to make that call. Trust your process.</p>
-        </div>
-    </section>
-
-    <!-- Navigation -->
-    <nav class="lesson-nav">
-        <a href="ml_kmeans_clustering.html" class="prev-lesson">← K-means Fundamentals</a>
-        <a href="index.html" class="home-link">Course Home</a>
-        <a href="ml_kmeans_applications.html" class="next-lesson">K-means Applications →</a>
-    </nav>
-    
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -951,8 +972,10 @@ adv_init.compare_initializations(n_trials=20)</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>

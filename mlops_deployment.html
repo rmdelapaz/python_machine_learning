@@ -3,983 +3,1231 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about Model Deployment strategies, serving patterns, and production best practices for machine learning systems.">
-    <title>Model Deployment - Python Machine Learning</title>
+    <meta name="description" content="Serve a churn model as a FastAPI web service with pydantic input validation, test it with TestClient, and monitor it for data drift with a simulated shifted batch. Python Machine Learning Lesson 12.2.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Serving and Monitoring Models - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#mlops">MLOps</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#mlops">MLOps</a></li>
-            <li aria-current="page">Model Deployment</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>🚢 Model Deployment: From Development to Production</h1>
+        <div class="container">
+            <header>
+                <h1>🚢 Lesson 12.2: Serving and Monitoring Models</h1>
+                <p class="lead">Turn the churn model into a small web service that other programs can call, make it refuse bad input politely, and learn to notice when the world it was trained on starts to change.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Compare deployment patterns — REST APIs, batch, and streaming serving</li>
-                <li>Wrap a trained model in a prediction API using Flask and FastAPI</li>
-                <li>Containerize a model service with Docker for reproducible deployment</li>
-                <li>Choose serving strategies such as blue-green and canary releases</li>
-                <li>Load-test an endpoint and reason about latency and throughput</li>
-                <li>Apply a production deployment checklist covering validation, versioning, and rollback</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Take a saved model, expose it through a FastAPI endpoint, containerize it with Docker, and load-test the running service to measure its latency.</p>
-        </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>Model deployment is the process of making trained machine learning models available for use in production environments. This involves creating APIs, containerization, scaling strategies, and monitoring systems. This lesson covers different deployment patterns including REST APIs, batch processing, streaming, and edge deployment, along with practical implementations using Flask, FastAPI, Docker, and cloud platforms.</p>
-        </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Package a fitted <code>Pipeline</code> with the metadata a server needs (features, dtypes, threshold, version)</li>
+                        <li>Describe valid input with a pydantic model and read its validation errors</li>
+                        <li>Serve predictions with FastAPI, test every endpoint with <code>TestClient</code>, and start the server with <code>uvicorn</code></li>
+                        <li>Measure input drift with the Population Stability Index and prediction drift with simple batch statistics</li>
+                        <li>Tell a data-quality bug from a real change in customers, and say which one needs labels to confirm</li>
+                    </ul>
+                </div>
 
-        <h2>Deployment Patterns Overview</h2>
-        
-        <div class="mermaid">
-        flowchart TB
-            A[Trained Model] --> B{Deployment Pattern}
-            
-            B --> C[REST API]
-            C --> C1[Synchronous]
-            C --> C2[Request/Response]
-            C --> C3[Low Latency]
-            
-            B --> D[Batch Processing]
-            D --> D1[Scheduled Jobs]
-            D --> D2[Large Volumes]
-            D --> D3[Offline Scoring]
-            
-            B --> E[Streaming]
-            E --> E1[Real-time Events]
-            E --> E2[Continuous Processing]
-            E --> E3[Event-Driven]
-            
-            B --> F[Edge Deployment]
-            F --> F1[On-Device]
-            F --> F2[Low Latency]
-            F --> F3[Offline Capable]
-            
-            C --> G[Use Cases]
-            D --> H[Use Cases]
-            E --> I[Use Cases]
-            F --> J[Use Cases]
-            
-            G --> G1[Web Apps]
-            H --> H1[ETL Pipelines]
-            I --> I1[IoT Sensors]
-            J --> J1[Mobile Apps]
-            
-            style A fill:#e3f2fd
-            style C fill:#c8e6c9
-            style D fill:#fff9c4
-            style E fill:#ffccbc
-            style F fill:#f3e5f5
-        </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 105 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="mlops_intro.html">Lesson 12.1: Reproducibility and Experiment Tracking</a> (saving models), <a href="pipelines_composite.html">Lesson 2.2: Pipelines</a></li>
+                    <li><span class="meta-label">🛠️ You will build</span> A churn-scoring API with validated input, plus a weekly drift report that tells the care team which weeks to trust</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code></li>
+                </ul>
+            </header>
 
-        <h2>Deployment Architecture</h2>
-        
-        <div class="mermaid">
-        graph LR
-            A[Client] --> B[Load Balancer]
-            B --> C[API Gateway]
-            C --> D[Model Service 1]
-            C --> E[Model Service 2]
-            C --> F[Model Service N]
-            
-            D --> G[Model Cache]
-            E --> G
-            F --> G
-            
-            G --> H[Model Storage]
-            
-            D --> I[Feature Store]
-            E --> I
-            F --> I
-            
-            D --> J[Monitoring]
-            E --> J
-            F --> J
-            
-            J --> K[Metrics DB]
-            J --> L[Alerting]
-            
-            style A fill:#e3f2fd
-            style B fill:#fff3e0
-            style C fill:#f0f4c3
-            style G fill:#e8f5e9
-            style J fill:#ffebee
-        </div>
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">From Notebook to Service</a></li>
+                        <li><a href="#package" class="toc-link">Package the Model</a></li>
+                        <li><a href="#validate" class="toc-link">Validate Input with pydantic</a></li>
+                        <li><a href="#serve" class="toc-link">Serve It with FastAPI</a></li>
+                        <li><a href="#run" class="toc-link">Run the Real Server</a></li>
+                        <li><a href="#monitor" class="toc-link">Monitoring and Data Drift</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: A Weekly Drift Report</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
 
-        <h2>Setting Up Deployment Environment</h2>
-        
-        <pre class="language-python"><code>import os
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 From Notebook to Service</h2>
+
+                <p>So far every model in this course has lived inside a notebook. You fit it, you scored the test set, you looked at a chart. Pinecrest's customer-care tool, its email system and its weekly reporting job cannot open your notebook. They need to send a customer's numbers somewhere and get a churn probability back, at any hour, without you in the room. Putting a model where other software can reach it is called <strong>serving</strong> or <strong>deployment</strong>, and keeping an eye on it afterwards is <strong>monitoring</strong>.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Kitchen and the Order Window</h4>
+                    <p>Think of the fitted model as a kitchen that can cook exactly one dish. Customers never walk into the kitchen. They hand an order through a window, and the person at the window checks it first: is every field filled in, is "Denver" really one of our stores, is a discount share of 1.4 even possible? Bad orders go straight back with a note saying what is wrong. Good orders go to the kitchen, and a plate comes back out.</p>
+                    <p>In this lesson <strong>FastAPI</strong> is the window, <strong>pydantic</strong> is the person checking orders, and your scikit-learn <code>Pipeline</code> is the kitchen. Monitoring is the manager who notices, weeks later, that orders have quietly changed: suddenly everyone wants it extra spicy.</p>
+                </div>
+
+                <div class="mermaid">
+graph TD
+    A["Client sends JSON"] --> B["FastAPI endpoint"]
+    B --> C{"pydantic: valid?"}
+    C -->|"no"| D["422 with the problems"]
+    C -->|"yes"| E["DataFrame, training dtypes"]
+    E --> F["Pipeline predict_proba"]
+    F --> G["JSON: probability, offer"]
+    G --> H["Logged for monitoring"]
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>A model nobody can call is a report, not a product. Most of the work of deployment is not machine learning at all: it is agreeing on what the input looks like, refusing input that does not match, and making sure the server builds exactly the same table the model was trained on. The last part of the lesson covers the slow failure that no error message announces: the customers change, and the model keeps answering as if they had not.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="package" class="lesson-section">
+                <h2>📦 Package the Model</h2>
+
+                <p>You finished Lesson 12.1 with the model you will serve: the random-forest churn pipeline in <code>churn_final.skops</code>, and its model card <code>churn_final.json</code> (configuration, data fingerprint, test AUC, the reviewed skops types). Copy both into a new folder for this lesson, next to the <code>data/</code> folder. If you do not have them, or want this page to run on its own, the next block recreates exactly what 12.1's project saved (without the MLflow logging, which serving does not need).</p>
+
+                <pre><code class="language-python"># Recreates Lesson 12.1's churn_final.skops and churn_final.json.
+# Skip this block if you already have both files from 12.1.
+import hashlib
 import json
-import pickle
-import joblib
+from importlib.metadata import version
+
 import numpy as np
 import pandas as pd
-from datetime import datetime
-import logging
+import skops.io as sio
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+CONFIG = {
+    "data_file": "data/customers_churn.csv",
+    "numeric": ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+                "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user", "email_opens_90d"],
+    "categorical": ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"],
+    "target": "churned",
+    "test_size": 0.25,
+    "seed": 42,
+    "cv_folds": 5,
+    "experiment": "churn-project",
+}
 
-# Create deployment directories
-deployment_dirs = ['models', 'configs', 'logs', 'tests']
-for dir_name in deployment_dirs:
-    os.makedirs(dir_name, exist_ok=True)
 
-print("Deployment Environment Setup Complete")
-print("=" * 50)</code></pre>
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1_000_000), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
-        <h2>REST API Deployment with Flask</h2>
-        
-        <pre class="language-python"><code># flask_app.py
-from flask import Flask, request, jsonify
-import joblib
-import numpy as np
+
+setup_data = pd.read_csv(CONFIG["data_file"])
+setup_X = setup_data[CONFIG["numeric"] + CONFIG["categorical"]]
+setup_y = setup_data[CONFIG["target"]]
+s_train, s_test, sy_train, sy_test = train_test_split(
+    setup_X, setup_y, test_size=CONFIG["test_size"], stratify=setup_y, random_state=CONFIG["seed"])
+setup_prep = ColumnTransformer([
+    ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), CONFIG["numeric"]),
+    ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"), OneHotEncoder(handle_unknown="ignore")),
+     CONFIG["categorical"]),
+])
+forest = RandomForestClassifier(n_estimators=200, min_samples_leaf=5, n_jobs=-1, random_state=CONFIG["seed"])
+setup_model = Pipeline([("prep", setup_prep), ("model", forest)]).fit(s_train, sy_train)
+setup_auc = roc_auc_score(sy_test, setup_model.predict_proba(s_test)[:, 1])
+
+sio.dump(setup_model, "churn_final.skops")
+with open("churn_final.json", "w") as f:
+    json.dump({
+        "model_file": "churn_final.skops",
+        "estimator": "forest",
+        "params": {k: v for k, v in forest.get_params().items() if v is not None},
+        "config": CONFIG,
+        "data_sha256": file_sha256(CONFIG["data_file"]),
+        "test_auc": round(setup_auc, 4),
+        "environment": {pkg: version(pkg) for pkg in ["scikit-learn", "pandas", "numpy", "skops"]},
+        "skops_trusted_types": ["numpy.dtype", "sklearn.tree._tree.Tree"],
+        "intended_use": "Rank customers for retention offers; not for decisions about individual accounts.",
+    }, f, indent=2)
+print(f"test AUC {setup_auc:.4f}: saved churn_final.skops and churn_final.json")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>test AUC 0.8612: saved churn_final.skops and churn_final.json</code></pre>
+                </div>
+
+                <p>Now load the model the way a server will: read the card first, check the data fingerprint, and load the skops file trusting only the types the card says were reviewed. Then rebuild the same split, so you have test customers to work with.</p>
+
+                <pre><code class="language-python">from sklearn.dummy import DummyClassifier
+
+with open("churn_final.json") as f:
+    card = json.load(f)
+
+churn_model = sio.load(card["model_file"], trusted=card["skops_trusted_types"])
+print(card["estimator"], card["test_auc"], card["skops_trusted_types"])
+print("data unchanged:", file_sha256(card["config"]["data_file"]) == card["data_sha256"])
+
+cfg = card["config"]
+NUMERIC, CATEGORICAL = cfg["numeric"], cfg["categorical"]
+FEATURES = NUMERIC + CATEGORICAL
+customers = pd.read_csv(cfg["data_file"])
+X_train, X_test, y_train, y_test = train_test_split(
+    customers[FEATURES], customers[cfg["target"]], test_size=cfg["test_size"],
+    stratify=customers[cfg["target"]], random_state=cfg["seed"])
+
+test_auc = roc_auc_score(y_test, churn_model.predict_proba(X_test)[:, 1])
+baseline = DummyClassifier(strategy="prior").fit(X_train, y_train)
+print(f"baseline AUC {roc_auc_score(y_test, baseline.predict_proba(X_test)[:, 1]):.3f}   model AUC {test_auc:.4f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>forest 0.8612 ['numpy.dtype', 'sklearn.tree._tree.Tree']
+data unchanged: True
+baseline AUC 0.500   model AUC 0.8612</code></pre>
+                </div>
+
+                <p>The same AUC as the card: the model survived the trip from 12.1 intact, and it clearly beats the do-nothing baseline. The card describes where the model came from. A server needs a few more facts about how to <em>use</em> it, because it cannot look back into your notebook:</p>
+
+                <ul>
+                    <li><strong>The feature list and their dtypes.</strong> The server will build a one-row table from JSON, and it must look exactly like <code>X_train</code>: same columns, same order, same types.</li>
+                    <li><strong>The decision threshold.</strong> With the costs from Lesson 1.4 (a retention offer costs $15, and an offer that reaches a real churner is worth $60), an offer pays off when the churn probability is above 15 / 60 = 0.25. Lesson 13.1 confirms this threshold with <code>TunedThresholdClassifierCV</code>.</li>
+                    <li><strong>A version name</strong>, so every prediction can say which model made it.</li>
+                    <li><strong>What normal looks like</strong>: the average predicted probability and offer rate on data the model has not memorized. You will compare live traffic with these numbers later.</li>
+                </ul>
+
+                <p>For the last item, predictions on the training rows would be too confident, because the model has seen those customers (a random forest almost remembers them). <code>cross_val_predict</code> gives an honest version: each training customer is scored by a copy of the pipeline fitted on the other folds (Lesson 1.3). It refits five copies and leaves <code>churn_model</code> untouched.</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import cross_val_predict
+
+oof_proba = cross_val_predict(churn_model, X_train, y_train, cv=5, method="predict_proba")[:, 1]
+THRESHOLD = 0.25
+
+serving = {
+    "model_card": "churn_final.json",
+    "version": "churn-forest-2025-06-30",
+    "features": FEATURES,
+    "dtypes": {col: str(dtype) for col, dtype in X_train.dtypes.items()},
+    "threshold": THRESHOLD,
+    "reference_mean_probability": round(float(oof_proba.mean()), 4),
+    "reference_offer_rate": round(float((oof_proba &gt;= THRESHOLD).mean()), 4),
+}
+with open("churn_serving.json", "w") as f:
+    json.dump(serving, f, indent=2)
+
+reference = X_train.assign(churn_probability=oof_proba)
+reference.to_csv("churn_reference.csv", index=False)
+
+print(sorted(serving))
+print(serving["dtypes"]["age_group"], serving["dtypes"]["email_opens_90d"], serving["dtypes"]["app_user"])
+print(serving["reference_mean_probability"], serving["reference_offer_rate"])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>['dtypes', 'features', 'model_card', 'reference_mean_probability', 'reference_offer_rate', 'threshold', 'version']
+str float64 int64
+0.1662 0.2436</code></pre>
+                </div>
+
+                <p>The service folder now holds everything the server needs, and none of it is a pickle: <code>churn_final.skops</code> (the model), <code>churn_final.json</code> (where it came from), <code>churn_serving.json</code> (how to use it), and <code>churn_reference.csv</code> (the training inputs with honest predictions, kept for drift checks). The dtype <code>str</code> is pandas' text type; you will see in a moment why it matters.</p>
+
+                <div class="card card-danger">
+                    <h4>🛑 Only Load Model Files You Trust</h4>
+                    <p>As Lesson 12.1 showed, a pickle (<code>joblib.load</code>) can run arbitrary code when it is loaded, which is why this service uses skops. Even with skops, the trusted list is a promise you make: the server trusts exactly the types written in the model card, which a person reviewed when the model was saved. A server that loads model files from uploads, email attachments or unknown downloads, in any format, is a server that runs a stranger's choices.</p>
+                </div>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Pin the Library Versions</h4>
+                    <p>A saved scikit-learn model is only guaranteed to load correctly in the same scikit-learn version that saved it. That is why the model card records the <code>environment</code>, and why the server's environment should install the exact versions from your <code>requirements.txt</code>. Loading in another version can print an <code>InconsistentVersionWarning</code>: treat it as an error, not as noise.</p>
+                </div>
+            </section>
+
+
+            <!-- ============================================================ -->
+            <section id="validate" class="lesson-section">
+                <h2>🛂 Validate Input with pydantic</h2>
+
+                <p>Inside a notebook you control the data. Behind an API, anyone can send anything: a missing field, a misspelled store, a discount share of 140%, the word "yes" where a 0 or 1 belongs. The model will not complain about most of these. It will quietly return a number, and that number will be nonsense. So the first job of a service is to describe valid input precisely and reject everything else.</p>
+
+                <p><strong>pydantic</strong> does this with ordinary Python classes. Each attribute has a type, and <code>Field</code> adds limits such as <code>ge</code> (greater than or equal) and <code>le</code> (less than or equal). A <code>Literal</code> type allows only the listed values. Put the schema in its own file, <code>schemas.py</code>, so both the notebook and the server can import it:</p>
+
+                <pre data-file="schemas.py"><code class="language-python">"""schemas.py: what a valid request to the churn API looks like."""
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+Store = Literal["Online", "Boise", "Bend", "Flagstaff", "Asheville"]
+Region = Literal["Northwest", "Southwest", "Southeast", "Mountain", "Midwest", "Northeast"]
+AgeGroup = Literal["18-24", "25-34", "35-44", "45-54", "55-64", "65+"]
+Tier = Literal["Basic", "Silver", "Gold"]
+Category = Literal["Accessories", "Apparel", "Camp Kitchen", "Climbing", "Footwear",
+                   "Packs", "Sleeping", "Snow", "Tents"]
+
+
+class Customer(BaseModel):
+    """One customer's 12-month summary, in the same units the model was trained on."""
+    model_config = ConfigDict(extra="forbid")      # unknown fields are an error, not ignored
+
+    tenure_months: int = Field(ge=1, le=600)
+    orders_12m: int = Field(ge=0, le=500)
+    spend_12m: float = Field(ge=0)
+    avg_order_value: float = Field(ge=0)
+    days_since_last_order: int = Field(ge=0, le=365)
+    returns_12m: int = Field(ge=0)
+    return_rate: float = Field(ge=0, le=1)
+    support_tickets_12m: int = Field(ge=0)
+    discount_share: float = Field(ge=0, le=1)
+    app_user: int = Field(ge=0, le=1)
+    email_opens_90d: float | None = Field(default=None, ge=0)   # may be unknown
+    home_store: Store
+    region: Region
+    age_group: AgeGroup | None = None                           # may be unknown
+    loyalty_tier: Tier
+    preferred_category: Category
+
+
+class Score(BaseModel):
+    """What the API sends back for one customer."""
+    churn_probability: float
+    offer: bool
+    model_version: str</code></pre>
+
+                <p>Two fields may be missing, because they are missing in the training data too: <code>email_opens_90d</code> (no tracking data) and <code>age_group</code> (never given). Everything else is required. Now try it on Pinecrest's first test customer, written as the plain dictionary a JSON request would turn into:</p>
+
+                <pre><code class="language-python">from pydantic import ValidationError
+from schemas import Customer
+
+example = {
+    "tenure_months": 90, "orders_12m": 5, "spend_12m": 1378.70, "avg_order_value": 275.74,
+    "days_since_last_order": 53, "returns_12m": 1, "return_rate": 0.306, "support_tickets_12m": 1,
+    "discount_share": 0.14, "app_user": 0, "email_opens_90d": 5, "home_store": "Asheville",
+    "region": "Southeast", "age_group": "25-34", "loyalty_tier": "Gold", "preferred_category": "Apparel",
+}
+
+customer = Customer(**example)
+print(customer.email_opens_90d, type(customer.email_opens_90d).__name__)
+print(Customer(**{**example, "orders_12m": "5"}).orders_12m + 1)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>5.0 float
+6</code></pre>
+                </div>
+
+                <p>pydantic does more than check: it <strong>converts</strong>. The integer 5 became the float 5.0 that the schema asked for, and the string <code>"5"</code> became the integer 5 (so adding 1 works). This "lax mode" is friendly to callers that send numbers as text. Now send a bad order:</p>
+
+                <pre><code class="language-python">bad = {**example, "discount_share": 1.4, "home_store": "Denver", "app_user": "yes"}
+del bad["tenure_months"]
+
+try:
+    Customer(**bad)
+except ValidationError as err:
+    print(err.error_count(), "problems")
+    for problem in err.errors():
+        print(problem["loc"], "-&gt;", problem["msg"])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>4 problems
+('tenure_months',) -&gt; Field required
+('discount_share',) -&gt; Input should be less than or equal to 1
+('app_user',) -&gt; Input should be a valid integer, unable to parse string as an integer
+('home_store',) -&gt; Input should be 'Online', 'Boise', 'Bend', 'Flagstaff' or 'Asheville'</code></pre>
+                </div>
+
+                <p>Every problem is reported at once, each with its location and a message a person can act on. That is exactly what the caller of an API needs: not "something went wrong", but "fix these four fields".</p>
+
+                <div class="card card-info">
+                    <h4>💡 Why Limits Belong in the Schema</h4>
+                    <p>Ask what the model would do with <code>discount_share=1.4</code>. A tree model treats it like the largest discount share it ever saw, so it returns a confident-looking probability for an impossible customer. The schema is where you write down what "possible" means. The limits here come from the data dictionary (shares between 0 and 1, recency within the 12-month window), not from the model.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="serve" class="lesson-section">
+                <h2>🚀 Serve It with FastAPI</h2>
+
+                <p><strong>FastAPI</strong> turns ordinary Python functions into web endpoints. You decorate a function with the HTTP method and path, and annotate its argument with a pydantic model. FastAPI then reads the JSON body, validates it with your schema, calls the function only if the input is valid, and turns the return value back into JSON. Here is the whole service, in a file called <code>serve.py</code>:</p>
+
+                <pre data-file="serve.py" data-norun><code class="language-python">"""serve.py: the Pinecrest churn-scoring API."""
+import json
+
 import pandas as pd
-import traceback
-import logging
-from datetime import datetime
+import skops.io as sio
+from fastapi import FastAPI
 
-# Initialize Flask app
-app = Flask(__name__)
+from schemas import Customer, Score
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+with open("churn_serving.json") as f:
+    SERVING = json.load(f)
+with open(SERVING["model_card"]) as f:
+    CARD = json.load(f)
 
-# Global model variable
-MODEL = None
-MODEL_METADATA = {}
+MODEL = sio.load(CARD["model_file"], trusted=CARD["skops_trusted_types"])   # only the reviewed types
+FEATURES = SERVING["features"]
+DTYPES = SERVING["dtypes"]
+THRESHOLD = SERVING["threshold"]
+VERSION = SERVING["version"]
 
-class ModelService:
-    """Model service for handling predictions"""
-    
-    def __init__(self, model_path):
-        self.model_path = model_path
-        self.model = None
-        self.metadata = {}
-        self.load_model()
-        
-    def load_model(self):
-        """Load model and metadata"""
-        try:
-            self.model = joblib.load(self.model_path)
-            self.metadata = {
-                'model_path': self.model_path,
-                'loaded_at': datetime.now().isoformat(),
-                'model_type': type(self.model).__name__
-            }
-            logger.info(f"Model loaded successfully from {self.model_path}")
-        except Exception as e:
-            logger.error(f"Error loading model: {str(e)}")
-            raise
-    
-    def predict(self, data):
-        """Make predictions"""
-        try:
-            # Convert to DataFrame if needed
-            if isinstance(data, dict):
-                df = pd.DataFrame([data])
-            elif isinstance(data, list):
-                df = pd.DataFrame(data)
-            else:
-                df = data
-            
-            # Make prediction
-            prediction = self.model.predict(df)
-            
-            # Get prediction probability if available
-            proba = None
-            if hasattr(self.model, 'predict_proba'):
-                proba = self.model.predict_proba(df).tolist()
-            
-            return {
-                'prediction': prediction.tolist(),
-                'probability': proba
-            }
-        except Exception as e:
-            logger.error(f"Prediction error: {str(e)}")
-            raise
-    
-    def get_model_info(self):
-        """Get model information"""
-        return self.metadata
+app = FastAPI(title="Pinecrest churn scoring", version=VERSION)
 
-# Initialize model service (example path)
-# In production, load from environment variable or config
-# model_service = ModelService('models/model.pkl')
 
-# Flask Routes
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat()
-    })
+def to_frame(customers: list[Customer]) -&gt; pd.DataFrame:
+    """Validated customers to a DataFrame with the training columns, order and dtypes."""
+    rows = [c.model_dump() for c in customers]
+    return pd.DataFrame(rows, columns=FEATURES).astype(DTYPES)
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    """Prediction endpoint"""
-    try:
-        # Get data from request
-        data = request.json
-        
-        # Log request
-        logger.info(f"Prediction request received: {len(data)} samples")
-        
-        # Make prediction
-        # result = model_service.predict(data)
-        
-        # For demo, return mock prediction
-        result = {
-            'prediction': [1],
-            'probability': [[0.3, 0.7]],
-            'model_version': '1.0.0',
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        return jsonify(result)
-    
-    except Exception as e:
-        error_msg = f"Prediction error: {str(e)}\n{traceback.format_exc()}"
-        logger.error(error_msg)
-        return jsonify({'error': str(e)}), 500
 
-@app.route('/model/info', methods=['GET'])
-def model_info():
-    """Get model information"""
-    try:
-        # info = model_service.get_model_info()
-        info = {
-            'model_type': 'RandomForestClassifier',
-            'version': '1.0.0',
-            'features': ['feature_1', 'feature_2', 'feature_3'],
-            'last_updated': datetime.now().isoformat()
-        }
-        return jsonify(info)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+def to_score(p: float) -&gt; Score:
+    return Score(churn_probability=round(float(p), 4), offer=bool(p &gt;= THRESHOLD), model_version=VERSION)
 
-# Example Flask app code
-print("\n" + "=" * 50)
-print("FLASK API EXAMPLE")
-print("=" * 50)
-print("""
-To run the Flask app:
-1. Save the code to 'app.py'
-2. Install Flask: pip install flask
-3. Run: python app.py
-4. Test: curl -X POST http://localhost:5000/predict -H "Content-Type: application/json" -d '{"feature1": 1.0}'
-""")</code></pre>
-
-        <h2>FastAPI Deployment (Modern Alternative)</h2>
-        
-        <pre class="language-python"><code># fastapi_app.py
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
-import joblib
-import numpy as np
-import pandas as pd
-from datetime import datetime
-import logging
-
-# Create FastAPI app
-app = FastAPI(
-    title="ML Model API",
-    description="Production ML model serving with FastAPI",
-    version="1.0.0"
-)
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Pydantic models for request/response validation
-class PredictionRequest(BaseModel):
-    """Request model for predictions"""
-    features: List[float]
-    feature_names: Optional[List[str]] = None
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "features": [5.1, 3.5, 1.4, 0.2],
-                "feature_names": ["sepal_length", "sepal_width", "petal_length", "petal_width"]
-            }
-        }
-
-class PredictionResponse(BaseModel):
-    """Response model for predictions"""
-    prediction: List[int]
-    probability: Optional[List[List[float]]]
-    model_version: str
-    timestamp: str
-
-class ModelInfo(BaseModel):
-    """Model information response"""
-    model_type: str
-    version: str
-    features: List[str]
-    performance_metrics: dict
-    last_updated: str
-
-# API Endpoints
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "message": "ML Model API",
-        "version": "1.0.0",
-        "endpoints": ["/docs", "/health", "/predict", "/model/info"]
-    }
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat()
-    }
+def health() -&gt; dict:
+    return {"status": "ok", "model_version": VERSION}
 
-@app.post("/predict", response_model=PredictionResponse)
-async def predict(request: PredictionRequest):
-    """
-    Make predictions with the model
-    """
-    try:
-        # Prepare data
-        features = np.array(request.features).reshape(1, -1)
-        
-        # Make prediction (mock for demo)
-        prediction = [1]
-        probability = [[0.3, 0.7]]
-        
-        return PredictionResponse(
-            prediction=prediction,
-            probability=probability,
-            model_version="1.0.0",
-            timestamp=datetime.now().isoformat()
-        )
-    
-    except Exception as e:
-        logger.error(f"Prediction error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/model/info", response_model=ModelInfo)
-async def get_model_info():
-    """
-    Get model information and metadata
-    """
-    return ModelInfo(
-        model_type="RandomForestClassifier",
-        version="1.0.0",
-        features=["feature_1", "feature_2", "feature_3", "feature_4"],
-        performance_metrics={
-            "accuracy": 0.95,
-            "precision": 0.94,
-            "recall": 0.96,
-            "f1_score": 0.95
-        },
-        last_updated=datetime.now().isoformat()
-    )
+@app.post("/predict")
+def predict(customer: Customer) -&gt; Score:
+    return to_score(MODEL.predict_proba(to_frame([customer]))[0, 1])
 
-@app.post("/batch_predict")
-async def batch_predict(requests: List[PredictionRequest]):
-    """
-    Batch prediction endpoint
-    """
-    results = []
-    for req in requests:
-        result = await predict(req)
-        results.append(result)
-    return results
 
-print("\n" + "=" * 50)
-print("FASTAPI DEPLOYMENT EXAMPLE")
-print("=" * 50)
-print("""
-FastAPI advantages:
-1. Automatic API documentation (Swagger UI)
-2. Type validation with Pydantic
-3. Async support for better performance
-4. Modern Python features
+@app.post("/predict_batch")
+def predict_batch(customers: list[Customer]) -&gt; list[Score]:
+    return [to_score(p) for p in MODEL.predict_proba(to_frame(customers))[:, 1]]</code></pre>
 
-To run:
-1. Install: pip install fastapi uvicorn
-2. Run: uvicorn app:app --reload
-3. View docs: http://localhost:8000/docs
-""")</code></pre>
+                <p>Read it top to bottom. The model is loaded <strong>once</strong>, when the server starts, not on every request (loading takes far longer than predicting). <code>to_frame</code> is the most important function in the file: it rebuilds the exact table the pipeline was trained on, column order and dtypes included. The three endpoints are a health check (so monitoring tools can ask "are you alive?"), one customer, and a batch.</p>
 
-        <h2>Docker Containerization</h2>
-        
-        <pre class="language-docker"><code># Dockerfile
-FROM python:3.9-slim
+                <p>You do not need a running server to test this. FastAPI's <code>TestClient</code> sends requests straight to the app object in the same Python process, so a test runs in milliseconds and needs no network:</p>
 
-# Set working directory
-WORKDIR /app
+                <pre><code class="language-python">from fastapi.testclient import TestClient
+import serve
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+client = TestClient(serve.app)
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+print(client.get("/health").json())
 
-# Copy application code
-COPY app.py .
-COPY models/ ./models/
-COPY configs/ ./configs/
+response = client.post("/predict", json=example)
+print(response.status_code, response.json())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>{'status': 'ok', 'model_version': 'churn-forest-2025-06-30'}
+200 {'churn_probability': 0.0775, 'offer': False, 'model_version': 'churn-forest-2025-06-30'}</code></pre>
+                </div>
 
-# Create non-root user for security
-RUN useradd -m -u 1000 mluser && chown -R mluser:mluser /app
-USER mluser
+                <p>Status 200 means success. This long-standing Gold customer gets a low churn probability and no offer. Now the bad order from before:</p>
 
-# Expose port
-EXPOSE 8000
+                <pre><code class="language-python">response = client.post("/predict", json=bad)
+print(response.status_code)
+for problem in response.json()["detail"]:
+    print(problem["loc"], "-&gt;", problem["msg"])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>422
+['body', 'tenure_months'] -&gt; Field required
+['body', 'discount_share'] -&gt; Input should be less than or equal to 1
+['body', 'app_user'] -&gt; Input should be a valid integer, unable to parse string as an integer
+['body', 'home_store'] -&gt; Input should be 'Online', 'Boise', 'Bend', 'Flagstaff' or 'Asheville'</code></pre>
+                </div>
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+                <p>Status <strong>422 Unprocessable Content</strong> is FastAPI's answer to input that fails validation, and the body lists the same problems pydantic found, with <code>"body"</code> in front of each location to say where in the request they were. The model never ran. That is the order window doing its job.</p>
 
-# Run application
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
-</code></pre>
+                <h3>📬 Scoring a Batch</h3>
+                <p>The care team's weekly job will send hundreds of customers at once. One snag: pandas marks missing values as <code>NaN</code>, and <code>NaN</code> is not valid JSON. Missing values have to travel as <code>null</code>, which Python writes as <code>None</code>. A small helper converts a DataFrame into JSON-ready records:</p>
 
-        <pre class="language-yaml"><code># docker-compose.yml
-version: '3.8'
+                <pre><code class="language-python">import numpy as np
 
-services:
-  model-api:
-    build: .
-    container_name: ml-model-api
-    ports:
-      - "8000:8000"
-    environment:
-      - MODEL_PATH=/app/models/model.pkl
-      - LOG_LEVEL=INFO
-      - MAX_BATCH_SIZE=100
-    volumes:
-      - ./models:/app/models:ro
-      - ./logs:/app/logs
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    
-  nginx:
-    image: nginx:alpine
-    container_name: ml-nginx
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - model-api
-    restart: unless-stopped
-  
-  prometheus:
-    image: prom/prometheus
-    container_name: ml-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    restart: unless-stopped
 
-print("\n" + "=" * 50)
-print("DOCKER DEPLOYMENT")
-print("=" * 50)
-print("""
-Docker commands:
-1. Build image: docker build -t ml-model:latest .
-2. Run container: docker run -p 8000:8000 ml-model:latest
-3. Docker Compose: docker-compose up -d
-4. View logs: docker logs ml-model-api
-5. Stop: docker-compose down
-""")</code></pre>
+def to_json_records(frame):
+    """DataFrame rows as dicts, with missing values as None (JSON null)."""
+    return frame.astype(object).where(frame.notna(), None).to_dict(orient="records")
 
-        <h2>Model Serving Patterns</h2>
-        
-        <div class="mermaid">
-        flowchart TB
-            subgraph "Online Serving"
-                A[REST API] --> A1[Single Prediction]
-                B[gRPC] --> B1[Low Latency]
-                C[WebSocket] --> C1[Real-time Stream]
-            end
-            
-            subgraph "Batch Serving"
-                D[Scheduled Jobs] --> D1[Daily Predictions]
-                E[Event Triggered] --> E1[File Upload]
-            end
-            
-            subgraph "Hybrid"
-                F[Cache Layer] --> F1[Pre-computed + Real-time]
-                G[Async Queue] --> G1[Process in Background]
-            end
-            
-            style A fill:#c8e6c9
-            style D fill:#fff9c4
-            style F fill:#e1f5fe
+
+week = X_test.head(5)
+scores = pd.DataFrame(client.post("/predict_batch", json=to_json_records(week)).json())
+print(scores)
+
+direct = churn_model.predict_proba(week)[:, 1]
+print("API matches the notebook:", np.allclose(scores["churn_probability"], direct, atol=1e-4))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>   churn_probability  offer            model_version
+0             0.0775  False  churn-forest-2025-06-30
+1             0.3810   True  churn-forest-2025-06-30
+2             0.1457  False  churn-forest-2025-06-30
+3             0.1908  False  churn-forest-2025-06-30
+4             0.1178  False  churn-forest-2025-06-30
+API matches the notebook: True</code></pre>
+                </div>
+
+                <div class="card card-success">
+                    <h4>✅ The Most Valuable Test You Can Write</h4>
+                    <p>That last line compares the API's answers with the notebook's answers for the same customers. If anything between JSON and the model is wrong (a dtype, a column order, a renamed field), this is the check that catches it. Keep a test like it next to every model you deploy, and run it whenever anything changes.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="run" class="lesson-section">
+                <h2>🖥️ Run the Real Server</h2>
+
+                <p><code>TestClient</code> is for tests. To let other programs call the model, start a real web server. <strong>uvicorn</strong> is the server FastAPI recommends. In a terminal, in the folder that holds <code>serve.py</code>, <code>schemas.py</code> and the three JSON and skops files, with your environment active:</p>
+
+                <pre><code class="language-bash">uvicorn serve:app --reload</code></pre>
+
+                <p><code>serve:app</code> means "the object called <code>app</code> in the file <code>serve.py</code>". <code>--reload</code> restarts the server whenever you save a file, which is handy while developing and should be left off in production. uvicorn prints a line like <code>Uvicorn running on http://127.0.0.1:8000</code>, and the server keeps running until you press <kbd>Ctrl</kbd>+<kbd>C</kbd>.</p>
+
+                <p>Open <code>http://127.0.0.1:8000/docs</code> in a browser: FastAPI builds an interactive page from your schema, listing every endpoint and field with its limits, and a "Try it out" button sends real requests. To call the server from Python (a second notebook, or any other program), use an HTTP client such as <code>httpx</code>:</p>
+
+                <pre data-norun><code class="language-python">import httpx
+
+response = httpx.post("http://127.0.0.1:8000/predict", json=example)
+print(response.status_code, response.json())</code></pre>
+
+                <p>This block needs the running server, so it is not run on this page; the result is the same as the <code>TestClient</code> call above. Port numbers and the startup log will differ on your machine.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Where Does It Go From Here?</h4>
+                    <p>A production deployment usually wraps these files and the pinned <code>requirements.txt</code> into a container image (Docker), runs a few uvicorn workers behind a load balancer (<code>uvicorn serve:app --host 0.0.0.0 --port 8000 --workers 2</code>), and adds authentication so that only Pinecrest's own systems can call it. Those steps are about running any web service, not about machine learning, so this course stops here. The ML-specific parts are the ones you just built: a frozen artifact, a strict schema, and a test that the service matches the notebook.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="monitor" class="lesson-section">
+                <h2>📡 Monitoring and Data Drift</h2>
+
+                <p>A deployed model does not wear out like a machine. It fails in a quieter way: the customers it scores stop looking like the customers it learned from. A warehouse problem delays thousands of orders, a long clearance sale pushes discount use up, an email tracker breaks and every <code>email_opens_90d</code> arrives empty. The API keeps answering with status 200. Nothing crashes. The answers just become less trustworthy.</p>
+
+                <p>The hard part: Pinecrest only learns who really churned six months later. You cannot wait half a year to find out the model went wrong. So monitoring watches what you <em>can</em> see right away:</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Watch</th><th>Needs labels?</th><th>Catches</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Input drift: each feature's distribution vs the reference</td><td>No</td><td>Changed customers, broken data feeds</td></tr>
+                            <tr><td>Data quality: missing rates, rejected (422) requests</td><td>No</td><td>Upstream bugs, renamed fields</td></tr>
+                            <tr><td>Prediction drift: mean probability, offer rate</td><td>No</td><td>Anything that moves the scores</td></tr>
+                            <tr><td>Performance: AUC, precision of the offers</td><td>Yes, months later</td><td>The model really getting worse</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>🧪 A Simulated Shifted Batch</h3>
+                <p>To practice, make two batches from the test customers. The <strong>stable</strong> batch is the test set as it is: new customers from the same world. The <strong>shifted</strong> batch is the same customers after a rough season: half of them hit by a 60-day delivery delay, a long sale that raises everyone's discount share by half, and a broken tracker that loses a quarter of the email data.</p>
+
+                <pre><code class="language-python">rng = np.random.default_rng(42)       # seeded, so the simulation is the same every run
+
+stable = X_test.copy()
+
+shifted = X_test.copy()
+delayed = rng.random(len(shifted)) &lt; 0.5
+shifted.loc[delayed, "days_since_last_order"] = (shifted.loc[delayed, "days_since_last_order"] + 60).clip(upper=364)
+shifted["discount_share"] = (shifted["discount_share"] * 1.5).clip(upper=0.833)
+lost_email = rng.random(len(shifted)) &lt; 0.25
+shifted.loc[lost_email, "email_opens_90d"] = np.nan
+
+for name, frame in [("reference", X_train), ("stable", stable), ("shifted", shifted)]:
+    print(f"{name:10s} days {frame['days_since_last_order'].mean():5.1f}   "
+          f"discount {frame['discount_share'].mean():.3f}   email missing {frame['email_opens_90d'].isna().mean():.1%}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>reference  days  83.5   discount 0.209   email missing 9.3%
+stable     days  83.6   discount 0.204   email missing 7.9%
+shifted    days 112.7   discount 0.299   email missing 31.8%</code></pre>
+                </div>
+
+                <h3>📏 The Population Stability Index</h3>
+                <p>Comparing means is a start, but a mean can stay put while the shape changes. The <strong>Population Stability Index (PSI)</strong> compares whole distributions. Cut the reference data into ten bins with equal counts (deciles), count what share of the reference and of the new batch falls in each bin, and add up how far apart the shares are:</p>
+
+                <p class="text-center"><strong>PSI = Σ (new share − reference share) × ln(new share / reference share)</strong></p>
+
+                <p>If the shares match, every term is zero. The more the new batch piles into some bins and deserts others, the bigger the sum. A widely used rule of thumb: below 0.1 is stable, 0.1 to 0.25 is worth watching, above 0.25 is a real shift. These cut-offs are conventions, not laws; what matters is that you pick them before you look. Missing values get their own bin, so a broken feed shows up too.</p>
+
+                <pre><code class="language-python">def psi(reference, current, bins=10):
+    """Population Stability Index of one numeric column; missing values get their own bin."""
+    edges = np.unique(np.quantile(reference.dropna(), np.linspace(0, 1, bins + 1)))
+    edges[0], edges[-1] = -np.inf, np.inf
+
+    def shares(values):
+        counts = np.append(np.histogram(values.dropna(), bins=edges)[0], values.isna().sum())
+        return np.clip(counts / len(values), 1e-4, None)      # avoid log(0) for empty bins
+
+    ref, cur = shares(reference), shares(current)
+    return float(np.sum((cur - ref) * np.log(cur / ref)))
+
+
+drift = pd.DataFrame({
+    "psi_stable": {col: psi(X_train[col], stable[col]) for col in NUMERIC},
+    "psi_shifted": {col: psi(X_train[col], shifted[col]) for col in NUMERIC},
+})
+drift["status"] = pd.cut(drift["psi_shifted"], [-np.inf, 0.1, 0.25, np.inf], labels=["stable", "watch", "SHIFT"])
+print(drift.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>                       psi_stable  psi_shifted  status
+tenure_months               0.008        0.008  stable
+orders_12m                  0.001        0.001  stable
+spend_12m                   0.005        0.005  stable
+avg_order_value             0.012        0.012  stable
+days_since_last_order       0.002        0.336   SHIFT
+returns_12m                 0.000        0.000  stable
+return_rate                 0.008        0.008  stable
+support_tickets_12m         0.001        0.001  stable
+discount_share              0.013        0.200   watch
+app_user                    0.000        0.000  stable
+email_opens_90d             0.009        0.350   SHIFT</code></pre>
+                </div>
+
+                <p>The stable batch stays well under 0.1 for every feature: ordinary sampling noise. The shifted batch flags recency and email opens as SHIFT and the discount share as "watch" (multiplying by 1.5 moved it less than you might expect, because the many small shares stay small), and every feature you did not touch stays stable. That is what a good drift check does: it points at <em>which</em> inputs moved, which is where an investigation starts.</p>
+
+                <h3>📈 Prediction Drift</h3>
+                <p>Now send both batches through the API, as the weekly job would, and compare the scores with the reference numbers stored in <code>churn_serving.json</code>:</p>
+
+                <pre><code class="language-python">import matplotlib.pyplot as plt
+
+batch_scores = {}
+for name, frame in [("stable", stable), ("shifted", shifted)]:
+    batch_scores[name] = pd.DataFrame(client.post("/predict_batch", json=to_json_records(frame)).json())
+    s = batch_scores[name]
+    print(f"{name:9s} mean probability {s['churn_probability'].mean():.3f}   offers {s['offer'].mean():.1%}")
+print(f"reference mean probability {serving['reference_mean_probability']:.3f}   "
+      f"offers {serving['reference_offer_rate']:.1%}")
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), layout="constrained")
+bins = np.linspace(0, 364, 27)
+axes[0].hist(X_train["days_since_last_order"], bins=bins, density=True, alpha=0.6, color="#667eea", label="reference (training)")
+axes[0].hist(shifted["days_since_last_order"], bins=bins, density=True, alpha=0.6, color="#e67e22", label="shifted batch")
+axes[0].set_xlabel("days_since_last_order")
+axes[0].set_ylabel("Density")
+axes[0].set_title("Input drift: recency")
+axes[0].legend()
+pbins = np.linspace(0, 1, 21)
+axes[1].hist(batch_scores["stable"]["churn_probability"], bins=pbins, alpha=0.6, color="#667eea", label="stable batch")
+axes[1].hist(batch_scores["shifted"]["churn_probability"], bins=pbins, alpha=0.6, color="#e67e22", label="shifted batch")
+axes[1].axvline(THRESHOLD, color="black", linestyle="--", linewidth=1, label=f"offer threshold {THRESHOLD}")
+axes[1].set_xlabel("Predicted churn probability")
+axes[1].set_ylabel("Customers")
+axes[1].set_title("Prediction drift")
+axes[1].legend()
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>stable    mean probability 0.163   offers 24.1%
+shifted   mean probability 0.209   offers 35.7%
+reference mean probability 0.166   offers 24.4%</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/mlops_deployment_drift.png" alt="Two histograms. Left: days since last order for the training reference and the shifted batch; the shifted batch has far fewer customers under 50 days and more between 60 and 160 days. Right: predicted churn probabilities for the stable and shifted batches; the shifted batch has fewer customers near zero and more above the 0.25 offer threshold." width="1100" height="440" loading="lazy">
+                    <figcaption>The delivery delay moves recency to the right (left), and the scores follow: more customers cross the 0.25 offer threshold (right).</figcaption>
+                </figure>
+
+                <h3>🔍 What Should Pinecrest Do?</h3>
+                <p>The three changes need three different answers, and telling them apart is the real skill:</p>
+                <ul>
+                    <li><strong>The broken email tracker</strong> is a <em>data-quality bug</em>. The customers did not change; the pipe did. Fix the feed. Do not retrain on broken data, or the model learns the bug.</li>
+                    <li><strong>The delivery delay</strong> is a <em>real change</em> in the customers (often called covariate shift). Customers who have not received anything for months may genuinely be at higher risk, so the higher scores may be right. The offer budget, though, was planned for the reference offer rate, so someone has to decide whether to spend more.</li>
+                    <li><strong>The sale</strong> is a change Pinecrest caused itself. Discount reliance was a churn warning in normal times; during a store-wide sale it may mean nothing. When the meaning of a feature changes, the relationship the model learned can go stale (<em>concept drift</em>), and only labels can confirm it.</li>
+                </ul>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Drift Is a Question, Not a Verdict</h4>
+                    <p>Input drift does not prove the model is wrong, and no drift does not prove it is right. Drift tells you where to look. The final word comes when the labels arrive: in January, Pinecrest will know which July customers churned, and can compute the AUC and offer precision on them. Plan for that check from day one by logging every prediction with its inputs, the model version and a timestamp.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Most deployment bugs live in the seam between JSON and the model. These four are the classics.</p>
+
+                <h3>1. Sending NaN in JSON</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">client.post("/predict", json={**example, "email_opens_90d": float("nan")})</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Out of range float values are not JSON compliant: nan</code></pre>
+                </div>
+                <p><strong>What it means:</strong> JSON has no NaN, so the HTTP client refuses to encode it. This is what happens when you send <code>frame.to_dict("records")</code> straight from pandas. <strong>Fix:</strong> send missing values as <code>None</code> (JSON <code>null</code>), as <code>to_json_records</code> does. The schema says which fields may be <code>null</code>.</p>
+
+                <h3>2. A Missing Column at Prediction Time</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">churn_model.predict_proba(X_test.drop(columns="email_opens_90d"))</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: columns are missing: {'email_opens_90d'}</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the <code>ColumnTransformer</code> selects columns by name and remembers which ones it was fitted on. A caller that leaves a column out (or renames it) gets this error, if they call the model directly. <strong>Fix:</strong> never let callers build the table. The schema makes every feature an explicit field, and <code>to_frame</code> builds the table with <code>columns=FEATURES</code>.</p>
+
+                <h3>3. Building the Frame Without the Training dtypes</h3>
+
+                <pre><code class="language-python">row = {**example, "age_group": None}
+no_dtypes = pd.DataFrame([row], columns=FEATURES)
+with_dtypes = no_dtypes.astype(serving["dtypes"])
+
+print(no_dtypes["age_group"].dtype, round(churn_model.predict_proba(no_dtypes)[0, 1], 4))
+print(with_dtypes["age_group"].dtype, round(churn_model.predict_proba(with_dtypes)[0, 1], 4))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>object 0.0719
+str 0.0708</code></pre>
+                </div>
+                <p><strong>What happened:</strong> in a one-row table, a <code>None</code> makes the column type <code>object</code>, and the imputer does not recognize a bare <code>None</code> as missing. It passes it through, the encoder treats it as an unknown category, and the model scores a slightly different customer. No error, no warning, a different number. Here the gap is small; for other customers, or other models, it can be large enough to flip the offer decision. This kind of difference between training and serving is called <strong>training-serving skew</strong>. <strong>Fix:</strong> store the training dtypes with the model and apply them with <code>astype</code>, then test that the API matches the notebook on real rows, including rows with missing values.</p>
+
+                <h3>4. Pydantic Version 1 Habits</h3>
+
+                <p>Many tutorials online were written for pydantic 1, whose method names changed in version 2. The old names still work for now, with a warning (caught here so you can read it):</p>
+
+                <pre><code class="language-python">import warnings
+
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    customer.dict()
+
+print(caught[0].category.__name__)
+print(str(caught[0].message).split(".")[0])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>PydanticDeprecatedSince20
+The `dict` method is deprecated; use `model_dump` instead</code></pre>
+                </div>
+                <p><strong>Fix:</strong> use the version 2 names: <code>model_dump()</code> instead of <code>dict()</code>, <code>model_dump_json()</code> instead of <code>json()</code>, <code>model_validate()</code> instead of <code>parse_obj()</code>, and <code>model_config = ConfigDict(...)</code> instead of an inner <code>class Config</code>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: A Weekly Drift Report</h2>
+
+                <p>The churn API scores customers for the care team every Monday. Your job: write a reusable monitoring module, run it on three weeks of incoming customers, and produce a short report that says, for each week, whether the scores can be trusted and what to check. Work in the same folder as <code>serve.py</code> (the project uses <code>churn_serving.json</code>, <code>churn_reference.csv</code> and the model files from the lesson). Allow about 45 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load the serving metadata, the reference and the client <span class="step-time">(5 min)</span></h3>
+                    <p>Start a fresh notebook. Everything the monitor needs was saved in the lesson.</p>
+                    <pre><code class="language-python">import json
+
+import numpy as np
+import pandas as pd
+from fastapi.testclient import TestClient
+from sklearn.model_selection import train_test_split
+
+import serve
+
+with open("churn_serving.json") as f:
+    serving = json.load(f)
+reference = pd.read_csv("churn_reference.csv")
+client = TestClient(serve.app)
+
+customers = pd.read_csv("data/customers_churn.csv")
+_, incoming = train_test_split(customers, test_size=0.25, stratify=customers["churned"], random_state=42)
+incoming = incoming[serving["features"]].reset_index(drop=True)
+
+print(serving["version"], reference.shape, incoming.shape)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>churn-forest-2025-06-30 (4500, 17) (1500, 16)</code></pre>
+                    </div>
+                    <p>The 1,500 test customers stand in for three weeks of new traffic, 500 a week.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Write the monitoring module <span class="step-time">(15 min)</span></h3>
+                    <p>Put the checks in a file, <code>monitor.py</code>, so the weekly job and your notebook share one implementation. <code>drift_report</code> returns one row per numeric feature with its PSI, its missing rate in both datasets and a status.</p>
+                    <pre data-file="monitor.py"><code class="language-python">"""monitor.py: input-drift checks for the churn API."""
+import numpy as np
+import pandas as pd
+
+PSI_WATCH, PSI_SHIFT = 0.10, 0.25
+
+
+def psi(reference, current, bins=10):
+    """Population Stability Index of one numeric column; missing values get their own bin."""
+    edges = np.unique(np.quantile(reference.dropna(), np.linspace(0, 1, bins + 1)))
+    edges[0], edges[-1] = -np.inf, np.inf
+
+    def shares(values):
+        counts = np.append(np.histogram(values.dropna(), bins=edges)[0], values.isna().sum())
+        return np.clip(counts / len(values), 1e-4, None)
+
+    ref, cur = shares(reference), shares(current)
+    return float(np.sum((cur - ref) * np.log(cur / ref)))
+
+
+def drift_report(reference, current, columns):
+    """One row per column: PSI, missing rate in reference and current, and a status."""
+    rows = []
+    for col in columns:
+        value = psi(reference[col], current[col])
+        status = "SHIFT" if value &gt; PSI_SHIFT else "watch" if value &gt; PSI_WATCH else "stable"
+        rows.append({"feature": col, "psi": round(value, 3),
+                     "missing_ref": round(reference[col].isna().mean(), 3),
+                     "missing_now": round(current[col].isna().mean(), 3), "status": status})
+    return pd.DataFrame(rows).sort_values("psi", ascending=False).reset_index(drop=True)</code></pre>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Simulate three weeks <span class="step-time">(5 min)</span></h3>
+                    <p>Week 1 is ordinary. In week 2 a new-member campaign brings in many brand-new customers (tenure of 1 to 5 months for 40% of the rows). In week 3 the email tracker breaks completely.</p>
+                    <pre><code class="language-python">rng = np.random.default_rng(42)
+
+week1 = incoming.iloc[0:500].copy()
+
+week2 = incoming.iloc[500:1000].copy()
+new_members = rng.random(len(week2)) &lt; 0.4
+week2.loc[new_members, "tenure_months"] = rng.integers(1, 6, new_members.sum())
+
+week3 = incoming.iloc[1000:1500].copy()
+week3["email_opens_90d"] = np.nan
+
+weeks = {"week 1": week1, "week 2": week2, "week 3": week3}
+for name, w in weeks.items():
+    print(f"{name}: tenure {w['tenure_months'].mean():.1f}  email missing {w['email_opens_90d'].isna().mean():.0%}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>week 1: tenure 44.0  email missing 8%
+week 2: tenure 25.0  email missing 6%
+week 3: tenure 42.7  email missing 100%</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Score each week through the API <span class="step-time">(10 min)</span></h3>
+                    <p>Use the batch endpoint, exactly as the Monday job would, and keep the scores.</p>
+                    <pre><code class="language-python">def to_json_records(frame):
+    return frame.astype(object).where(frame.notna(), None).to_dict(orient="records")
+
+
+scores = {}
+for name, w in weeks.items():
+    response = client.post("/predict_batch", json=to_json_records(w))
+    scores[name] = pd.DataFrame(response.json())
+    print(name, response.status_code, len(scores[name]), "scores")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>week 1 200 500 scores
+week 2 200 500 scores
+week 3 200 500 scores</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Build the weekly report <span class="step-time">(10 min)</span></h3>
+                    <p>For each week, run the drift report and keep the headline numbers: the most-drifted feature, the overall status, the mean probability and the offer rate next to the reference values.</p>
+                    <pre><code class="language-python">from monitor import drift_report
+
+numeric = reference.drop(columns="churn_probability").select_dtypes("number").columns
+
+summary = []
+for name, w in weeks.items():
+    report = drift_report(reference, w, numeric)
+    top = report.iloc[0]
+    summary.append({"week": name, "top_feature": top["feature"], "top_psi": top["psi"],
+                    "n_shift": int((report["status"] == "SHIFT").sum()),
+                    "mean_p": round(scores[name]["churn_probability"].mean(), 3),
+                    "offer_rate": round(scores[name]["offer"].mean(), 3)})
+
+summary = pd.DataFrame(summary).set_index("week")
+print(summary)
+print(f"reference: mean_p {serving['reference_mean_probability']:.3f}  offer_rate {serving['reference_offer_rate']:.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>            top_feature  top_psi  n_shift  mean_p  offer_rate
+week                                                         
+week 1    tenure_months    0.033        0   0.162       0.242
+week 2    tenure_months    0.383        1   0.189       0.276
+week 3  email_opens_90d    8.368        1   0.176       0.246
+reference: mean_p 0.166  offer_rate 0.244</code></pre>
+                    </div>
+                    <p>Week 1 is ordinary: its biggest PSI is 0.033 and its scores sit right on the reference. Week 2's new members push <code>tenure_months</code> past 0.25, and the mean score rises with them, because the model learned that brand-new customers churn more. Week 3's PSI of 8.4 looks absurd, but it is honest: 100% of the email values fall into the "missing" bin, which held 9% of the reference. A PSI that large almost always means a broken feed, not changed customers. Notice that week 3's scores barely moved (0.176 against 0.166). The pipeline's imputer quietly filled every missing value with the training median, so the model scored 500 customers as if they were all average email readers. Nothing in the scores would have warned you; only the missing-rate and PSI checks did.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save the report and write the note <span class="step-time">(5 min)</span></h3>
+                    <p>Save the table and print the note the care team will read. The note names an action for each week, built from your own numbers.</p>
+                    <pre><code class="language-python">summary.to_csv("drift_report.csv")
+
+actions = {
+    "stable": "Scores look normal. Use the offer list as planned.",
+    "data": "Data-quality problem: fix the feed, then re-score. Do not use this week's list.",
+    "change": "Customers have changed. Use the list, but flag it for review when labels arrive.",
+}
+for name, w in weeks.items():
+    report = drift_report(reference, w, numeric)
+    shifted = report[report["status"] == "SHIFT"]
+    if shifted.empty:
+        verdict = "stable"
+    elif (shifted["missing_now"] &gt; shifted["missing_ref"] + 0.2).any():
+        verdict = "data"
+    else:
+        verdict = "change"
+    print(f"{name}: {actions[verdict]}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>week 1: Scores look normal. Use the offer list as planned.
+week 2: Customers have changed. Use the list, but flag it for review when labels arrive.
+week 3: Data-quality problem: fix the feed, then re-score. Do not use this week's list.</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li><code>monitor.py</code> holds <code>psi</code> and <code>drift_report</code>, and the notebook imports them instead of copying them</li>
+                        <li>All three weeks were scored through <code>/predict_batch</code> with status 200, and missing values were sent as <code>null</code></li>
+                        <li>Week 1 shows no SHIFT, week 2 flags <code>tenure_months</code>, week 3 flags <code>email_opens_90d</code></li>
+                        <li>Your summary compares each week's mean probability and offer rate with the reference values in <code>churn_serving.json</code></li>
+                        <li><code>drift_report.csv</code> is saved, and your note gives a different action for a data bug than for a real change</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue in the project notebook, so <code>client</code>, <code>serving</code>, <code>reference</code>, <code>incoming</code> and <code>week1</code> already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Read the Rejections</h3>
+                    <p>Take the first incoming customer as a dictionary, set <code>tenure_months</code> to 0 and <code>loyalty_tier</code> to <code>"Platinum"</code>, add a field <code>"customer_id"</code>, and post it to <code>/predict</code>. Print the status code and one line per problem. Which of the three problems would pydantic have <em>ignored</em> without <code>extra="forbid"</code>?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>to_json_records(incoming.head(1))[0]</code> gives a JSON-ready dictionary for one customer.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">one = to_json_records(incoming.head(1))[0]
+one.update({"tenure_months": 0, "loyalty_tier": "Platinum", "customer_id": "C102112"})
+
+response = client.post("/predict", json=one)
+print(response.status_code)
+for problem in response.json()["detail"]:
+    print(problem["loc"][-1], "-&gt;", problem["msg"])</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>422
+tenure_months -&gt; Input should be greater than or equal to 1
+loyalty_tier -&gt; Input should be 'Basic', 'Silver' or 'Gold'
+customer_id -&gt; Extra inputs are not permitted</code></pre>
+                        </div>
+                        <p>Without <code>extra="forbid"</code>, pydantic silently drops unknown fields, so <code>customer_id</code> would pass. Forbidding extras catches typos such as <code>"tenure_month"</code> that would otherwise vanish (and then fail as a missing field anyway, with a less helpful message). Whether to forbid or ignore extras is a design choice: forbidding is stricter for callers, ignoring is friendlier when callers send extra context.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: A Model-Info Endpoint</h3>
+                    <p>Callers often need to know which model they are talking to. Add a <code>GET /model-info</code> endpoint that returns the version, the threshold, the test AUC and the number of features. Write it in a new file <code>serve_info.py</code> that imports <code>app</code> from <code>serve</code> and adds the route, then test it with a fresh <code>TestClient</code>.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Decorators work on an app imported from another module: <code>@app.get("/model-info")</code> registers the route on that same app object.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre data-file="serve_info.py" data-norun><code class="language-python">"""serve_info.py: the churn API plus a model-info endpoint."""
+from serve import CARD, SERVING, app
+
+
+@app.get("/model-info")
+def model_info() -&gt; dict:
+    return {"version": SERVING["version"], "threshold": SERVING["threshold"], "estimator": CARD["estimator"],
+            "test_auc": CARD["test_auc"], "n_features": len(SERVING["features"])}</code></pre>
+                        <pre><code class="language-python">import serve_info
+
+info_client = TestClient(serve_info.app)
+print(info_client.get("/model-info").json())</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>{'version': 'churn-forest-2025-06-30', 'threshold': 0.25, 'estimator': 'forest', 'test_auc': 0.8612, 'n_features': 16}</code></pre>
+                        </div>
+                        <p>Start this version with <code>uvicorn serve_info:app</code>. In a real project you would simply add the endpoint to <code>serve.py</code>; a separate file keeps the lesson's file unchanged.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Drift in a Category</h3>
+                    <p>PSI works for categories too: the "bins" are simply the categories. Write <code>category_psi(reference, current)</code> using <code>value_counts(normalize=True)</code> on both, aligned on the same categories (missing ones count as share 0, clipped to 0.0001). Then build a batch from <code>incoming</code> where Online shoppers are twice as common (hint: concatenate the Online rows twice) and compare its <code>home_store</code> PSI with week 1's.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>pd.concat([ref_shares, cur_shares], axis=1).fillna(0).clip(lower=1e-4)</code> lines the two up, one column each.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">def category_psi(reference, current):
+    shares = pd.concat([reference.value_counts(normalize=True, dropna=False),
+                        current.value_counts(normalize=True, dropna=False)], axis=1).fillna(0).clip(lower=1e-4)
+    ref, cur = shares.iloc[:, 0], shares.iloc[:, 1]
+    return float(((cur - ref) * np.log(cur / ref)).sum())
+
+
+online_heavy = pd.concat([incoming, incoming[incoming["home_store"] == "Online"]])
+print(f"week 1       {category_psi(reference['home_store'], week1['home_store']):.3f}")
+print(f"online-heavy {category_psi(reference['home_store'], online_heavy['home_store']):.3f}")
+print(online_heavy["home_store"].value_counts(normalize=True).round(3).head(2))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>week 1       0.007
+online-heavy 0.162
+home_store
+Online    0.635
+Boise     0.111
+Name: proportion, dtype: float64</code></pre>
+                        </div>
+                        <p>Week 1's store mix is stable (0.007). The online-heavy batch reaches 0.162, in the "watch" band: Online shoppers jump from about 44% of customers to 64%. That matters for a model that learned different churn rates by store, and it is the kind of change a marketing campaign can cause overnight.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Statistical vs Practical Drift (Stretch)</h3>
+                    <p>The FAQ warns that a statistical test flags harmless differences in big batches. See it happen. Nudge week 1's <code>discount_share</code> up by 3% (multiply by 1.03), then compare it with the reference twice: as it is (500 rows), and as a 30,000-row sample drawn from it with replacement (a busy month at the same mix). For each, print the PSI (from <code>monitor.py</code>) and the p-value of <code>scipy.stats.ks_2samp</code>. Which measure changes its verdict when only the sample size changes?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>nudged.sample(30_000, replace=True, random_state=42)</code> builds the big batch. A p-value below 0.05 is the usual "significant" line.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from scipy.stats import ks_2samp
+from monitor import psi
+
+nudged = week1["discount_share"] * 1.03
+busy_month = nudged.sample(30_000, replace=True, random_state=42)
+
+for name, current in [("500 rows", nudged), ("30,000 rows", busy_month)]:
+    p_value = ks_2samp(reference["discount_share"], current).pvalue
+    print(f"{name:12s} PSI {psi(reference['discount_share'], current):.3f}   KS p-value {p_value:.4f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>500 rows     PSI 0.022   KS p-value 0.4166
+30,000 rows  PSI 0.021   KS p-value 0.0000</code></pre>
+                        </div>
+                        <p>The PSI says the same thing twice: a tiny shift (0.02, far below the 0.1 "watch" line). The KS test changes its mind: with 500 rows the difference is not significant (p = 0.42), with 30,000 rows of the same mix it is overwhelming (p below 0.0001). Nothing about the customers changed between the two lines, only the count. A significance test answers "can I detect any difference?", which with enough data is always yes; PSI answers "how big is it?", which is what an alert should be about.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> A caller posts a customer with <code>"discount_share": 1.4</code> to the lesson's <code>/predict</code> endpoint. What happens?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Does the model ever see this request? Think about what runs before the endpoint function.">
+                                A) The model returns a very high churn probability with status 200
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The schema says discount_share must be at most 1. FastAPI validates the body with pydantic before calling the function, so the model never runs and the caller gets a 422 listing the problem.">
+                                B) FastAPI answers 422 and the body explains which field is wrong
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A 500 means the server crashed. Is an invalid request the server's fault?">
+                                C) The server crashes with status 500
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> What does this print?</p>
+                        <pre><code class="language-python">from pydantic import BaseModel, Field
+
+
+class QuizOrder(BaseModel):
+    units: int = Field(ge=1)
+    coupon: str | None = None
+
+
+print(QuizOrder(units="3").units * 2)</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="pydantic's default mode is lax. Can the text 3 be read as a whole number?">
+                                A) A <code>ValidationError</code>, because <code>"3"</code> is a string
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="That would be string repetition. What type does units have after validation?">
+                                B) <code>33</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="In lax mode pydantic converts the string 3 to the integer 3, which passes ge=1. The attribute is an int, so doubling it gives 6. coupon is optional and defaults to None.">
+                                C) <code>6</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> This week <code>days_since_last_order</code> has a PSI of 0.31 and the mean predicted churn probability jumped. Labels will not arrive for six months. What is the best next step?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Drift says where to look, not what is wrong. A broken feed calls for a fix, a real change in customers may mean the higher scores are right, and only labels can confirm whether the model got worse.">
+                                A) Find out why recency changed: a data bug, or a real change in customers
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Which labels would you retrain on? This week's churn outcomes are not known yet.">
+                                B) Retrain the model on this week's batch immediately
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Accuracy cannot drop in your dashboard without labels. Does that mean nothing is wrong?">
+                                C) Ignore it until the model's accuracy drops
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> Which of these monitoring checks can only be done once the churn labels are known?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="PSI compares input distributions. Does it need to know who churned?">
+                                A) PSI of each input feature against the reference
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The model produces these numbers right away. What do they not tell you?">
+                                B) The mean predicted probability and the offer rate
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="AUC compares predictions with real outcomes, so it needs the labels, which for churn arrive months later. That is why the label-free checks matter so much in the meantime.">
+                                C) The AUC on last quarter's customers
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> Why does the lesson store reference prediction statistics from <code>cross_val_predict</code> instead of from <code>churn_model.predict_proba(X_train)</code>?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="It is actually slower: it fits five extra models. What is different about the predictions it makes?">
+                                A) It is faster than predicting on the training data
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The fitted model has seen every training row, so its predictions on them are more extreme than on new customers. Out-of-fold predictions come from models that did not see the row, so they look like live traffic should.">
+                                B) Predictions on rows the model trained on are over-confident; out-of-fold predictions look like new data
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="cross_val_predict does not change churn_model at all. What does it return?">
+                                C) It makes the deployed model more accurate
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Why FastAPI and not Flask?</summary>
+                    <p>Both work. Flask is older and very widely used, but you write input checks yourself. FastAPI builds validation, error messages and the interactive <code>/docs</code> page from the same pydantic types, which is exactly what a model API needs. The ideas in this lesson (a frozen artifact, a strict schema, a match test) carry over to any framework.</p>
+                </details>
+                <details>
+                    <summary>Should the server retrain the model when drift appears?</summary>
+                    <p>Not automatically. Retraining needs labels, which arrive months later, and retraining on a broken feed teaches the model the bug. Most teams retrain on a schedule (for churn, perhaps quarterly) with fresh labeled data, compare the new model with the old one on the same held-out data, and switch only if it is better. Drift alerts are a reason to investigate or to retrain early, not a trigger to retrain blindly.</p>
+                </details>
+                <details>
+                    <summary>Why not use a statistical test such as Kolmogorov-Smirnov instead of PSI?</summary>
+                    <p>You can (<code>scipy.stats.ks_2samp</code>), and it is a good second opinion. Be careful with large batches: a test's p-value answers "is there <em>any</em> difference?", and with tens of thousands of rows even a harmless difference becomes "significant". PSI measures <em>how big</em> the difference is, which is what an alert needs. Many teams look at both.</p>
+                </details>
+                <details>
+                    <summary>Is it a privacy problem to log every request?</summary>
+                    <p>It can be. The log holds customer behavior linked to IDs, so it deserves the same protection as the customer database: limited access, a retention period, and no fields you do not need. Log what monitoring and the later performance check require (inputs, score, model version, time, an ID to join labels later) and nothing more.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Add request logging to the service: a FastAPI dependency or a few lines inside <code>predict_batch</code> that append each scored customer (inputs, probability, model version, a UTC timestamp) to a CSV file. Then write a script that reads the last seven days of the log and runs <code>drift_report</code> on it. Finally, simulate the arrival of labels: join the true <code>churned</code> values for the test customers and compute AUC and the precision of the offers, the check the drift report was standing in for.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> List every place in this lesson where the model could have returned a wrong number without any error (there are at least four). For each one, write the check that would catch it. Which of those checks would you set up first on a real project, and why?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Serving means letting other software call your model; ship the fitted <code>Pipeline</code> together with its feature list, dtypes, threshold and version</li>
+                        <li>A pydantic schema describes valid input; FastAPI uses it to reject bad requests with a 422 before the model runs</li>
+                        <li>Rebuild the training table exactly (columns, order, dtypes) in one function, and test that the API's answers match the notebook's</li>
+                        <li><code>TestClient</code> tests endpoints without a server; <code>uvicorn serve:app</code> runs the real one, with interactive docs at <code>/docs</code></li>
+                        <li>NaN is not JSON: send missing values as <code>null</code></li>
+                        <li>Without labels, monitor input drift (PSI), data quality (missing rates, rejections) and prediction drift (mean score, offer rate)</li>
+                        <li>Drift is a question: a data bug needs a fix, a real change needs a decision, and only labels can confirm the model got worse</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You turned a notebook model into a three-endpoint web service with validated input</li>
+                        <li>You proved the service gives the same answers as the notebook</li>
+                        <li>You found a silent training-serving skew bug and fixed it with stored dtypes</li>
+                        <li>You built a reusable drift monitor and a weekly report that separates data bugs from real change</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="case_study_churn.html"><strong>Lesson 13.1: Case Study: Predicting Churn</strong></a> you will pull the whole course together on one problem: frame Pinecrest's churn question in business terms, catch the planted leak, compare and tune models inside a Pipeline, choose the offer threshold from the costs, explain the model, and write it up for a manager who will never read your code.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Start the real server with <code>uvicorn serve:app --reload</code> and send one request from the <code>/docs</code> page.</li>
+                    <li>Change the threshold in <code>churn_serving.json</code> to 0.4, restart the server, and watch the week 2 offer rate change. Who should own that number: the data scientist or the business?</li>
+                    <li>Keep <code>serve.py</code>, <code>schemas.py</code> and <code>monitor.py</code>: they are a starting point for your capstone.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>Today your model left the notebook. It now has a front door, a bouncer and a smoke detector, which is more than many models in real companies ever get. If the web parts felt unfamiliar, that is fine: you do not need to become a web developer to ship models, you need the three habits you practiced here. Validate the input, prove the service matches the notebook, and keep watching after launch.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="mlops_intro.html" class="prev-lesson">← Previous: Reproducibility and Experiment Tracking</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="case_study_churn.html" class="next-lesson">Next: Case Study: Predicting Churn →</a>
+            </nav>
         </div>
-
-        <pre class="language-python"><code>class ModelServer:
-    """
-    Advanced model serving with caching and monitoring
-    """
-    
-    def __init__(self, model_path, cache_size=1000):
-        self.model = joblib.load(model_path)
-        self.cache = {}
-        self.cache_size = cache_size
-        self.metrics = {
-            'total_predictions': 0,
-            'cache_hits': 0,
-            'cache_misses': 0,
-            'avg_latency': 0,
-            'errors': 0
-        }
-        
-    def _get_cache_key(self, features):
-        """Generate cache key from features"""
-        return hash(tuple(features.flatten()))
-    
-    def predict_with_cache(self, features):
-        """Predict with caching"""
-        import time
-        
-        start_time = time.time()
-        cache_key = self._get_cache_key(features)
-        
-        # Check cache
-        if cache_key in self.cache:
-            self.metrics['cache_hits'] += 1
-            logger.info("Cache hit")
-            return self.cache[cache_key]
-        
-        # Make prediction
-        try:
-            prediction = self.model.predict(features)
-            
-            # Update cache (FIFO if full)
-            if len(self.cache) >= self.cache_size:
-                # Remove oldest entry
-                oldest = next(iter(self.cache))
-                del self.cache[oldest]
-            
-            self.cache[cache_key] = prediction
-            self.metrics['cache_misses'] += 1
-            
-            # Update metrics
-            latency = time.time() - start_time
-            self.metrics['total_predictions'] += 1
-            self.metrics['avg_latency'] = (
-                (self.metrics['avg_latency'] * (self.metrics['total_predictions'] - 1) + latency) 
-                / self.metrics['total_predictions']
-            )
-            
-            return prediction
-            
-        except Exception as e:
-            self.metrics['errors'] += 1
-            logger.error(f"Prediction error: {str(e)}")
-            raise
-    
-    def get_metrics(self):
-        """Get server metrics"""
-        cache_hit_rate = (
-            self.metrics['cache_hits'] / 
-            max(self.metrics['cache_hits'] + self.metrics['cache_misses'], 1)
-        )
-        
-        return {
-            **self.metrics,
-            'cache_hit_rate': cache_hit_rate,
-            'cache_size': len(self.cache)
-        }
-    
-    def clear_cache(self):
-        """Clear prediction cache"""
-        self.cache.clear()
-        logger.info("Cache cleared")
-
-# Batch processing
-class BatchProcessor:
-    """
-    Batch processing for offline scoring
-    """
-    
-    def __init__(self, model_path, batch_size=1000):
-        self.model = joblib.load(model_path)
-        self.batch_size = batch_size
-        
-    def process_file(self, input_file, output_file):
-        """Process predictions from file"""
-        # Read data
-        data = pd.read_csv(input_file)
-        
-        # Process in batches
-        predictions = []
-        for i in range(0, len(data), self.batch_size):
-            batch = data.iloc[i:i + self.batch_size]
-            batch_pred = self.model.predict(batch)
-            predictions.extend(batch_pred)
-        
-        # Save results
-        data['prediction'] = predictions
-        data.to_csv(output_file, index=False)
-        
-        logger.info(f"Processed {len(data)} records")
-        return len(data)
-    
-    def process_stream(self, data_generator):
-        """Process streaming data"""
-        for batch in data_generator:
-            predictions = self.model.predict(batch)
-            yield predictions
-
-# Demonstrate serving patterns
-print("\n" + "=" * 50)
-print("MODEL SERVING PATTERNS")
-print("=" * 50)
-
-# Create sample model (mock)
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.datasets import make_classification
-
-X, y = make_classification(n_samples=100, n_features=4, random_state=42)
-model = RandomForestClassifier(n_estimators=10, random_state=42)
-model.fit(X, y)
-
-# Save model
-joblib.dump(model, 'models/demo_model.pkl')
-
-# Test server with caching
-server = ModelServer('models/demo_model.pkl', cache_size=10)
-
-# Make predictions
-test_features = X[:5]
-for i, features in enumerate(test_features):
-    pred = server.predict_with_cache(features.reshape(1, -1))
-    print(f"Prediction {i+1}: {pred[0]}")
-
-# Make same predictions again (should hit cache)
-print("\nRepeating predictions (should hit cache):")
-for i, features in enumerate(test_features[:3]):
-    pred = server.predict_with_cache(features.reshape(1, -1))
-    print(f"Cached prediction {i+1}: {pred[0]}")
-
-# Show metrics
-print("\nServer Metrics:")
-metrics = server.get_metrics()
-for key, value in metrics.items():
-    print(f"  {key}: {value}")</code></pre>
-
-        <h2>Load Testing and Performance</h2>
-        
-        <pre class="language-python"><code># load_test.py
-import asyncio
-import aiohttp
-import time
-import statistics
-from typing import List
-
-class LoadTester:
-    """
-    Load testing for deployed models
-    """
-    
-    def __init__(self, base_url="http://localhost:8000"):
-        self.base_url = base_url
-        self.results = []
-        
-    async def make_request(self, session, data):
-        """Make single async request"""
-        start_time = time.time()
-        try:
-            async with session.post(
-                f"{self.base_url}/predict",
-                json=data
-            ) as response:
-                result = await response.json()
-                latency = time.time() - start_time
-                return {
-                    'status': response.status,
-                    'latency': latency,
-                    'success': response.status == 200
-                }
-        except Exception as e:
-            return {
-                'status': 0,
-                'latency': time.time() - start_time,
-                'success': False,
-                'error': str(e)
-            }
-    
-    async def run_load_test(self, num_requests=100, concurrent=10):
-        """Run load test with concurrent requests"""
-        print(f"\nRunning load test: {num_requests} requests, {concurrent} concurrent")
-        
-        # Prepare test data
-        test_data = {'features': [1.0, 2.0, 3.0, 4.0]}
-        
-        # Create semaphore for concurrency control
-        semaphore = asyncio.Semaphore(concurrent)
-        
-        async def bounded_request(session):
-            async with semaphore:
-                return await self.make_request(session, test_data)
-        
-        # Run requests
-        async with aiohttp.ClientSession() as session:
-            start_time = time.time()
-            tasks = [bounded_request(session) for _ in range(num_requests)]
-            self.results = await asyncio.gather(*tasks)
-            total_time = time.time() - start_time
-        
-        # Calculate statistics
-        successful = [r for r in self.results if r['success']]
-        latencies = [r['latency'] for r in successful]
-        
-        stats = {
-            'total_requests': num_requests,
-            'successful_requests': len(successful),
-            'failed_requests': num_requests - len(successful),
-            'success_rate': len(successful) / num_requests * 100,
-            'total_time': total_time,
-            'requests_per_second': num_requests / total_time,
-            'avg_latency': statistics.mean(latencies) if latencies else 0,
-            'min_latency': min(latencies) if latencies else 0,
-            'max_latency': max(latencies) if latencies else 0,
-            'p50_latency': statistics.median(latencies) if latencies else 0,
-            'p95_latency': statistics.quantiles(latencies, n=20)[18] if len(latencies) > 20 else 0,
-            'p99_latency': statistics.quantiles(latencies, n=100)[98] if len(latencies) > 100 else 0
-        }
-        
-        return stats
-    
-    def print_results(self, stats):
-        """Print load test results"""
-        print("\n" + "=" * 50)
-        print("LOAD TEST RESULTS")
-        print("=" * 50)
-        print(f"Total Requests: {stats['total_requests']}")
-        print(f"Successful: {stats['successful_requests']} ({stats['success_rate']:.1f}%)")
-        print(f"Failed: {stats['failed_requests']}")
-        print(f"Total Time: {stats['total_time']:.2f}s")
-        print(f"Requests/Second: {stats['requests_per_second']:.1f}")
-        print("\nLatency Statistics (seconds):")
-        print(f"  Average: {stats['avg_latency']:.3f}")
-        print(f"  Min: {stats['min_latency']:.3f}")
-        print(f"  Max: {stats['max_latency']:.3f}")
-        print(f"  P50: {stats['p50_latency']:.3f}")
-        print(f"  P95: {stats['p95_latency']:.3f}")
-        print(f"  P99: {stats['p99_latency']:.3f}")
-
-# Example load test
-print("\n" + "=" * 50)
-print("LOAD TESTING EXAMPLE")
-print("=" * 50)
-print("""
-To run load test:
-1. Start your model API server
-2. Run the load test:
-
-import asyncio
-tester = LoadTester()
-stats = asyncio.run(tester.run_load_test(num_requests=1000, concurrent=50))
-tester.print_results(stats)
-""")</code></pre>
-
-        <h2>Production Deployment Checklist</h2>
-        
-        <div class="summary-box">
-            <h3>✅ Deployment Checklist</h3>
-            <ul>
-                <li><strong>Model:</strong> Versioned, tested, documented</li>
-                <li><strong>API:</strong> RESTful endpoints, input validation, error handling</li>
-                <li><strong>Container:</strong> Docker image, health checks, resource limits</li>
-                <li><strong>Security:</strong> Authentication, HTTPS, input sanitization</li>
-                <li><strong>Monitoring:</strong> Metrics, logging, alerting</li>
-                <li><strong>Scaling:</strong> Load balancer, auto-scaling, caching</li>
-                <li><strong>Testing:</strong> Unit tests, integration tests, load tests</li>
-                <li><strong>Documentation:</strong> API docs, deployment guide, runbook</li>
-                <li><strong>Rollback:</strong> Version control, quick rollback strategy</li>
-                <li><strong>Compliance:</strong> Data privacy, audit logs, regulations</li>
-            </ul>
-        </div>
-
-        <h2>Best Practices</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 Deployment Best Practices</h3>
-            <ul>
-                <li><strong>Blue-Green Deployment:</strong> Zero-downtime deployments</li>
-                <li><strong>Canary Releases:</strong> Gradual rollout to subset of users</li>
-                <li><strong>Feature Flags:</strong> Enable/disable features without deployment</li>
-                <li><strong>Circuit Breakers:</strong> Prevent cascade failures</li>
-                <li><strong>Rate Limiting:</strong> Protect against abuse</li>
-                <li><strong>Request Validation:</strong> Validate all inputs</li>
-                <li><strong>Async Processing:</strong> Use queues for heavy computations</li>
-                <li><strong>Model Warm-up:</strong> Pre-load models before serving</li>
-                <li><strong>Graceful Shutdown:</strong> Handle in-flight requests</li>
-                <li><strong>Observability:</strong> Structured logging, distributed tracing</li>
-            </ul>
-        </div>
-
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Build Production API</h3>
-            <p>Create a production-ready model API:</p>
-            <ul>
-                <li>Implement FastAPI with proper validation</li>
-                <li>Add authentication and rate limiting</li>
-                <li>Implement caching layer</li>
-                <li>Add comprehensive logging</li>
-                <li>Create Docker container</li>
-            </ul>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: Deploy to Cloud</h3>
-            <p>Deploy model to cloud platform:</p>
-            <ul>
-                <li>Choose cloud provider (AWS/GCP/Azure)</li>
-                <li>Set up container registry</li>
-                <li>Configure auto-scaling</li>
-                <li>Implement monitoring dashboard</li>
-                <li>Set up CI/CD pipeline</li>
-            </ul>
-        </div>
-
-        <h2>Summary</h2>
-        
-        <div class="summary-box">
-            <h3>✅ You've Learned</h3>
-            <ul>
-                <li>Different deployment patterns and when to use them</li>
-                <li>Building REST APIs with Flask and FastAPI</li>
-                <li>Docker containerization for ML models</li>
-                <li>Model serving with caching and optimization</li>
-                <li>Load testing and performance monitoring</li>
-                <li>Production deployment best practices</li>
-                <li>Security and scaling considerations</li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> A model in a notebook helps no one until it's deployed. Which part
-            of taking a model to production — the API, the container, the release strategy — felt most unfamiliar, and how
-            would you build confidence in it before real users depend on it?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Deployment turns a saved model into a service others can call — most commonly a REST API for real-time predictions, or batch/streaming jobs.</li>
-                <li>Flask is simple and familiar; FastAPI adds async performance, type validation, and automatic docs.</li>
-                <li>Docker packages the model, code, and dependencies together so it runs identically everywhere.</li>
-                <li>Safe rollouts (blue-green, canary), load testing, and a deployment checklist protect users from bad releases.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now take a trained model out of the notebook and stand it up as a containerized, testable prediction
-        service — and choose a rollout strategy that lets you ship changes without risking downtime.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>Flask or FastAPI for a model API?</summary>
-            <p>FastAPI is the modern default: async support, request validation via type hints, and auto-generated docs.
-            Flask is fine for quick prototypes or when you already have a Flask stack.</p>
-        </details>
-        <details>
-            <summary>Why bother with Docker?</summary>
-            <p>It eliminates "works on my machine" problems by bundling the exact Python version, libraries, and model
-            artifact. The same image runs on your laptop, CI, and the cloud unchanged.</p>
-        </details>
-        <details>
-            <summary>What's the difference between blue-green and canary deployment?</summary>
-            <p>Blue-green keeps two full environments and switches all traffic at once (easy instant rollback). Canary
-            sends a small slice of traffic to the new version first, expanding only if metrics stay healthy.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Shipping the model is only the beginning — next comes watching it in production, catching drift and
-        degradation before they hurt users.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Serve a saved model behind a FastAPI endpoint and call it with a sample request.</li>
-            <li>Write a Dockerfile for the service, build the image, and run the container locally.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Crossing the gap from "it works in training" to "it serves real requests" is where many models stall — and
-            you just built that bridge. This is the skill that makes your ML work actually count. Well done!</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="mlops_intro.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="mlops_monitoring.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -987,24 +1235,10 @@ tester.print_results(stats)
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
     <script src="js/course-enhancements.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-        mermaid.initialize({ 
-            startOnLoad: true,
-            theme: 'default',
-            themeVariables: {
-                primaryColor: '#f0f0f0',
-                primaryTextColor: '#333',
-                primaryBorderColor: '#667eea',
-                lineColor: '#667eea',
-                secondaryColor: '#e0e7ff',
-                tertiaryColor: '#fff'
-            }
-        });
-    </script>
 </body>
 </html>

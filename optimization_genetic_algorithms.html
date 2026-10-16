@@ -3,1087 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about Genetic Algorithms for optimization in machine learning - evolutionary computation for complex problem solving.">
+    <meta name="description" content="How genetic algorithms search by selection, crossover and mutation, a 25-line implementation compared with random search, and where they fit in machine learning. Python Machine Learning going-further reading.">
+    <meta name="author" content="Ray de la Paz">
     <title>Genetic Algorithms - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#optimization">Optimization</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#optimization">Optimization</a></li>
-            <li aria-current="page">Genetic Algorithms</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>🧬 Genetic Algorithms: Evolution-Inspired Optimization</h1>
+        <div class="container">
+            <header>
+                <h1>🔭 Going Further: Genetic Algorithms</h1>
+                <p class="lead">Genetic algorithms search for good solutions by imitating evolution: keep the fitter candidates, mix them, mutate them, repeat. They are simple and flexible, and in machine learning they are a niche tool rather than a default.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Explain how genetic algorithms mimic natural selection to search a solution space</li>
-                <li>Represent candidate solutions as chromosomes and design an effective fitness function</li>
-                <li>Implement the core operators: selection, crossover, and mutation</li>
-                <li>Apply a genetic algorithm to a real ML task such as feature selection or hyperparameter tuning</li>
-                <li>Tune population size, mutation rate, and generations, and judge when a GA beats grid or random search</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Implement a genetic algorithm from scratch that selects the best feature subset (or hyperparameters) for a classifier.</p>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 25 minutes</li>
+                    <li><span class="meta-label">📋 Builds on</span> <a href="dimensionality_feature_selection.html">Lesson 2.4: Feature Selection</a> and <a href="hyperparameter_tuning.html">Lesson 6.2: Hyperparameter Tuning</a></li>
+                    <li><span class="meta-label">📂 Data</span> None: a classic test function</li>
+                </ul>
+            </header>
+
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Reading</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">The Idea</a></li>
+                        <li><a href="#code" class="toc-link">A Genetic Algorithm in 25 Lines</a></li>
+                        <li><a href="#library" class="toc-link">Use a Library When You Can</a></li>
+                        <li><a href="#ml" class="toc-link">Where GAs Meet Machine Learning</a></li>
+                        <li><a href="#verdict" class="toc-link">An Honest Verdict</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <section id="idea" class="lesson-section">
+                <h2>🧬 The Idea</h2>
+
+                <p>Most of the optimizers in this course follow a gradient: they compute which direction makes the loss smaller and take a step that way. That needs a smooth, differentiable objective. Many real problems do not have one. Which 12 of 40 features to keep, which order to visit 30 stores in, which combination of settings for a pipeline: these are choices among discrete options, the objective may be noisy, and there is no slope to follow.</p>
+
+                <p>A <strong>genetic algorithm</strong> (GA) needs only a way to score a candidate. It keeps a <strong>population</strong> of candidate solutions, each encoded as a list of values (a <strong>chromosome</strong>), and repeats four steps:</p>
+
+                <div class="mermaid">
+graph TD
+    A["Random population"] --> B["Score each one: fitness"]
+    B --> C["Selection: favor the fitter"]
+    C --> D["Crossover: mix two parents"]
+    D --> E["Mutation: small random changes"]
+    E -->|"next generation"| B
+                </div>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: Breeding Trail Routes</h4>
+                    <p>Imagine planning hiking routes by committee. You sketch fifty random routes and time each one (fitness). The faster routes get to "have children": a new route takes the first half of one good route and the second half of another (crossover), and now and then a random detour is swapped (mutation). After many rounds the population is full of fast routes, without anyone having worked out the best route mathematically. Nothing guarantees the very best one is found; you usually find a good one.</p>
+                </div>
+
+                <p>Each operator has many variants. <strong>Selection</strong>: tournament selection (pick a few at random, keep the best) is simple and robust; roulette-wheel selection picks in proportion to fitness. <strong>Crossover</strong>: one-point, two-point or uniform (each gene from a random parent). <strong>Mutation</strong>: flip a bit, or add a little Gaussian noise to a number. <strong>Elitism</strong> copies the best individual unchanged into the next generation, so the best score never gets worse.</p>
+            </section>
+
+            <section id="code" class="lesson-section">
+                <h2>🧪 A Genetic Algorithm in 25 Lines</h2>
+
+                <p>The test problem is the <strong>Rastrigin function</strong>, a standard benchmark for optimizers: a bowl covered in a regular grid of bumps, so it has a huge number of local minima, and one global minimum of 0 at the origin. Gradient descent started at a random point gets stuck in the nearest dip. Here it has five dimensions.</p>
+
+                <pre><code class="language-python">import numpy as np
+
+
+def rastrigin(x):
+    """Many local minima; the global minimum is 0 at (0, 0, ..., 0). Works on one point or a whole population."""
+    return 10 * x.shape[-1] + (x**2 - 10 * np.cos(2 * np.pi * x)).sum(axis=-1)
+
+
+def genetic_algorithm(f, dim=5, pop_size=60, generations=80, mutation_sd=0.3, seed=42):
+    rng = np.random.default_rng(seed)
+    pop = rng.uniform(-5.12, 5.12, size=(pop_size, dim))
+    history = []
+    for _ in range(generations):
+        fitness = f(pop)                                          # lower is better here
+        history.append(fitness.min())
+        a, b = rng.integers(pop_size, size=(2, pop_size))         # tournament selection
+        parents = np.where((fitness[a] &lt; fitness[b])[:, None], pop[a], pop[b])
+        mask = rng.random((pop_size, dim)) &lt; 0.5                  # uniform crossover
+        children = np.where(mask, parents, np.roll(parents, 1, axis=0))
+        mutate = rng.random((pop_size, dim)) &lt; 0.2                # Gaussian mutation
+        children = np.clip(children + mutate * rng.normal(0, mutation_sd, (pop_size, dim)), -5.12, 5.12)
+        children[0] = pop[fitness.argmin()]                       # elitism
+        pop = children
+    fitness = f(pop)
+    return pop[fitness.argmin()], fitness.min(), history
+
+
+best_x, best_f, history = genetic_algorithm(rastrigin)
+print("best value found:", round(best_f, 3))
+print("best point:", best_x.round(2))
+print("best value every 10 generations:", np.round(history[::10], 2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>best value found: 0.166
+best point: [-0.01 -0.    0.01  0.01 -0.02]
+best value every 10 generations: [44.63  7.97  3.33  1.84  1.19  1.1   1.1   0.32]</code></pre>
+                </div>
+
+                <p>The best value falls from about 45 to under 0.2, and the best point sits within a few hundredths of the true answer at the origin. Is that impressive? Only a baseline can say. Random search with exactly the same number of function evaluations:</p>
+
+                <pre><code class="language-python">evaluations = 60 * 81                     # population x (generations + final scoring)
+rng = np.random.default_rng(42)
+samples = rng.uniform(-5.12, 5.12, size=(evaluations, 5))
+print(f"random search, {evaluations} evaluations: best value {rastrigin(samples).min():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>random search, 4860 evaluations: best value 23.065</code></pre>
+                </div>
+
+                <p>Random search, given the same budget, does far worse in five dimensions: the GA's selection and crossover concentrate the search where good solutions are. That is the honest case for evolutionary methods on rugged, many-dimensional objectives.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Many Knobs, Few Guarantees</h4>
+                    <p>Population size, mutation rate, mutation size and the number of generations all change the result, and the best settings differ by problem. Change the seed and you get a different answer. A GA gives no proof that it found the optimum and no rule for when to stop. Always run it with several seeds and compare it with a simple baseline, exactly as you would a model.</p>
+                </div>
+            </section>
+
+            <section id="library" class="lesson-section">
+                <h2>📦 Use a Library When You Can</h2>
+
+                <p>Writing a GA is a great way to understand one; maintaining your own is rarely worth it. SciPy ships <strong>differential evolution</strong>, a closely related evolutionary method for continuous problems that is well tested and needs almost no tuning:</p>
+
+                <pre><code class="language-python">from scipy.optimize import differential_evolution
+
+result = differential_evolution(rastrigin, bounds=[(-5.12, 5.12)] * 5, rng=42)
+print(f"best value {result.fun:.6f} at {result.x.round(4)} after {result.nfev} evaluations")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>best value 0.000000 at [ 0. -0.  0. -0. -0.] after 12156 evaluations</code></pre>
+                </div>
+
+                <p>It reaches the exact optimum, at the cost of more evaluations than the hand-written GA used. For discrete or multi-objective problems, dedicated libraries such as DEAP and pymoo implement many GA variants, including NSGA-II, the standard algorithm for finding trade-off curves between two objectives (for example accuracy against model size).</p>
+            </section>
+
+            <section id="ml" class="lesson-section">
+                <h2>🤝 Where GAs Meet Machine Learning</h2>
+
+                <ul>
+                    <li><strong>Feature selection.</strong> Encode a feature subset as a string of 0s and 1s and use cross-validated score as fitness. It works, but every fitness evaluation is a full cross-validation, so it is slow, and scoring thousands of subsets on the same folds invites overfitting the selection to those folds. Lesson 2.4's simpler methods (L1 regularization, RFECV and sequential selection, plus Lesson 7.1's permutation importance) are usually the better first choice. If you do use a GA, keep a test set it never sees.</li>
+                    <li><strong>Hyperparameter and pipeline search.</strong> TPOT evolves whole scikit-learn pipelines (see the <a href="future_automl.html">AutoML reading</a>). For expensive models with a handful of continuous hyperparameters, Bayesian optimization usually needs fewer evaluations; evolutionary methods shine with many, mixed, conditional choices.</li>
+                    <li><strong>Neuroevolution.</strong> Evolving network weights or architectures. Evolution strategies have been used as a parallel-friendly alternative to gradient methods in reinforcement learning, and evolutionary search has found competitive network architectures, but gradient descent remains the standard way to train networks.</li>
+                    <li><strong>Outside ML, in operations.</strong> Scheduling, routing and layout problems, where solutions are discrete and constraints are messy, are where GAs earn their keep. A delivery route for Pinecrest's four stores is a more natural fit than a churn model.</li>
+                </ul>
+            </section>
+
+            <section id="verdict" class="lesson-section">
+                <h2>⚖️ An Honest Verdict</h2>
+
+                <p>Genetic algorithms are general, easy to explain and easy to parallelize, because each candidate in a generation can be scored independently. They need no gradient and tolerate noise. In return, they are slow per unit of improvement, sensitive to their settings and come with no guarantees. When a gradient exists, use it. When evaluations are expensive and the space is small and continuous, try Bayesian optimization first. When the problem is discrete, constrained, multi-objective or simply strange, a GA or another evolutionary method is a reasonable, well-understood tool.</p>
+
+                <div class="card card-success">
+                    <h4>✅ Key Takeaways</h4>
+                    <ul>
+                        <li>A GA keeps a population of candidates and repeats selection, crossover and mutation, guided only by a fitness score</li>
+                        <li>On a rugged test function it beats random search with the same budget, but it has many settings and no guarantee of the optimum</li>
+                        <li>Prefer a tested library (SciPy's <code>differential_evolution</code>, DEAP, pymoo) over your own implementation</li>
+                        <li>In ML, GAs appear in feature selection and pipeline search; watch the cost and the risk of overfitting the search</li>
+                        <li>Gradient methods for differentiable problems, Bayesian optimization for small expensive searches, evolutionary methods for discrete and messy ones</li>
+                    </ul>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Reading Navigation">
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="dimensionality_feature_selection.html">Related lesson: Feature Selection</a>
+                <a href="future_automl.html">Reading: AutoML</a>
+                <a href="future_federated.html">Reading: Federated Learning</a>
+                <a href="future_quantum_ml.html">Reading: Quantum Machine Learning</a>
+            </nav>
         </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>Genetic Algorithms (GA) are optimization techniques inspired by natural evolution. They work by evolving a population of candidate solutions through selection, crossover, and mutation operations. GAs are particularly effective for complex optimization problems where traditional methods struggle, including feature selection, hyperparameter tuning, neural architecture search, and combinatorial optimization problems.</p>
-        </div>
-
-        <h2>How Genetic Algorithms Work</h2>
-        
-        <div class="mermaid">
-        flowchart TB
-            A[Initial Population] --> B[Fitness Evaluation]
-            B --> C{Termination<br/>Criteria?}
-            
-            C -->|No| D[Selection]
-            D --> E[Crossover]
-            E --> F[Mutation]
-            F --> G[New Population]
-            G --> B
-            
-            C -->|Yes| H[Best Solution]
-            
-            subgraph "Genetic Operations"
-                D
-                E
-                F
-            end
-            
-            style A fill:#e3f2fd
-            style H fill:#c8e6c9
-            style D fill:#fff9c4
-            style E fill:#fff9c4
-            style F fill:#fff9c4
-        </div>
-
-        <h2>GA Components</h2>
-        
-        <div class="mermaid">
-        graph LR
-            A[Chromosome] --> B[Gene 1]
-            A --> C[Gene 2]
-            A --> D[Gene 3]
-            A --> E[Gene N]
-            
-            F[Population] --> G[Individual 1]
-            F --> H[Individual 2]
-            F --> I[Individual M]
-            
-            J[Selection Methods] --> K[Roulette Wheel]
-            J --> L[Tournament]
-            J --> M[Rank-Based]
-            
-            N[Crossover Types] --> O[Single-Point]
-            N --> P[Two-Point]
-            N --> Q[Uniform]
-            
-            style A fill:#e3f2fd
-            style F fill:#fff3e0
-            style J fill:#e8f5e9
-            style N fill:#f3e5f5
-        </div>
-
-        <h2>Setting Up Environment</h2>
-        
-        <pre class="language-python"><code>import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from typing import List, Tuple, Callable
-import random
-from copy import deepcopy
-from sklearn.datasets import make_classification
-from sklearn.model_selection import cross_val_score
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-import warnings
-warnings.filterwarnings('ignore')
-
-# Set style for visualizations
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
-
-# Set random seed
-np.random.seed(42)
-random.seed(42)
-
-print("Genetic Algorithms for Optimization")
-print("=" * 50)</code></pre>
-
-        <h2>Basic Genetic Algorithm Implementation</h2>
-        
-        <pre class="language-python"><code>class GeneticAlgorithm:
-    """
-    Basic Genetic Algorithm implementation
-    """
-    
-    def __init__(self, 
-                 population_size: int = 50,
-                 chromosome_length: int = 10,
-                 generations: int = 100,
-                 crossover_rate: float = 0.8,
-                 mutation_rate: float = 0.01,
-                 elitism: int = 2,
-                 selection_method: str = 'tournament',
-                 verbose: bool = True):
-        """
-        Initialize Genetic Algorithm
-        
-        Parameters:
-        -----------
-        population_size : int
-            Number of individuals in population
-        chromosome_length : int
-            Length of each chromosome
-        generations : int
-            Number of generations to evolve
-        crossover_rate : float
-            Probability of crossover
-        mutation_rate : float
-            Probability of mutation per gene
-        elitism : int
-            Number of best individuals to preserve
-        selection_method : str
-            Selection strategy ('tournament', 'roulette', 'rank')
-        """
-        self.population_size = population_size
-        self.chromosome_length = chromosome_length
-        self.generations = generations
-        self.crossover_rate = crossover_rate
-        self.mutation_rate = mutation_rate
-        self.elitism = elitism
-        self.selection_method = selection_method
-        self.verbose = verbose
-        
-        self.population = None
-        self.best_individual = None
-        self.best_fitness = -np.inf
-        self.fitness_history = []
-        
-    def initialize_population(self) -> np.ndarray:
-        """
-        Initialize random population
-        """
-        return np.random.randint(0, 2, size=(self.population_size, self.chromosome_length))
-    
-    def fitness_function(self, individual: np.ndarray) -> float:
-        """
-        Calculate fitness of an individual (to be overridden)
-        """
-        # Example: maximize the number of 1s
-        return np.sum(individual)
-    
-    def evaluate_population(self, population: np.ndarray) -> np.ndarray:
-        """
-        Evaluate fitness for entire population
-        """
-        return np.array([self.fitness_function(ind) for ind in population])
-    
-    def selection(self, population: np.ndarray, fitness_scores: np.ndarray) -> np.ndarray:
-        """
-        Select parents for next generation
-        """
-        if self.selection_method == 'tournament':
-            return self.tournament_selection(population, fitness_scores)
-        elif self.selection_method == 'roulette':
-            return self.roulette_wheel_selection(population, fitness_scores)
-        elif self.selection_method == 'rank':
-            return self.rank_selection(population, fitness_scores)
-        else:
-            raise ValueError(f"Unknown selection method: {self.selection_method}")
-    
-    def tournament_selection(self, population: np.ndarray, fitness_scores: np.ndarray, 
-                            tournament_size: int = 3) -> np.ndarray:
-        """
-        Tournament selection
-        """
-        selected_idx = []
-        
-        for _ in range(len(population)):
-            # Random tournament
-            tournament_idx = np.random.choice(len(population), tournament_size, replace=False)
-            tournament_fitness = fitness_scores[tournament_idx]
-            
-            # Select winner
-            winner_idx = tournament_idx[np.argmax(tournament_fitness)]
-            selected_idx.append(winner_idx)
-        
-        return population[selected_idx]
-    
-    def roulette_wheel_selection(self, population: np.ndarray, fitness_scores: np.ndarray) -> np.ndarray:
-        """
-        Roulette wheel selection
-        """
-        # Ensure positive fitness values
-        min_fitness = np.min(fitness_scores)
-        if min_fitness < 0:
-            fitness_scores = fitness_scores - min_fitness + 1
-        
-        # Calculate selection probabilities
-        total_fitness = np.sum(fitness_scores)
-        probabilities = fitness_scores / total_fitness
-        
-        # Select individuals
-        selected_idx = np.random.choice(
-            len(population), 
-            size=len(population), 
-            p=probabilities, 
-            replace=True
-        )
-        
-        return population[selected_idx]
-    
-    def rank_selection(self, population: np.ndarray, fitness_scores: np.ndarray) -> np.ndarray:
-        """
-        Rank-based selection
-        """
-        # Rank individuals
-        ranks = np.argsort(np.argsort(fitness_scores)) + 1
-        
-        # Calculate selection probabilities based on rank
-        probabilities = ranks / np.sum(ranks)
-        
-        # Select individuals
-        selected_idx = np.random.choice(
-            len(population), 
-            size=len(population), 
-            p=probabilities, 
-            replace=True
-        )
-        
-        return population[selected_idx]
-    
-    def crossover(self, parent1: np.ndarray, parent2: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Single-point crossover
-        """
-        if np.random.random() < self.crossover_rate:
-            # Choose crossover point
-            crossover_point = np.random.randint(1, len(parent1))
-            
-            # Create offspring
-            offspring1 = np.concatenate([parent1[:crossover_point], parent2[crossover_point:]])
-            offspring2 = np.concatenate([parent2[:crossover_point], parent1[crossover_point:]])
-            
-            return offspring1, offspring2
-        else:
-            return parent1.copy(), parent2.copy()
-    
-    def mutation(self, individual: np.ndarray) -> np.ndarray:
-        """
-        Bit-flip mutation for binary encoding
-        """
-        for i in range(len(individual)):
-            if np.random.random() < self.mutation_rate:
-                individual[i] = 1 - individual[i]  # Flip bit
-        
-        return individual
-    
-    def evolve(self):
-        """
-        Main evolution loop
-        """
-        # Initialize population
-        self.population = self.initialize_population()
-        
-        for generation in range(self.generations):
-            # Evaluate fitness
-            fitness_scores = self.evaluate_population(self.population)
-            
-            # Track best individual
-            best_idx = np.argmax(fitness_scores)
-            if fitness_scores[best_idx] > self.best_fitness:
-                self.best_fitness = fitness_scores[best_idx]
-                self.best_individual = self.population[best_idx].copy()
-            
-            self.fitness_history.append({
-                'generation': generation,
-                'best_fitness': self.best_fitness,
-                'avg_fitness': np.mean(fitness_scores),
-                'min_fitness': np.min(fitness_scores)
-            })
-            
-            if self.verbose and generation % 10 == 0:
-                print(f"Generation {generation}: Best Fitness = {self.best_fitness:.4f}, "
-                      f"Avg = {np.mean(fitness_scores):.4f}")
-            
-            # Create new population
-            new_population = []
-            
-            # Elitism: preserve best individuals
-            if self.elitism > 0:
-                elite_idx = np.argsort(fitness_scores)[-self.elitism:]
-                for idx in elite_idx:
-                    new_population.append(self.population[idx].copy())
-            
-            # Selection
-            selected_population = self.selection(self.population, fitness_scores)
-            
-            # Crossover and mutation
-            while len(new_population) < self.population_size:
-                # Select parents
-                parent_idx = np.random.choice(len(selected_population), 2, replace=False)
-                parent1 = selected_population[parent_idx[0]]
-                parent2 = selected_population[parent_idx[1]]
-                
-                # Crossover
-                offspring1, offspring2 = self.crossover(parent1, parent2)
-                
-                # Mutation
-                offspring1 = self.mutation(offspring1)
-                offspring2 = self.mutation(offspring2)
-                
-                # Add to new population
-                new_population.append(offspring1)
-                if len(new_population) < self.population_size:
-                    new_population.append(offspring2)
-            
-            self.population = np.array(new_population[:self.population_size])
-        
-        if self.verbose:
-            print(f"\nEvolution complete!")
-            print(f"Best fitness: {self.best_fitness:.4f}")
-            print(f"Best individual: {self.best_individual}")
-    
-    def plot_evolution(self):
-        """
-        Plot evolution progress
-        """
-        df_history = pd.DataFrame(self.fitness_history)
-        
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Fitness over generations
-        axes[0].plot(df_history['generation'], df_history['best_fitness'], 
-                    label='Best', linewidth=2, color='green')
-        axes[0].plot(df_history['generation'], df_history['avg_fitness'], 
-                    label='Average', linewidth=2, color='blue')
-        axes[0].plot(df_history['generation'], df_history['min_fitness'], 
-                    label='Minimum', linewidth=2, color='red', alpha=0.5)
-        axes[0].set_xlabel('Generation')
-        axes[0].set_ylabel('Fitness')
-        axes[0].set_title('Fitness Evolution')
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3)
-        
-        # Fitness improvement rate
-        improvement = df_history['best_fitness'].diff()
-        axes[1].bar(df_history['generation'], improvement, color='steelblue', alpha=0.7)
-        axes[1].set_xlabel('Generation')
-        axes[1].set_ylabel('Fitness Improvement')
-        axes[1].set_title('Generation-wise Improvement')
-        axes[1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Genetic Algorithm Evolution Progress', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-
-# Demonstrate basic GA
-print("\n" + "=" * 50)
-print("BASIC GENETIC ALGORITHM DEMO")
-print("=" * 50)
-
-# Simple OneMax problem: maximize number of 1s
-ga = GeneticAlgorithm(
-    population_size=50,
-    chromosome_length=50,
-    generations=100,
-    crossover_rate=0.8,
-    mutation_rate=0.02,
-    elitism=2,
-    selection_method='tournament'
-)
-
-ga.evolve()
-ga.plot_evolution()</code></pre>
-
-        <h2>GA for Feature Selection</h2>
-        
-        <pre class="language-python"><code>class GAFeatureSelection(GeneticAlgorithm):
-    """
-    Genetic Algorithm for feature selection in ML
-    """
-    
-    def __init__(self, X, y, estimator, cv=5, **kwargs):
-        """
-        Initialize GA for feature selection
-        
-        Parameters:
-        -----------
-        X : array-like
-            Feature matrix
-        y : array-like
-            Target variable
-        estimator : sklearn estimator
-            ML model to evaluate feature subsets
-        cv : int
-            Number of cross-validation folds
-        """
-        self.X = X
-        self.y = y
-        self.estimator = estimator
-        self.cv = cv
-        
-        # Chromosome length = number of features
-        super().__init__(chromosome_length=X.shape[1], **kwargs)
-        
-    def fitness_function(self, individual: np.ndarray) -> float:
-        """
-        Evaluate feature subset using cross-validation
-        """
-        # Select features where gene = 1
-        selected_features = np.where(individual == 1)[0]
-        
-        # Handle case with no features selected
-        if len(selected_features) == 0:
-            return 0.0
-        
-        # Evaluate model with selected features
-        X_subset = self.X[:, selected_features]
-        
-        try:
-            # Use cross-validation score as fitness
-            scores = cross_val_score(self.estimator, X_subset, self.y, cv=self.cv)
-            
-            # Combine accuracy and parsimony (fewer features is better)
-            accuracy = scores.mean()
-            parsimony_bonus = 0.01 * (1 - len(selected_features) / len(individual))
-            
-            return accuracy + parsimony_bonus
-            
-        except:
-            return 0.0
-    
-    def get_selected_features(self) -> np.ndarray:
-        """
-        Get indices of selected features
-        """
-        return np.where(self.best_individual == 1)[0]
-    
-    def print_results(self, feature_names=None):
-        """
-        Print feature selection results
-        """
-        selected_idx = self.get_selected_features()
-        
-        print("\n" + "=" * 50)
-        print("FEATURE SELECTION RESULTS")
-        print("=" * 50)
-        print(f"Total features: {self.chromosome_length}")
-        print(f"Selected features: {len(selected_idx)}")
-        print(f"Reduction: {(1 - len(selected_idx)/self.chromosome_length)*100:.1f}%")
-        print(f"Best fitness: {self.best_fitness:.4f}")
-        
-        if feature_names is not None:
-            print("\nSelected features:")
-            for idx in selected_idx:
-                print(f"  - {feature_names[idx]}")
-
-# Demonstrate feature selection
-print("\n" + "=" * 50)
-print("GA FOR FEATURE SELECTION")
-print("=" * 50)
-
-# Generate dataset
-X, y = make_classification(n_samples=500, n_features=30, n_informative=10,
-                          n_redundant=10, n_repeated=5, random_state=42)
-
-feature_names = [f'Feature_{i}' for i in range(30)]
-
-# Create GA feature selector
-ga_fs = GAFeatureSelection(
-    X=X,
-    y=y,
-    estimator=RandomForestClassifier(n_estimators=50, random_state=42),
-    cv=3,
-    population_size=30,
-    generations=50,
-    crossover_rate=0.8,
-    mutation_rate=0.05,
-    elitism=2,
-    verbose=True
-)
-
-# Run evolution
-ga_fs.evolve()
-
-# Print results
-ga_fs.print_results(feature_names)
-
-# Plot evolution
-ga_fs.plot_evolution()
-
-# Compare with using all features
-print("\n" + "=" * 50)
-print("COMPARISON")
-print("=" * 50)
-
-# All features
-rf_all = RandomForestClassifier(n_estimators=50, random_state=42)
-score_all = cross_val_score(rf_all, X, y, cv=3).mean()
-print(f"All features ({X.shape[1]}): {score_all:.4f}")
-
-# GA selected features
-selected_features = ga_fs.get_selected_features()
-X_selected = X[:, selected_features]
-score_selected = cross_val_score(rf_all, X_selected, y, cv=3).mean()
-print(f"GA selected features ({len(selected_features)}): {score_selected:.4f}")</code></pre>
-
-        <h2>GA for Hyperparameter Optimization</h2>
-        
-        <div class="mermaid">
-        flowchart LR
-            A[Hyperparameter Space] --> B[Encoding]
-            B --> C[Binary]
-            B --> D[Real-valued]
-            B --> E[Integer]
-            
-            C --> F[Chromosome]
-            D --> F
-            E --> F
-            
-            F --> G[GA Evolution]
-            G --> H[Decode]
-            H --> I[Train Model]
-            I --> J[Evaluate]
-            J --> K[Fitness]
-            K --> G
-            
-            G --> L[Best Hyperparameters]
-            
-            style A fill:#e3f2fd
-            style F fill:#fff9c4
-            style L fill:#c8e6c9
-        </div>
-
-        <pre class="language-python"><code>class GAHyperparameterTuning:
-    """
-    GA for hyperparameter optimization
-    """
-    
-    def __init__(self, param_bounds, X, y, estimator_class, cv=3):
-        """
-        Initialize GA for hyperparameter tuning
-        
-        Parameters:
-        -----------
-        param_bounds : dict
-            Dictionary of parameter names and (min, max) bounds
-        X : array-like
-            Feature matrix
-        y : array-like  
-            Target variable
-        estimator_class : class
-            ML model class to optimize
-        """
-        self.param_bounds = param_bounds
-        self.param_names = list(param_bounds.keys())
-        self.X = X
-        self.y = y
-        self.estimator_class = estimator_class
-        self.cv = cv
-        
-        # GA parameters
-        self.population_size = 20
-        self.generations = 30
-        self.mutation_rate = 0.1
-        self.crossover_rate = 0.8
-        
-        self.population = None
-        self.best_params = None
-        self.best_fitness = -np.inf
-        self.fitness_history = []
-        
-    def encode_params(self, params):
-        """
-        Encode parameters to chromosome [0, 1] range
-        """
-        encoded = []
-        for name in self.param_names:
-            value = params[name]
-            min_val, max_val = self.param_bounds[name]
-            
-            if isinstance(min_val, int):
-                # Integer parameter
-                normalized = (value - min_val) / (max_val - min_val)
-            else:
-                # Float parameter
-                normalized = (value - min_val) / (max_val - min_val)
-            
-            encoded.append(normalized)
-        
-        return np.array(encoded)
-    
-    def decode_params(self, chromosome):
-        """
-        Decode chromosome to parameters
-        """
-        params = {}
-        for i, name in enumerate(self.param_names):
-            min_val, max_val = self.param_bounds[name]
-            
-            if isinstance(min_val, int):
-                # Integer parameter
-                value = int(chromosome[i] * (max_val - min_val) + min_val)
-            else:
-                # Float parameter
-                value = chromosome[i] * (max_val - min_val) + min_val
-            
-            params[name] = value
-        
-        return params
-    
-    def fitness_function(self, chromosome):
-        """
-        Evaluate hyperparameters using cross-validation
-        """
-        # Decode chromosome to parameters
-        params = self.decode_params(chromosome)
-        
-        try:
-            # Create model with parameters
-            model = self.estimator_class(**params, random_state=42)
-            
-            # Evaluate using cross-validation
-            scores = cross_val_score(model, self.X, self.y, cv=self.cv)
-            
-            return scores.mean()
-        except:
-            return 0.0
-    
-    def initialize_population(self):
-        """
-        Initialize random population
-        """
-        return np.random.random((self.population_size, len(self.param_names)))
-    
-    def crossover(self, parent1, parent2):
-        """
-        Uniform crossover for real-valued encoding
-        """
-        if np.random.random() < self.crossover_rate:
-            mask = np.random.random(len(parent1)) < 0.5
-            offspring1 = np.where(mask, parent1, parent2)
-            offspring2 = np.where(mask, parent2, parent1)
-            return offspring1, offspring2
-        return parent1.copy(), parent2.copy()
-    
-    def mutate(self, chromosome):
-        """
-        Gaussian mutation for real-valued encoding
-        """
-        for i in range(len(chromosome)):
-            if np.random.random() < self.mutation_rate:
-                # Add Gaussian noise
-                chromosome[i] += np.random.normal(0, 0.1)
-                # Clip to valid range
-                chromosome[i] = np.clip(chromosome[i], 0, 1)
-        
-        return chromosome
-    
-    def optimize(self):
-        """
-        Run GA optimization
-        """
-        self.population = self.initialize_population()
-        
-        print("Starting hyperparameter optimization...")
-        
-        for generation in range(self.generations):
-            # Evaluate fitness
-            fitness_scores = np.array([self.fitness_function(ind) for ind in self.population])
-            
-            # Track best
-            best_idx = np.argmax(fitness_scores)
-            if fitness_scores[best_idx] > self.best_fitness:
-                self.best_fitness = fitness_scores[best_idx]
-                self.best_params = self.decode_params(self.population[best_idx])
-            
-            self.fitness_history.append({
-                'generation': generation,
-                'best_fitness': self.best_fitness,
-                'avg_fitness': np.mean(fitness_scores)
-            })
-            
-            if generation % 5 == 0:
-                print(f"Generation {generation}: Best Score = {self.best_fitness:.4f}")
-            
-            # Create new population
-            new_population = []
-            
-            # Elitism
-            new_population.append(self.population[best_idx].copy())
-            
-            # Tournament selection and reproduction
-            while len(new_population) < self.population_size:
-                # Tournament selection
-                tournament_idx = np.random.choice(self.population_size, 3)
-                winner_idx = tournament_idx[np.argmax(fitness_scores[tournament_idx])]
-                parent1 = self.population[winner_idx]
-                
-                tournament_idx = np.random.choice(self.population_size, 3)
-                winner_idx = tournament_idx[np.argmax(fitness_scores[tournament_idx])]
-                parent2 = self.population[winner_idx]
-                
-                # Crossover
-                offspring1, offspring2 = self.crossover(parent1, parent2)
-                
-                # Mutation
-                offspring1 = self.mutate(offspring1)
-                offspring2 = self.mutate(offspring2)
-                
-                new_population.append(offspring1)
-                if len(new_population) < self.population_size:
-                    new_population.append(offspring2)
-            
-            self.population = np.array(new_population[:self.population_size])
-        
-        print(f"\nOptimization complete!")
-        print(f"Best parameters: {self.best_params}")
-        print(f"Best score: {self.best_fitness:.4f}")
-        
-        return self.best_params
-
-# Demonstrate hyperparameter tuning
-print("\n" + "=" * 50)
-print("GA FOR HYPERPARAMETER TUNING")
-print("=" * 50)
-
-# Define parameter bounds for Random Forest
-param_bounds = {
-    'n_estimators': (10, 200),
-    'max_depth': (2, 30),
-    'min_samples_split': (2, 20),
-    'min_samples_leaf': (1, 10)
-}
-
-# Create optimizer
-ga_tuner = GAHyperparameterTuning(
-    param_bounds=param_bounds,
-    X=X,
-    y=y,
-    estimator_class=RandomForestClassifier,
-    cv=3
-)
-
-# Run optimization
-best_params = ga_tuner.optimize()
-
-# Plot optimization progress
-df_history = pd.DataFrame(ga_tuner.fitness_history)
-
-plt.figure(figsize=(10, 6))
-plt.plot(df_history['generation'], df_history['best_fitness'], 
-         label='Best Score', linewidth=2, color='green')
-plt.plot(df_history['generation'], df_history['avg_fitness'], 
-         label='Average Score', linewidth=2, color='blue')
-plt.xlabel('Generation')
-plt.ylabel('Cross-validation Score')
-plt.title('Hyperparameter Optimization Progress')
-plt.legend()
-plt.grid(True, alpha=0.3)
-plt.show()
-
-# Compare with default parameters
-print("\n" + "=" * 50)
-print("COMPARISON WITH DEFAULT PARAMETERS")
-print("=" * 50)
-
-# Default parameters
-rf_default = RandomForestClassifier(random_state=42)
-score_default = cross_val_score(rf_default, X, y, cv=3).mean()
-print(f"Default parameters: {score_default:.4f}")
-
-# GA optimized parameters
-rf_optimized = RandomForestClassifier(**best_params, random_state=42)
-score_optimized = cross_val_score(rf_optimized, X, y, cv=3).mean()
-print(f"GA optimized parameters: {score_optimized:.4f}")
-print(f"Improvement: {(score_optimized - score_default):.4f}")</code></pre>
-
-        <h2>Advanced GA Techniques</h2>
-        
-        <pre class="language-python"><code>class AdvancedGA:
-    """
-    Advanced GA techniques
-    """
-    
-    @staticmethod
-    def adaptive_mutation(generation, max_generations, initial_rate=0.1, final_rate=0.01):
-        """
-        Adaptive mutation rate that decreases over time
-        """
-        progress = generation / max_generations
-        return initial_rate * (1 - progress) + final_rate * progress
-    
-    @staticmethod
-    def multi_point_crossover(parent1, parent2, n_points=2):
-        """
-        Multi-point crossover
-        """
-        length = len(parent1)
-        
-        # Generate random crossover points
-        points = sorted(np.random.choice(length - 1, n_points, replace=False) + 1)
-        points = [0] + points + [length]
-        
-        # Create offspring
-        offspring1, offspring2 = parent1.copy(), parent2.copy()
-        
-        for i in range(0, len(points) - 1, 2):
-            start, end = points[i], points[i + 1]
-            offspring1[start:end] = parent2[start:end]
-            offspring2[start:end] = parent1[start:end]
-        
-        return offspring1, offspring2
-    
-    @staticmethod
-    def diversity_preservation(population, fitness_scores, diversity_weight=0.1):
-        """
-        Modify fitness scores to preserve population diversity
-        """
-        # Calculate pairwise distances
-        n = len(population)
-        distances = np.zeros((n, n))
-        
-        for i in range(n):
-            for j in range(i + 1, n):
-                # Hamming distance for binary encoding
-                dist = np.sum(population[i] != population[j])
-                distances[i, j] = distances[j, i] = dist
-        
-        # Calculate diversity score for each individual
-        diversity_scores = np.mean(distances, axis=1)
-        
-        # Normalize diversity scores
-        if diversity_scores.max() > 0:
-            diversity_scores = diversity_scores / diversity_scores.max()
-        
-        # Combine fitness and diversity
-        adjusted_fitness = fitness_scores + diversity_weight * diversity_scores
-        
-        return adjusted_fitness
-    
-    @staticmethod
-    def island_model(islands, migration_rate=0.1, migration_interval=10):
-        """
-        Island model for parallel GA evolution
-        """
-        # Simulate migration between islands
-        if np.random.random() < migration_rate:
-            n_islands = len(islands)
-            
-            for i in range(n_islands):
-                # Select migrant from island i
-                source_island = islands[i]
-                migrant_idx = np.random.randint(len(source_island))
-                migrant = source_island[migrant_idx].copy()
-                
-                # Send to random different island
-                target_island_idx = (i + np.random.randint(1, n_islands)) % n_islands
-                target_island = islands[target_island_idx]
-                
-                # Replace random individual in target island
-                replace_idx = np.random.randint(len(target_island))
-                target_island[replace_idx] = migrant
-        
-        return islands
-
-# Demonstrate advanced techniques
-print("\n" + "=" * 50)
-print("ADVANCED GA TECHNIQUES")
-print("=" * 50)
-
-# Test adaptive mutation
-print("\n1. Adaptive Mutation Rate:")
-for gen in [0, 25, 50, 75, 100]:
-    rate = AdvancedGA.adaptive_mutation(gen, 100)
-    print(f"  Generation {gen}: {rate:.4f}")
-
-# Test multi-point crossover
-print("\n2. Multi-point Crossover:")
-parent1 = np.array([1, 1, 1, 1, 1, 0, 0, 0, 0, 0])
-parent2 = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
-offspring1, offspring2 = AdvancedGA.multi_point_crossover(parent1, parent2, n_points=2)
-print(f"  Parent 1: {parent1}")
-print(f"  Parent 2: {parent2}")
-print(f"  Offspring 1: {offspring1}")
-print(f"  Offspring 2: {offspring2}")
-
-# Test diversity preservation
-print("\n3. Diversity Preservation:")
-small_pop = np.array([
-    [1, 1, 1, 1, 1],
-    [1, 1, 1, 1, 0],
-    [0, 0, 0, 0, 0],
-    [1, 0, 1, 0, 1]
-])
-fitness = np.array([5, 4, 0, 3])
-adjusted = AdvancedGA.diversity_preservation(small_pop, fitness)
-print(f"  Original fitness: {fitness}")
-print(f"  Adjusted fitness: {adjusted}")</code></pre>
-
-        <h2>Best Practices</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 GA Best Practices</h3>
-            <ul>
-                <li><strong>Population Size:</strong> Balance diversity and computation (typically 50-200)</li>
-                <li><strong>Selection Pressure:</strong> Too high causes premature convergence</li>
-                <li><strong>Mutation Rate:</strong> Start with 1/chromosome_length, adjust as needed</li>
-                <li><strong>Elitism:</strong> Preserve best solutions (typically 5-10% of population)</li>
-                <li><strong>Encoding:</strong> Choose appropriate representation for your problem</li>
-                <li><strong>Fitness Function:</strong> Include penalties for constraints</li>
-                <li><strong>Diversity:</strong> Monitor and maintain genetic diversity</li>
-                <li><strong>Parallelization:</strong> Use island models for large problems</li>
-                <li><strong>Hybrid Approaches:</strong> Combine GA with local search</li>
-                <li><strong>Early Stopping:</strong> Stop if no improvement for N generations</li>
-            </ul>
-        </div>
-
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Neural Architecture Search</h3>
-            <p>Use GA to design neural network architectures:</p>
-            <ul>
-                <li>Encode network topology in chromosome</li>
-                <li>Include number of layers, neurons, activation functions</li>
-                <li>Evaluate fitness on validation set</li>
-                <li>Compare with manually designed networks</li>
-            </ul>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: Multi-Objective GA</h3>
-            <p>Implement multi-objective optimization:</p>
-            <ul>
-                <li>Optimize accuracy and model complexity simultaneously</li>
-                <li>Implement Pareto frontier selection</li>
-                <li>Use NSGA-II algorithm concepts</li>
-                <li>Visualize trade-offs between objectives</li>
-            </ul>
-        </div>
-
-        <h2>Summary</h2>
-        
-        <div class="summary-box">
-            <h3>✅ You've Learned</h3>
-            <ul>
-                <li>Genetic Algorithm fundamentals and biological inspiration</li>
-                <li>Implementation of selection, crossover, and mutation</li>
-                <li>GA for feature selection in machine learning</li>
-                <li>Hyperparameter optimization using GA</li>
-                <li>Advanced techniques: adaptive rates, diversity preservation</li>
-                <li>When to use GA vs other optimization methods</li>
-                <li>Best practices for effective GA implementation</li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Genetic algorithms trade guaranteed optimality for the ability to explore
-            huge, rugged search spaces. When in your own work would "a good-enough answer, found fast" beat "the perfect answer,
-            found never"?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>A genetic algorithm evolves a population of candidate solutions using selection, crossover, and mutation.</li>
-                <li>The fitness function encodes what "good" means and steers the entire search.</li>
-                <li>Mutation preserves diversity and prevents premature convergence to a local optimum.</li>
-                <li>GAs shine on large, non-differentiable, or combinatorial search spaces where gradient-based methods fail.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now build an evolutionary optimizer from its basic operators and point it at real problems like feature selection
-        or hyperparameter search — a powerful alternative when conventional methods stall.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>When should I use a GA instead of grid or random search?</summary>
-            <p>Reach for a GA when the search space is huge, combinatorial, or non-differentiable and cheaper methods (grid, random,
-            or gradient-based) stall or can't be applied.</p>
-        </details>
-        <details>
-            <summary>How do I stop the population converging too early?</summary>
-            <p>Maintain diversity: use an adequate mutation rate, a large enough population, and diversity-preserving selection so the
-            search keeps exploring instead of collapsing onto one solution.</p>
-        </details>
-        <details>
-            <summary>Does a genetic algorithm guarantee the global optimum?</summary>
-            <p>No. GAs are heuristics — they usually find very good solutions but offer no proof of optimality. Their strength is
-            reliably good answers on problems where exact methods are infeasible.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>This introduces a whole family of metaheuristics. Next you can explore related nature-inspired optimizers such as particle
-        swarm optimization and simulated annealing, plus Bayesian optimization for smarter, sample-efficient search.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Change the mutation rate and observe its effect on how quickly the population converges.</li>
-            <li>Design a fitness function for a small optimization problem you care about and run the GA on it.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Evolution built everything alive. Harness the same idea in code and you can tackle optimization problems that stump
-            conventional methods — that's a genuinely powerful tool to have in your kit. Keep experimenting.</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="hyperparameter_bayesian.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="optimization_pso.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1091,24 +216,10 @@ print(f"  Adjusted fitness: {adjusted}")</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
     <script src="js/course-enhancements.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-        mermaid.initialize({ 
-            startOnLoad: true,
-            theme: 'default',
-            themeVariables: {
-                primaryColor: '#f0f0f0',
-                primaryTextColor: '#333',
-                primaryBorderColor: '#667eea',
-                lineColor: '#667eea',
-                secondaryColor: '#e0e7ff',
-                tertiaryColor: '#fff'
-            }
-        });
-    </script>
 </body>
 </html>

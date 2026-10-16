@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Key: Session 8</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">answers &amp; solutions · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Answer Key</div>
+    <h1>Session 8: CNNs and Sequence Models</h1>
+    <p class="sub">Answers and reasoning for every Session 8 item: the warm-up, both self-checks, the predict-then-run items, the lab reference outputs and debug handouts, the lesson pages' own quizzes and the exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Session <b>8</b></span>
+      <span class="chip"><b>12</b> self-check items</span>
+      <span class="chip">Confidential</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<p>Retrieval on Lessons 10.1 and 10.2. Accept answers in the learner's own words.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">What does this print? (Lesson 10.2)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> torch
+print(torch.tensor(np.zeros(<span class="s">3</span>)).dtype, torch.tensor(np.zeros(<span class="s">3</span>), dtype=torch.float32).dtype)</pre><div class="opts"><div class="opt correct"><code class="inline">torch.float64 torch.float32</code>: torch.tensor keeps NumPy's float64; layers want float32, so convert as you create.</div></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">Put the four lines of the batch loop in order: loss.backward(), optimizer.step(), optimizer.zero_grad(), loss = loss_fn(model(xb), yb). (10.2)</div><div class="opts"><div class="opt correct">optimizer.zero_grad(), loss = loss_fn(model(xb), yb), loss.backward(), optimizer.step().</div></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Your binary model ends with nn.Linear(32, 1) and trains with BCEWithLogitsLoss. Where does the sigmoid go? (10.2)</div><div class="opts"><div class="opt correct">Inside the loss during training; apply torch.sigmoid yourself only to report probabilities. Today's ten-class models follow the same rule with softmax and CrossEntropyLoss.</div></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">A model with dropout gives a different score for the same customer on every call, inside with torch.no_grad(). Why? (10.2)</div><div class="opts"><div class="opt correct">It is still in training mode: no_grad() stops gradient tracking but does not switch dropout off. Call model.eval().</div></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">On the churn table the PyTorch network scored test AUC 0.846 and gradient boosting 0.850. What was the verdict, and what kind of data should change it? (10.1, 10.2)</div><div class="opts"><div class="opt correct">Recommend boosting: a tie within the wobble, with far fewer choices. Images, sequences and text are where networks earn their keep: today's session.</div></div></div>
+
+  <div class="sec"><h2>10.3 · Convolutional Neural Networks: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="1" data-kind="short"><div class="qn">Q1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+conv = nn.Conv2d(<span class="s">3</span>, <span class="s">16</span>, kernel_size=<span class="s">3</span>, stride=<span class="s">2</span>, padding=<span class="s">1</span>)
+print(tuple(conv(torch.zeros(<span class="s">8</span>, <span class="s">3</span>, <span class="s">32</span>, <span class="s">32</span>)).shape))</pre><div class="opts"><div class="opt correct"><code class="inline">(8, 16, 16, 16)</code></div></div><div class="why"><b>Why:</b> Per side: (32 + 2 × 1 - 3) / 2 + 1 = 16.5, rounded down to 16. The batch stays 8 and the 16 filters give 16 channels.</div></div>
+  <div class="q" data-sc="2"><div class="qn">Q2</div><div class="qt">How many parameters does <code class="inline">nn.Conv2d(3, 8, kernel_size=3)</code> have?</div><div class="opts"><div class="opt correct">A) 224</div><div class="opt">B) 216</div><div class="opt">C) 72</div><div class="opt">D) 80</div></div><div class="why"><b>Why:</b> Each of the 8 filters spans all 3 input channels: 8 × (3 × 3 × 3) = 216 weights, plus 8 biases = 224.<br><b>B</b> is wrong: That forgets the 8 biases.<br><b>C</b> is wrong: That counts one input channel only (8 × 9).<br><b>D</b> is wrong: One input channel plus biases: every filter spans ALL incoming channels.</div></div>
+  <div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">Why does the lesson use <code class="inline">padding=1</code> with every 3 × 3 kernel?</div><div class="opts"><div class="opt">A) It halves the height and width</div><div class="opt">B) It adds a border of learnable weights</div><div class="opt correct">C) It keeps the height and width unchanged: (n + 2 - 3) / 1 + 1 = n</div><div class="opt">D) Grayscale images require it</div></div><div class="why"><b>Why:</b> A one-pixel border of zeros lets the 3 × 3 window sit centered on every pixel, so 28 stays 28. Without it, 28 becomes 26. Halving is the pooling layer's job.<br><b>A</b> is wrong: That is `MaxPool2d(2)` (or stride 2).<br><b>B</b> is wrong: The border is zeros, not weights.<br><b>D</b> is wrong: Padding works the same for any number of channels.</div></div>
+  <div class="q" data-sc="4" data-kind="short"><div class="qn">Q4</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">import</span> torch.nn.functional <span class="k">as</span> F
+x = torch.arange(<span class="s">16.0</span>).reshape(<span class="s">1</span>, <span class="s">1</span>, <span class="s">4</span>, <span class="s">4</span>)
+print(F.max_pool2d(x, <span class="s">2</span>).squeeze())</pre><div class="opts"><div class="opt correct"><code class="inline">tensor([[ 5.,  7.],         [13., 15.]])</code></div></div><div class="why"><b>Why:</b> The 4 × 4 grid holds 0 to 15 row by row. Max pooling keeps the largest value of each 2 × 2 block: 5 (0, 1, 4, 5), 7, 13 and 15. It has no weights.</div></div>
+  <div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">In the shift lab, the lesson's CNN loses about 12 points of test accuracy when every image moves 2 pixels to the right. Convolutions share weights across positions, so why does it lose anything?</div><div class="opts"><div class="opt">A) The model has no max pooling</div><div class="opt">B) The shifted images were scaled differently</div><div class="opt">C) Each convolution uses different weights at different positions</div><div class="opt correct">D) The <code class="inline">Flatten</code> + <code class="inline">Linear</code> head reads WHERE each feature map lit up, so positions still matter</div></div><div class="why"><b>Why:</b> The convolutions find a pattern anywhere, and pooling forgives a pixel or so. But the flattened maps go into a dense layer with one weight per position, which learned where features usually appear in centered images. Training on shifted copies (augmentation) is the usual remedy.<br><b>A</b> is wrong: It has two max-pooling layers; they buy only a pixel or two of tolerance.<br><b>B</b> is wrong: Shifting moves pixels; their values are unchanged.<br><b>C</b> is wrong: That is exactly what weight sharing rules out.</div></div>
+  <div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">This model fails. What should the first argument of its nn.Linear be?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+model = nn.Sequential(
+    nn.Conv2d(<span class="s">1</span>, <span class="s">64</span>, kernel_size=<span class="s">3</span>, padding=<span class="s">1</span>), nn.ReLU(), nn.MaxPool2d(<span class="s">2</span>),
+    nn.MaxPool2d(<span class="s">2</span>), nn.Flatten(), nn.Linear(<span class="s">64</span> * <span class="s">14</span> * <span class="s">14</span>, <span class="s">10</span>),
+)
+model(torch.zeros(<span class="s">64</span>, <span class="s">1</span>, <span class="s">28</span>, <span class="s">28</span>))</pre><div class="opts"><div class="opt">A) 12544 (64 × 14 × 14)</div><div class="opt correct">B) 3136 (64 × 7 × 7)</div><div class="opt">C) 1568 (32 × 7 × 7)</div><div class="opt">D) 64 (one number per filter)</div></div><div class="why"><b>Why:</b> The message reads <code class="inline">RuntimeError: mat1 and mat2 shapes cannot be multiplied (64x3136 and 125...</code>: the rows really have 3,136 numbers. Two poolings take 28 to 14 to 7, with 64 channels: 64 × 7 × 7. Trace a dummy batch instead of computing on paper.<br><b>A</b> is wrong: That counts only one pooling.<br><b>C</b> is wrong: That is the lesson's SmallCNN with 32 channels.<br><b>D</b> is wrong: 64 would need global average pooling first.</div></div>
+
+  <div class="sec"><h2>10.3 · Convolutional Neural Networks: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+print(nn.MaxPool2d(<span class="s">2</span>)(torch.zeros(<span class="s">5</span>, <span class="s">8</span>, <span class="s">28</span>, <span class="s">28</span>)).shape)</pre><div class="opts"><div class="opt correct"><code class="inline">torch.Size([5, 8, 14, 14])</code></div></div><div class="why"><b>Why:</b> Max pooling with a 2 × 2 window halves height and width and keeps batch and channels: (5, 8, 14, 14).</div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> nn.Conv2d(<span class="s">1</span>, <span class="s">4</span>, kernel_size=<span class="s">5</span>).parameters()))</pre><div class="opts"><div class="opt correct"><code class="inline">104</code></div></div><div class="why"><b>Why:</b> Four filters of 1 × 5 × 5 = 25 weights, plus 4 biases: 104.</div></div>
+
+  <div class="sec"><h2>10.4 · Sequence Models: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+out, h = nn.GRU(<span class="s">5</span>, <span class="s">8</span>, batch_first=<span class="k">True</span>)(torch.zeros(<span class="s">4</span>, <span class="s">10</span>, <span class="s">5</span>))
+print(tuple(out.shape), tuple(h.shape))</pre><div class="opts"><div class="opt correct"><code class="inline">(4, 10, 8) (1, 4, 8)</code></div></div><div class="why"><b>Why:</b> With batch_first=True, out holds the hidden state of size 8 after every one of the 10 steps of each of the 4 sequences; h holds only the last one, with a leading dimension for the number of layers.</div></div>
+  <div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">A store has 100 days of sales. How many training examples do windows of 7 days (each predicting the next day) give?</div><div class="opts"><div class="opt">A) 100</div><div class="opt">B) 94</div><div class="opt correct">C) 93</div><div class="opt">D) 7</div></div><div class="why"><b>Why:</b> The first target that has 7 days before it is day 8 (index 7), so targets run from index 7 to 99: 100 - 7 = 93 windows, exactly as the lesson's make_windows gives 10 - 4 = 6.<br><b>A</b> is wrong: The first seven days have no full window before them.<br><b>B</b> is wrong: Off by one: count the targets, from index 7 to 99.<br><b>D</b> is wrong: That is the window length.</div></div>
+  <div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">For Pinecrest's daily store sales, which forecast is the seasonal naive one?</div><div class="opts"><div class="opt correct">A) Tomorrow = the same weekday last week</div><div class="opt">B) Tomorrow = today</div><div class="opt">C) Tomorrow = the average of the training years</div><div class="opt">D) Tomorrow = the same date last year</div></div><div class="why"><b>Why:</b> The season that dominates daily sales is the week (Saturday sells almost twice what Tuesday does), so the seasonal naive forecast copies the value 7 days earlier: MAE $1,072 in 2025, against $1,350 for yesterday's value.<br><b>B</b> is wrong: That is the plain naive forecast.<br><b>C</b> is wrong: That ignores the weekly cycle and the trends.<br><b>D</b> is wrong: A yearly season exists too, but last year's date falls on a different weekday.</div></div>
+  <div class="q" data-sc="10" data-kind="short"><div class="qn">Q10</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+keys = np.array([[<span class="s">1</span>, <span class="s">0</span>], [<span class="s">0</span>, <span class="s">1</span>], [<span class="s">1</span>, <span class="s">0</span>]])
+values = np.array([<span class="s">10.0</span>, <span class="s">50.0</span>, <span class="s">30.0</span>])
+query = np.array([<span class="s">1</span>, <span class="s">0</span>])
+w = np.exp(<span class="s">5</span> * (keys @ query))
+w = w / w.sum()
+print(w.round(<span class="s">3</span>), round(w @ values, <span class="s">1</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">[0.498 0.003 0.498] 20.1</code></div></div><div class="why"><b>Why:</b> The query matches keys 1 and 3 (score 5) and not key 2 (score 0), so the softmax gives them almost all the weight, equally: the output is about the average of 10 and 30. That is the lesson's "four Saturdays" lookup in miniature.</div></div>
+  <div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">Your LSTM predicts standardized log sales. What must happen before you compute the MAE you report?</div><div class="opts"><div class="opt">A) Round the predictions to whole numbers</div><div class="opt">B) Nothing: targets and predictions are on the same scale, so the MAE is fair</div><div class="opt">C) Multiply the predictions by sd</div><div class="opt correct">D) Undo the standardization, then the log (expm1), and compare in dollars</div></div><div class="why"><b>Why:</b> The error must be in units a manager understands and comparable with the naive forecasts. The lesson's Mistake 5 shows the same model at 0.222 in scaled log units and $702 in dollars.<br><b>A</b> is wrong: Rounding changes nothing about the units.<br><b>B</b> is wrong: A scaled error flatters the model and cannot be compared with anything.<br><b>C</b> is wrong: Half the undo: add mu, then expm1.</div></div>
+  <div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">You create <code class="inline">nn.LSTM(8, 32)</code> and forget <code class="inline">batch_first=True</code>, while your windows are (batch, 28, 8). What happens?</div><div class="opts"><div class="opt">A) A RuntimeError about the input size</div><div class="opt correct">B) It runs and trains on nonsense: PyTorch reads (batch, time) as (time, batch)</div><div class="opt">C) PyTorch notices and transposes the input</div><div class="opt">D) The output becomes (28, 64, 32), so the linear head fails</div></div><div class="why"><b>Why:</b> The default layout is (time, batch, features). Your 64 windows become 64 time steps of 28 "sequences"; out[:, -1] still has a usable shape, so nothing complains (the lesson's Mistake 3).<br><b>A</b> is wrong: The feature size (8) still matches, so nothing raises.<br><b>C</b> is wrong: PyTorch never guesses the layout.<br><b>D</b> is wrong: The output keeps the input's (64, 28, ...) layout, which is why the bug is silent.</div></div>
+
+  <div class="sec"><h2>10.4 · Sequence Models: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+series = np.arange(<span class="s">6</span>)
+X = np.stack([series[i:i + <span class="s">3</span>] <span class="k">for</span> i <span class="k">in</span> range(len(series) - <span class="s">3</span>)])
+print(X.shape, series[<span class="s">3</span>:])</pre><div class="opts"><div class="opt correct"><code class="inline">(3, 3) [3 4 5]</code></div></div><div class="why"><b>Why:</b> 6 values and windows of 3 give 6 - 3 = 3 windows of 3; the targets are the values after each window: 3, 4, 5.</div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> nn.LSTM(input_size=<span class="s">2</span>, hidden_size=<span class="s">4</span>).parameters()))</pre><div class="opts"><div class="opt correct"><code class="inline">128</code></div></div><div class="why"><b>Why:</b> Four gates, each with input weights (4 × 2) and hidden weights (4 × 4) and two bias vectors of 4: 4 × (8 + 16 + 8) = 128.</div></div>
+
+  <div class="sec"><h2>Lab Reference Solutions</h2><span class="rule"></span></div>
+<div class="blk lab"><div class="h">Lab 10.3-A: labs/module-08/l10_3-cnn/edge_features_starter.py → edge_features_solution.py</div>
+<p>The solution prints (CNN column yours may vary slightly):</p>
+<pre class="out">(60000, 1, 28, 28) (10000, 1, 28, 28)
+edge maps: (4, 2, 28, 28)  filter shape: (2, 1, 3, 3)
+hand-made features per image: 48
+
+training images   hand-made filters + logistic regression   SmallCNN, 3 epochs
+          1,000                                     0.795               0.676
+          5,000                                     0.819               0.782
+         20,000                                     0.827               0.863
+
+With little data, two filters chosen by a person win: they encode knowledge the CNN must
+learn from examples. With 20,000 images the CNN's sixteen learned filters overtake them,
+and more data and epochs widen the gap (the lesson's Scaling Up: about 90 to 92% on all 60,000).</pre><p>Reading it: 48 = 2 filters × 16 regions + 16 brightness numbers. The hand-made pipeline is strong with little data because the person supplied the knowledge (edges matter, roughly where they are matters); the CNN must learn sixteen filters and a classifier from examples, and at 1,000 images in 3 epochs it cannot. By 20,000 it passes the fixed features. Common sticking point: forgetting <code class="inline">.abs()</code>, so positive and negative edge responses cancel when averaged (accuracy drops noticeably).</p>
+</div>
+<div class="blk lab"><div class="h">Lab 10.3-B: labs/module-08/l10_3-cnn/shift_test_starter.py → shift_test_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">loaded: 101770 and 105866 parameters
+unshifted test accuracy  dense 0.840   CNN 0.864
+a boot moved 3 pixels right: first 3 columns are now empty: True
+
+shift (pixels)   right: dense   CNN    down: dense   CNN
+             0         0.840   0.864        0.840   0.864
+             1         0.756   0.838        0.778   0.821
+             2         0.552   0.743        0.708   0.770
+             3         0.355   0.471        0.661   0.726
+             4         0.252   0.301        0.553   0.592
+
+CNN accuracy lost with a 2-pixel shift right, worst three classes:
+  Dress        -0.334
+  T-shirt/top  -0.229
+  Coat         -0.217
+
+The CNN holds up better at every shift, but it is NOT shift-proof: its convolutions find a
+pattern anywhere, yet the Flatten + Linear head still reads WHERE each feature map lit up.
+Pooling buys tolerance of a pixel or two; training on shifted copies (augmentation with random
+crops, the lesson's Exercise 4) is the standard way to teach a network more.</pre><p>Reading it: shifting down hurts less than shifting right for both models (the clothes are centered and wider than tall, so a horizontal shift moves more of the outline). The CNN degrades more gently at every shift, but by 3 pixels to the right it has lost almost 40 points. The convolutions are shift-equivariant; the dense head after <code class="inline">Flatten</code> is not, and two poolings only forgive a pixel or two. <code class="inline">torch.roll</code> would wrap pixels around from the opposite edge, which is why the lab fills with zeros.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-08/l10_3-cnn/debug_cnn.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">RuntimeError: Given groups=1, weight of size [16, 1, 3, 3], expected input[1, 64, 28, 28] to have 1 channels, but got 64 channels instead</code> → <code class="inline">X_train</code> needs <code class="inline">.unsqueeze(1)</code>.</li>
+  <li><code class="inline">RuntimeError: mat1 and mat2 shapes cannot be multiplied (64x1568 and 25088x64)</code> → <code class="inline">nn.Linear(32 * 7 * 7, 64)</code>.</li>
+  <li>No error: <code class="inline">nn.Softmax(dim=1)</code> as the last layer before <code class="inline">CrossEntropyLoss</code>. With this and the next bug: 0.655 / 0.653.</li>
+  <li>No error: <code class="inline">test_accuracy</code> never calls <code class="inline">model.eval()</code>, so dropout stays on: 0.688 with only this bug left. Fixed: 0.747 on both lines.</li>
+</ol>
+</div>
+<div class="blk lab"><div class="h">Lab 10.4-A: labs/module-08/l10_4-sequences/transactions_gru_starter.py → transactions_gru_solution.py</div>
+<p>The solution prints (GRU lines yours may vary slightly):</p>
+<pre class="out">mean transactions per day in 2025: {'Asheville': 61.0, 'Bend': 77.5, 'Boise': 115.5, 'Flagstaff': 91.3}
+mu 4.287  sd 0.482  z (1096, 4)  calendar (1096, 9)
+windows (4272, 28, 8)  training 2812  test 1460  parameters 4,065
+windows (4272, 28, 10)  training 2812  test 1460  parameters 4,257
+
+next-day transactions, test year 2025 (MAE in transactions per store-day)
+naive (yesterday)                 19.09
+seasonal naive (last week)        15.50
+GRU, weekday only                  9.15
+GRU, weekday + promo + closed      7.56
+Weekday flags alone cut the seasonal naive error by about 40%; adding the promotion and closed
+flags, known in advance, brings it to half.</pre><p>Reading it: same windows as the lesson (2,812 training windows ending in 2023 to 2024, 1,460 test windows in 2025), a different target and a GRU. Seasonal naive beats naive for the same reason as with sales (the weekly cycle). The weekday-only GRU cuts its error by about 40%; the promotion and closed flags, known in advance, bring it to half. For staffing: about 7.6 customers off per store-day against 15.5 for "same day last week".</p>
+</div>
+<div class="blk lab"><div class="h">Lab 10.4-B: labs/module-08/l10_4-sequences/attention_lookup_starter.py → attention_lookup_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">2025: 365 days, 20 of them special (promotion or closed)
+
+seasonal naive (same day last week)      all $ 1,072   ordinary $   949   special $ 3,194
+weekday keys, 28 days (the lesson)       all $   979   ordinary $   856   special $ 3,097
+weekday keys, 364 days                   all $ 1,151   ordinary $ 1,030   special $ 3,238
+calendar keys, 28 days                   all $   950   ordinary $   856   special $ 2,571
+calendar keys, 364 days                  all $ 1,039   ordinary $ 1,030   special $ 1,198
+routed (28 ordinary / 364 special)       all $   875   ordinary $   856   special $ 1,198
+
+Boise, 2025-11-28 (Black Friday): forecast $12,014, actual $12,702
+  weight 0.226 on 2024-11-29 Friday    (Black Friday) $12,644
+  weight 0.226 on 2025-05-23 Friday    (Memorial Day sale) $13,178
+  weight 0.226 on 2025-08-29 Friday    (Labor Day sale) $13,235
+  weight 0.226 on 2024-12-20 Friday    (Holiday rush) $10,077
+Its query (Friday + promotion) matched the past year's sale Fridays, not ordinary Fridays.</pre><p>Reading it: with weekday keys, a longer memory is worse everywhere (it averages Saturdays from a year of trend and season). Calendar keys over 28 days help special days only a little, because the last 28 days rarely contain a matching sale day. Calendar keys over a year find past sale days and cut the special-day error from $3,097 to $1,198, at the cost of ordinary days. Routing each query to the right memory takes the best of both ($875 overall). A trained attention layer learns its own keys, queries and, in effect, this routing.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-08/l10_4-sequences/debug_sequence.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">ValueError: RNN input dtype (torch.float64) does not match weight dtype (torch.float32)...</code> → <code class="inline">torch.tensor(np.array(X), dtype=torch.float32)</code>.</li>
+  <li>No error: <code class="inline">nn.LSTM(8, 32)</code> without <code class="inline">batch_first=True</code> reads (batch, time) as (time, batch).</li>
+  <li>No error: a random choice of 365 windows as the test set; overlapping windows leak. With the next bug fixed first, the dollar MAE is a flattering 863.2 (825.8 once <code class="inline">batch_first</code> is fixed).</li>
+  <li>No error: the MAE is computed on scaled log values (prints 0.2). Undo the scaling and the log before the metric.</li>
+  <li>Fixed: 365 test windows, LSTM MAE 1,039.2 against seasonal naive 1,355.6 for Boise in 2025.</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>The Lesson Pages' Own Quick Quizzes</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Lesson 10.3 · Convolutional Neural Networks</div>
+<ol class="steps">
+  <li><b>B</b> <code class="inline">torch.Size([4, 8, 24, 24])</code>: 28 - 5 + 1 = 24 without padding; 8 filters give 8 channels.</li>
+  <li><b>C</b> 4,640: 32 × (16 × 3 × 3) = 4,608 weights plus 32 biases.</li>
+  <li><b>A</b> Small filters reused at every position: patterns learned once and found anywhere.</li>
+  <li><b>A</b> So dropout stops zeroing activations and batch norm uses its stored training statistics.</li>
+  <li><b>C</b> A plain <code class="inline">nn.Linear</code> with 10 outputs (logits): <code class="inline">CrossEntropyLoss</code> applies log-softmax itself.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Lesson 10.4 · Sequence Models</div>
+<ol class="steps">
+  <li><b>B</b> (10, 7, 16): one hidden state of size 16 for each of the 7 steps of the 10 sequences.</li>
+  <li><b>A</b> It is a free forecast that already captures the weekly cycle; a model must beat it.</li>
+  <li><b>C</b> Gradients vanish over many steps, so plain RNNs struggle to learn from the distant past.</li>
+  <li><b>B</b> Their keys matched the query (tomorrow's weekday) and the softmax turned the higher scores into most of the weight.</li>
+  <li><b>C</b> Overlapping windows leaked the test days into training: too good to be true.</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<ol class="steps">
+  <li><b>Shapes:</b> (64, 16, 28, 28) after the convolution (16 filters, padding keeps 28), then (64, 16, 14, 14) after pooling.</li>
+  <li><b>Time split:</b> a forecast is made on the day before, knowing only the past. A random split of overlapping windows puts the days around each test window, including its target, into training, so the model is graded on data it has effectively seen. Accept "leakage" with any correct reason.</li>
+  <li><b>$515 vs $616 / $569:</b> both far better than seasonal naive ($1,072) and in the same league; the LSTM leads here, but boosting was simpler, fast, untuned, and easier to explain; the calendar information mattered more than the architecture. Good answers recommend starting with the simpler model or keeping both under test; weak answers just say "the LSTM, it is lower".</li>
+</ol>
+
+  <div class="sec"><h2>Common Wrong Answers and What They Reveal</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li><b>Q2 B (216).</b> Forgets biases again: a Session 7 echo. <b>Q2 C or D:</b> forgets that every filter spans all input channels.</li>
+  <li><b>Q5 C.</b> Has not understood weight sharing; replay the stencil sliding over the image.</li>
+  <li><b>Q6 A (12544).</b> Counted one pooling. The habit to build is tracing, not arithmetic.</li>
+  <li><b>Q8 B (94).</b> Off by one: count targets, not windows' start positions.</li>
+  <li><b>Q11 B.</b> Believes a scaled error is fair because both sides are scaled; ask them to compare it with $1,072.</li>
+  <li><b>Q12 A or D.</b> Expects PyTorch to complain. The lesson's Mistake 3 is the counterexample: always print shapes when building a model.</li>
+</ul>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 8 · Answer Key · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

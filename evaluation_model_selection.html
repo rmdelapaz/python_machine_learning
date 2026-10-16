@@ -3,1304 +3,1037 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Master model selection and hyperparameter tuning in Python. Learn cross-validation, grid search, random search, Bayesian optimization, and model evaluation strategies.">
-    <title>Model Selection & Tuning Path - Python Machine Learning</title>
+    <meta name="description" content="Compare machine-learning models fairly on identical cross-validation folds, tell a real difference from noise, and read validation and learning curves on Pinecrest churn data. Python Machine Learning Lesson 6.1.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Model Selection and Learning Curves - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
-    <main id="main-content">
-    <header role="banner">
-        <h1>Model Selection & Tuning</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Supervised Learning</a>
-        <span class="separator">›</span>
-        <span class="current">Model Selection & Tuning</span>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
     </nav>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Distinguish model <em>parameters</em> (learned during training) from <em>hyperparameters</em> (set beforehand)</li>
-            <li>Tune hyperparameters with <code>GridSearchCV</code> and <code>RandomizedSearchCV</code></li>
-            <li>Use nested cross-validation to get an unbiased estimate of a tuned model's performance</li>
-            <li>Compare candidate models fairly using consistent cross-validation and metrics</li>
-            <li>Avoid overfitting the validation set while searching for the best configuration</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Use <code>GridSearchCV</code> (or <code>RandomizedSearchCV</code>) to tune a model's hyperparameters and select the best configuration by cross-validated score.</p>
-    </div>
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>📊 Lesson 6.1: Model Selection and Learning Curves</h1>
+                <p class="lead">Choose between models with evidence instead of one lucky number, and learn to read the two charts that tell you whether more data, a more flexible model or a simpler one will help.</p>
 
-    <h2>Optimize Your Machine Learning Pipeline! 🎯</h2>
-    
-    <blockquote>
-        <p>Model selection and hyperparameter tuning are critical steps in building high-performing machine learning systems. Learn systematic approaches to choose the best algorithm, optimize hyperparameters, avoid overfitting, and build robust models that generalize well to new data. Master the techniques that separate good models from great ones.</p>
-    </blockquote>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Compare several models fairly with <code>cross_validate</code>: the same preprocessing pipeline, the same folds and the same metric, reporting the spread and the fit time</li>
+                        <li>Decide whether a gap between two models is bigger than the noise, using paired per-fold differences</li>
+                        <li>Draw a validation curve with <code>ValidationCurveDisplay</code> and point to where a model moves from underfitting to overfitting</li>
+                        <li>Draw a learning curve with <code>LearningCurveDisplay</code> and say whether more data or a more flexible model is the better next step</li>
+                        <li>Make a final choice you can defend, then score it once on the untouched test set</li>
+                    </ul>
+                </div>
 
-    <h2>Model Selection Framework</h2>
-    
-    <div class="mermaid">
-    graph TD
-        A[Model Selection Pipeline] --> B[Algorithm Selection]
-        A --> C[Hyperparameter Tuning]
-        A --> D[Model Evaluation]
-        
-        B --> E[Compare Algorithms]
-        B --> F[Baseline Models]
-        B --> G[Ensemble Methods]
-        
-        C --> H[Grid Search]
-        C --> I[Random Search]
-        C --> J[Bayesian Optimization]
-        C --> K[Genetic Algorithms]
-        
-        D --> L[Cross-Validation]
-        D --> M[Validation Curves]
-        D --> N[Learning Curves]
-        D --> O[Final Evaluation]
-        
-        L --> P[K-Fold]
-        L --> Q[Stratified K-Fold]
-        L --> R[Time Series Split]
-        
-        O --> S[Test Set Performance]
-        
-        style A fill:#f9f,stroke:#333,stroke-width:2px
-        style C fill:#bbf,stroke:#333,stroke-width:2px
-        style D fill:#9f9,stroke:#333,stroke-width:2px
-    </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 100 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="evaluation_cross_validation.html">Lesson 1.3: Cross-Validation</a>, <a href="pipelines_composite.html">Lesson 2.2: Pipelines</a> and <a href="trees_gradient_boosting.html">Lesson 5.3: Gradient Boosting</a></li>
+                    <li><span class="meta-label">🛠️ You will build</span> A churn-model bake-off: five candidates scored on identical folds, a learning curve for the winner, one final test score and a results file</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code></li>
+                </ul>
+            </header>
 
-    <h2>Cross-Validation Strategies</h2>
-    
-    <h3>Understanding Different CV Methods</h3>
-    <pre class="language-python"><code>import numpy as np
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Choosing a Model Is a Measurement</a></li>
+                        <li><a href="#setup" class="toc-link">One Recipe for Every Candidate</a></li>
+                        <li><a href="#fair" class="toc-link">A Fair Comparison</a></li>
+                        <li><a href="#noise" class="toc-link">Is the Difference Real?</a></li>
+                        <li><a href="#validation-curve" class="toc-link">Validation Curves: Turning One Knob</a></li>
+                        <li><a href="#learning-curve" class="toc-link">Learning Curves: Would More Data Help?</a></li>
+                        <li><a href="#choose" class="toc-link">Making the Call, Then Testing Once</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: The Churn-Model Bake-off</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Choosing a Model Is a Measurement</h2>
+
+                <p>By now you have trained logistic regression, nearest neighbors, single trees, random forests and gradient boosting on the same Pinecrest churn data. Each one printed a score, and the scores were different. The obvious question is "which one should Pinecrest use?" The obvious answer, "the one with the highest number", is right surprisingly rarely, because every one of those numbers came with noise you could not see.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: Testing Tents</h4>
+                    <p>Imagine Pinecrest's gear team choosing which tent to stock. If they pitch tent A on a calm night and tent B in a storm, the result says more about the weather than the tents. A fair test pitches every tent at the <strong>same campsites on the same nights</strong>, many nights in a row, and compares them night by night. One wet night where tent A leaked a little is not a verdict; tent A leaking on nine nights out of ten is.</p>
+                    <p>In machine learning the campsites are cross-validation folds, the nights are repeats, and the leaks are scores. This lesson is about running that test properly and then asking two follow-up questions the gear team would ask: <em>is the winner's margin real</em>, and <em>what would make the winner better</em>?</p>
+                </div>
+
+                <p>Model selection rests on three habits, one for each question:</p>
+                <ol>
+                    <li><strong>Which is best?</strong> Score every candidate on identical folds, with the metric that matches the business problem, and look at the spread, not only the mean.</li>
+                    <li><strong>Is the gap real?</strong> Compare candidates fold by fold, so that easy and hard folds cancel out.</li>
+                    <li><strong>What would help?</strong> Read a validation curve (one setting turned up and down) and a learning curve (more and more training data) to diagnose underfitting and overfitting.</li>
+                </ol>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>A model you deploy will be judged on customers it has never seen. If you pick it because it won a noisy contest by 0.002, you may ship a slower, harder-to-explain model that is not actually better. Worse, if you pick it by peeking at the test set, the score you report will be too optimistic, and the people who rely on it will plan around a number that will not hold. The habits in this lesson protect you and them.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="setup" class="lesson-section">
+                <h2>📂 One Recipe for Every Candidate</h2>
+
+                <p>A fair contest starts with identical inputs. Load the churn table, use the 11 numeric and 5 categorical features from Module 2 (no <code>cancellation_reason</code>: that is the leak from Lesson 1.2), make the usual split, and write the preprocessing once as a function so every candidate gets its own fresh copy.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.model_selection import (
-    KFold, StratifiedKFold, TimeSeriesSplit, 
-    RepeatedKFold, RepeatedStratifiedKFold,
-    LeaveOneOut, LeavePOut, ShuffleSplit,
-    cross_val_score, cross_validate, validation_curve, learning_curve
-)
-from sklearn.datasets import make_classification, make_regression
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import make_pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+           "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+           "email_opens_90d"]
+categorical = ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"]
+
+X = customers[numeric + categorical]
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
+
+
+def make_preprocess():
+    return ColumnTransformer([
+        ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric),
+        ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"),
+                              OneHotEncoder(handle_unknown="ignore")), categorical),
+    ])
+
+
+print(X_train.shape, X_test.shape)
+print(f"churn rate in training data: {y_train.mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(4500, 16) (1500, 16)
+churn rate in training data: 0.165</code></pre>
+                </div>
+
+                <p>Now the candidates. Each is a <code>Pipeline</code> (preprocessing, then a model), so cross-validation refits the imputers, scaler and encoder inside every fold and nothing leaks from the validation rows. The <code>DummyClassifier</code> is there on purpose: every comparison needs a floor.</p>
+
+                <pre><code class="language-python">from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.ensemble import RandomForestClassifier, HistGradientBoostingClassifier
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
-
-# Generate datasets
-np.random.seed(42)
-X_class, y_class = make_classification(
-    n_samples=1000, n_features=20, n_informative=15,
-    n_redundant=5, n_classes=3, random_state=42
-)
-
-X_reg, y_reg = make_regression(
-    n_samples=1000, n_features=20, n_informative=15,
-    noise=0.1, random_state=42
-)
-
-class CrossValidationAnalyzer:
-    """Comprehensive Cross-Validation Analysis"""
-    
-    def __init__(self):
-        self.cv_results = {}
-        self.best_params = {}
-        
-    def visualize_cv_strategies(self, X, y, n_splits=5):
-        """Visualize different cross-validation strategies"""
-        
-        strategies = {
-            'KFold': KFold(n_splits=n_splits, shuffle=True, random_state=42),
-            'StratifiedKFold': StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42),
-            'ShuffleSplit': ShuffleSplit(n_splits=n_splits, test_size=0.2, random_state=42),
-            'TimeSeriesSplit': TimeSeriesSplit(n_splits=n_splits)
-        }
-        
-        fig, axes = plt.subplots(4, 1, figsize=(12, 10))
-        
-        n_samples = 100  # Use subset for visualization
-        X_vis = X[:n_samples]
-        y_vis = y[:n_samples]
-        
-        for idx, (name, cv) in enumerate(strategies.items()):
-            # Create visualization
-            ax = axes[idx]
-            
-            # Plot each fold
-            for fold, (train_idx, test_idx) in enumerate(cv.split(X_vis, y_vis)):
-                # Create array for visualization
-                indices = np.zeros(n_samples)
-                indices[train_idx] = 1
-                indices[test_idx] = 2
-                
-                # Plot
-                ax.scatter(range(n_samples), [fold] * n_samples, 
-                          c=indices, cmap='coolwarm', s=10, alpha=0.8)
-            
-            ax.set_xlim(0, n_samples)
-            ax.set_ylim(-0.5, n_splits - 0.5)
-            ax.set_ylabel('Fold')
-            ax.set_title(f'{name} Cross-Validation')
-            ax.grid(True, alpha=0.3)
-            
-            # Add legend for first plot only
-            if idx == 0:
-                from matplotlib.patches import Patch
-                legend_elements = [
-                    Patch(facecolor='blue', alpha=0.8, label='Not used'),
-                    Patch(facecolor='white', alpha=0.8, label='Training'),
-                    Patch(facecolor='red', alpha=0.8, label='Testing')
-                ]
-                ax.legend(handles=legend_elements, loc='upper right')
-        
-        axes[-1].set_xlabel('Sample Index')
-        
-        plt.suptitle('Cross-Validation Strategies Visualization', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-    
-    def compare_cv_strategies(self, X, y, model, cv_strategies):
-        """Compare different CV strategies"""
-        
-        results = {}
-        
-        for name, cv in cv_strategies.items():
-            # Perform cross-validation
-            scores = cross_val_score(model, X, y, cv=cv, scoring='accuracy')
-            
-            results[name] = {
-                'mean_score': scores.mean(),
-                'std_score': scores.std(),
-                'scores': scores,
-                'n_splits': cv.get_n_splits() if hasattr(cv, 'get_n_splits') else len(scores)
-            }
-        
-        # Create comparison DataFrame
-        comparison_df = pd.DataFrame({
-            name: [res['mean_score'], res['std_score'], res['n_splits']]
-            for name, res in results.items()
-        }).T
-        comparison_df.columns = ['Mean Score', 'Std Dev', 'N Splits']
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Bar plot of mean scores with error bars
-        names = list(results.keys())
-        means = [results[n]['mean_score'] for n in names]
-        stds = [results[n]['std_score'] for n in names]
-        
-        axes[0].bar(names, means, yerr=stds, capsize=5, alpha=0.7)
-        axes[0].set_ylabel('Accuracy')
-        axes[0].set_title('Cross-Validation Strategy Comparison')
-        axes[0].set_ylim([min(means) - 0.1, max(means) + 0.1])
-        axes[0].grid(True, alpha=0.3)
-        
-        # Add value labels
-        for i, (mean, std) in enumerate(zip(means, stds)):
-            axes[0].text(i, mean + std + 0.01, f'{mean:.3f}±{std:.3f}', 
-                        ha='center', fontsize=9)
-        
-        # Box plot of score distributions
-        score_data = [results[n]['scores'] for n in names]
-        axes[1].boxplot(score_data, labels=names)
-        axes[1].set_ylabel('Accuracy')
-        axes[1].set_title('Score Distributions')
-        axes[1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Cross-Validation Strategy Performance', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return comparison_df, results
-    
-    def nested_cross_validation(self, X, y, model, param_grid, 
-                               inner_cv=5, outer_cv=5):
-        """Perform nested cross-validation for unbiased evaluation"""
-        
-        from sklearn.model_selection import GridSearchCV
-        
-        outer_scores = []
-        best_params_list = []
-        
-        # Outer CV loop
-        outer_cv_split = KFold(n_splits=outer_cv, shuffle=True, random_state=42)
-        
-        print("Performing Nested Cross-Validation...")
-        print("="*50)
-        
-        for fold, (train_idx, test_idx) in enumerate(outer_cv_split.split(X, y)):
-            X_train, X_test = X[train_idx], X[test_idx]
-            y_train, y_test = y[train_idx], y[test_idx]
-            
-            # Inner CV for hyperparameter tuning
-            inner_cv_split = KFold(n_splits=inner_cv, shuffle=True, random_state=42)
-            
-            grid_search = GridSearchCV(
-                model, param_grid, cv=inner_cv_split,
-                scoring='accuracy', n_jobs=-1
-            )
-            
-            grid_search.fit(X_train, y_train)
-            
-            # Evaluate on outer fold test set
-            score = grid_search.score(X_test, y_test)
-            outer_scores.append(score)
-            best_params_list.append(grid_search.best_params_)
-            
-            print(f"Fold {fold+1}: Score={score:.3f}, Best params={grid_search.best_params_}")
-        
-        print(f"\nNested CV Score: {np.mean(outer_scores):.3f} ± {np.std(outer_scores):.3f}")
-        
-        return outer_scores, best_params_list
-
-# Initialize analyzer
-cv_analyzer = CrossValidationAnalyzer()
-
-print("="*60)
-print("CROSS-VALIDATION STRATEGIES")
-print("="*60)
-
-# Visualize CV strategies
-print("\nVisualizing cross-validation strategies...")
-cv_analyzer.visualize_cv_strategies(X_class, y_class)
-
-# Compare CV strategies
-print("\nComparing CV strategies...")
-model = RandomForestClassifier(n_estimators=50, random_state=42)
-
-cv_strategies = {
-    'KFold': KFold(n_splits=5, shuffle=True, random_state=42),
-    'StratifiedKFold': StratifiedKFold(n_splits=5, shuffle=True, random_state=42),
-    'RepeatedKFold': RepeatedKFold(n_splits=5, n_repeats=2, random_state=42),
-    'ShuffleSplit': ShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
+candidates = {
+    "baseline": make_pipeline(make_preprocess(), DummyClassifier()),
+    "logistic": make_pipeline(make_preprocess(), LogisticRegression(max_iter=1000)),
+    "forest": make_pipeline(make_preprocess(), RandomForestClassifier(
+        n_estimators=200, min_samples_leaf=5, n_jobs=-1, random_state=42)),
+    "boosting": make_pipeline(make_preprocess(), HistGradientBoostingClassifier(random_state=42)),
 }
+print(list(candidates))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>['baseline', 'logistic', 'forest', 'boosting']</code></pre>
+                </div>
 
-comparison_df, results = cv_analyzer.compare_cv_strategies(
-    X_class, y_class, model, cv_strategies
+                <p>Every model that uses randomness gets <code>random_state=42</code>, as everywhere in this course, so your scores match this page and, more importantly, so that rerunning a comparison gives the same answer. A comparison you cannot repeat is not evidence.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="fair" class="lesson-section">
+                <h2>⚖️ A Fair Comparison</h2>
+
+                <p>Lesson 1.3 used <code>cross_val_score</code>, which returns one score per fold. Its bigger sibling, <code>cross_validate</code>, returns a dictionary with the scores <em>and</em> the time each fit took, and it accepts several metrics at once. Pair it with a <code>RepeatedStratifiedKFold</code> splitter: 5 folds, repeated twice with a different shuffle, gives 10 scores per model instead of 5, which makes the spread easier to judge.</p>
+
+                <div class="mermaid">
+graph TD
+    A["One splitter, fixed random_state"] --> B["Same 10 train/validation folds"]
+    B --> C["Candidate 1: 10 scores"]
+    B --> D["Candidate 2: 10 scores"]
+    C --> E["Compare fold by fold"]
+    D --> E
+    E --> F["Pick, then test once"]
+                </div>
+
+                <pre><code class="language-python">from sklearn.model_selection import RepeatedStratifiedKFold, cross_validate
+
+cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=2, random_state=42)
+
+fold_scores = {}
+summary = []
+for name, model in candidates.items():
+    result = cross_validate(model, X_train, y_train, cv=cv, scoring="roc_auc")
+    fold_scores[name] = result["test_score"]
+    summary.append({"model": name,
+                    "mean_auc": result["test_score"].mean(),
+                    "std_auc": result["test_score"].std(),
+                    "fit_seconds": result["fit_time"].mean()})
+
+summary = pd.DataFrame(summary).set_index("model")
+print(summary[["mean_auc", "std_auc"]].round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>          mean_auc  std_auc
+model
+baseline     0.500    0.000
+logistic     0.832    0.017
+forest       0.867    0.016
+boosting     0.860    0.013</code></pre>
+                </div>
+
+                <p>Because the same <code>cv</code> object (with a fixed <code>random_state</code>) is passed to every call, all four candidates were trained and scored on exactly the same ten splits: the same campsites on the same nights. The metric is ROC AUC, because Pinecrest uses the model to <em>rank</em> customers (Lesson 1.4), and AUC measures ranking quality. The baseline's 0.500 is the "coin flip" floor; all three real models clear it by a wide margin.</p>
+
+                <p>Fit time is a real cost too, so look at it, but treat it as rough: it depends on your computer and on what else it is doing.</p>
+
+                <pre><code class="language-python">print(summary["fit_seconds"].round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (your numbers will differ)</h4>
+                    <pre><code>model
+baseline    0.04
+logistic    0.17
+forest      1.04
+boosting    1.34
+Name: fit_seconds, dtype: float64</code></pre>
+                </div>
+
+                <p>Two things in the score table deserve a second look. First, the default random forest scores a little <em>higher</em> than default gradient boosting, even though boosting was the star of Lesson 5.3. Second, the standard deviations (0.013 to 0.017) are about twice as large as <strong>the gap</strong> between the forest and boosting (0.007). Is the forest really better, or did it get lucky? That is the next section.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ The Test Set Stays Locked</h4>
+                    <p>Everything in this section used <code>X_train</code> only. The test set has not been touched, and it will be used exactly once, after the choice is made. If you compare models on the test set, you are choosing with it, and its score stops being an honest estimate of the future.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="noise" class="lesson-section">
+                <h2>🎲 Is the Difference Real?</h2>
+
+                <p>Some folds are simply harder than others: by chance, they hold more of the customers who are difficult to call. On a hard fold <em>every</em> model scores lower. Those shared ups and downs are most of the spread in each model's scores, and it has nothing to do with which model is better. Comparing models fold by fold removes it. Put the per-fold scores side by side and look:</p>
+
+                <pre><code class="language-python">folds = pd.DataFrame(fold_scores).drop(columns="baseline")
+print(folds.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>   logistic  forest  boosting
+0     0.801   0.841     0.848
+1     0.847   0.873     0.863
+2     0.850   0.882     0.879
+3     0.855   0.894     0.872
+4     0.809   0.850     0.846
+5     0.830   0.878     0.874
+6     0.844   0.871     0.867
+7     0.818   0.853     0.847
+8     0.826   0.854     0.843
+9     0.836   0.879     0.866</code></pre>
+                </div>
+
+                <p>Read down the columns and the scores wander; read across a row and the three models move together. Plotting the folds makes it obvious:</p>
+
+                <pre><code class="language-python">fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+for name, marker in [("logistic", "o"), ("forest", "s"), ("boosting", "^")]:
+    ax.plot(range(1, 11), folds[name], marker=marker, label=name)
+ax.set_xticks(range(1, 11))
+ax.set_xlabel("Fold (5 folds x 2 repeats)")
+ax.set_ylabel("Validation ROC AUC")
+ax.set_title("Hard folds are hard for every model: compare within each fold")
+ax.legend()
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/evaluation_model_selection_fold_scores.png" alt="Line chart of validation ROC AUC for logistic regression, random forest and gradient boosting across ten cross-validation folds. All three lines rise and fall together from fold to fold, between about 0.80 and 0.89, with logistic regression always lowest and the forest usually just above boosting." width="990" height="440" loading="lazy">
+                    <figcaption>The three lines rise and fall together: fold difficulty is shared. The gap between lines is the part that tells you about the models.</figcaption>
+                </figure>
+
+                <p>So the right quantity is the <strong>paired difference</strong>: in each fold, score of model A minus score of model B. The ups and downs cancel, and what is left is the models' real difference plus a much smaller amount of noise.</p>
+
+                <pre><code class="language-python">def paired(a, b):
+    diff = folds[a] - folds[b]
+    print(f"{a} - {b}: mean {diff.mean():+.4f}, std {diff.std():.4f}, "
+          f"{a} wins {(diff > 0).sum()} of {len(diff)} folds")
+
+
+paired("boosting", "logistic")
+paired("forest", "boosting")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>boosting - logistic: mean +0.0289, std 0.0113, boosting wins 10 of 10 folds
+forest - boosting: mean +0.0070, std 0.0078, forest wins 9 of 10 folds</code></pre>
+                </div>
+
+                <p>Now the picture is sharp. Boosting beats logistic regression in every fold, by about 0.03: a real difference, and it matches what you know about the data (churn depends on thresholds and interactions that a straight line cannot draw from raw columns). The forest beats default boosting by less than 0.01, but it does so in nearly every fold, so it is consistent rather than lucky. Notice that the standard deviation of the forest-minus-boosting <em>differences</em> (0.008) is about half the standard deviation of either model's raw scores: pairing removed much of the noise.</p>
+
+                <div class="card card-info">
+                    <h4>💡 How Big Is "Big Enough"?</h4>
+                    <p>A quick, honest rule: a difference is worth acting on when the winner wins in most folds <em>and</em> the mean difference is clearly larger than its standard deviation divided by the square root of the number of folds. Be modest with formal tests: the training parts of different folds overlap, so the fold scores are not independent and a textbook t-test is overconfident. If two models are within noise of each other, stop arguing about the third decimal and choose on other grounds: speed, simplicity, ease of explanation, robustness.</p>
+                </div>
+
+                <div class="card card-success">
+                    <h4>✅ Keep the Default Boosting Result in Mind</h4>
+                    <p>Default <code>HistGradientBoostingClassifier</code> losing to a forest is not a law of nature. Its defaults are generous (31 leaves per tree, 100 rounds), and on 4,500 rows that can overfit. The learning curve later in this lesson shows the symptom, and Lesson 6.2 tunes it.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="validation-curve" class="lesson-section">
+                <h2>🎚️ Validation Curves: Turning One Knob</h2>
+
+                <p>A <strong>validation curve</strong> answers "what happens as I make this model more flexible?" You choose one hyperparameter, try a range of values, and plot both the training score and the cross-validated score at each value. A decision tree's <code>max_depth</code> is the clearest knob there is: a depth-1 tree asks one question, a depth-15 tree asks up to fifteen in a row.</p>
+
+                <p>When the model is a pipeline, the hyperparameter name gets the step name in front, joined by a double underscore. <code>make_pipeline</code> names each step after its class in lowercase, so the tree's depth is <code>decisiontreeclassifier__max_depth</code>.</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import StratifiedKFold, ValidationCurveDisplay
+from sklearn.tree import DecisionTreeClassifier
+
+tree_pipe = make_pipeline(make_preprocess(), DecisionTreeClassifier(random_state=42))
+cv5 = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+depths = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15]
+
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+vc = ValidationCurveDisplay.from_estimator(
+    tree_pipe, X_train, y_train,
+    param_name="decisiontreeclassifier__max_depth", param_range=depths,
+    cv=cv5, scoring="roc_auc", score_name="ROC AUC", ax=ax,
 )
+ax.set_xlabel("max_depth")
+ax.set_title("Deeper trees memorize the training data and stop generalizing")
+plt.show()
 
-print("\nCV Strategy Comparison:")
-print(comparison_df)
+curve = pd.DataFrame({"max_depth": depths,
+                      "train_auc": vc.train_scores.mean(axis=1),
+                      "validation_auc": vc.test_scores.mean(axis=1)})
+print(curve.round(3).to_string(index=False))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code> max_depth  train_auc  validation_auc
+         1      0.682           0.678
+         2      0.791           0.783
+         3      0.834           0.823
+         4      0.857           0.835
+         5      0.880           0.834
+         6      0.899           0.829
+         8      0.941           0.732
+        10      0.977           0.638
+        12      0.993           0.659
+        15      1.000           0.673</code></pre>
+                </div>
 
-# Nested cross-validation
-print("\n" + "="*60)
-print("NESTED CROSS-VALIDATION")
-print("="*60)
+                <figure>
+                    <img src="images/evaluation_model_selection_validation_curve.png" alt="Validation curve for decision-tree depth from 1 to 15. The training ROC AUC rises steadily from about 0.68 to 1.00. The validation ROC AUC rises to a peak of about 0.835 at depths 4 and 5, then falls to about 0.65 for deep trees, with shaded bands showing the spread across folds." width="990" height="440" loading="lazy">
+                    <figcaption>Left of the peak the tree underfits (both scores low); right of it the tree overfits (training score near perfect, validation score falling).</figcaption>
+                </figure>
 
-param_grid = {
-    'n_estimators': [50, 100],
-    'max_depth': [5, 10, None],
-    'min_samples_split': [2, 5]
-}
+                <div class="card card-info">
+                    <h4>💡 "Test" in the Legend Means the Validation Folds</h4>
+                    <p>The Display classes label the cross-validated score "Test", because inside each fold that part is held out for testing. It is not your test set: <code>X_test</code> is still locked away. This lesson says "validation" for those scores to keep the two apart.</p>
+                </div>
 
-nested_scores, nested_params = cv_analyzer.nested_cross_validation(
-    X_class[:500], y_class[:500],  # Use subset for speed
-    RandomForestClassifier(random_state=42),
-    param_grid,
-    inner_cv=3,
-    outer_cv=5
-)</code></pre>
+                <p>Read the chart from left to right:</p>
+                <ul>
+                    <li><strong>Depth 1 to 3, underfitting (high bias).</strong> Both curves are low and close together. The tree is too simple to capture the pattern; it would do badly on any data, including the data it trained on.</li>
+                    <li><strong>Depth 4 to 5, the sweet spot.</strong> The validation score peaks. The training score is a little higher, which is normal.</li>
+                    <li><strong>Depth 6 and beyond, overfitting (high variance).</strong> The training score heads to a perfect 1.000 while the validation score drops sharply. The tree is memorizing individual customers, the noise along with the signal.</li>
+                </ul>
 
-    <h2>Hyperparameter Tuning Methods</h2>
-    
-    <h3>Grid Search, Random Search, and Bayesian Optimization</h3>
-    <pre class="language-python"><code>from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
-from scipy.stats import randint, uniform
+                <p>The gap between the two curves is the overfitting meter. You met the same pattern in Lesson 1.1's exercise on tree depth and in Lesson 3.2 as the bias-variance trade-off; the validation curve is the tool that draws it for any knob of any model.</p>
 
-class HyperparameterTuner:
-    """Advanced hyperparameter tuning methods"""
-    
-    def __init__(self):
-        self.search_results = {}
-        self.best_models = {}
-        
-    def grid_search_tuning(self, X, y, model, param_grid):
-        """Exhaustive grid search"""
-        
-        print("Performing Grid Search...")
-        grid_search = GridSearchCV(
-            model, param_grid,
-            cv=5, scoring='accuracy',
-            n_jobs=-1, verbose=1,
-            return_train_score=True
-        )
-        
-        grid_search.fit(X, y)
-        
-        self.search_results['grid'] = pd.DataFrame(grid_search.cv_results_)
-        self.best_models['grid'] = grid_search.best_estimator_
-        
-        print(f"Best parameters: {grid_search.best_params_}")
-        print(f"Best score: {grid_search.best_score_:.3f}")
-        
-        return grid_search
-    
-    def random_search_tuning(self, X, y, model, param_distributions, n_iter=100):
-        """Random search with distributions"""
-        
-        print("Performing Random Search...")
-        random_search = RandomizedSearchCV(
-            model, param_distributions,
-            n_iter=n_iter,
-            cv=5, scoring='accuracy',
-            n_jobs=-1, verbose=1,
-            random_state=42,
-            return_train_score=True
-        )
-        
-        random_search.fit(X, y)
-        
-        self.search_results['random'] = pd.DataFrame(random_search.cv_results_)
-        self.best_models['random'] = random_search.best_estimator_
-        
-        print(f"Best parameters: {random_search.best_params_}")
-        print(f"Best score: {random_search.best_score_:.3f}")
-        
-        return random_search
-    
-    def bayesian_optimization(self, X, y, model_class, search_space, n_calls=50):
-        """Bayesian optimization using scikit-optimize"""
-        
-        try:
-            from skopt import BayesSearchCV
-            from skopt.space import Real, Integer, Categorical
-            
-            print("Performing Bayesian Optimization...")
-            
-            bayes_search = BayesSearchCV(
-                model_class(),
-                search_space,
-                n_iter=n_calls,
-                cv=5,
-                scoring='accuracy',
-                n_jobs=-1,
-                random_state=42
-            )
-            
-            bayes_search.fit(X, y)
-            
-            self.best_models['bayesian'] = bayes_search.best_estimator_
-            
-            print(f"Best parameters: {bayes_search.best_params_}")
-            print(f"Best score: {bayes_search.best_score_:.3f}")
-            
-            return bayes_search
-            
-        except ImportError:
-            print("scikit-optimize not installed.")
-            print("Install with: pip install scikit-optimize")
-            return None
-    
-    def compare_search_methods(self, X, y):
-        """Compare different search methods"""
-        
-        from sklearn.ensemble import RandomForestClassifier
-        
-        # Define search spaces
-        param_grid = {
-            'n_estimators': [50, 100, 200],
-            'max_depth': [5, 10, 20],
-            'min_samples_split': [2, 5, 10]
-        }
-        
-        param_distributions = {
-            'n_estimators': randint(50, 200),
-            'max_depth': randint(5, 20),
-            'min_samples_split': randint(2, 10)
-        }
-        
-        results = {}
-        
-        # Grid Search
-        print("\n" + "="*40)
-        print("GRID SEARCH")
-        print("="*40)
-        import time
-        start_time = time.time()
-        
-        grid_search = self.grid_search_tuning(
-            X, y,
-            RandomForestClassifier(random_state=42),
-            param_grid
-        )
-        
-        grid_time = time.time() - start_time
-        results['Grid Search'] = {
-            'best_score': grid_search.best_score_,
-            'time': grid_time,
-            'n_evaluations': len(grid_search.cv_results_['mean_test_score'])
-        }
-        
-        # Random Search
-        print("\n" + "="*40)
-        print("RANDOM SEARCH")
-        print("="*40)
-        start_time = time.time()
-        
-        random_search = self.random_search_tuning(
-            X, y,
-            RandomForestClassifier(random_state=42),
-            param_distributions,
-            n_iter=27  # Same as grid search combinations
-        )
-        
-        random_time = time.time() - start_time
-        results['Random Search'] = {
-            'best_score': random_search.best_score_,
-            'time': random_time,
-            'n_evaluations': len(random_search.cv_results_['mean_test_score'])
-        }
-        
-        # Bayesian Optimization (if available)
-        try:
-            from skopt.space import Real, Integer
-            
-            print("\n" + "="*40)
-            print("BAYESIAN OPTIMIZATION")
-            print("="*40)
-            
-            search_space = {
-                'n_estimators': Integer(50, 200),
-                'max_depth': Integer(5, 20),
-                'min_samples_split': Integer(2, 10)
-            }
-            
-            start_time = time.time()
-            bayes_search = self.bayesian_optimization(
-                X, y,
-                RandomForestClassifier,
-                search_space,
-                n_calls=27
-            )
-            
-            if bayes_search:
-                bayes_time = time.time() - start_time
-                results['Bayesian Opt'] = {
-                    'best_score': bayes_search.best_score_,
-                    'time': bayes_time,
-                    'n_evaluations': 27
-                }
-        except ImportError:
-            pass
-        
-        # Visualization
-        if len(results) > 0:
-            results_df = pd.DataFrame(results).T
-            
-            fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-            
-            # Best scores
-            axes[0].bar(results_df.index, results_df['best_score'])
-            axes[0].set_ylabel('Best Score')
-            axes[0].set_title('Optimization Performance')
-            axes[0].set_ylim([min(results_df['best_score']) - 0.01, 
-                             max(results_df['best_score']) + 0.01])
-            axes[0].grid(True, alpha=0.3)
-            
-            # Time taken
-            axes[1].bar(results_df.index, results_df['time'])
-            axes[1].set_ylabel('Time (seconds)')
-            axes[1].set_title('Computation Time')
-            axes[1].grid(True, alpha=0.3)
-            
-            # Efficiency (score per second)
-            efficiency = results_df['best_score'] / results_df['time']
-            axes[2].bar(results_df.index, efficiency)
-            axes[2].set_ylabel('Score / Time')
-            axes[2].set_title('Optimization Efficiency')
-            axes[2].grid(True, alpha=0.3)
-            
-            plt.suptitle('Hyperparameter Search Methods Comparison', fontsize=14, y=1.02)
-            plt.tight_layout()
-            plt.show()
-            
-            return results_df
-    
-    def visualize_search_results(self, search_cv):
-        """Visualize hyperparameter search results"""
-        
-        results = pd.DataFrame(search_cv.cv_results_)
-        
-        # Get parameter names
-        param_names = [p for p in results.columns if p.startswith('param_')]
-        
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Plot training vs validation scores
-        axes[0].scatter(results['mean_train_score'], results['mean_test_score'], 
-                       alpha=0.5, s=20)
-        axes[0].plot([0, 1], [0, 1], 'r--', lw=2)
-        axes[0].set_xlabel('Training Score')
-        axes[0].set_ylabel('Validation Score')
-        axes[0].set_title('Training vs Validation Scores')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Highlight best point
-        best_idx = search_cv.best_index_
-        axes[0].scatter(results.loc[best_idx, 'mean_train_score'],
-                       results.loc[best_idx, 'mean_test_score'],
-                       color='red', s=100, marker='*', 
-                       label='Best params', zorder=5)
-        axes[0].legend()
-        
-        # Parameter importance (if we have 2 or more parameters)
-        if len(param_names) >= 2:
-            # Take first two parameters for visualization
-            param1 = param_names[0]
-            param2 = param_names[1] if len(param_names) > 1 else 'mean_test_score'
-            
-            # Create pivot table for heatmap
-            pivot = results.pivot_table(
-                values='mean_test_score',
-                index=param1,
-                columns=param2 if param2 != 'mean_test_score' else None,
-                aggfunc='mean'
-            )
-            
-            if param2 != 'mean_test_score':
-                sns.heatmap(pivot, annot=True, fmt='.3f', cmap='YlOrRd', ax=axes[1])
-                axes[1].set_title(f'Score Heatmap: {param1} vs {param2}')
-            else:
-                axes[1].bar(range(len(results)), results['mean_test_score'])
-                axes[1].set_xlabel('Configuration')
-                axes[1].set_ylabel('Validation Score')
-                axes[1].set_title('Score by Configuration')
-        
-        plt.suptitle('Hyperparameter Search Results', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
+                <div class="card card-info">
+                    <h4>💡 Prefer the Simpler Model When It Is a Tie</h4>
+                    <p>Depths 4 and 5 score within a hair of each other, and the fold spread is far larger than that hair. When a simpler setting is within noise of the best one, take the simpler one: it is faster, easier to explain, and less likely to have won by luck. A common formal version is the <strong>one-standard-error rule</strong>: choose the simplest setting whose score is within one standard error of the best. Exercise 4 has you apply it.</p>
+                </div>
+            </section>
 
-# Hyperparameter tuning
-print("\n" + "="*60)
-print("HYPERPARAMETER TUNING METHODS")
-print("="*60)
+            <!-- ============================================================ -->
+            <section id="learning-curve" class="lesson-section">
+                <h2>📈 Learning Curves: Would More Data Help?</h2>
 
-tuner = HyperparameterTuner()
+                <p>A <strong>learning curve</strong> keeps the model fixed and changes the amount of training data. For each size it trains on that many rows and reports the training score and the cross-validated score. It answers a question managers ask all the time: "if we collected twice as much data, would the model get better?"</p>
 
-# Compare search methods
-print("\nComparing search methods...")
-search_comparison = tuner.compare_search_methods(X_class[:500], y_class[:500])
+                <pre><code class="language-python">from sklearn.model_selection import LearningCurveDisplay
 
-if search_comparison is not None:
-    print("\nSearch Method Comparison:")
-    print(search_comparison)
-
-# Visualize search results
-if 'grid' in tuner.best_models:
-    print("\nVisualizing grid search results...")
-    grid_search = GridSearchCV(
-        RandomForestClassifier(random_state=42),
-        {'n_estimators': [50, 100, 200], 'max_depth': [5, 10, 20]},
-        cv=5, return_train_score=True
+sizes = np.linspace(0.1, 1.0, 5)
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True, layout="constrained")
+curves = {}
+for ax, name in zip(axes, ["logistic", "boosting"]):
+    curves[name] = LearningCurveDisplay.from_estimator(
+        candidates[name], X_train, y_train, train_sizes=sizes,
+        cv=cv5, scoring="roc_auc", score_name="ROC AUC", ax=ax,
     )
-    grid_search.fit(X_class[:500], y_class[:500])
-    tuner.visualize_search_results(grid_search)</code></pre>
+    ax.set_title(name)
+plt.show()
 
-    <h2>Model Selection Strategies</h2>
-    
-    <h3>Comparing and Selecting Models</h3>
-    <pre class="language-python"><code>from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+for name, lc in curves.items():
+    print(name)
+    print(pd.DataFrame({"train_rows": lc.train_sizes,
+                        "train_auc": lc.train_scores.mean(axis=1),
+                        "validation_auc": lc.test_scores.mean(axis=1)}).round(3).to_string(index=False))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>logistic
+ train_rows  train_auc  validation_auc
+        360      0.861           0.790
+       1170      0.839           0.818
+       1980      0.838           0.827
+       2790      0.838           0.830
+       3600      0.843           0.832
+boosting
+ train_rows  train_auc  validation_auc
+        360        1.0           0.818
+       1170        1.0           0.834
+       1980        1.0           0.846
+       2790        1.0           0.852
+       3600        1.0           0.861</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/evaluation_model_selection_learning_curves.png" alt="Two learning curves side by side. For logistic regression the training and validation ROC AUC converge to about 0.83 as training rows grow from 360 to 3,600. For gradient boosting the training score stays at 1.0 at every size, while the validation score climbs steadily from about 0.82 to 0.86 and is still rising at the largest size." width="1100" height="440" loading="lazy">
+                    <figcaption>Logistic regression has converged: more data will not help it. Boosting is still climbing, and its perfect training score says it is overfitting.</figcaption>
+                </figure>
+
+                <p>The two models tell opposite stories:</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Pattern</th><th>Diagnosis</th><th>What helps</th><th>What does not</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Logistic: curves meet early and flatten at about 0.83</td><td>High bias (underfitting): the model is too simple for the pattern</td><td>A more flexible model, or better features (for example a "days since last order above 150" flag)</td><td>More rows of the same data</td></tr>
+                            <tr><td>Boosting: training score 1.0, validation still rising</td><td>High variance (overfitting), but it is learning real signal as data grows</td><td>More data, or regularization: fewer leaves, more rows per leaf, fewer rounds (Lesson 6.2)</td><td>A more flexible model</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p>This is why learning curves are worth the computing time. Without them you might spend a month collecting more customer history for the logistic model, which has already learned all it can. With them, you know that the next win for logistic regression lies in features, and the next win for boosting lies in taming it.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Learning Curves Are Not Free</h4>
+                    <p>Five sizes times five folds is 25 fits per model. On large data or slow models, use fewer sizes, three folds, or a sample of the rows. The shape of the curve matters, not its third decimal.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="choose" class="lesson-section">
+                <h2>🏁 Making the Call, Then Testing Once</h2>
+
+                <p>The evidence so far: boosting and the forest are both clearly better than logistic regression; the default forest edges out default boosting consistently but by less than 0.01; boosting's learning curve suggests it would improve with regularization. Other things to weigh:</p>
+                <ul>
+                    <li><strong>Cost.</strong> The forest builds 200 deep trees; boosting builds 100 shallow ones. On larger data the difference in fit and prediction time can matter.</li>
+                    <li><strong>Explainability.</strong> Logistic regression's coefficients are easy to show a manager. Tree ensembles need the tools of Module 7.</li>
+                    <li><strong>Room to improve.</strong> A model with obvious headroom (boosting) is a better investment for tuning than one that is already near its ceiling.</li>
+                </ul>
+
+                <p>For this lesson, take the forest as the current best <em>default</em> model. Fit it on the whole training set and open the test set, once:</p>
+
+                <pre><code class="language-python">from sklearn.metrics import roc_auc_score
+
+final = candidates["forest"].fit(X_train, y_train)
+test_auc = roc_auc_score(y_test, final.predict_proba(X_test)[:, 1])
+
+print(f"cross-validated AUC: {summary.loc['forest', 'mean_auc']:.3f} +/- {summary.loc['forest', 'std_auc']:.3f}")
+print(f"test AUC (one look): {test_auc:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>cross-validated AUC: 0.867 +/- 0.016
+test AUC (one look): 0.861</code></pre>
+                </div>
+
+                <p>The test score lands within the cross-validated range: the selection process did not fool you. If it had landed far below, that would be a warning that something in the comparison leaked or that the test customers differ from the training ones. Either way, you report the test number, and you do not go back to change the model because of it. If you did, you would need a new test set to report honestly.</p>
+
+                <div class="card card-success">
+                    <h4>✅ The Model-Selection Checklist</h4>
+                    <p>Same preprocessing pipeline for all candidates. Same folds (one splitter object, fixed <code>random_state</code>). One metric chosen for the business question, decided <em>before</em> looking at results. A baseline in the table. Paired differences for close calls. Curves to decide what to try next. The test set opened once, at the end.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Two of these raise an error that points straight at the fix. The other two raise nothing at all, which makes them the dangerous ones.</p>
+
+                <h3>1. A Scorer Name That Does Not Exist</h3>
+
+                <p>The real message is very long, because it lists every valid scorer name. This block catches it and prints its type, its start and its end:</p>
+
+                <pre><code class="language-python">try:
+    cross_validate(candidates["logistic"], X_train, y_train, cv=cv5, scoring="auc")
+except ValueError as err:
+    message = str(err)
+    print(type(err).__name__)
+    print(message[:62], "...")
+    print("...", message[-18:])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>InvalidParameterError
+The 'scoring' parameter of cross_validate must be a str among  ...
+... Got 'auc' instead.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> <code>InvalidParameterError</code> is scikit-learn's kind of <code>ValueError</code> for an argument it does not accept. Scorers have exact names, and <code>"auc"</code> is not one of them. <strong>Fix:</strong> use <code>"roc_auc"</code>. The full list is in <code>sklearn.metrics.get_scorer_names()</code>; error-type metrics appear with a <code>neg_</code> prefix (such as <code>"neg_log_loss"</code>) because scikit-learn always treats a bigger score as better.</p>
+
+                <h3>2. Forgetting the Step Name in a Pipeline</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">from sklearn.model_selection import validation_curve
+
+validation_curve(tree_pipe, X_train, y_train, param_name="max_depth", param_range=[2, 4], cv=cv5)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Invalid parameter 'max_depth' for estimator Pipeline(steps=[('columntransformer',
+...
+                 DecisionTreeClassifier(random_state=42))]). Valid parameters are: ['memory', 'steps', 'transform_input', 'verbose'].</code></pre>
+                </div>
+                <p>The middle of the message (shortened here) prints the whole pipeline. <strong>What it means:</strong> a pipeline has no <code>max_depth</code>; its tree step does. <strong>Fix:</strong> prefix the step name and two underscores: <code>decisiontreeclassifier__max_depth</code>. To see every valid name, print <code>sorted(tree_pipe.get_params())</code>.</p>
+
+                <h3>3. Each Model on Its Own Shuffle</h3>
+
+                <p>Paired differences only work when the two models saw the same folds. Here is what happens to the forest-versus-boosting comparison if each model gets its own shuffle:</p>
+
+                <pre><code class="language-python">cv_a = RepeatedStratifiedKFold(n_splits=5, n_repeats=2, random_state=0)
+cv_b = RepeatedStratifiedKFold(n_splits=5, n_repeats=2, random_state=1)
+forest_a = cross_validate(candidates["forest"], X_train, y_train, cv=cv_a, scoring="roc_auc")["test_score"]
+boosting_b = cross_validate(candidates["boosting"], X_train, y_train, cv=cv_b, scoring="roc_auc")["test_score"]
+
+mismatched = pd.Series(forest_a - boosting_b)
+print(f"mismatched folds: mean {mismatched.mean():+.4f}, std {mismatched.std():.4f}, "
+      f"forest wins {(mismatched &gt; 0).sum()} of {len(mismatched)} folds")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>mismatched folds: mean +0.0073, std 0.0133, forest wins 6 of 10 folds</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the mean difference is about the same, but the spread of the "paired" differences jumps from 0.0078 to 0.0133 and the forest now wins only 6 folds out of 10 instead of 9. Nothing is paired any more: each difference mixes the model gap with the luck of two different folds, and the consistent edge you measured earlier disappears into noise. <strong>Fix:</strong> create one splitter with a fixed <code>random_state</code> and pass the same object to every candidate. (Passing <code>cv=5</code> to every call is also safe: without shuffling, the folds are the same each time.)</p>
+
+                <h3>4. Crowning a Winner by the Third Decimal</h3>
+
+                <pre><code class="language-python">ranked = summary.sort_values("mean_auc", ascending=False)
+print(ranked[["mean_auc", "std_auc"]].round(4).head(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>          mean_auc  std_auc
+model
+forest      0.8674   0.0161
+boosting    0.8604   0.0128</code></pre>
+                </div>
+                <p><strong>What happened:</strong> sorting a table always produces a "winner", even when the top two are separated by a fraction of their standard deviations. A slide that says "forest: 0.867, boosting: 0.860, forest wins" hides the most important fact. <strong>Fix:</strong> report the spread next to every mean, check paired differences for close calls, and say "within noise" when it is.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: The Churn-Model Bake-off</h2>
+
+                <p>Pinecrest's care team calls customers from the top of a risk-ranked list, so what matters is how clean the top of the list is. Your job: run a fair bake-off of five candidates using <strong>average precision</strong> (Lesson 1.4: it rewards models whose highest-ranked customers really are churners), check whether the top two are really different, draw a learning curve for the winner, test it once, and save the results. Work in a new notebook called <code>lesson_6_1_project</code>. Allow about 35 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load, split and write the preprocessing once <span class="step-time">(5 min)</span></h3>
+                    <p>Same features, same split, same preprocessing function as the lesson.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import make_pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+           "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+           "email_opens_90d"]
+categorical = ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"]
+X_train, X_test, y_train, y_test = train_test_split(
+    customers[numeric + categorical], customers["churned"],
+    test_size=0.25, stratify=customers["churned"], random_state=42)
+
+
+def make_preprocess():
+    return ColumnTransformer([
+        ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric),
+        ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"),
+                              OneHotEncoder(handle_unknown="ignore")), categorical),
+    ])
+
+
+print(len(X_train), len(X_test))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>4500 1500</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Line up five candidates <span class="step-time">(5 min)</span></h3>
+                    <p>Add nearest neighbors (Lesson 4.1) and a depth-5 tree (the sweet spot from the validation curve) to the lesson's line-up.</p>
+                    <pre><code class="language-python">from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import GaussianNB
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
 
-class ModelSelector:
-    """Systematic model selection"""
-    
-    def __init__(self):
-        self.models = {}
-        self.results = {}
-        self.best_model = None
-        
-    def compare_algorithms(self, X, y, models_dict=None):
-        """Compare multiple algorithms"""
-        
-        if models_dict is None:
-            models_dict = {
-                'Logistic Regression': LogisticRegression(max_iter=1000),
-                'Random Forest': RandomForestClassifier(n_estimators=100),
-                'Gradient Boosting': GradientBoostingClassifier(n_estimators=100),
-                'SVM': SVC(probability=True),
-                'KNN': KNeighborsClassifier(),
-                'Naive Bayes': GaussianNB()
-            }
-        
-        from sklearn.model_selection import cross_validate
-        
-        results = []
-        
-        for name, model in models_dict.items():
-            # Create pipeline with scaling
-            pipeline = Pipeline([
-                ('scaler', StandardScaler()),
-                ('model', model)
-            ])
-            
-            # Cross-validation with multiple metrics
-            cv_results = cross_validate(
-                pipeline, X, y,
-                cv=5,
-                scoring=['accuracy', 'precision_macro', 'recall_macro', 'f1_macro'],
-                return_train_score=True
-            )
-            
-            results.append({
-                'Algorithm': name,
-                'Accuracy': cv_results['test_accuracy'].mean(),
-                'Accuracy_Std': cv_results['test_accuracy'].std(),
-                'Precision': cv_results['test_precision_macro'].mean(),
-                'Recall': cv_results['test_recall_macro'].mean(),
-                'F1': cv_results['test_f1_macro'].mean(),
-                'Train_Time': cv_results['fit_time'].mean(),
-                'Test_Time': cv_results['score_time'].mean()
-            })
-            
-            self.models[name] = pipeline
-        
-        results_df = pd.DataFrame(results)
-        results_df = results_df.sort_values('Accuracy', ascending=False)
-        
-        # Visualization
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-        axes = axes.flatten()
-        
-        # Accuracy comparison
-        axes[0].barh(results_df['Algorithm'], results_df['Accuracy'])
-        axes[0].set_xlabel('Accuracy')
-        axes[0].set_title('Model Accuracy Comparison')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Precision vs Recall
-        axes[1].scatter(results_df['Precision'], results_df['Recall'], s=100)
-        for i, txt in enumerate(results_df['Algorithm']):
-            axes[1].annotate(txt, (results_df['Precision'].iloc[i], 
-                                  results_df['Recall'].iloc[i]),
-                           fontsize=8)
-        axes[1].set_xlabel('Precision')
-        axes[1].set_ylabel('Recall')
-        axes[1].set_title('Precision vs Recall')
-        axes[1].grid(True, alpha=0.3)
-        
-        # F1 Score
-        axes[2].barh(results_df['Algorithm'], results_df['F1'])
-        axes[2].set_xlabel('F1 Score')
-        axes[2].set_title('F1 Score Comparison')
-        axes[2].grid(True, alpha=0.3)
-        
-        # Training time
-        axes[3].barh(results_df['Algorithm'], results_df['Train_Time'])
-        axes[3].set_xlabel('Training Time (seconds)')
-        axes[3].set_title('Training Time Comparison')
-        axes[3].grid(True, alpha=0.3)
-        
-        # Accuracy vs Training Time trade-off
-        axes[4].scatter(results_df['Train_Time'], results_df['Accuracy'], s=100)
-        for i, txt in enumerate(results_df['Algorithm']):
-            axes[4].annotate(txt, (results_df['Train_Time'].iloc[i], 
-                                  results_df['Accuracy'].iloc[i]),
-                           fontsize=8)
-        axes[4].set_xlabel('Training Time (seconds)')
-        axes[4].set_ylabel('Accuracy')
-        axes[4].set_title('Accuracy vs Training Time Trade-off')
-        axes[4].grid(True, alpha=0.3)
-        
-        # Radar chart for multi-metric comparison
-        from math import pi
-        
-        categories = ['Accuracy', 'Precision', 'Recall', 'F1']
-        N = len(categories)
-        
-        angles = [n / N * 2 * pi for n in range(N)]
-        angles += angles[:1]
-        
-        ax = plt.subplot(2, 3, 6, projection='polar')
-        
-        # Plot top 3 models
-        for i in range(min(3, len(results_df))):
-            values = results_df.iloc[i][['Accuracy', 'Precision', 'Recall', 'F1']].values.tolist()
-            values += values[:1]
-            ax.plot(angles, values, 'o-', linewidth=2, 
-                   label=results_df.iloc[i]['Algorithm'])
-            ax.fill(angles, values, alpha=0.25)
-        
-        ax.set_xticks(angles[:-1])
-        ax.set_xticklabels(categories)
-        ax.set_ylim(0, 1)
-        ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
-        ax.set_title('Multi-Metric Comparison (Top 3)', y=1.08)
-        
-        plt.suptitle('Algorithm Comparison Dashboard', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        self.results = results_df
-        self.best_model = self.models[results_df.iloc[0]['Algorithm']]
-        
-        return results_df
-    
-    def validation_curves(self, X, y, model, param_name, param_range):
-        """Plot validation curves for a parameter"""
-        
-        train_scores, val_scores = validation_curve(
-            model, X, y,
-            param_name=param_name,
-            param_range=param_range,
-            cv=5,
-            scoring='accuracy'
-        )
-        
-        # Calculate mean and std
-        train_mean = train_scores.mean(axis=1)
-        train_std = train_scores.std(axis=1)
-        val_mean = val_scores.mean(axis=1)
-        val_std = val_scores.std(axis=1)
-        
-        # Plot
-        plt.figure(figsize=(10, 6))
-        plt.plot(param_range, train_mean, 'o-', label='Training score', linewidth=2)
-        plt.fill_between(param_range, train_mean - train_std, 
-                        train_mean + train_std, alpha=0.3)
-        
-        plt.plot(param_range, val_mean, 'o-', label='Validation score', linewidth=2)
-        plt.fill_between(param_range, val_mean - val_std, 
-                        val_mean + val_std, alpha=0.3)
-        
-        plt.xlabel(param_name)
-        plt.ylabel('Accuracy')
-        plt.title(f'Validation Curve: {param_name}')
-        plt.legend(loc='best')
-        plt.grid(True, alpha=0.3)
-        
-        # Mark best value
-        best_idx = np.argmax(val_mean)
-        plt.axvline(x=param_range[best_idx], color='red', linestyle='--', 
-                   label=f'Best: {param_range[best_idx]}')
-        plt.legend()
-        
-        plt.show()
-        
-        return train_scores, val_scores
-    
-    def learning_curves(self, X, y, model, train_sizes=None):
-        """Plot learning curves"""
-        
-        if train_sizes is None:
-            train_sizes = np.linspace(0.1, 1.0, 10)
-        
-        train_sizes_abs, train_scores, val_scores = learning_curve(
-            model, X, y,
-            train_sizes=train_sizes,
-            cv=5,
-            scoring='accuracy',
-            n_jobs=-1
-        )
-        
-        # Calculate mean and std
-        train_mean = train_scores.mean(axis=1)
-        train_std = train_scores.std(axis=1)
-        val_mean = val_scores.mean(axis=1)
-        val_std = val_scores.std(axis=1)
-        
-        # Plot
-        plt.figure(figsize=(10, 6))
-        plt.plot(train_sizes_abs, train_mean, 'o-', label='Training score', linewidth=2)
-        plt.fill_between(train_sizes_abs, train_mean - train_std, 
-                        train_mean + train_std, alpha=0.3)
-        
-        plt.plot(train_sizes_abs, val_mean, 'o-', label='Validation score', linewidth=2)
-        plt.fill_between(train_sizes_abs, val_mean - val_std, 
-                        val_mean + val_std, alpha=0.3)
-        
-        plt.xlabel('Training Set Size')
-        plt.ylabel('Accuracy')
-        plt.title('Learning Curves')
-        plt.legend(loc='best')
-        plt.grid(True, alpha=0.3)
-        
-        # Add annotations for bias/variance
-        final_train = train_mean[-1]
-        final_val = val_mean[-1]
-        gap = final_train - final_val
-        
-        if gap > 0.1:
-            plt.text(0.5, 0.2, 'High Variance\n(Overfitting)', 
-                    transform=plt.gca().transAxes,
-                    fontsize=12, color='red',
-                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        elif final_val < 0.7:
-            plt.text(0.5, 0.2, 'High Bias\n(Underfitting)', 
-                    transform=plt.gca().transAxes,
-                    fontsize=12, color='blue',
-                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        else:
-            plt.text(0.5, 0.2, 'Good Fit', 
-                    transform=plt.gca().transAxes,
-                    fontsize=12, color='green',
-                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        
-        plt.show()
-        
-        return train_sizes_abs, train_scores, val_scores
-
-# Model selection
-print("\n" + "="*60)
-print("MODEL SELECTION STRATEGIES")
-print("="*60)
-
-selector = ModelSelector()
-
-# Compare algorithms
-print("\nComparing different algorithms...")
-comparison_results = selector.compare_algorithms(X_class[:500], y_class[:500])
-
-print("\nAlgorithm Comparison Results:")
-print(comparison_results.to_string())
-
-# Validation curves
-print("\nPlotting validation curves...")
-selector.validation_curves(
-    X_class, y_class,
-    RandomForestClassifier(random_state=42),
-    'n_estimators',
-    [10, 50, 100, 200, 500]
-)
-
-# Learning curves
-print("\nPlotting learning curves...")
-selector.learning_curves(
-    X_class, y_class,
-    RandomForestClassifier(n_estimators=100, random_state=42)
-)</code></pre>
-
-    <h2>Pipeline Optimization</h2>
-    
-    <h3>Building and Tuning Complete ML Pipelines</h3>
-    <pre class="language-python"><code>from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler, PolynomialFeatures
-from sklearn.decomposition import PCA
-from sklearn.feature_selection import SelectKBest, f_classif
-
-class PipelineOptimizer:
-    """Optimize complete machine learning pipelines"""
-    
-    def __init__(self):
-        self.best_pipeline = None
-        self.pipeline_results = {}
-        
-    def create_pipeline(self, steps):
-        """Create a pipeline from steps"""
-        return Pipeline(steps)
-    
-    def optimize_pipeline(self, X, y):
-        """Optimize a complete pipeline including preprocessing"""
-        
-        # Create pipeline
-        pipeline = Pipeline([
-            ('scaler', StandardScaler()),
-            ('feature_selection', SelectKBest()),
-            ('classifier', RandomForestClassifier())
-        ])
-        
-        # Parameter grid for pipeline
-        param_grid = [
-            {
-                'feature_selection__k': [5, 10, 15, 20],
-                'classifier': [RandomForestClassifier()],
-                'classifier__n_estimators': [50, 100],
-                'classifier__max_depth': [5, 10, None]
-            },
-            {
-                'feature_selection__k': [5, 10, 15, 20],
-                'classifier': [LogisticRegression()],
-                'classifier__C': [0.1, 1.0, 10.0],
-                'classifier__max_iter': [1000]
-            }
-        ]
-        
-        # Grid search
-        grid_search = GridSearchCV(
-            pipeline, param_grid,
-            cv=5, scoring='accuracy',
-            n_jobs=-1, verbose=1
-        )
-        
-        print("Optimizing pipeline...")
-        grid_search.fit(X, y)
-        
-        self.best_pipeline = grid_search.best_estimator_
-        
-        print(f"\nBest pipeline parameters:")
-        print(grid_search.best_params_)
-        print(f"Best score: {grid_search.best_score_:.3f}")
-        
-        return grid_search
-    
-    def pipeline_ablation_study(self, X, y):
-        """Study the impact of different pipeline components"""
-        
-        # Different pipeline configurations
-        pipelines = {
-            'Basic': Pipeline([
-                ('classifier', RandomForestClassifier(n_estimators=100))
-            ]),
-            'Scaled': Pipeline([
-                ('scaler', StandardScaler()),
-                ('classifier', RandomForestClassifier(n_estimators=100))
-            ]),
-            'PCA': Pipeline([
-                ('scaler', StandardScaler()),
-                ('pca', PCA(n_components=10)),
-                ('classifier', RandomForestClassifier(n_estimators=100))
-            ]),
-            'Feature Selection': Pipeline([
-                ('scaler', StandardScaler()),
-                ('feature_selection', SelectKBest(k=10)),
-                ('classifier', RandomForestClassifier(n_estimators=100))
-            ]),
-            'Full Pipeline': Pipeline([
-                ('scaler', StandardScaler()),
-                ('feature_selection', SelectKBest(k=15)),
-                ('pca', PCA(n_components=10)),
-                ('classifier', RandomForestClassifier(n_estimators=100))
-            ])
-        }
-        
-        results = []
-        
-        for name, pipeline in pipelines.items():
-            scores = cross_val_score(pipeline, X, y, cv=5, scoring='accuracy')
-            results.append({
-                'Pipeline': name,
-                'Mean Score': scores.mean(),
-                'Std Score': scores.std(),
-                'Components': len(pipeline.steps)
-            })
-        
-        results_df = pd.DataFrame(results)
-        results_df = results_df.sort_values('Mean Score', ascending=False)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Bar plot of scores
-        axes[0].bar(results_df['Pipeline'], results_df['Mean Score'], 
-                   yerr=results_df['Std Score'], capsize=5)
-        axes[0].set_ylabel('Accuracy')
-        axes[0].set_title('Pipeline Configuration Comparison')
-        axes[0].tick_params(axis='x', rotation=45)
-        axes[0].grid(True, alpha=0.3)
-        
-        # Components vs Score
-        axes[1].scatter(results_df['Components'], results_df['Mean Score'], s=100)
-        for i, txt in enumerate(results_df['Pipeline']):
-            axes[1].annotate(txt, (results_df['Components'].iloc[i], 
-                                  results_df['Mean Score'].iloc[i]),
-                           fontsize=9, ha='center')
-        axes[1].set_xlabel('Number of Components')
-        axes[1].set_ylabel('Mean Score')
-        axes[1].set_title('Pipeline Complexity vs Performance')
-        axes[1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Pipeline Ablation Study', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return results_df
-
-# Pipeline optimization
-print("\n" + "="*60)
-print("PIPELINE OPTIMIZATION")
-print("="*60)
-
-pipeline_opt = PipelineOptimizer()
-
-# Optimize pipeline
-print("\nOptimizing complete pipeline...")
-optimized_pipeline = pipeline_opt.optimize_pipeline(X_class[:500], y_class[:500])
-
-# Ablation study
-print("\nPerforming pipeline ablation study...")
-ablation_results = pipeline_opt.pipeline_ablation_study(X_class[:500], y_class[:500])
-
-print("\nPipeline Ablation Results:")
-print(ablation_results.to_string(index=False))</code></pre>
-
-    <h2>Best Practices and Guidelines</h2>
-    
-    <pre class="language-python"><code>print("\n" + "="*60)
-print("MODEL SELECTION & TUNING BEST PRACTICES")
-print("="*60)
-
-best_practices = """
-KEY GUIDELINES:
-
-1. CROSS-VALIDATION STRATEGY:
-   • Use StratifiedKFold for imbalanced classification
-   • Use TimeSeriesSplit for temporal data
-   • Use RepeatedKFold for small datasets
-   • Use nested CV for unbiased evaluation
-   • 5-10 folds typically sufficient
-
-2. HYPERPARAMETER TUNING ORDER:
-   • Start with random search for exploration
-   • Use grid search for fine-tuning
-   • Consider Bayesian optimization for expensive models
-   • Always use cross-validation
-   • Set aside final test set
-
-3. AVOIDING OVERFITTING:
-   • Use proper cross-validation
-   • Don't tune on test set
-   • Use regularization
-   • Monitor training vs validation scores
-   • Consider simpler models
-
-4. SEARCH STRATEGY:
-   • Coarse-to-fine approach
-   • Log scale for regularization parameters
-   • Start with default parameters
-   • Focus on most impactful parameters first
-
-5. COMPUTATIONAL EFFICIENCY:
-   • Use RandomizedSearchCV for large spaces
-   • Parallelize with n_jobs=-1
-   • Use early stopping when available
-   • Cache repeated computations
-   • Consider successive halving
-
-6. EVALUATION METRICS:
-   • Choose metric based on problem
-   • Consider multiple metrics
-   • Account for class imbalance
-   • Use domain-specific metrics
-   • Consider computational cost
-
-7. PIPELINE OPTIMIZATION:
-   • Tune preprocessing with model
-   • Use Pipeline for consistency
-   • Include feature selection
-   • Optimize end-to-end
-
-8. FINAL MODEL SELECTION:
-   • Compare multiple algorithms
-   • Consider ensemble methods
-   • Evaluate on holdout test set
-   • Check for data leakage
-   • Document all steps
-"""
-
-print(best_practices)
-
-# Common pitfalls
-pitfalls = """
-COMMON PITFALLS TO AVOID:
-
-1. ❌ Tuning on test set
-   ✓ Use separate validation set or cross-validation
-
-2. ❌ Not scaling features for distance-based models
-   ✓ Include scaling in pipeline
-
-3. ❌ Using accuracy for imbalanced datasets
-   ✓ Use F1, AUC-ROC, or balanced accuracy
-
-4. ❌ Overfitting hyperparameters
-   ✓ Use nested cross-validation
-
-5. ❌ Ignoring computational cost
-   ✓ Consider time/accuracy trade-off
-
-6. ❌ Not setting random seeds
-   ✓ Ensure reproducibility
-
-7. ❌ Tuning too many parameters at once
-   ✓ Use sequential or hierarchical approach
-
-8. ❌ Not checking learning curves
-   ✓ Diagnose bias/variance issues
-"""
-
-print(pitfalls)
-
-# Summary table
-summary_data = {
-    'Method': ['Grid Search', 'Random Search', 'Bayesian Opt', 'Genetic Algo', 'Manual'],
-    'Exhaustive': ['Yes', 'No', 'No', 'No', 'No'],
-    'Efficiency': ['Low', 'Medium', 'High', 'Medium', 'Low'],
-    'Parallelizable': ['Yes', 'Yes', 'Limited', 'Yes', 'No'],
-    'Good For': ['Small spaces', 'Large spaces', 'Expensive models', 'Complex spaces', 'Understanding'],
-    'Convergence': ['Guaranteed', 'Probabilistic', 'Probabilistic', 'Probabilistic', 'No guarantee']
+models = {
+    "baseline": DummyClassifier(),
+    "logistic": LogisticRegression(max_iter=1000),
+    "knn_50": KNeighborsClassifier(n_neighbors=50),
+    "tree_d5": DecisionTreeClassifier(max_depth=5, random_state=42),
+    "forest": RandomForestClassifier(n_estimators=200, min_samples_leaf=5, n_jobs=-1, random_state=42),
 }
+pipes = {name: make_pipeline(make_preprocess(), model) for name, model in models.items()}
+print(len(pipes), "candidates")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>5 candidates</code></pre>
+                    </div>
+                </div>
 
-summary_df = pd.DataFrame(summary_data)
-print("\n" + "="*60)
-print("HYPERPARAMETER SEARCH METHODS SUMMARY")
-print("="*60)
-print(summary_df.to_string(index=False))</code></pre>
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Score them on identical folds <span class="step-time">(10 min)</span></h3>
+                    <p>One splitter, two metrics. Average precision is the deciding metric (chosen before looking); AUC is for context.</p>
+                    <pre><code class="language-python">from sklearn.model_selection import RepeatedStratifiedKFold, cross_validate
 
-    <h2>Practice Exercises</h2>
-    
-    <h3>Exercise 1: Custom Cross-Validation</h3>
-    <p>Implement custom cross-validation strategies:</p>
-    <ol>
-        <li>Create stratified group k-fold for grouped data</li>
-        <li>Implement Monte Carlo cross-validation</li>
-        <li>Design blocked time series cross-validation</li>
-        <li>Create adversarial validation splits</li>
-    </ol>
+cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=2, random_state=42)
+per_fold, rows = {}, []
+for name, pipe in pipes.items():
+    res = cross_validate(pipe, X_train, y_train, cv=cv, scoring=["average_precision", "roc_auc"])
+    per_fold[name] = res["test_average_precision"]
+    rows.append({"model": name,
+                 "ap_mean": res["test_average_precision"].mean(),
+                 "ap_std": res["test_average_precision"].std(),
+                 "auc_mean": res["test_roc_auc"].mean()})
 
-    <h3>Exercise 2: Advanced Optimization</h3>
-    <p>Implement advanced hyperparameter optimization:</p>
-    <ol>
-        <li>Build multi-objective optimization (accuracy vs speed)</li>
-        <li>Implement successive halving for efficiency</li>
-        <li>Create adaptive search strategies</li>
-        <li>Design meta-learning for parameter initialization</li>
-    </ol>
+board = pd.DataFrame(rows).set_index("model").sort_values("ap_mean", ascending=False)
+print(board.round(3))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>          ap_mean  ap_std  auc_mean
+model
+forest      0.615   0.031     0.867
+tree_d5     0.539   0.038     0.842
+logistic    0.524   0.031     0.832
+knn_50      0.518   0.033     0.834
+baseline    0.165   0.000     0.500</code></pre>
+                    </div>
+                    <p>The baseline's average precision equals the churn rate, 0.165: that is what a list in random order scores. Every real model is several times better, and the forest leads.</p>
+                </div>
 
-    <h3>Exercise 3: AutoML Pipeline</h3>
-    <p>Build an automated machine learning pipeline:</p>
-    <ol>
-        <li>Automatic feature engineering</li>
-        <li>Algorithm selection based on data characteristics</li>
-        <li>Automated hyperparameter tuning</li>
-        <li>Ensemble generation and selection</li>
-    </ol>
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Is the leader really ahead? <span class="step-time">(5 min)</span></h3>
+                    <p>Compare the top two fold by fold.</p>
+                    <pre><code class="language-python">first, second = board.index[:2]
+diff = per_fold[first] - per_fold[second]
+print(f"{first} - {second}: mean {diff.mean():+.3f}, std {diff.std():.3f}, "
+      f"{first} wins {(diff > 0).sum()} of {len(diff)} folds")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>forest - tree_d5: mean +0.075, std 0.021, forest wins 10 of 10 folds</code></pre>
+                    </div>
+                    <p>A lead in every fold: the forest's advantage on the top of the list is consistent, not luck.</p>
+                </div>
 
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>🎯 Proper cross-validation prevents overfitting</li>
-        <li>🔍 Grid search is exhaustive but expensive</li>
-        <li>🎲 Random search often finds good solutions faster</li>
-        <li>📊 Nested CV provides unbiased performance estimates</li>
-        <li>📈 Learning curves diagnose bias/variance issues</li>
-        <li>⚡ Bayesian optimization is efficient for expensive models</li>
-        <li>🔄 Pipeline optimization tunes preprocessing with model</li>
-        <li>📉 Validation curves show parameter sensitivity</li>
-        <li>🎚️ Start coarse, then fine-tune parameters</li>
-        <li>⚠️ Always keep a final test set untouched</li>
-    </ul>
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Learning curve for the winner <span class="step-time">(5 min)</span></h3>
+                    <p>Would more customer history help the forest? Use three sizes and five folds to keep it quick.</p>
+                    <pre><code class="language-python">from sklearn.model_selection import StratifiedKFold, LearningCurveDisplay
 
-    <h2>Further Resources</h2>
-    <ul>
-        <li><a href="https://scikit-learn.org/stable/model_selection.html">Scikit-learn Model Selection Guide</a></li>
-        <li><a href="https://www.automl.org/book/">AutoML Book</a></li>
-        <li><a href="https://papers.nips.cc/paper/4522-practical-bayesian-optimization">Bayesian Optimization Papers</a></li>
-        <li><a href="https://optuna.org/">Optuna - Hyperparameter Optimization Framework</a></li>
-        <li><a href="https://github.com/hyperopt/hyperopt">Hyperopt - Distributed Async Hyperparameter Optimization</a></li>
-        <li><a href="https://arxiv.org/abs/1603.06560">Efficient and Robust Automated Machine Learning</a></li>
-    </ul>
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+lc = LearningCurveDisplay.from_estimator(
+    pipes[first], X_train, y_train, train_sizes=[0.2, 0.6, 1.0],
+    cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=42),
+    scoring="average_precision", score_name="Average precision", ax=ax)
+ax.set_title(f"Learning curve: {first}")
+plt.show()
+print("training rows:", lc.train_sizes)
+print("validation AP:", lc.test_scores.mean(axis=1).round(3))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>training rows: [ 720 2160 3600]
+validation AP: [0.551 0.608 0.619]</code></pre>
+                    </div>
+                    <p>The validation score rises from 0.551 to 0.608 to 0.619: still rising at full size, but flattening. More customer history would probably help a little, not a lot. Note that in your report.</p>
+                </div>
 
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Tuning can chase tiny gains that don't hold up. How did you decide when a
-            hyperparameter search had found a real improvement rather than just noise?</p>
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Test once, save the results <span class="step-time">(5 min)</span></h3>
+                    <p>Fit the winner on all training rows, score the test set a single time, and save the leaderboard for the team.</p>
+                    <pre><code class="language-python">from sklearn.metrics import average_precision_score
+
+winner = pipes[first].fit(X_train, y_train)
+test_ap = average_precision_score(y_test, winner.predict_proba(X_test)[:, 1])
+board.round(4).to_csv("bakeoff_results.csv")
+
+print(f"""Churn-model bake-off
+Candidates compared : {len(board)} on {cv.get_n_splits()} identical folds
+Winner              : {first} (CV AP {board.loc[first, 'ap_mean']:.3f} +/- {board.loc[first, 'ap_std']:.3f})
+Runner-up           : {second} (CV AP {board.loc[second, 'ap_mean']:.3f})
+Random-order list   : AP {board.loc['baseline', 'ap_mean']:.3f}
+Test AP (one look)  : {test_ap:.3f}
+Saved               : bakeoff_results.csv""")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>Churn-model bake-off
+Candidates compared : 5 on 10 identical folds
+Winner              : forest (CV AP 0.615 +/- 0.031)
+Runner-up           : tree_d5 (CV AP 0.539)
+Random-order list   : AP 0.165
+Test AP (one look)  : 0.606
+Saved               : bakeoff_results.csv</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>All five candidates are pipelines built from the same preprocessing function</li>
+                        <li>One <code>RepeatedStratifiedKFold</code> object with <code>random_state=42</code> produced every score</li>
+                        <li>Your leaderboard shows the mean <em>and</em> the spread, with the baseline at the bottom (AP 0.165)</li>
+                        <li>You checked the top two with paired per-fold differences</li>
+                        <li>You drew a learning curve for the winner and wrote one sentence on whether more data would help</li>
+                        <li>The test set was used exactly once, after the choice, and <code>bakeoff_results.csv</code> is saved</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue in the project notebook, so <code>pipes</code>, <code>make_preprocess</code>, <code>X_train</code> and <code>y_train</code> already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Does the Metric Change the Winner?</h3>
+                    <p>Score the <code>logistic</code> and <code>knn_50</code> pipelines with 5-fold stratified cross-validation (<code>shuffle=True, random_state=42</code>) on two metrics: <code>"roc_auc"</code> and <code>"average_precision"</code>. Which model wins on each? What does that tell you about deciding the metric before looking at results?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Pass <code>scoring=["roc_auc", "average_precision"]</code> to <code>cross_validate</code>; the result has keys <code>test_roc_auc</code> and <code>test_average_precision</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.model_selection import StratifiedKFold, cross_validate
+
+cv5 = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+for name in ["logistic", "knn_50"]:
+    res = cross_validate(pipes[name], X_train, y_train, cv=cv5, scoring=["roc_auc", "average_precision"])
+    print(f"{name:9s} AUC {res['test_roc_auc'].mean():.4f}  AP {res['test_average_precision'].mean():.4f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>logistic  AUC 0.8324  AP 0.5282
+knn_50    AUC 0.8369  AP 0.5205</code></pre>
+                        </div>
+                        <p>Nearest neighbors wins on AUC, logistic regression on average precision, and both gaps are tiny next to the fold spread of about 0.02 to 0.03. So these two are tied, and with two metrics you can almost always find one that flatters the model you already like. That is exactly why the deciding metric is chosen from the business question first.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: A Validation Curve for Neighbors</h3>
+                    <p>Draw a validation curve for the <code>knn_50</code> pipeline over <code>n_neighbors</code> in <code>[1, 5, 15, 50, 150, 400]</code>, scored by ROC AUC with <code>cv5</code>. Print the mean training and validation AUC for each value. Which end of the range overfits, and which underfits?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>The step created by <code>make_pipeline</code> for <code>KNeighborsClassifier</code> is called <code>kneighborsclassifier</code>. You can use <code>validation_curve</code> (numbers only) instead of the Display.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.model_selection import validation_curve
+
+ks = [1, 5, 15, 50, 150, 400]
+train_s, val_s = validation_curve(pipes["knn_50"], X_train, y_train,
+                                  param_name="kneighborsclassifier__n_neighbors", param_range=ks,
+                                  cv=cv5, scoring="roc_auc")
+for k, tr, va in zip(ks, train_s.mean(axis=1), val_s.mean(axis=1)):
+    print(f"k={k:4d}  train {tr:.3f}  validation {va:.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>k=   1  train 1.000  validation 0.627
+k=   5  train 0.923  validation 0.763
+k=  15  train 0.883  validation 0.812
+k=  50  train 0.859  validation 0.837
+k= 150  train 0.846  validation 0.836
+k= 400  train 0.837  validation 0.833</code></pre>
+                        </div>
+                        <p>For nearest neighbors the knob runs the other way from tree depth: a <em>small</em> k is the flexible end. With k=1 each customer is its own nearest neighbor in the training data, so the training AUC is perfect and the validation AUC is poor: overfitting. As k grows the predictions smooth out and validation improves, then levels off; at very large k the model starts averaging over customers who are not alike, and the training and validation scores sink toward each other: underfitting.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Better Features for a Converged Model</h3>
+                    <p>The lesson's learning curve said logistic regression has converged, so more rows will not help but better features might. Test the second half of that claim: add a column <code>lapsed</code> = 1 when <code>days_since_last_order</code> is above 150, else 0, and compare the 5-fold AUC of logistic regression with and without it.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Make copies of <code>X_train</code> with the new column, and a preprocessing <code>ColumnTransformer</code> whose numeric list includes <code>"lapsed"</code>. The rest of the pipeline is unchanged.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.model_selection import cross_val_score
+
+X_lapsed = X_train.assign(lapsed=(X_train["days_since_last_order"] &gt; 150).astype(int))
+pre_lapsed = ColumnTransformer([
+    ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric + ["lapsed"]),
+    ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"),
+                          OneHotEncoder(handle_unknown="ignore")), categorical),
+])
+plain = cross_val_score(pipes["logistic"], X_train, y_train, cv=cv5, scoring="roc_auc").mean()
+with_flag = cross_val_score(make_pipeline(pre_lapsed, LogisticRegression(max_iter=1000)),
+                            X_lapsed, y_train, cv=cv5, scoring="roc_auc").mean()
+print(f"logistic AUC without the flag: {plain:.3f}")
+print(f"logistic AUC with the flag   : {with_flag:.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>logistic AUC without the flag: 0.832
+logistic AUC with the flag   : 0.837</code></pre>
+                        </div>
+                        <p>One well-chosen column adds 0.005, as much as the last 1,600 rows added in the learning curve, and unlike more rows it can be repeated: each threshold or interaction you encode gives the straight-line model a shape it could not draw before. That is what "high bias: improve the features or the model" means in practice. Lesson 2.3 is full of features like this.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: The One-Standard-Error Rule (Stretch)</h3>
+                    <p>Rerun the tree-depth validation curve with <code>validation_curve</code> over depths 1 to 10 (ROC AUC, <code>cv5</code>). Compute each depth's mean validation score and its standard error (the standard deviation across folds divided by the square root of 5). Find the best depth, then the <em>smallest</em> depth whose mean is at least the best mean minus the best depth's standard error. Which depth does the rule pick?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>val_s.std(axis=1) / np.sqrt(5)</code> gives the standard errors. Use <code>np.argmax</code> for the best index, then scan the depths from smallest to largest.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">tree_pipe = make_pipeline(make_preprocess(), DecisionTreeClassifier(random_state=42))
+depth_range = list(range(1, 11))
+_, val_s = validation_curve(tree_pipe, X_train, y_train, param_name="decisiontreeclassifier__max_depth",
+                            param_range=depth_range, cv=cv5, scoring="roc_auc")
+means = val_s.mean(axis=1)
+se = val_s.std(axis=1) / np.sqrt(val_s.shape[1])
+best = int(np.argmax(means))
+threshold = means[best] - se[best]
+chosen = next(d for d, m in zip(depth_range, means) if m &gt;= threshold)
+print(f"best depth {depth_range[best]}: {means[best]:.4f} (standard error {se[best]:.4f})")
+print(f"threshold {threshold:.4f} -&gt; one-standard-error depth: {chosen}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>best depth 4: 0.8348 (standard error 0.0070)
+threshold 0.8277 -&gt; one-standard-error depth: 4</code></pre>
+                        </div>
+                        <p>Here the rule agrees with the plain maximum: depth 3 scores 0.823, more than one standard error below the best, so depth 4 stays. That is a useful result too: it tells you depth 4 is not just a lucky fold away from depth 3. On noisier data (fewer rows, more features) the rule often picks a noticeably simpler model, trading a sliver of measured score for one that is cheaper, easier to explain and less likely to be a fluke of these particular folds.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> A tree's validation curve shows training AUC 0.857 and validation AUC 0.835 at depth 4, and training AUC 1.000 and validation AUC 0.67 at depth 15. What is happening at depth 15?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Underfitting means both scores are low. Is the training score low at depth 15?">
+                                A) Underfitting: the tree is too simple for the pattern
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="A perfect training score with a much lower validation score is the signature of overfitting: the deep tree memorizes individual training customers, noise included, and that does not carry over to new customers.">
+                                B) Overfitting: the tree memorizes the training customers
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Look at the gap between the two curves rather than at the data. What does a perfect training score combined with a falling validation score tell you?">
+                                C) The validation folds must contain a data error
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> A learning curve shows the training and validation scores meeting at about 0.83 by 1,500 rows and staying flat up to 3,600 rows. What is most likely to improve the model?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The validation score stopped rising long before the largest size. What would extra rows add?">
+                                A) Collecting twice as many rows of the same data
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Regularization fights overfitting, which shows as a big gap between the curves. Is there a gap here?">
+                                B) Stronger regularization
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Curves that meet early at a mediocre level mean high bias: the model cannot represent the pattern. A more flexible model or better features (such as a recency threshold flag) can help; more of the same rows cannot.">
+                                C) A more flexible model or better features
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> Why does the lesson pass one splitter object, with a fixed <code>random_state</code>, to every candidate?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="With identical folds, a hard fold is hard for every model, so you can compare fold by fold and the shared difficulty cancels out. Different shuffles would mix fold luck into the comparison.">
+                                A) So every model is scored on the same folds and the scores can be compared fold by fold
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="cross_validate refits a clone of the model on every fold whatever splitter you use. What does sharing the splitter keep the same?">
+                                B) So each model is fitted only once and the run is faster
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The fixed random_state is about which rows go into which fold, not about the test set. Was the test set used during cross-validation?">
+                                C) So that the test set is included in the comparison
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> Over 10 shared folds, model A beats model B by a mean of 0.004 AUC. The standard deviation of the per-fold differences is 0.012 and A wins 6 of the 10 folds. What is the best conclusion?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="A higher mean always produces a winner in a sorted table. Is 0.004 large compared with how much the differences jump around?">
+                                A) Model A is better and should be deployed
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The comparison is valid; it just does not separate the models. Would a coin decide more fairly than speed or simplicity?">
+                                B) The comparison is broken and must be redone on the test set
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="A gap far smaller than the spread of the differences, with an almost even split of wins, is within noise. Treat the models as tied on this metric and choose on other grounds such as speed, simplicity or explainability.">
+                                C) The models are within noise; choose on speed, simplicity or explainability
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> How many times does <code>cross_validate</code> fit a model when given this splitter?</p>
+                        <pre><code class="language-python">from sklearn.model_selection import RepeatedStratifiedKFold
+
+quiz_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=3, random_state=42)
+print(quiz_cv.get_n_splits())</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Five folds, repeated three times with different shuffles, gives 15 train-and-validate splits, so cross_validate fits the model 15 times and returns 15 scores.">
+                                A) 15
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Repeating a 5-fold split creates a fresh set of 5 folds each time. How many folds in total?">
+                                B) 5
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The two numbers multiply rather than add: every repeat is a complete set of folds.">
+                                C) 8
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>How many folds and repeats should I use?</summary>
+                    <p>Five folds is the usual default; ten gives each model more training data per fold but costs twice as much. Repeats are cheap insurance when models are close: they average away the luck of one particular shuffle. With small data (a few hundred rows) use more repeats; with very large data a single 3-fold run, or even one validation split, is often enough because each score is already stable.</p>
+                </details>
+                <details>
+                    <summary>Can I use a statistical test to decide between two models?</summary>
+                    <p>Yes, with care. The ordinary paired t-test on fold scores is too confident, because folds share most of their training rows. Corrected versions exist (the Nadeau and Bengio correction is the best known), and the bonus challenge has you try one. In practice, "wins in nearly every fold by more than the spread of the differences" is a sound working rule, and "within noise" is a perfectly good conclusion.</p>
+                </details>
+                <details>
+                    <summary>The validation score in my learning curve is still rising. How much would more data help?</summary>
+                    <p>Extrapolate gently. A curve that rises by 0.01 between 2,000 and 3,600 rows will usually rise by less than that over the next doubling, because the curve flattens as it climbs. A learning curve tells you the direction and a rough size; it does not promise a number.</p>
+                </details>
+                <details>
+                    <summary>Why not just pick the model with the best test score?</summary>
+                    <p>Because then the test set has helped choose the model, and the winning score is the best of several noisy measurements: it is biased upward. The test set's job is to give one honest number for the model you already chose. If you need to compare, compare inside cross-validation on the training data.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Implement the Nadeau and Bengio corrected paired t-test for the forest-versus-boosting differences from the lesson. For k-fold cross-validation repeated r times, the corrected variance of the mean difference is <code>(1/(k*r) + n_test/n_train) * var(diff)</code>, where <code>n_test/n_train</code> is 1/4 for 5 folds. Compute the t statistic (mean difference divided by the square root of that variance) and a two-sided p-value with <code>scipy.stats.t.sf</code> and <code>k*r - 1</code> degrees of freedom. Compare it with the uncorrected test from <code>scipy.stats.ttest_rel</code>. How much more cautious is the corrected one?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain the tent test in your own words: what are the campsites, the nights and the leaks in cross-validation? Then sketch, from memory, the two learning curves from this lesson (logistic regression and boosting) and write one sentence under each saying what you would try next and why.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>A fair comparison uses the same preprocessing pipeline, the same folds (one splitter with a fixed <code>random_state</code>) and one metric chosen from the business question in advance</li>
+                        <li><code>cross_validate</code> returns per-fold scores and fit times and accepts several metrics; <code>RepeatedStratifiedKFold</code> gives more scores per model</li>
+                        <li>Fold difficulty is shared across models; paired per-fold differences remove it and show whether a gap is real</li>
+                        <li>When models are within noise, prefer the simpler, faster or more explainable one</li>
+                        <li>A validation curve varies one hyperparameter: both scores low means underfitting, a large train-validation gap means overfitting</li>
+                        <li>A learning curve varies the amount of data: curves that meet early mean more data will not help; a rising validation curve means it might</li>
+                        <li>Pipeline hyperparameters are named <code>step__param</code>, such as <code>decisiontreeclassifier__max_depth</code></li>
+                        <li>The test set is used once, after the choice, and its score is reported as is</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You compared six kinds of model on identical folds and separated a real gap (boosting over logistic regression) from a small but consistent one (forest over default boosting)</li>
+                        <li>You drew a validation curve and found the depth where a tree stops learning and starts memorizing</li>
+                        <li>You read two learning curves that called for opposite next steps</li>
+                        <li>You ran a full bake-off on the business metric and tested the winner exactly once</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="hyperparameter_tuning.html"><strong>Lesson 6.2: Hyperparameter Tuning</strong></a> you will act on what boosting's learning curve told you. Instead of turning one knob by hand, you will search many knobs at once with grid search, random search, successive halving and Optuna, and you will learn how to report a tuned model's score without fooling yourself.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook: Lesson 6.2 starts from the same split and preprocessing function.</li>
+                    <li>Run <code>sorted(make_pipeline(make_preprocess(), HistGradientBoostingClassifier()).get_params())</code> and find the names of three boosting hyperparameters you could tune.</li>
+                    <li>Guess which boosting settings would close the gap between its training and validation curves. Write the guess down; Lesson 6.2 will test it.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>Today you learned to distrust a single number, which is one of the most valuable instincts in machine learning. Most bad model decisions are not made by people who lack algorithms; they are made by people who read a leaderboard without its error bars. You now have the tools to say "these two are tied", "this one is truly better" and "this one needs more data" with evidence behind each claim. That is what makes a model choice trustworthy.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="ensemble_methods.html" class="prev-lesson">← Previous: Voting and Stacking</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="hyperparameter_tuning.html" class="next-lesson">Next: Hyperparameter Tuning →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Hyperparameters are set before training; tuning is the search for the best combination of them.</li>
-                <li><code>GridSearchCV</code> tries every combination, while <code>RandomizedSearchCV</code> samples — scaling far better to large search spaces.</li>
-                <li>Nested cross-validation separates model selection from performance estimation, preventing optimistic bias.</li>
-                <li>Always tune using cross-validation, and never touch the final test set during the search.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now systematically search for the best model and settings — and, just as importantly, do it without fooling
-        yourself about how well the result will generalize.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>Grid search or random search?</summary>
-            <p>Grid search is exhaustive but explodes as the number of hyperparameters grows. Random search often finds a
-            near-best configuration much faster in large or continuous spaces.</p>
-        </details>
-        <details>
-            <summary>What is nested cross-validation for?</summary>
-            <p>The inner loop tunes hyperparameters and the outer loop estimates performance — so the act of tuning doesn't
-            inflate your reported score.</p>
-        </details>
-        <details>
-            <summary>Can I just tune on the test set?</summary>
-            <p>No. Repeatedly peeking at the test set leaks information and gives an over-optimistic estimate. Hold it out
-            untouched until the very end.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Next you'll bring evaluation, cross-validation, and tuning together to confirm your chosen model truly generalizes to
-        new data.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Run <code>GridSearchCV</code> and <code>RandomizedSearchCV</code> on the same model and compare best scores and runtime.</li>
-            <li>Wrap the search in a <code>Pipeline</code> so preprocessing is tuned within each fold, not before.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Systematic tuning is what turns a decent model into your best one. You now optimize like a professional — honestly,
-            reproducibly, and with real confidence. Keep going!</p>
-        </div>
-    </section>
-
-    <!-- Navigation at the bottom -->
-    <nav class="lesson-nav" aria-label="Lesson navigation">
-        <a href="ml_gradient_boosting.html" class="prev-lesson" aria-label="Previous lesson">Previous: Gradient Boosting</a>
-        <a href="index.html" class="home-link" aria-label="Course home">Course Home</a>
-        <a href="ml_neural_networks_basics.html" class="next-lesson" aria-label="Next lesson">Next: Neural Networks Basics</a>
-    </nav>
-    
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1308,8 +1041,10 @@ print(summary_df.to_string(index=False))</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>

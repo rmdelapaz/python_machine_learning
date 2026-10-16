@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facilitator Guide: Session 5</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">contains answers &amp; timing · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Facilitator Guide</div>
+    <h1>Session 5: Feature Selection and Imbalanced Classes</h1>
+    <p class="sub">How to teach the fifth session of Machine Learning Foundations: feature selection (filters, wrappers, L1, and the tolerance rule that cuts Pinecrest's churn model from 16 inputs to 6) and imbalanced classes (why accuracy fails on 0.9% fraud, what class weights and samplers really do, and how to set a threshold from the price of each mistake). Both lessons share one warning: a step that looks at the labels must happen inside each training fold, or cross-validation reports 80% on pure noise and AP 0.91 on fiction.</p>
+    <div class="meta-row">
+      <span class="chip"><b>2</b> lessons</span>
+      <span class="chip"><b>3 hrs</b> session</span>
+      <span class="chip">Lessons <b>2.4–2.5</b></span>
+      <span class="chip">Session <b>5</b> of 11</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>How to Use This Guide</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Same rhythm for both lessons: frame (the goal and one mental model) → live demo (you type, they type along) → guided lab (a kit lab, new practice on the lesson's skills) → start the lesson project. Exercises, the quiz and the journal are homework.</li>
+  <li>Both lessons are about the same trap in two forms: a step that looks at the labels (choosing columns, rebalancing) must happen inside each training fold, or cross-validation lies. Say it at 0:10 and at 1:35.</li>
+  <li>Type, do not paste, except where a step says "start the cell, then talk": forward selection and the samplers take 10 to 30 seconds on a laptop. Every code block below was run to produce the output printed under it (Python 3.12, pandas 3.0, scikit-learn 1.9, imbalanced-learn, 4 CPU threads).</li>
+  <li>Keep <code class="inline">dimensionality_feature_selection.html</code> and <code class="inline">imbalanced_learning.html</code> open in browser tabs for the charts you show but do not type: the RFECV curve, the forward-selection path, the side-by-side sampler table and the cost curve. Labs live in <code class="inline">labs/module-05/</code>: <code class="inline">_starter.py</code> files are handouts, <code class="inline">_solution.py</code> files are yours.</li>
+  <li>Session 6 opens with Checkpoint 1 on Modules 1 and 2. Mention it in the warm-up and again at the wrap-up so nobody is surprised.</li>
+</ul>
+<div class="note warn"><div class="t">The #1 risk of Session 5: numbers that are too good</div>
+<p>Both lessons have a moment where a wrong method produces an impressive number: about 80% accuracy on pure noise, AP 0.91 from SMOTE before cross-validation. Learners who miss the point leave thinking selection or SMOTE "improves the model". Protect the noise experiment (2.4 Step 9) and the SMOTE leak (2.5 Step 11) even if you cut elsewhere, and in both labs ask the same question: "Which number would you have reported if you had not known the truth?"</p>
+</div>
+
+  <div class="sec"><h2>Before the Session</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ <b>Run the kit check:</b> <code class="inline">python3 labs/check_labs.py module-05</code> from this kit's folder. Expect <code class="inline">8 passed, 0 failed</code> (four lab pairs; <code class="inline">debug_imbalance.py</code> is not run) in under a minute.</li>
+  <li>☐ <b>Copy the starters only</b> to the shared folder: <code class="inline">labs/module-05/l2_4-feature-selection/*_starter.py</code>, <code class="inline">labs/module-05/l2_5-imbalanced-classes/*_starter.py</code> and <code class="inline">debug_imbalance.py</code>. Keep every <code class="inline">*_solution.py</code> on your machine.</li>
+  <li>☐ <b>Downloads:</b> none. imbalanced-learn (<code class="inline">import imblearn</code>) is in the course requirements and <code class="inline">check_environment.py</code> already checks it.</li>
+  <li>☐ <b>Projector machine:</b> <code class="inline">(.venv)</code> active in your <code class="inline">pinecrest-ml</code>, JupyterLab started from that folder, two empty notebooks <code class="inline">lesson_2_4</code> and <code class="inline">lesson_2_5</code>, font 18 pt or more. Run demo Steps 6 to 7 of 2.4 and Step 7 of 2.5 once beforehand to know how long they take on your machine.</li>
+  <li>☐ <b>Board:</b> three habits for 2.4 (decide with CV · selection inside the pipeline · smallest set within a tolerance); for 2.5 the smoke detector, RANK | DECIDE, and <code class="inline">cost = $10 × flagged + $375 × missed</code>.</li>
+  <li>☐ <b>Print or share:</b> the workbook pages for Session 5 and sticky notes for the exit ticket.</li>
+</ul>
+<div class="blk warn"><div class="h">Known environment traps</div>
+<table class="timing">
+<thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td><code class="inline">ModuleNotFoundError: No module named 'imblearn'</code></td><td>imbalanced-learn missing from this environment, or the notebook kernel is another Python</td><td><code class="inline">python -m pip install imbalanced-learn</code> in the activated environment (install name and import name differ, like scikit-learn / sklearn); check the kernel.</td></tr>
+<tr><td><code class="inline">ValueError: Solver lbfgs supports only 'l2' or None penalties, got l1 penalty.</code></td><td><code class="inline">l1_ratio=1</code> with the default solver</td><td>Add <code class="inline">solver="liblinear"</code> (or <code class="inline">"saga"</code>), as in the lesson.</td></tr>
+<tr><td><code class="inline">ImportError: cannot import name 'TunedThresholdClassifierCV'</code></td><td>scikit-learn older than 1.5</td><td>The kernel is not the course environment: compare <code class="inline">sklearn.__version__</code> with 1.9.</td></tr>
+<tr><td>Forward selection or the sampler loop seems to hang</td><td>Hundreds of fits; old laptops take 30 to 60 s</td><td>Wait; in the lab, <code class="inline">lean_fraud</code> Step 4 needs about 15 s on a modern laptop.</td></tr>
+<tr><td><code class="inline">FutureWarning: 'penalty' was deprecated</code></td><td>Copying <code class="inline">penalty="l1"</code> from older tutorials</td><td>Use <code class="inline">l1_ratio=1</code> with <code class="inline">solver="liblinear"</code>.</td></tr>
+</tbody>
+</table>
+</div>
+
+  <div class="sec"><h2>Session 5 Agenda (3 hours)</h2><span class="rule"></span></div>
+  <table class="timing">
+    <thead><tr><th>Clock</th><th>Minutes</th><th>Segment</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="t">0:00</td><td class="t">10</td><td>Warm-up</td><td>Five retrieval questions on Lessons 2.2 and 2.3; homework check (the saved 2.2 pipeline and the 2.3 demand scoreboard).</td></tr>
+      <tr><td class="t">0:10</td><td class="t">10</td><td><b>2.4</b> Frame and mental model</td><td>The ultralight backpack; filters, wrappers and embedded methods; the three habits: decide with CV, keep selection in the pipeline, prefer the smaller set.</td></tr>
+      <tr><td class="t">0:20</td><td class="t">30</td><td><b>2.4</b> Live demo</td><td>Redundant columns by hand, F against mutual information, RFECV's plateau, forward selection, the L1 sweep, the noise experiment.</td></tr>
+      <tr><td class="t">0:50</td><td class="t">20</td><td><b>2.4</b> Guided lab</td><td><code class="inline">labs/module-05/l2_4-feature-selection/lean_fraud_starter.py</code> (everyone), then <code class="inline">labs/module-05/l2_4-feature-selection/vendor_columns_starter.py</code> in pairs.</td></tr>
+      <tr><td class="t">1:10</td><td class="t">15</td><td><b>2.4</b> Start the lesson project</td><td>The lean churn model, Steps 1 to 3; Steps 4 to 6 go home.</td></tr>
+      <tr><td class="t">1:25</td><td class="t">10</td><td>Break</td><td>Leave the three habits and the smoke detector on the board.</td></tr>
+      <tr><td class="t">1:35</td><td class="t">10</td><td><b>2.5</b> Frame and mental model</td><td>The smoke detector; ranking against deciding; the cost of each kind of mistake.</td></tr>
+      <tr><td class="t">1:45</td><td class="t">30</td><td><b>2.5</b> Live demo</td><td>The accuracy paradox, AP against its baseline, class weights and samplers that only move the cut, cost by threshold, the formula, TunedThresholdClassifierCV, the SMOTE leak.</td></tr>
+      <tr><td class="t">2:15</td><td class="t">20</td><td><b>2.5</b> Guided lab</td><td><code class="inline">labs/module-05/l2_5-imbalanced-classes/retention_threshold_starter.py</code> (everyone), then <code class="inline">labs/module-05/l2_5-imbalanced-classes/rebalance_tree_starter.py</code> in pairs.</td></tr>
+      <tr><td class="t">2:35</td><td class="t">15</td><td><b>2.5</b> Start the lesson project</td><td>The June fraud review queue, Steps 1 to 3; Steps 4 to 6 go home.</td></tr>
+      <tr><td class="t">2:50</td><td class="t">10</td><td>Wrap-up</td><td>Exit ticket (3 questions), homework, bring list for Session 6 (Checkpoint 1).</td></tr>
+      <tr><td class="t"><b>Total</b></td><td class="t"><b>180</b></td><td></td><td>Ends at 3:00.</td></tr>
+    </tbody>
+  </table>
+<p><b>In the room.</b> The lesson pages estimate 100 + 100 minutes for a solo learner; after the warm-up, the break and the wrap-up the room has 150. So the room does, for each lesson, the mental model, the live demo, one guided kit lab and the first three steps of the lesson project.</p>
+<p><b>Goes home (2 to 3 hours).</b> The lean churn model Steps 4 to 6 (forward selection by hand, the tolerance rule, one test and <code class="inline">lean_features.txt</code>) and the June review queue Steps 4 to 6 (tune the threshold, run June once, save the queue); each lesson's Hands-on Exercises 1 to 3 (4 is a stretch); both Quick Quizzes; both journal entries; any lab part not finished; and a first look back over Modules 1 and 2 for Checkpoint 1.</p>
+<p><b>Protect, in this order:</b> the noise experiment (2.4 Step 9) and the SMOTE leak (2.5 Step 11); RANK | DECIDE with the cost table and the tuned threshold (2.5 Steps 4, 8 to 10); RFECV's plateau and the tolerance rule (2.4 Step 6). <b>Cut first:</b> 2.4 Steps 4 and 5 (filters: say one sentence each and show the table on the page), then 2.5 Step 7 (samplers: show the lesson's table), then Lab B of each lesson (to homework).</p>
+
+  <div class="sec"><h2>Opening Segment</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">0:00</span><h3>Warm-up: Pipelines and Features</h3><span class="dur">10 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Timing</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">6m</td><td>Five retrieval questions (workbook, Session 5 warm-up box), answered alone, then compared with a neighbor</td></tr>
+<tr><td class="t">4m</td><td>Reveal and discuss; homework check: who has <code class="inline">churn_pipeline.joblib</code> and <code class="inline">demand_scoreboard.csv</code>?</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Questions and answers</div>
+<ul class="tick">
+  <li><b>W1.</b> A pipeline is <code class="inline">make_pipeline(SimpleImputer(), StandardScaler(), LogisticRegression())</code>. What does <code class="inline">pipe.predict(X_new)</code> do to each of the three steps? <b>Answer:</b> The imputer and the scaler only <b>transform</b> the new rows, with the medians, means and standard deviations they learned during <code class="inline">fit</code>; the model then <b>predicts</b>. Nothing is refitted. <i>If someone says "it refits the scaler", ask what would happen with one new customer: a scaler fitted on one row.</i></li>
+  <li><b>W2.</b> In Lesson 2.2 the signup-date churn rate scored CV ROC AUC 0.930 when computed with pandas, and 0.586 as a <code class="inline">TargetEncoder</code> inside the pipeline. Which is honest, and why was the other so high? <b>Answer:</b> 0.586. The pandas rates used every training row's label, including the rows that later sat in each validation fold; with one or two customers per date, "the rate on your date" was mostly your own label. <i>This is today's selection leak in another costume: any step that looks at <code class="inline">y</code> belongs inside the folds.</i></li>
+  <li><b>W3.</b> What does this print? (code on the slide) <b>Answer:</b> <code class="inline">['logisticregression__C']</code> <i><code class="inline">make_pipeline</code> names each step after its class in lowercase; <code class="inline">step__parameter</code> reaches any setting. Today you swap a whole step the same way: <code class="inline">set_params(logisticregression=...)</code>.</i></li>
+  <li><b>W4.</b> <code class="inline">add_churn_features</code> builds <code class="inline">tickets_no_app = support_tickets_12m * (1 - app_user)</code>. What is it for an app user with 3 tickets, and why build it? <b>Answer:</b> 0. Tickets raise churn for customers without the app but not for app users; a linear model cannot express that from the two raw columns, so the product gives non-app tickets their own weight. <i>Keep this pair in mind: in today's demo forward selection keeps both raw columns because they matter together.</i></li>
+  <li><b>W5.</b> Why can <code class="inline">FunctionTransformer(add_churn_features)</code> be fitted outside the folds without leaking, while <code class="inline">TargetEncoder</code> cannot? <b>Answer:</b> The feature function is stateless: its thresholds are fixed numbers and it learns nothing from the rows it sees. <code class="inline">TargetEncoder</code> learns rates from <code class="inline">y</code>, so fitting it on validation rows hands them their own answers. <i>Feature selection and resampling, today's two subjects, are both "learn from y" steps.</i></li>
+</ul>
+</div>
+<div class="blk warn"><div class="h">Reading the room</div>
+<ul class="tick">
+  <li><b>W2 and W5 wrong</b> means the room does not yet feel why some steps must live inside the folds. Spend an extra minute on 2.4 Step 9 and 2.5 Step 11: both are that idea again.</li>
+  <li><b>W3 wrong</b> is harmless: today you will use <code class="inline">set_params(logisticregression=...)</code> and <code class="inline">pipe[-1]</code>, and the demo narrates them.</li>
+  <li><b>No saved pipeline or scoreboard?</b> Not needed today; both projects start from the data file. They do need their Lesson 2.3 notebook later (Exercise 4 of 2.4 reuses <code class="inline">add_churn_features</code>).</li>
+  <li><b>The redundant-column guesses</b> (Session 4 homework): take three or four and write them on the board. Do not judge them now: 2.4 demo Steps 2 and 3 check them (no pair is a copy by correlation, yet <code class="inline">spend_12m</code>, <code class="inline">orders_12m</code> and <code class="inline">avg_order_value</code> rebuild one another). Tick the guesses that survive.</li>
+  <li><b>The Module 1 model rewritten as a pipeline</b> (also Session 4 homework): one hand up is enough; ask that learner which steps went inside and why. Anyone who skipped it gets the same practice in today's labs.</li>
+</ul>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Lesson Plans</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">2.4</span><h3>Feature Selection</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Explain what feature selection buys you (simpler, cheaper, sturdier models) and what it usually does not (big accuracy gains)</li>
+  <li>Find redundant features with correlations, exact relationships and cross-tabulations</li>
+  <li>Use filter (<code class="inline">SelectKBest</code>), wrapper (<code class="inline">RFECV</code>, <code class="inline">SequentialFeatureSelector</code>) and embedded (L1, <code class="inline">SelectFromModel</code>) methods, and say what each can miss</li>
+  <li>Keep selection inside a <code class="inline">Pipeline</code> so cross-validation stays honest, and show what happens when it is not</li>
+  <li>Choose the smallest feature set whose cross-validated score is within a tolerance of the best</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: the ultralight backpack; three families of methods and their blind spots; the three habits</td></tr>
+<tr><td class="t">30m</td><td>Live demo: redundancy by hand, two filters, RFECV, forward selection, the L1 sweep, the noise experiment</td></tr>
+<tr><td class="t">20m</td><td>Guided lab: <code class="inline">lean_fraud_starter.py</code> (everyone), then <code class="inline">vendor_columns_starter.py</code> in pairs</td></tr>
+<tr><td class="t">15m</td><td>Start the lesson project: the lean churn model, Steps 1 to 3</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"Experienced hikers weigh every item before a long trip. Two stoves? One goes home: a <b>redundant</b> feature. The camp chair you never sit in? Home: an <b>irrelevant</b> feature. But the water filter stays, even though you use it twice a day. The goal is not the lightest pack; it is the lightest pack that still gets you to the end of the trail. In model terms: the smallest feature set that keeps the score."</p>
+<p>Then the honest promise, in one breath: "Selection rarely makes a good model much more accurate. It makes it simpler to collect, explain and monitor. On Pinecrest's churn table it will cut 16 inputs to 6 at no cost." Draw three columns on the board, <b>Filter · Wrapper · Embedded</b>, with one line each: scores columns alone (fast, blind to the model and to teamwork) · tries subsets with the real model (slow, sees teamwork) · selects while training (one fit, tied to one model type).</p>
+<p>Close with the three habits, written under the columns and left there: <b>decide with cross-validation · keep selection inside the pipeline · prefer the smallest set within a tolerance of the best.</b></p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook <code class="inline">lesson_2_4</code>. Ask for a prediction before every number. The two moments that matter most are Step 6 (the plateau: read the curve, not the winner) and Step 9 (80% on pure noise).</p>
+<ol class="steps">
+  <li><b>Load the churn table and the standard split (2m).</b> "Same customers, same split as every churn lesson, but today all 11 numeric columns, including <code class="inline">email_opens_90d</code> with its gaps. Every pipeline imputes it."
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+numeric = [<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"days_since_last_order"</span>,
+           <span class="s">"returns_12m"</span>, <span class="s">"return_rate"</span>, <span class="s">"support_tickets_12m"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>, <span class="s">"email_opens_90d"</span>]
+train, test = train_test_split(customers, test_size=<span class="s">0.25</span>, stratify=customers[<span class="s">"churned"</span>], random_state=<span class="s">42</span>)
+X_train, y_train = train[numeric], train[<span class="s">"churned"</span>]
+X_test, y_test = test[numeric], test[<span class="s">"churned"</span>]
+print(X_train.shape, X_test.shape)</pre>
+<pre class="out">(4500, 11) (1500, 11)</pre></li>
+  <li><b>Which columns move together? (3m).</b> "Cheapest check first: correlations, each pair once."
+<pre class="code">corr = X_train.corr()
+upper = corr.where(np.triu(np.ones(corr.shape, dtype=bool), k=<span class="s">1</span>)).stack()
+print(upper[upper.abs() &gt; <span class="s">0.3</span>].sort_values(key=abs, ascending=<span class="k">False</span>).round(<span class="s">2</span>).head(<span class="s">4</span>))</pre>
+<pre class="out">returns_12m  return_rate              0.68
+orders_12m   spend_12m                0.57
+spend_12m    avg_order_value          0.49
+orders_12m   days_since_last_order   -0.41
+dtype: float64</pre>
+Ask: "Is any pair a copy?" (No: nothing near 1.) "So no redundancy?" Take answers, then Step 3.</li>
+  <li><b>A relationship correlation cannot see (2m).</b> "Lesson 2.3 found this one: spend is orders times average order value."
+<pre class="code">rebuilt = X_train[<span class="s">"orders_12m"</span>] * X_train[<span class="s">"avg_order_value"</span>]
+print(<span class="s">"largest gap between spend and orders x AOV:"</span>, (X_train[<span class="s">"spend_12m"</span>] - rebuilt).abs().max().round(<span class="s">2</span>))</pre>
+<pre class="out">largest gap between spend and orders x AOV: 0.09</pre>
+Nine cents of rounding. Any one of the three can be rebuilt from the other two. Say: "The fastest selection method is asking how a column was made." Mention that <code class="inline">region</code> repeats <code class="inline">home_store</code> for store shoppers and <code class="inline">loyalty_tier</code> is assigned from spend and tenure (lesson page, no need to type).</li>
+  <li><b>Two filters disagree (3m).</b> "A filter scores each column alone against the target. F compares the churners' mean with the stayers'; mutual information sees any kind of dependence."
+<pre class="code"><span class="k">from</span> sklearn.feature_selection <span class="k">import</span> f_classif, mutual_info_classif
+<span class="k">from</span> sklearn.impute <span class="k">import</span> SimpleImputer
+
+X_filled = SimpleImputer(strategy=<span class="s">"median"</span>).set_output(transform=<span class="s">"pandas"</span>).fit_transform(X_train)
+f_scores, _ = f_classif(X_filled, y_train)
+mi_scores = mutual_info_classif(X_filled, y_train, random_state=<span class="s">42</span>)
+filters = pd.DataFrame({<span class="s">"F"</span>: f_scores, <span class="s">"MI"</span>: mi_scores}, index=numeric)
+filters[<span class="s">"F_rank"</span>] = filters[<span class="s">"F"</span>].rank(ascending=<span class="k">False</span>).astype(int)
+filters[<span class="s">"MI_rank"</span>] = filters[<span class="s">"MI"</span>].rank(ascending=<span class="k">False</span>).astype(int)
+print(filters.sort_values(<span class="s">"F_rank"</span>).round(<span class="s">4</span>))</pre>
+<pre class="out">                              F      MI  F_rank  MI_rank
+days_since_last_order  735.4249  0.0641       1        1
+discount_share         196.5015  0.0118       2        6
+spend_12m              174.5598  0.0190       3        4
+orders_12m             156.1053  0.0206       4        3
+app_user                64.2232  0.0145       5        5
+support_tickets_12m     41.8948  0.0000       6       10
+email_opens_90d         37.1523  0.0000       7       10
+returns_12m             15.5411  0.0064       8        8
+tenure_months           14.9306  0.0329       9        2
+avg_order_value          8.5355  0.0106      10        7
+return_rate              1.1013  0.0000      11       10</pre>
+Point at <code class="inline">tenure_months</code>: rank 9 for F, rank 2 for MI. Ask: "Which lesson showed why?" (2.3: the U-shape; the means are close.) Then <code class="inline">support_tickets_12m</code>: MI rounds it to 0 although it matters, for non-app customers.</li>
+  <li><b>A filter inside the pipeline (3m).</b> "<code class="inline">SelectKBest</code> keeps the k best; in a pipeline it is refitted on every training fold. Predict: does picking the best six beat using all eleven?"
+<pre class="code"><span class="k">from</span> functools <span class="k">import</span> partial
+<span class="k">from</span> sklearn.feature_selection <span class="k">import</span> SelectKBest
+<span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> StratifiedKFold, cross_val_score
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+
+cv = StratifiedKFold(n_splits=<span class="s">5</span>, shuffle=<span class="k">True</span>, random_state=<span class="s">42</span>)
+mi = partial(mutual_info_classif, random_state=<span class="s">42</span>)
+
+<span class="k">def</span> churn_pipe(*steps):
+    <span class="k">return</span> make_pipeline(SimpleImputer(strategy=<span class="s">"median"</span>), StandardScaler(), *steps, LogisticRegression())
+
+<span class="k">for</span> name, pipe <span class="k">in</span> [(<span class="s">"all 11 columns"</span>, churn_pipe()),
+                   (<span class="s">"best 6 by F"</span>, churn_pipe(SelectKBest(f_classif, k=<span class="s">6</span>))),
+                   (<span class="s">"best 6 by MI"</span>, churn_pipe(SelectKBest(mi, k=<span class="s">6</span>)))]:
+    scores = cross_val_score(pipe, X_train, y_train, cv=cv, scoring=<span class="s">"roc_auc"</span>)
+    print(<span class="s">f"{name:15s} CV ROC AUC {scores.mean():.3f}"</span>)</pre>
+<pre class="out">all 11 columns  CV ROC AUC 0.833
+best 6 by F     CV ROC AUC 0.824
+best 6 by MI    CV ROC AUC 0.813</pre>
+Both lose: F by 0.009, MI by 0.020. MI keeps tenure, whose U-shape a logistic regression cannot use. "A filter knows nothing about the model that comes after it."</li>
+  <li><b>RFECV and its plateau (4m).</b> "Recursive elimination drops the column with the smallest weight, refits, repeats; RFECV scores every count with cross-validation."
+<pre class="code"><span class="k">from</span> sklearn.feature_selection <span class="k">import</span> RFECV
+
+rfecv = RFECV(LogisticRegression(), cv=cv, scoring=<span class="s">"roc_auc"</span>)
+rfe_pipe = make_pipeline(SimpleImputer(strategy=<span class="s">"median"</span>), StandardScaler(), rfecv).set_output(transform=<span class="s">"pandas"</span>)
+rfe_pipe.fit(X_train, y_train)
+curve = pd.Series(rfecv.cv_results_[<span class="s">"mean_test_score"</span>], index=rfecv.cv_results_[<span class="s">"n_features"</span>])
+print(<span class="s">"RFECV keeps"</span>, rfecv.n_features_, <span class="s">"columns"</span>)
+print(curve.round(<span class="s">4</span>).to_dict())</pre>
+<pre class="out">RFECV keeps 11 columns
+{1: 0.7215, 2: 0.8063, 3: 0.8116, 4: 0.8226, 5: 0.8263, 6: 0.8328, 7: 0.8328, 8: 0.8323, 9: 0.8332, 10: 0.8333, 11: 0.8333}</pre>
+It keeps all 11, won by a ten-thousandth. Show the lesson's curve chart. Say: "Read the curve, not <code class="inline">n_features_</code>. From six on it is flat, and the folds disagree by far more than these differences." Write the rule on the board: smallest set within a tolerance of the best.</li>
+  <li><b>Forward selection finds teamwork (4m).</b> "A wrapper adds, one at a time, the column that raises the cross-validated score most. <code class="inline">tol=0.002</code> stops it when the next column adds less." Start this cell, then talk while it runs (about 10 to 20 seconds on a laptop).
+<pre class="code"><span class="k">from</span> sklearn.feature_selection <span class="k">import</span> SequentialFeatureSelector
+
+sfs = SequentialFeatureSelector(LogisticRegression(), n_features_to_select=<span class="s">"auto"</span>, tol=<span class="s">0.002</span>,
+                                direction=<span class="s">"forward"</span>, cv=cv, scoring=<span class="s">"roc_auc"</span>)
+sfs_pipe = make_pipeline(SimpleImputer(strategy=<span class="s">"median"</span>), StandardScaler(), sfs).set_output(transform=<span class="s">"pandas"</span>)
+sfs_pipe.fit(X_train, y_train)
+forward_six = list(sfs.get_feature_names_out())
+print(forward_six)
+scores = cross_val_score(churn_pipe(SequentialFeatureSelector(LogisticRegression(), n_features_to_select=<span class="s">"auto"</span>,
+                                                              tol=<span class="s">0.002</span>, cv=cv, scoring=<span class="s">"roc_auc"</span>)),
+                         X_train, y_train, cv=cv, scoring=<span class="s">"roc_auc"</span>)
+print(<span class="s">f"forward selection inside CV: {scores.mean():.3f}"</span>)</pre>
+<pre class="out">['orders_12m', 'days_since_last_order', 'support_tickets_12m', 'discount_share', 'app_user', 'email_opens_90d']
+forward selection inside CV: 0.832</pre>
+Six columns, the full model's score. It kept <code class="inline">support_tickets_12m</code> AND <code class="inline">app_user</code>, the pair that matters together (warm-up W4). Point at the second number: it cross-validates the whole selection procedure, the honest estimate.</li>
+  <li><b>L1: selection while training (4m).</b> "An L1 penalty charges for the total size of the weights; the cheapest way to pay is zeros. Smaller C, heavier penalty, more zeros. <code class="inline">liblinear</code> because the default solver refuses L1."
+<pre class="code">rows, zeroed = [], {}
+<span class="k">for</span> C <span class="k">in</span> [<span class="s">0.005</span>, <span class="s">0.01</span>, <span class="s">0.02</span>, <span class="s">0.05</span>, <span class="s">1.0</span>]:
+    l1_pipe = churn_pipe().set_params(logisticregression=LogisticRegression(l1_ratio=<span class="s">1</span>, solver=<span class="s">"liblinear"</span>, C=C))
+    auc = cross_val_score(l1_pipe, X_train, y_train, cv=cv, scoring=<span class="s">"roc_auc"</span>).mean()
+    weights = l1_pipe.fit(X_train, y_train)[-<span class="s">1</span>].coef_[<span class="s">0</span>]
+    zeroed[C] = [col <span class="k">for</span> col, w <span class="k">in</span> zip(numeric, weights) <span class="k">if</span> w == <span class="s">0</span>]
+    rows.append({<span class="s">"C"</span>: C, <span class="s">"kept"</span>: int((weights != <span class="s">0</span>).sum()), <span class="s">"cv_auc"</span>: round(auc, <span class="s">4</span>)})
+print(pd.DataFrame(rows).to_string(index=<span class="k">False</span>))
+print(<span class="s">"zero at C=0.05:"</span>, zeroed[<span class="s">0.05</span>])</pre>
+<pre class="out">    C  kept  cv_auc
+0.005     2  0.7955
+0.010     6  0.8175
+0.020     8  0.8301
+0.050     8  0.8333
+1.000    11  0.8334
+zero at C=0.05: ['avg_order_value', 'returns_12m', 'return_rate']</pre>
+Read from the bottom: at C = 0.05 three columns drop with no loss, and they are the redundant ones from Steps 2 and 3. At C = 0.01 useful columns start to go and the score falls.</li>
+  <li><b>The most important experiment: pure noise (4m).</b> "200 rows, 5,000 random columns, a random target. Honest accuracy is a coin flip. Watch what selecting first, then cross-validating, reports."
+<pre class="code"><span class="k">def</span> noise_experiment(seed):
+    rng = np.random.default_rng(seed)
+    X_noise = rng.normal(size=(<span class="s">200</span>, <span class="s">5000</span>))
+    y_noise = rng.integers(<span class="s">0</span>, <span class="s">2</span>, size=<span class="s">200</span>)
+    chosen = SelectKBest(f_classif, k=<span class="s">20</span>).fit(X_noise, y_noise)
+    leaky = cross_val_score(LogisticRegression(), chosen.transform(X_noise), y_noise, cv=cv).mean()
+    honest = cross_val_score(make_pipeline(SelectKBest(f_classif, k=<span class="s">20</span>), LogisticRegression()),
+                             X_noise, y_noise, cv=cv).mean()
+    <span class="k">return</span> {<span class="s">"seed"</span>: seed, <span class="s">"select first, then CV"</span>: leaky, <span class="s">"select inside CV"</span>: honest}
+
+noise = pd.DataFrame([noise_experiment(seed) <span class="k">for</span> seed <span class="k">in</span> range(<span class="s">42</span>, <span class="s">47</span>)]).set_index(<span class="s">"seed"</span>)
+print(noise.round(<span class="s">3</span>))
+print(noise.mean().round(<span class="s">3</span>).to_string())</pre>
+<pre class="out">      select first, then CV  select inside CV
+seed                                         
+42                    0.825             0.595
+43                    0.780             0.545
+44                    0.820             0.515
+45                    0.770             0.520
+46                    0.795             0.460
+select first, then CV    0.798
+select inside CV         0.527</pre>
+About 80% on pure noise, five times out of five, against 53% when selection is a pipeline step. Say: "Same data, same model, one line of difference. Any choice made with the labels is part of the model."</li>
+  <li><b>One silent mistake: L1 without a scaler (1m).</b> "No error, and that is the problem."
+<pre class="code">l1 = LogisticRegression(l1_ratio=<span class="s">1</span>, solver=<span class="s">"liblinear"</span>, C=<span class="s">0.02</span>)
+<span class="k">for</span> name, pipe <span class="k">in</span> [(<span class="s">"scaled"</span>, make_pipeline(SimpleImputer(strategy=<span class="s">"median"</span>), StandardScaler(), l1)),
+                   (<span class="s">"unscaled"</span>, make_pipeline(SimpleImputer(strategy=<span class="s">"median"</span>), l1))]:
+    weights = pipe.fit(X_train, y_train)[-<span class="s">1</span>].coef_[<span class="s">0</span>]
+    print(<span class="s">f"{name:9s} keeps discount_share: {weights[numeric.index('discount_share')] != 0}, "</span>
+          <span class="s">f"keeps avg_order_value: {weights[numeric.index('avg_order_value')] != 0}"</span>)</pre>
+<pre class="out">scaled    keeps discount_share: True, keeps avg_order_value: False
+unscaled  keeps discount_share: False, keeps avg_order_value: True</pre>
+Unscaled, L1 drops <code class="inline">discount_share</code> (0 to 1, needs a big weight) and keeps redundant <code class="inline">avg_order_value</code> (dollars, tiny weight). It selects by units.</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>Selecting before the split or outside the pipeline.</b> Symptom: a CV score that rises when they select (often with <code class="inline">SelectKBest(...).fit_transform(X_train, y_train)</code> and then <code class="inline">cross_val_score</code> on the result). Coach: "Which rows did the selector see? Did the validation folds help choose the columns?" Point at the noise experiment's two numbers.</li>
+  <li><b>L1 or RFE on unscaled columns, or the default solver.</b> Symptoms: <code class="inline">ValueError: Solver lbfgs supports only 'l2' or None penalties, got l1 penalty.</code>, or an L1 model that keeps <code class="inline">avg_order_value</code> and drops <code class="inline">discount_share</code>. Coach: "What does the penalty charge for? Is a weight of 3 on a 0-to-1 column the same as 3 on dollars?"</li>
+  <li><b>Reading the winner instead of the curve, and "dropped" as "irrelevant".</b> Symptoms: "RFECV says keep all 11", or "L1 shows average order value doesn't matter". Coach: "How far apart are the scores on the plateau, and how far apart are the folds?" and "Dropped given what else is in the model?"</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (12m, everyone):</b> <code class="inline">labs/module-05/l2_4-feature-selection/lean_fraud_starter.py</code>; reference <code class="inline">labs/module-05/l2_4-feature-selection/lean_fraud_solution.py</code>. The lesson's tools on fraud: nine raw columns plus five engineered ones (night, night on a new device, gift cards, log of the amount, brand-new accounts), judged by cross-validated average precision because fraud is rare. TODO 1 to 4 in the room; TODO 5 (tolerance rule and test) can finish at home.</li>
+  <li><b>Expected, Lab A:</b> <code class="inline">amount</code> and <code class="inline">log_amount</code> correlate 0.88 (the only pair above 0.5); the F-test ranks <code class="inline">night_new_device</code> first (4,344); CV AP 0.5512 ± 0.0618 with all 14, 0.5202 with the raw 9; forward selection adds <code class="inline">velocity_24h</code>, <code class="inline">night_new_device</code>, <code class="inline">log_amount</code>, <code class="inline">card_attempts</code>, ...; within 0.01 of the best: 8 columns; test AP raw 9 0.444, all 14 0.505, lean 8 0.505.</li>
+  <li><b>Circulate in Lab A for:</b> forward selection judged on the test set ("which rows chose the columns?"); a tolerance smaller than the fold spread treated as meaningful; surprise that the F-test's winner is not forward selection's first pick (<code class="inline">velocity_24h</code> alone ranks better; the interaction shines next to it). <b>Debrief:</b> "Engineering moved AP from 0.444 to 0.505; selection then dropped six columns for free. Create generously, keep what earns its place."</li>
+  <li><b>Lab B (8m, pairs):</b> <code class="inline">labs/module-05/l2_4-feature-selection/vendor_columns_starter.py</code>; reference <code class="inline">labs/module-05/l2_4-feature-selection/vendor_columns_solution.py</code>. A data vendor's 1,000 extra columns (simulated as pure noise) on a 300-customer pilot. One types, one predicts each number.</li>
+  <li><b>Expected, Lab B:</b> CV AUC 0.745 with the 10 real columns, 0.603 with all 1,010; select the best 10 on all rows, then CV: 0.825, with only 3 real columns among the picks; select inside CV: 0.660; on the 1,500 test customers the real 10 score 0.794 and the vendor's picks 0.609.</li>
+  <li><b>Debrief Lab B (1m):</b> "The leaky number beat the honest model built from real columns, and only 3 of its 10 columns were real. Which pilot number would the vendor put in the brochure?"</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The lesson project is <b>the lean churn model</b>: the smallest set of the 16 candidate columns whose CV ROC AUC is within 0.005 of the best, confirmed once on the test set. In the room, Steps 1 to 3 (15 minutes).</p>
+<ul class="tick">
+  <li>Read the brief from the lesson page: every input column is a data feed someone must maintain. Step 1 together: <code class="inline">16 candidate columns; {'email_opens_90d': 419, 'age_group': 359}</code>.</li>
+  <li>Step 2 (<code class="inline">build_model</code> for any list of columns, numeric and categorical) is the step that matters: walk the room. <b>Done</b> = <code class="inline">all 16 columns: CV ROC AUC 0.8324</code>.</li>
+  <li>Step 3 on their own: dropping the four derived columns gives <code class="inline">0.8305</code>.</li>
+  <li><b>Goes home:</b> Step 4 (forward selection by hand, about a minute to run, starting with <code class="inline">days_since_last_order</code>), Step 5 (tolerance rule: 6 columns) and Step 6 (test ROC AUC 0.826 full against 0.824 lean; <code class="inline">lean_features.txt</code>).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these out loud during the demo and the lab:</p>
+<ul class="tick">
+  <li>Why can't correlation find that spend is orders times average order value? <b>Answer:</b> correlation looks at two columns and straight lines; this is a product of two columns.</li>
+  <li>RFECV's best count is 11, but 6 scores 0.8328 against 0.8333. What do you keep? <b>Answer:</b> 6: the gap is far smaller than the spread between folds; prefer the smaller set within a tolerance.</li>
+  <li>Why does L1 need a scaler? <b>Answer:</b> it charges for weight size, and a column's unit decides how big its weight must be.</li>
+  <li>Name one step besides selection that must live inside the folds. <b>Answer:</b> anything that looks at <code class="inline">y</code>: target encoding (2.2), resampling (2.5), tuning (6.2).</li>
+</ul>
+<p>Workbook self-check, items Q1 to Q6 (learners do them at the end of the block or at home).</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q1</b> <span data-sc="1">C) A filter scores each column on its own; the wrapper judges each column next to the ones already chosen, so it sees that the two matter together</span>; <b>Q2</b> <span data-sc="2"><code class="inline">['score']</code></span>; <b>Q3</b> <span data-sc="3">B) Put the selector inside a pipeline and cross-validate the whole pipeline, expecting a lower number</span>; <b>Q4</b> <span data-sc="4">D) <code class="inline">discount_share</code> runs from 0 to 1, so it needs a large weight, and the penalty charges for the size of each weight</span>; <b>Q5</b> <span data-sc="5">A) 6</span>; <b>Q6</b> <span data-sc="6">B) Given spend and orders, average order value adds nothing new to this model</span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> give Lab A's TODO 1 and 2 to the whole room on the projector, then let pairs do TODO 3 and 4 with <code class="inline">cv_ap</code> already written. For anyone lost in method names, the board's three columns are the map: ask "which column is this method in?" before each demo step.</p>
+<p><b>Stretch:</b> the lesson's Exercise 2 (backward selection reaches the same six), then the Bonus Challenge (how stable is the lean set across CV shuffles and half the data?). In Lab A, ask them to try <code class="inline">SelectFromModel</code> with the L1 model at a few values of <code class="inline">C</code> and compare with their forward path.</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">2.5</span><h3>Imbalanced Classes</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Explain why accuracy fails on rare classes and judge a model with recall, precision and average precision against the right baseline</li>
+  <li>Apply <code class="inline">class_weight="balanced"</code> and the imbalanced-learn samplers (random under- and oversampling, SMOTE) inside a leak-proof pipeline</li>
+  <li>Show that weights and resampling mostly move the decision threshold, and explain what they do to predicted probabilities</li>
+  <li>Choose a threshold from the cost of each kind of mistake, by formula and with <code class="inline">TunedThresholdClassifierCV</code></li>
+  <li>Check who carries the burden of false alarms before a model goes live</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: the smoke detector; ranking against deciding; mistakes have prices</td></tr>
+<tr><td class="t">30m</td><td>Live demo: the accuracy paradox, AP, weights and samplers, cost by threshold, the formula, the tuned threshold, the SMOTE leak</td></tr>
+<tr><td class="t">20m</td><td>Guided lab: <code class="inline">retention_threshold_starter.py</code> (everyone), then <code class="inline">rebalance_tree_starter.py</code> in pairs</td></tr>
+<tr><td class="t">15m</td><td>Start the lesson project: the June review queue, Steps 1 to 3</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"A smoke detector that never beeps is right 364 days a year, and worthless. One that beeps every time you make toast catches every fire, and soon gets its battery pulled. A useful detector sits between the two, and where exactly depends on what a false alarm costs compared with a missed fire."</p>
+<p>Then split the board in two: <b>RANK</b> (does the model put frauds near the top? average precision against the base rate) and <b>DECIDE</b> (where do we cut? cost, capacity or a recall target). "Today's big surprise: class weights and resampling, the fixes every tutorial reaches for, mostly change DECIDE, not RANK, and you can change DECIDE directly by moving the threshold." Write <code class="inline">cost = $10 × flagged + $375 × missed</code> under DECIDE.</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook <code class="inline">lesson_2_5</code>. The two predictions that matter: "what does 'all legitimate' score?" (Step 2) and "what AP does SMOTE-before-CV report?" (Step 11).</p>
+<ol class="steps">
+  <li><b>How rare is fraud? (1m).</b> "Six months of online payments."
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+
+tx = pd.read_csv(<span class="s">"data/transactions.csv"</span>)
+print(tx.shape)
+print(tx[<span class="s">"is_fraud"</span>].value_counts().to_dict())
+print(<span class="s">f"fraud rate: {tx['is_fraud'].mean():.3%}"</span>)</pre>
+<pre class="out">(50000, 13)
+{0: 49562, 1: 438}
+fraud rate: 0.876%</pre>
+Fewer than one in a hundred. Write 0.876% on the board.</li>
+  <li><b>The accuracy paradox (3m).</b> "Stratified split, because with 438 frauds a random split could leave the test set short. Predict: what does 'all legitimate' score?"
+<pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+<span class="k">from</span> sklearn.dummy <span class="k">import</span> DummyClassifier
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> recall_score
+
+num_cols = [<span class="s">"account_age_days"</span>, <span class="s">"amount"</span>, <span class="s">"hour"</span>, <span class="s">"items"</span>, <span class="s">"device_new"</span>,
+            <span class="s">"billing_shipping_mismatch"</span>, <span class="s">"country_mismatch"</span>, <span class="s">"card_attempts"</span>, <span class="s">"velocity_24h"</span>]
+cat_cols = [<span class="s">"category"</span>]
+X = tx[num_cols + cat_cols]
+y = tx[<span class="s">"is_fraud"</span>]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=<span class="s">0.3</span>, stratify=y, random_state=<span class="s">42</span>)
+print(<span class="s">f"train: {len(y_train):,} rows, {y_train.sum()} frauds"</span>)
+print(<span class="s">f"test : {len(y_test):,} rows, {y_test.sum()} frauds"</span>)
+dummy = DummyClassifier(strategy=<span class="s">"most_frequent"</span>).fit(X_train, y_train)
+print(<span class="s">f"'all legitimate' accuracy: {dummy.score(X_test, y_test):.4f}"</span>)
+print(<span class="s">f"frauds caught: {recall_score(y_test, dummy.predict(X_test)):.0%}"</span>)</pre>
+<pre class="out">train: 35,000 rows, 307 frauds
+test : 15,000 rows, 131 frauds
+'all legitimate' accuracy: 0.9913
+frauds caught: 0%</pre>
+99.1% accurate, catches nothing. Draw the smoke detector that never beeps.</li>
+  <li><b>Judge the ranking: AP against its baseline (3m).</b> "A pipeline from Lesson 2.2, built by a function so no two pipelines share one fitted ColumnTransformer. Average precision's baseline is the fraud rate, not 0.5."
+<pre class="code"><span class="k">from</span> sklearn.compose <span class="k">import</span> ColumnTransformer
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler, OneHotEncoder
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> roc_auc_score, average_precision_score
+
+<span class="k">def</span> make_preprocess():
+    <span class="k">return</span> ColumnTransformer([
+        (<span class="s">"num"</span>, StandardScaler(), num_cols),
+        (<span class="s">"cat"</span>, OneHotEncoder(handle_unknown=<span class="s">"ignore"</span>), cat_cols),
+    ])
+
+plain = make_pipeline(make_preprocess(), LogisticRegression())
+plain.fit(X_train, y_train)
+p_plain = plain.predict_proba(X_test)[:, <span class="s">1</span>]
+print(<span class="s">f"ROC AUC {roc_auc_score(y_test, p_plain):.3f}   average precision {average_precision_score(y_test, p_plain):.3f}"</span>)
+print(<span class="s">f"average precision of a random ranking: {y_test.mean():.4f}"</span>)</pre>
+<pre class="out">ROC AUC 0.843   average precision 0.463
+average precision of a random ranking: 0.0087</pre>
+0.46 against 0.009: a good ranking.</li>
+  <li><b>Then the decisions at 0.5 (2m).</b> "A helper that prints what a fraud team cares about."
+<pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> confusion_matrix
+
+<span class="k">def</span> report(name, y_true, y_pred):
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[<span class="s">0</span>, <span class="s">1</span>]).ravel()
+    print(<span class="s">f"{name:16s} flagged {tp + fp:5d}  caught {tp:3d}  missed {fn:3d}  "</span>
+          <span class="s">f"recall {tp / (tp + fn):.2f}  precision {tp / max(tp + fp, 1):.2f}"</span>)
+
+report(<span class="s">"plain @ 0.5"</span>, y_test, plain.predict(X_test))</pre>
+<pre class="out">plain @ 0.5      flagged    44  caught  41  missed  90  recall 0.31  precision 0.93</pre>
+44 flags, 41 real, 90 frauds missed. "The ranking is good; the decision rule is timid." Write two words on the board: RANK | DECIDE.</li>
+  <li><b>Class weights (3m).</b> "Each fraud mistake now counts about 57 times."
+<pre class="code"><span class="k">from</span> sklearn.utils.class_weight <span class="k">import</span> compute_class_weight
+
+print(compute_class_weight(<span class="s">"balanced"</span>, classes=np.array([<span class="s">0</span>, <span class="s">1</span>]), y=y_train).round(<span class="s">2</span>))
+weighted = make_pipeline(make_preprocess(), LogisticRegression(class_weight=<span class="s">"balanced"</span>))
+weighted.fit(X_train, y_train)
+p_weighted = weighted.predict_proba(X_test)[:, <span class="s">1</span>]
+print(<span class="s">f"ROC AUC {roc_auc_score(y_test, p_weighted):.3f}   average precision {average_precision_score(y_test, p_weighted):.3f}"</span>)
+report(<span class="s">"balanced @ 0.5"</span>, y_test, weighted.predict(X_test))</pre>
+<pre class="out">[ 0.5 57. ]
+ROC AUC 0.848   average precision 0.438
+balanced @ 0.5   flagged  1863  caught  90  missed  41  recall 0.69  precision 0.05</pre>
+Recall 0.69, but 1,863 flags for 90 frauds, and AUC and AP barely moved (AP even fell). Ask: "Did it learn fraud better, or say fraud more readily?"</li>
+  <li><b>What the weights did to the probabilities (2m).</b> "Compare the average probability with the real rate."
+<pre class="code"><span class="k">from</span> scipy.stats <span class="k">import</span> spearmanr
+
+print(<span class="s">f"real fraud rate          : {y_test.mean():.4f}"</span>)
+print(<span class="s">f"mean probability, plain  : {p_plain.mean():.4f}"</span>)
+print(<span class="s">f"mean probability, weighted: {p_weighted.mean():.4f}"</span>)
+print(<span class="s">f"rank correlation of the two scores: {spearmanr(p_plain, p_weighted).statistic:.3f}"</span>)</pre>
+<pre class="out">real fraud rate          : 0.0087
+mean probability, plain  : 0.0085
+mean probability, weighted: 0.2671
+rank correlation of the two scores: 0.961</pre>
+The plain model is calibrated (0.0085 against 0.0087); the weighted one averages 0.27. Same order (rank correlation 0.96), probabilities of nothing real. "Hold that thought for Step 8."</li>
+  <li><b>Three samplers, inside an imblearn pipeline (4m).</b> "Samplers change the training rows. imblearn's pipeline runs them during fit and skips them during predict, so test rows keep the real balance." Start the cell, then talk through the three samplers while it runs.
+<pre class="code"><span class="k">from</span> imblearn.under_sampling <span class="k">import</span> RandomUnderSampler
+<span class="k">from</span> imblearn.over_sampling <span class="k">import</span> RandomOverSampler, SMOTE
+<span class="k">from</span> imblearn.pipeline <span class="k">import</span> make_pipeline <span class="k">as</span> make_imb_pipeline
+
+samplers = {
+    <span class="s">"undersample"</span>: RandomUnderSampler(random_state=<span class="s">42</span>),
+    <span class="s">"oversample"</span>: RandomOverSampler(random_state=<span class="s">42</span>),
+    <span class="s">"SMOTE"</span>: SMOTE(random_state=<span class="s">42</span>),
+}
+<span class="k">for</span> name, sampler <span class="k">in</span> samplers.items():
+    pipe = make_imb_pipeline(make_preprocess(), sampler, LogisticRegression())
+    pipe.fit(X_train, y_train)
+    proba = pipe.predict_proba(X_test)[:, <span class="s">1</span>]
+    print(<span class="s">f"{name:12s} ROC AUC {roc_auc_score(y_test, proba):.3f}   AP {average_precision_score(y_test, proba):.3f}"</span>)
+    report(<span class="s">f"{name} @ 0.5"</span>, y_test, pipe.predict(X_test))</pre>
+<pre class="out">undersample  ROC AUC 0.843   AP 0.419
+undersample @ 0.5 flagged  2172  caught  93  missed  38  recall 0.71  precision 0.04
+oversample   ROC AUC 0.848   AP 0.437
+oversample @ 0.5 flagged  1866  caught  90  missed  41  recall 0.69  precision 0.05
+SMOTE        ROC AUC 0.845   AP 0.428
+SMOTE @ 0.5      flagged  1940  caught  89  missed  42  recall 0.68  precision 0.05</pre>
+Show the lesson's side-by-side table: four fixes, the same place: about 1,900 flags, recall near 0.7, precision near 0.05, ranking no better. "For a linear model they shift scores across 0.5. You can do that directly."</li>
+  <li><b>Price the mistakes (3m).</b> "A review costs $10 of analyst time; a missed fraud costs about $375. Cost = $10 per flag plus $375 per miss."
+<pre class="code">REVIEW_COST, FRAUD_LOSS = <span class="s">10</span>, <span class="s">375</span>
+
+<span class="k">def</span> fraud_cost(y_true, y_pred):
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[<span class="s">0</span>, <span class="s">1</span>]).ravel()
+    <span class="k">return</span> int(REVIEW_COST * (tp + fp) + FRAUD_LOSS * fn)
+
+print(<span class="s">f"review nothing   : ${fraud_cost(y_test, np.zeros(len(y_test), dtype=int)):,}"</span>)
+print(<span class="s">f"review everything: ${fraud_cost(y_test, np.ones(len(y_test), dtype=int)):,}"</span>)
+<span class="k">for</span> threshold <span class="k">in</span> [<span class="s">0.5</span>, <span class="s">0.2</span>, <span class="s">0.1</span>, <span class="s">0.05</span>, <span class="s">0.02</span>, <span class="s">0.01</span>]:
+    pred = (p_plain &gt;= threshold).astype(int)
+    print(<span class="s">f"threshold {threshold:&lt;5} cost ${fraud_cost(y_test, pred):,}"</span>)</pre>
+<pre class="out">review nothing   : $49,125
+review everything: $150,000
+threshold 0.5   cost $34,190
+threshold 0.2   cost $30,100
+threshold 0.1   cost $27,455
+threshold 0.05  cost $25,395
+threshold 0.02  cost $27,250
+threshold 0.01  cost $33,230</pre>
+Both do-nothing options are expensive, so is 0.5. Lowering the cut to 0.05 saves almost $9,000 with the same model.</li>
+  <li><b>The formula, and why not to pick on the test set (3m).</b> "Flag when p × $375 &gt; $10: p &gt; 10/375. That works because the plain model's probabilities are honest."
+<pre class="code">print(<span class="s">f"formula threshold: {REVIEW_COST} / {FRAUD_LOSS} = {REVIEW_COST / FRAUD_LOSS:.3f}"</span>)
+thresholds = np.geomspace(<span class="s">0.003</span>, <span class="s">0.9</span>, <span class="s">80</span>)
+costs = [fraud_cost(y_test, (p_plain &gt;= t).astype(int)) <span class="k">for</span> t <span class="k">in</span> thresholds]
+best = thresholds[int(np.argmin(costs))]
+print(<span class="s">f"cheapest threshold on the test set: {best:.3f}  (cost ${min(costs):,})"</span>)</pre>
+<pre class="out">formula threshold: 10 / 375 = 0.027
+cheapest threshold on the test set: 0.043  (cost $25,025)</pre>
+Show the lesson's cost-curve chart (log scale). Then: "0.043 was found by peeking at the test set: fine for a picture, wrong for a choice."</li>
+  <li><b>TunedThresholdClassifierCV (3m).</b> "Cross-validation tries many thresholds on the training folds, keeps the cheapest, then refits."
+<pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> make_scorer
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> TunedThresholdClassifierCV
+
+cost_scorer = make_scorer(fraud_cost, greater_is_better=<span class="k">False</span>)
+tuned = TunedThresholdClassifierCV(make_pipeline(make_preprocess(), LogisticRegression()),
+                                   scoring=cost_scorer, cv=<span class="s">5</span>)
+tuned.fit(X_train, y_train)
+print(<span class="s">f"threshold chosen by 5-fold CV: {tuned.best_threshold_:.3f}"</span>)
+print(<span class="s">f"test cost: ${fraud_cost(y_test, tuned.predict(X_test)):,}"</span>)
+report(<span class="s">"tuned threshold"</span>, y_test, tuned.predict(X_test))</pre>
+<pre class="out">threshold chosen by 5-fold CV: 0.040
+test cost: $25,295
+tuned threshold  flagged   392  caught  74  missed  57  recall 0.56  precision 0.19</pre>
+0.040, close to the formula, chosen without the test set: 392 flags, 74 frauds caught, $25,295 against $34,190 at 0.5.</li>
+  <li><b>The leak, on purpose (3m).</b> "Resample first, then cross-validate. Predict the AP."
+<pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> StratifiedKFold, cross_val_score
+
+cv = StratifiedKFold(n_splits=<span class="s">5</span>, shuffle=<span class="k">True</span>, random_state=<span class="s">42</span>)
+X_train_enc = make_preprocess().fit_transform(X_train)
+X_smote, y_smote = SMOTE(random_state=<span class="s">42</span>).fit_resample(X_train_enc, y_train)
+leaky = cross_val_score(LogisticRegression(), X_smote, y_smote, cv=cv, scoring=<span class="s">"average_precision"</span>)
+honest = cross_val_score(make_imb_pipeline(make_preprocess(), SMOTE(random_state=<span class="s">42</span>), LogisticRegression()),
+                         X_train, y_train, cv=cv, scoring=<span class="s">"average_precision"</span>)
+print(<span class="s">f"SMOTE first, then CV : AP {leaky.mean():.3f}"</span>)
+print(<span class="s">f"SMOTE inside the CV  : AP {honest.mean():.3f}"</span>)</pre>
+<pre class="out">SMOTE first, then CV : AP 0.912
+SMOTE inside the CV  : AP 0.495</pre>
+0.912 is fiction: validation folds full of synthetic near-copies, at a 50/50 balance production never has. Honest: 0.495. Then say one sentence about Mistake 1 (a sampler in a scikit-learn pipeline raises <code class="inline">TypeError</code>) and Mistake 3 (Step 6's inflated probabilities cut at the formula threshold flag all 15,000 payments, the most expensive option).</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>A sampler in a scikit-learn pipeline, or resampling before cross-validation.</b> Symptoms: <code class="inline">TypeError: All intermediate steps should be transformers and implement fit and transform or be the string 'passthrough...</code>; or a CV AP near 0.9. Coach: "Which pipeline did you import? Did the validation folds keep the real fraud rate?"</li>
+  <li><b>Judging by accuracy or by recall at 0.5.</b> Symptoms: "the balanced model is better, recall 0.69"; <code class="inline">cross_val_score</code> without <code class="inline">scoring=</code>. Coach: "How many payments did it flag to get that recall? What did AP do?"</li>
+  <li><b>The formula threshold on weighted or resampled probabilities, or a threshold chosen on the test set.</b> Symptoms: a model that flags everything; a "best threshold" read off the test-set cost curve. Coach: "Are these probabilities honest? Compare their mean with the real rate." and "Which rows chose the threshold?"</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (12m, everyone):</b> <code class="inline">labs/module-05/l2_5-imbalanced-classes/retention_threshold_starter.py</code>; reference <code class="inline">labs/module-05/l2_5-imbalanced-classes/retention_threshold_solution.py</code>. The lesson's cost reasoning on a different decision: a $15 retention offer against $60 lost per churner nobody contacts, on the canonical churn split with 14 columns.</li>
+  <li><b>Expected, Lab A:</b> offer nobody $14,880, everyone $22,500; ROC AUC 0.827, AP 0.496 (random 0.165); at 0.5: 112 offers, $12,540; the sweep is cheapest at 0.2 to 0.25 ($10,830 to $10,935); formula 15/60 = 0.25; balanced weights at 0.5: 471 offers, $10,965, but their probabilities average 0.377 against a real 0.165, so the formula on them costs $14,070; tuned threshold 0.234: 343 offers, 153 of 248 churners reached, $10,845.</li>
+  <li><b>Circulate in Lab A for:</b> a cost function with the <code class="inline">ravel()</code> order wrong (tn, fp, fn, tp); the formula applied to the balanced model; thresholds chosen from the test sweep and then reported as the result. <b>Debrief:</b> "With churn at 16.5% the 0.5 cut still costs $1,700 more than a cut chosen from the prices. Same lesson as fraud, milder imbalance."</li>
+  <li><b>Lab B (8m, pairs):</b> <code class="inline">labs/module-05/l2_5-imbalanced-classes/rebalance_tree_starter.py</code>; reference <code class="inline">labs/module-05/l2_5-imbalanced-classes/rebalance_tree_solution.py</code>. Tests the lesson's claim that SMOTE can help a deep tree: a depth-6 decision tree on fraud, five candidates compared by CV AP inside imblearn pipelines.</li>
+  <li><b>Expected, Lab B:</b> CV AP plain 0.335, balanced 0.269, undersample 0.044, oversample 0.271, SMOTE 0.182; at 0.5 plain flags 44 (recall 0.27, precision 0.80), the others 1,517 to 2,242 (recall near 0.65, precision 0.04 to 0.06); SMOTE first, then CV: AP 0.873 on folds that are 50% fraud.</li>
+  <li><b>Debrief Lab B (1m):</b> "Here every rebalancing hurt the ranking, and undersampling (614 training rows) wrecked it. On this data the claim fails: try it, do not assume it. The leak still reports 0.87."</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-05/l2_5-imbalanced-classes/debug_imbalance.py</code>: two bugs that stop it (<code class="inline">TypeError</code> from a scikit-learn pipeline, <code class="inline">ValueError: could not convert string to float: 'Gift Cards'</code> from SMOTE before the encoder) and two that do not (accuracy reported as AP; the <code class="inline">ravel()</code> order). Fixed, it prints AP 0.535 and 0.495 and a cost of $25,985.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The lesson project is <b>a fraud review queue for June</b>: train on January to May, choose model and threshold on those months only, run June once. In the room, Steps 1 to 3 (15 minutes).</p>
+<ul class="tick">
+  <li>Read the brief aloud. Step 1 together: the split by date, no shuffling. <b>Done</b> = <code class="inline">train Jan-May: 41,738 payments, 374 frauds (0.90%)</code> and <code class="inline">test  June   : 8,262 payments, 64 frauds (0.77%)</code>.</li>
+  <li>Step 2: the cost function and June's do-nothing costs, $24,000 and $82,620. "Any model has to beat $24,000."</li>
+  <li>Step 3: three candidates by CV AP with SMOTE inside an imblearn pipeline: plain 0.506, balanced 0.481, SMOTE 0.472. Keep the plain model.</li>
+  <li><b>Goes home:</b> Step 4 (tuned threshold 0.051 against the formula's 0.027), Step 5 (June once: 166 flags, 41 of 64 caught, $10,285) and Step 6 (<code class="inline">fraud_review_queue.csv</code>, no <code class="inline">is_fraud</code> column).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these out loud during the demo and the lab:</p>
+<ul class="tick">
+  <li>What is AP's baseline here, and why not 0.5? <b>Answer:</b> the fraud rate, about 0.009: that is what a random ranking scores.</li>
+  <li>The balanced model's recall jumped and its AP did not. What changed? <b>Answer:</b> where the 0.5 cut falls; the ranking is about the same.</li>
+  <li>Review $10, missed fraud $375: formula threshold, and which model may use it? <b>Answer:</b> 0.027, only a model with calibrated probabilities (the plain one).</li>
+  <li>Why must the sampler sit inside the pipeline? <b>Answer:</b> so validation folds keep the real class balance and contain no synthetic rows.</li>
+  <li>Who carries the cost of a false alarm? <b>Answer:</b> an honest customer whose order is held; check whether one group (new accounts) carries more than its share (Exercise 3).</li>
+</ul>
+<p>Workbook self-check, items Q7 to Q12 (learners do them at the end of the block or at home).</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q7</b> <span data-sc="7"><code class="inline">[ 0.526 10.   ]</code></span>; <b>Q8</b> <span data-sc="8">D) 0.04</span>; <b>Q9</b> <span data-sc="9">A) 0.495: resampling first put synthetic frauds, built from frauds in the training folds, into the validation folds, at a 50/50 balance production never has</span>; <b>Q10</b> <span data-sc="10"><code class="inline">405</code></span>; <b>Q11</b> <span data-sc="11">C) <code class="inline">predict</code> applies the tuned threshold; <code class="inline">predict_proba</code> returns the underlying model's probabilities unchanged</span>; <b>Q12</b> <span data-sc="12">B) The default score of a classifier is accuracy, which hides whether any fraud is found; pass <code class="inline">scoring="average_precision"</code> or a cost scorer</span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> in Lab A, write <code class="inline">retention_cost</code> together on the projector (TODO 1 is the step most people get wrong), and give struggling pairs the threshold loop from the demo to adapt. Keep RANK | DECIDE on the board and ask "which side is this?" for every number.</p>
+<p><b>Stretch:</b> the lesson's Exercise 4 (re-tune for losses of $100, $375 and $1,000) and Bonus Challenge (night and night-on-a-new-device features: one good feature moves AP more than every sampler). In Lab A: what threshold fills a capacity of 200 calls, and what does it cost?</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Closing</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Exit ticket (3 questions, no notes, 4 minutes)</div>
+<p>Put the questions on the slide; learners answer in the workbook's Exit Ticket box or on a sticky note. Sort the notes before Session 6: question 1 tells you how much the checkpoint will test what you think it tests.</p>
+<ol class="steps">
+  <li>Why must <code class="inline">SelectKBest</code> live inside the pipeline when you cross-validate? <b>Answer:</b> it looks at the labels; outside the pipeline the validation rows help choose the columns, and the score is optimistic (about 80% on pure noise instead of 50%).</li>
+  <li>A class-weighted fraud model has recall 0.69 where the plain model had 0.31, with the same AP. What changed, and what did it cost? <b>Answer:</b> mostly the cut: more payments cross 0.5 (1,863 flags instead of 44, precision 0.05), and the probabilities are inflated (mean 0.27 against a real 0.009).</li>
+  <li>A review costs $10 and a missed fraud $375. Which threshold, and on which model's probabilities may you use it? <b>Answer:</b> 10 / 375 ≈ 0.027, on a calibrated model (plain, no weights, no resampling); otherwise tune it with <code class="inline">TunedThresholdClassifierCV</code>.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Homework (about 2 to 3 hours)</div>
+<ul class="tick">
+  <li><b>Finish both lesson projects.</b> The lean churn model (Steps 4 to 6: the forward path from <code class="inline">days_since_last_order</code>, 6 columns, test ROC AUC 0.826 full against 0.824 lean, <code class="inline">lean_features.txt</code>) and the June review queue (Steps 4 to 6: threshold 0.051, 166 flags, 41 of 64 caught, $10,285, <code class="inline">fraud_review_queue.csv</code>).</li>
+  <li><b>Lesson exercises.</b> 2.4: Exercises 1 to 3 (what the filters keep, backward selection, a forest as the selector); 4 is a stretch. 2.5: Exercises 1 to 3 (weights between the extremes, a fixed threshold for a capacity, who gets flagged by mistake); 4 is a stretch.</li>
+  <li><b>Both Quick Quizzes</b> on the lesson pages, and <b>both journal entries</b>.</li>
+  <li><b>Before the Next Lesson (both pages):</b> keep <code class="inline">lean_features.txt</code> and the 2.5 notebook; 2.4: rerun the noise experiment with <code class="inline">k=200</code>; 2.5: one problem from your own life with two very different mistake costs, and its formula threshold; rerun 2.5 Step 3 with <code class="inline">scoring="roc_auc"</code>.</li>
+  <li><b>Labs not finished in class:</b> <code class="inline">lean_fraud</code> TODO 5, <code class="inline">vendor_columns</code>, <code class="inline">rebalance_tree</code>; optional <code class="inline">debug_imbalance.py</code>.</li>
+  <li><b>Checkpoint 1 is at the start of Session 6</b> (30 minutes, open notebook, not graded): look back over your Module 1 and 2 notebooks, especially splits, pipelines, metrics and thresholds.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Bring list for Session 6</div>
+<ul class="tick">
+  <li>A laptop on which <code class="inline">check_environment.py</code> ends with READY (nothing new to install).</li>
+  <li>The <code class="inline">pinecrest-ml</code> folder with <code class="inline">data/</code> and the <code class="inline">labs/</code> folder inside it. Session 6's starters are in <code class="inline">labs/module-06/</code>, including the checkpoint starter in <code class="inline">labs/module-06/checkpoint-1/</code>.</li>
+  <li>Your notebooks from Lessons 1.1 to 2.5: Checkpoint 1 is open notebook, and your own code is the best reference.</li>
+  <li>The finished 2.4 and 2.5 project notebooks, <code class="inline">lean_features.txt</code>, the workbook and the journal. No downloads, no internet needed.</li>
+</ul>
+</div>
+
+  <div class="sec"><h2>If You Run Long or Short</h2><span class="rule"></span></div>
+<div class="blk warn"><div class="h">Running long: what to protect and what to cut first</div>
+<ul class="tick">
+  <li><b>Protect:</b> the noise experiment and the SMOTE leak; 2.5 Steps 4, 8 to 10 (RANK | DECIDE, cost, tuned threshold); RFECV's plateau and the tolerance rule.</li>
+  <li><b>Cut first (saves 6m):</b> 2.4 Steps 4 and 5 (filters). Show the F/MI table on the lesson page and say: "Filters score columns alone: fast, blind to the model and to teamwork."</li>
+  <li><b>Cut second (saves 4m):</b> 2.5 Step 7 (samplers). Show the lesson's side-by-side table instead of running it.</li>
+  <li><b>Cut third (saves 8m per lesson):</b> Lab B of either lesson moves to homework; its expected output is in the workbook's "Expected when done" lines.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Running short: what to add</div>
+<ul class="tick">
+  <li>2.4 Exercise 3 live: a forest as the selector, and why a logistic regression does worse on the forest's choice (0.813).</li>
+  <li>2.5 Exercise 3 live: who gets flagged by mistake? New accounts 3.2% against 1.4%. Discuss what Pinecrest should do about it.</li>
+  <li>Run <code class="inline">debug_imbalance.py</code> together: each loud bug read from the last line, then hunt the two silent ones.</li>
+</ul>
+</div>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 5 · Facilitator Guide · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

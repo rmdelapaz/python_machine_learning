@@ -3,1137 +3,1009 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Master Random Forests in Python. Learn ensemble methods, bagging, feature importance, and hyperparameter tuning with practical examples.">
-    <title>Random Forests Path - Python Machine Learning</title>
+    <meta name="description" content="Turn one unstable decision tree into a reliable ensemble: bootstrap samples, bagging, random forests, out-of-bag validation and honest feature importance, on Pinecrest churn data. Python Machine Learning Lesson 5.2.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Bagging and Random Forests - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
-    <main id="main-content">
-    <header role="banner">
-        <h1>Random Forests</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Supervised Learning</a>
-        <span class="separator">›</span>
-        <span class="current">Random Forests</span>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
     </nav>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Explain how bagging and random feature selection combine to make a random forest</li>
-            <li>Train random forests for both classification and regression</li>
-            <li>Tune the key hyperparameters: <code>n_estimators</code>, <code>max_features</code>, and <code>max_depth</code></li>
-            <li>Use out-of-bag (OOB) error and feature importances from the forest</li>
-            <li>Explain why an ensemble reduces variance and overfits less than a single tree</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Train and tune a random forest on a real dataset, then compare it against a single decision tree to see the variance reduction firsthand.</p>
-    </div>
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>🌲 Lesson 5.2: Bagging and Random Forests</h1>
+                <p class="lead">Turn one jumpy decision tree into a steady crowd: train many trees on resampled customers, average their opinions, and get a free validation score along the way.</p>
 
-    <h2>The Power of Ensemble Learning! 🌲🌲🌲</h2>
-    
-    <blockquote>
-        <p>Random Forests combine the wisdom of crowds with the power of decision trees. By building hundreds of trees and letting them vote, Random Forests achieve remarkable accuracy while maintaining robustness against overfitting. Master this versatile algorithm that excels at both classification and regression tasks.</p>
-    </blockquote>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Draw a bootstrap sample and explain why it contains about 63% of the original rows</li>
+                        <li>Build a bagged ensemble by hand and with <code>BaggingClassifier(estimator=...)</code>, and explain why averaging reduces variance</li>
+                        <li>Explain how a random forest decorrelates its trees with <code>max_features</code>, and tune <code>n_estimators</code>, <code>max_features</code> and <code>min_samples_leaf</code></li>
+                        <li>Use out-of-bag predictions as a built-in validation estimate</li>
+                        <li>Compare impurity-based and permutation importance, and recognize the bias of the first</li>
+                    </ul>
+                </div>
 
-    <h2>Random Forest Architecture</h2>
-    
-    <div class="mermaid">
-    graph TD
-        A[Random Forest] --> B[Bootstrap Sampling]
-        A --> C[Random Feature Selection]
-        A --> D[Multiple Trees]
-        
-        B --> E[Sample 1]
-        B --> F[Sample 2]
-        B --> G[Sample n]
-        
-        C --> H[Features Subset 1]
-        C --> I[Features Subset 2]
-        C --> J[Features Subset m]
-        
-        D --> K[Tree 1]
-        D --> L[Tree 2]
-        D --> M[Tree n]
-        
-        K --> N[Predictions]
-        L --> N
-        M --> N
-        
-        N --> O[Voting/Averaging]
-        O --> P[Final Prediction]
-        
-        style A fill:#f9f,stroke:#333,stroke-width:2px
-        style O fill:#bbf,stroke:#333,stroke-width:2px
-        style P fill:#9f9,stroke:#333,stroke-width:2px
-    </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 100 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="trees_decision.html">Lesson 5.1: Decision Trees</a></li>
+                    <li><span class="meta-label">🛠️ You will build</span> A churn forest in a pipeline, validated out-of-bag, compared with Lesson 5.1's rule tree and logistic regression, plus a 50-customer call list and an importance check</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code> (exercise 4 uses <code>data/weekly_demand.csv</code>)</li>
+                </ul>
+            </header>
 
-    <h2>Understanding Random Forests</h2>
-    
-    <h3>Core Concepts and Implementation</h3>
-    <pre class="language-python"><code>import numpy as np
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Ask the Crowd</a></li>
+                        <li><a href="#bootstrap" class="toc-link">The Bootstrap</a></li>
+                        <li><a href="#bagging" class="toc-link">Bagging by Hand</a></li>
+                        <li><a href="#bagging-sklearn" class="toc-link">BaggingClassifier</a></li>
+                        <li><a href="#forest" class="toc-link">Random Forests: One More Twist</a></li>
+                        <li><a href="#oob" class="toc-link">Out-of-Bag Validation</a></li>
+                        <li><a href="#tuning" class="toc-link">What to Tune</a></li>
+                        <li><a href="#importance" class="toc-link">Importance You Can Check</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: A Churn Forest and a Call List</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Ask the Crowd</h2>
+
+                <p>Lesson 5.1 ended with a problem. Three unlimited trees, each trained on a slightly different 80% of the same customers, disagreed about one test customer in four. A single deep tree has low bias (it can represent almost any pattern) but high <strong>variance</strong>: its predictions swing with every small change in the training data.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: A Panel of New Hires</h4>
+                    <p>Remember the new hire from Lesson 1.1 studying case files? One very diligent new hire who memorizes every file makes confident, quirky judgments. Now hire a panel of 100. Each one studies their own random stack of files: drawn from the same archive, with some files appearing twice and others missing. When a new customer arrives, everyone gives an opinion and you take the average.</p>
+                    <p>Each panelist is still quirky, but their quirks point in different directions and largely cancel out. What they agree on is the real pattern. That is <strong>bagging</strong>. A <strong>random forest</strong> adds one more rule: at every decision, each panelist may only look at a random handful of the columns, which forces them to disagree more usefully.</p>
+                </div>
+
+                <p>The math behind "quirks cancel out" fits in one line. If you average n models whose predictions each have variance σ² and are correlated with each other by ρ (rho), the average has variance:</p>
+
+                <div class="card card-info">
+                    <h4>💡 Variance of an Average</h4>
+                    <p><strong>ρσ² + (1 − ρ)σ² / n</strong>. More models shrink the second term toward zero, but the first term stays: averaging cannot remove the error the models <em>share</em>. So there are two levers: use many models (bigger n), and make them less alike (smaller ρ). Bagging pulls the first lever; a random forest pulls both.</p>
+                </div>
+
+                <p>In a picture: each "sample" below is a bootstrap sample of the training customers (next section), each tree is grown to full depth on its own sample, and the ensemble's prediction is the average of the trees' churn probabilities.</p>
+
+                <div class="mermaid">
+graph TD
+    A["4,500 training customers"] --> B["Sample 1"]
+    A --> C["Sample 2"]
+    A --> D["Sample 100"]
+    B --> E["Tree 1"]
+    C --> F["Tree 2"]
+    D --> G["Tree 100"]
+    E --> H["Average the probabilities"]
+    F --> H
+    G --> H
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>Random forests are among the most dependable models for tabular data: they need little preprocessing, few settings, almost never fail badly, and come with a built-in validation score. Even when gradient boosting (Lesson 5.3) wins by a little, a forest is the baseline it has to beat. And the idea underneath, averaging many unstable models, appears all over machine learning.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="bootstrap" class="lesson-section">
+                <h2>🎒 The Bootstrap</h2>
+
+                <p>A <strong>bootstrap sample</strong> draws n rows from a table of n rows <em>with replacement</em>: after each draw the row goes back in the pot, so it can be picked again. Same size as the original, but with duplicates and gaps. Set up the usual split and draw one:</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.tree import DecisionTreeClassifier, plot_tree
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
-from sklearn.metrics import (accuracy_score, confusion_matrix, classification_report,
-                           mean_squared_error, r2_score, mean_absolute_error)
-from sklearn.datasets import make_classification, make_regression, load_iris, load_wine
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import roc_auc_score
+
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+X = customers[features]
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
+
+rng = np.random.default_rng(42)
+n = len(X_train)
+rows = rng.integers(0, n, size=n)                   # n draws with replacement
+times_drawn = np.bincount(rows, minlength=n)
+
+print(f"draws: {len(rows)}, distinct customers: {np.count_nonzero(times_drawn)} ({np.count_nonzero(times_drawn) / n:.1%})")
+print("how many customers were drawn 0, 1, 2, ... times:", np.bincount(times_drawn))
+print(f"theory: 1 - (1 - 1/n)^n = {1 - (1 - 1 / n) ** n:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>draws: 4500, distinct customers: 2830 (62.9%)
+how many customers were drawn 0, 1, 2, ... times: [1670 1626  840  281   65   17    1]
+theory: 1 - (1 - 1/n)^n = 0.632</code></pre>
+                </div>
+
+                <p>Each customer has a (1 − 1/n) chance of being missed on every draw, so the chance of being missed all n times is (1 − 1/n)ⁿ, which approaches 1/e ≈ 0.368 for large n. So a bootstrap sample contains about <strong>63.2%</strong> of the distinct customers, some of them two, three or more times, and leaves out the other 36.8%. Those left-out customers are called <strong>out-of-bag</strong> (OOB), and they will turn out to be very useful.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Why Seeds Matter Here</h4>
+                    <p>Everything in this lesson is random on purpose: bootstrap samples, feature choices, permutations. <code>np.random.default_rng(42)</code> and <code>random_state=42</code> make your run match this page. In real work you also rerun with other seeds to check that a conclusion does not depend on one lucky draw.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="bagging" class="lesson-section">
+                <h2>🛠️ Bagging by Hand</h2>
+
+                <p><strong>Bagging</strong> is short for <em>bootstrap aggregating</em>: fit one model per bootstrap sample, then aggregate their predictions (average the probabilities, or take a majority vote). Build it yourself with 100 unlimited trees, the worst-behaved model from Lesson 5.1:</p>
+
+                <pre><code class="language-python">single = DecisionTreeClassifier(random_state=42).fit(X_train, y_train)
+print(f"one unlimited tree: test ROC AUC {roc_auc_score(y_test, single.predict_proba(X_test)[:, 1]):.3f}")
+
+tree_probas = []
+for i in range(100):
+    rows = rng.integers(0, n, size=n)
+    tree = DecisionTreeClassifier(random_state=42).fit(X_train.iloc[rows], y_train.iloc[rows])
+    tree_probas.append(tree.predict_proba(X_test)[:, 1])
+tree_probas = np.array(tree_probas)                 # 100 trees x 1,500 test customers
+
+for k in [1, 5, 10, 25, 50, 100]:
+    print(f"average of {k:3d} trees: test ROC AUC {roc_auc_score(y_test, tree_probas[:k].mean(axis=0)):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>one unlimited tree: test ROC AUC 0.683
+average of   1 trees: test ROC AUC 0.668
+average of   5 trees: test ROC AUC 0.801
+average of  10 trees: test ROC AUC 0.825
+average of  25 trees: test ROC AUC 0.835
+average of  50 trees: test ROC AUC 0.842
+average of 100 trees: test ROC AUC 0.848</code></pre>
+                </div>
+
+                <p>Same algorithm, same settings, same data, and the AUC climbs from about 0.68 to about 0.85 just by averaging. Nothing about any individual tree improved: each one is still an overfitted memorizer. What improved is that their mistakes partly cancel. Notice the diminishing returns: the first 10 trees give most of the gain; the last 50 add less than 0.01.</p>
+
+                <p>Look at a single customer to see why averaging also fixes the "all 0s and 1s" problem from Lesson 5.1. Pick the test customer the panel is most divided about:</p>
+
+                <pre><code class="language-python">panel = tree_probas.mean(axis=0)
+divided = int(np.argmin(np.abs(panel - 0.5)))
+print(f"test customer {customers.loc[X_test.index[divided], 'customer_id']}: "
+      f"{panel[divided]:.2f} average churn vote, really churned: {y_test.iloc[divided]}")
+print("first 20 trees say:", tree_probas[:20, divided])
+print("distinct probabilities: one tree", len(np.unique(tree_probas[0])), "| the panel", len(np.unique(panel)))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>test customer C105686: 0.50 average churn vote, really churned: 1
+first 20 trees say: [1. 0. 1. 1. 0. 0. 0. 1. 1. 1. 0. 1. 0. 1. 1. 1. 0. 1. 1. 1.]
+distinct probabilities: one tree 2 | the panel 99</code></pre>
+                </div>
+
+                <p>Each tree is certain, one way or the other; the panel is honestly unsure. And while one tree gives almost every customer a 0 or a 1, the panel produces many distinct probabilities, so it can rank customers finely enough to pick a top 50.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="bagging-sklearn" class="lesson-section">
+                <h2>📦 BaggingClassifier</h2>
+
+                <p>scikit-learn packages the loop as <code>BaggingClassifier</code> (and <code>BaggingRegressor</code>). Pass the model to bag as <code>estimator=</code>; it can be <em>any</em> classifier, not only a tree.</p>
+
+                <pre><code class="language-python">from sklearn.ensemble import BaggingClassifier
+
+bagging = BaggingClassifier(estimator=DecisionTreeClassifier(), n_estimators=100, random_state=42)
+bagging.fit(X_train, y_train)
+print(f"BaggingClassifier, 100 trees: test ROC AUC {roc_auc_score(y_test, bagging.predict_proba(X_test)[:, 1]):.3f}")
+print(len(bagging.estimators_), "fitted trees; first tree trained on", len(np.unique(bagging.estimators_samples_[0])), "distinct customers")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>BaggingClassifier, 100 trees: test ROC AUC 0.849
+100 fitted trees; first tree trained on 2834 distinct customers</code></pre>
+                </div>
+
+                <p>The same result as your loop, give or take the luck of the draws. <code>estimators_</code> holds the fitted trees and <code>estimators_samples_</code> the rows each one was trained on. Other options: <code>max_samples</code> (draw fewer rows per model), <code>max_features</code> (give each model a random subset of columns), and <code>bootstrap=False</code> (sample without replacement, called <em>pasting</em>).</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Bagging Helps Unstable Models</h4>
+                    <p>Bagging reduces variance. A deep tree has lots of it, so bagging helps enormously. Logistic regression or k-nearest neighbors with a large k barely change from one bootstrap sample to the next, so bagging them gains almost nothing (Exercise 2 checks this). Bagging also cannot fix bias: averaging 100 depth-1 stumps that all ask the same question still gives a one-question model.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="forest" class="lesson-section">
+                <h2>🌲 Random Forests: One More Twist</h2>
+
+                <p>Bagged trees have a weakness: they are too alike. Recency is so useful that almost every tree asks about it first, so they share their top splits and many of their errors (the ρσ² term). A <strong>random forest</strong> fixes this with one change: at <em>each split</em>, the tree may only choose among a random subset of the features. In <code>RandomForestClassifier</code> that subset size is <code>max_features</code>, by default <code>"sqrt"</code>: √10 ≈ 3 of the 10 features here. Some trees must make do without recency at the top, and they find other useful patterns.</p>
+
+                <pre><code class="language-python">from sklearn.ensemble import RandomForestClassifier
+
+forest = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1).fit(X_train, y_train)
+print(f"random forest, 100 trees: test ROC AUC {roc_auc_score(y_test, forest.predict_proba(X_test)[:, 1]):.3f}")
+
+def per_tree(ensemble):
+    """Churn probabilities of every tree in an ensemble, one row per tree."""
+    X_array = X_test.to_numpy()                       # the inner trees were fitted without column names
+    return np.array([t.predict_proba(X_array)[:, 1] for t in ensemble.estimators_])
+
+for name, ensemble in [("bagging", bagging), ("random forest", forest)]:
+    probas = per_tree(ensemble)
+    one_tree = np.mean([roc_auc_score(y_test, p) for p in probas])
+    rho = np.corrcoef(probas)[np.triu_indices(len(probas), k=1)].mean()
+    print(f"{name:14s} average single-tree AUC {one_tree:.3f}   average correlation between trees {rho:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>random forest, 100 trees: test ROC AUC 0.855
+bagging        average single-tree AUC 0.666   average correlation between trees 0.354
+random forest  average single-tree AUC 0.648   average correlation between trees 0.288</code></pre>
+                </div>
+
+                <p>This is the variance formula in action. Each forest tree is a little <em>worse</em> on its own than a bagged tree (it was often denied the best feature), but the forest's trees are less correlated with each other, and the average of less-alike trees is better. <code>n_jobs=-1</code> trains the trees in parallel on all your CPU cores; they are independent, so this is an easy speed-up.</p>
+
+                <p>How many trees are enough? Average the first k trees of each ensemble, for every k from 1 to 100:</p>
+
+                <pre><code class="language-python">ks = np.arange(1, 101)
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+for name, ensemble, color in [("bagging", bagging, "#999999"), ("random forest", forest, "#667eea")]:
+    probas = per_tree(ensemble)
+    curve = [roc_auc_score(y_test, probas[:k].mean(axis=0)) for k in ks]
+    ax.plot(ks, curve, color=color, label=name)
+    print(f"{name:14s} AUC with 1, 10, 50, 100 trees:", [round(curve[k - 1], 3) for k in [1, 10, 50, 100]])
+ax.axhline(roc_auc_score(y_test, single.predict_proba(X_test)[:, 1]), color="black", linestyle="--",
+           linewidth=1, label="one unlimited tree")
+ax.set_xlabel("Number of trees averaged")
+ax.set_ylabel("Test ROC AUC")
+ax.set_title("Averaging trees: big gains early, then a plateau")
+ax.legend(loc="lower right")
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>bagging        AUC with 1, 10, 50, 100 trees: [0.677, 0.821, 0.846, 0.849]
+random forest  AUC with 1, 10, 50, 100 trees: [0.649, 0.806, 0.849, 0.855]</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/trees_random_forest_n_trees.png" alt="Line chart of test ROC AUC against the number of trees averaged, from 1 to 100. Both the bagging line (gray) and the random forest line (purple) start between 0.65 and 0.68 and rise steeply. Bagging climbs faster at first; the random forest catches up at about 40 trees and levels off slightly higher, near 0.855 against 0.849. A dashed line marks a single unlimited tree at 0.68." width="990" height="440" loading="lazy">
+                    <figcaption>Both ensembles gain most of their accuracy in the first 20 trees. The forest starts slower, because each of its trees is weaker, but its less-alike trees average to a better result once there are enough of them.</figcaption>
+                </figure>
+
+                <p>The two curves tell the variance-formula story again. With a handful of trees, the stronger individual bagged trees win. As n grows, the (1 − ρ)σ²/n term fades and the shared-error term ρσ² is what is left, and that is where the forest's lower correlation pays off.</p>
+
+                <div class="card card-success">
+                    <h4>✅ More Trees Never Overfit</h4>
+                    <p>Adding trees does not make a forest more complex in the way a deeper tree is more complex: it only makes the average more precise. The curve flattens; it does not turn down. The cost of more trees is time and memory, not accuracy. A few hundred is typical; check that your score has plateaued.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="oob" class="lesson-section">
+                <h2>🧪 Out-of-Bag Validation</h2>
+
+                <p>Each tree never saw about 37% of the training customers. So for every training customer there is a sub-panel of trees (about a third of the forest) that did not train on them. Their average prediction is an honest, unseen-data prediction, made without holding anything out. Ask for it with <code>oob_score=True</code>:</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import StratifiedKFold, cross_val_score
+
+oob_forest = RandomForestClassifier(n_estimators=300, min_samples_leaf=5, oob_score=True, random_state=42, n_jobs=-1)
+oob_forest.fit(X_train, y_train)
+oob_proba = oob_forest.oob_decision_function_[:, 1]          # one OOB probability per training customer
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+cv_auc = cross_val_score(oob_forest, X_train, y_train, cv=cv, scoring="roc_auc").mean()
+print(f"OOB accuracy (oob_score_)  {oob_forest.oob_score_:.3f}")
+print(f"OOB ROC AUC                {roc_auc_score(y_train, oob_proba):.3f}")
+print(f"5-fold CV ROC AUC          {cv_auc:.3f}")
+print(f"test ROC AUC               {roc_auc_score(y_test, oob_forest.predict_proba(X_test)[:, 1]):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>OOB accuracy (oob_score_)  0.872
+OOB ROC AUC                0.866
+5-fold CV ROC AUC          0.868
+test ROC AUC               0.865</code></pre>
+                </div>
+
+                <p>The OOB estimate agrees closely with 5-fold cross-validation, at one fifth of the cost: one fit instead of five. <code>oob_score_</code> is accuracy by default; <code>oob_decision_function_</code> holds the OOB probabilities, so you can compute any metric from them, as here with ROC AUC.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Where OOB Is Not Enough</h4>
+                    <p>OOB validation only covers the forest itself. If preprocessing learns from the target (target encoding, feature selection by correlation with churn), it has already seen every training row, so the OOB score is optimistic: use cross-validation of the whole pipeline instead (Lesson 2.2). It also assumes rows are independent: for data split by time or by group, use a time-aware or grouped split. And the test set stays locked until the end, as always.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="tuning" class="lesson-section">
+                <h2>🎛️ What to Tune</h2>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Hyperparameter</th><th>Default</th><th>Effect</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>n_estimators</code></td><td>100</td><td>More trees: steadier, slower, never worse. Raise until the score plateaus.</td></tr>
+                            <tr><td><code>max_features</code></td><td><code>"sqrt"</code></td><td>Features tried per split. Smaller: less correlated, individually weaker trees. <code>None</code> (all features) turns the forest back into bagging.</td></tr>
+                            <tr><td><code>min_samples_leaf</code></td><td>1</td><td>Larger leaves: smoother probabilities, less overfitting of each tree.</td></tr>
+                            <tr><td><code>max_depth</code>, <code>max_leaf_nodes</code></td><td>None</td><td>Alternative size limits for each tree.</td></tr>
+                            <tr><td><code>max_samples</code></td><td>None</td><td>Rows per bootstrap sample; a fraction such as 0.5 speeds up big data.</td></tr>
+                            <tr><td><code>class_weight</code></td><td>None</td><td><code>"balanced"</code> or <code>"balanced_subsample"</code> for rare classes (Lesson 2.5).</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p>The OOB score makes tuning cheap: one fit per setting. Try three values of <code>max_features</code> against three leaf sizes:</p>
+
+                <pre><code class="language-python">results = []
+for max_features in ["sqrt", 0.5, None]:
+    for leaf in [1, 5, 20]:
+        model = RandomForestClassifier(n_estimators=200, max_features=max_features, min_samples_leaf=leaf,
+                                       oob_score=True, random_state=42, n_jobs=-1).fit(X_train, y_train)
+        results.append({"max_features": str(max_features), "min_samples_leaf": leaf,
+                        "oob_auc": roc_auc_score(y_train, model.oob_decision_function_[:, 1])})
+
+grid = pd.DataFrame(results).pivot(index="max_features", columns="min_samples_leaf", values="oob_auc")
+print(grid.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>min_samples_leaf     1      5      20
+max_features                         
+0.5               0.856  0.866  0.870
+None              0.851  0.862  0.867
+sqrt              0.857  0.865  0.870</code></pre>
+                </div>
+
+                <p>Two patterns. Larger leaves help in every row (about +0.013 AUC from 1 to 20): fully grown trees overfit even inside a forest, and larger leaves give smoother probabilities. And <code>max_features=None</code> (plain bagging) is the weakest row, but only by a few thousandths: with ten features, several of them redundant, there is limited room for decorrelation. So the defaults plus a moderate leaf size are a sound start. Random forests are famously forgiving to tune.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Extra-Trees: Even More Random</h4>
+                    <p><code>ExtraTreesClassifier</code> (extremely randomized trees) goes one step further: at each split it draws a <em>random</em> threshold for each candidate feature instead of searching for the best one, and by default it does not bootstrap. Trees are faster to grow and even less correlated, but individually weaker. Sometimes it beats a random forest, sometimes not; Exercise 3 compares them on this data.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="importance" class="lesson-section">
+                <h2>📊 Importance You Can Check</h2>
+
+                <p>A forest's <code>feature_importances_</code> averages the impurity-based importance (MDI) of its trees. Lesson 5.1 warned that MDI favors features with many distinct values. Here is a test you can run on any model: add a column of pure random noise and see how much importance it gets. Then compare with <strong>permutation importance</strong>, which shuffles one column of the <em>test</em> set at a time and measures how much the test AUC drops.</p>
+
+                <pre><code class="language-python">from sklearn.inspection import permutation_importance
+
+noise_rng = np.random.default_rng(42)
+X_train_noisy = X_train.assign(noise=noise_rng.normal(size=len(X_train)))
+X_test_noisy = X_test.assign(noise=noise_rng.normal(size=len(X_test)))
+
+noisy_forest = RandomForestClassifier(n_estimators=300, min_samples_leaf=5, random_state=42, n_jobs=-1)
+noisy_forest.fit(X_train_noisy, y_train)
+perm = permutation_importance(noisy_forest, X_test_noisy, y_test, scoring="roc_auc", n_repeats=5, random_state=42)
+
+importance = pd.DataFrame({"impurity (MDI)": noisy_forest.feature_importances_,
+                           "permutation (AUC drop)": perm.importances_mean},
+                          index=X_train_noisy.columns).sort_values("impurity (MDI)")
+print(importance.iloc[::-1].round(3))
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4.5), layout="constrained", sharey=True)
+for ax, col in zip(axes, importance.columns):
+    colors = ["#d62728" if name == "noise" else "#667eea" for name in importance.index]
+    ax.barh(importance.index, importance[col], color=colors, label=col)
+    ax.set_title(col)
+    ax.axvline(0, color="black", linewidth=0.8)
+fig.suptitle("A pure-noise column (red) looks useful to MDI, much less so to permutation importance")
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>                       impurity (MDI)  permutation (AUC drop)
+days_since_last_order           0.302                   0.161
+tenure_months                   0.153                   0.048
+discount_share                  0.139                   0.085
+spend_12m                       0.087                  -0.002
+avg_order_value                 0.075                   0.001
+return_rate                     0.066                   0.003
+noise                           0.065                   0.005
+support_tickets_12m             0.042                   0.014
+orders_12m                      0.036                   0.002
+app_user                        0.025                   0.013
+returns_12m                     0.010                   0.001</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/trees_random_forest_importance.png" alt="Two horizontal bar charts side by side. Left, impurity-based importance: days since last order is largest, and the red noise column ranks seventh of eleven, ahead of support tickets, orders, app use and returns. Right, permutation importance on the test set: days since last order, discount share and tenure dominate, and the noise column shrinks to a sliver, below support tickets and app use." width="1100" height="495" loading="lazy">
+                    <figcaption>MDI credits the noise column for splits it won by chance on the training data; on unseen data, shuffling it costs almost nothing, which exposes it.</figcaption>
+                </figure>
+
+                <p>A column of random numbers outranks four real features on MDI (support tickets, orders, app use and returns), because with thousands of distinct values it can always find some threshold that happens to separate a few training customers, especially deep in the trees where leaves are small. On the test set, permutation importance gives it 0.005, about a thirtieth of recency's, and below support tickets and app use: the chance splits do not generalize. (It is not exactly zero because the forest did use the column, so shuffling it adds a little random jitter to the predictions.) Permutation importance also moves <code>spend_12m</code> and <code>avg_order_value</code> down: they look busy inside the trees, but the forest barely needs them, because other features carry the same information.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Still a Description of the Model</h4>
+                    <p>Permutation importance tells you how much <em>this model's predictions on this data</em> depend on a column. It is not a causal effect: a model may lean on recency because lapsed customers churn, not because reminding them to order would keep them. With strongly correlated features, permutation importance can also understate each one (the model falls back on its twin). Lesson 7.1 covers it properly, and Lesson 7.2 adds SHAP values.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <h3>1. The Old base_estimator Argument</h3>
+
+                <pre data-raises="TypeError"><code class="language-python">BaggingClassifier(base_estimator=DecisionTreeClassifier(), n_estimators=50)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>TypeError: BaggingClassifier.__init__() got an unexpected keyword argument 'base_estimator'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> older tutorials (and older versions of this course) used <code>base_estimator=</code>. scikit-learn renamed it <code>estimator=</code> and has since removed the old name. <strong>Fix:</strong> <code>BaggingClassifier(estimator=DecisionTreeClassifier(), ...)</code>. The same rename applies to <code>AdaBoostClassifier</code>.</p>
+
+                <h3>2. Asking for OOB Without the Bootstrap</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">RandomForestClassifier(bootstrap=False, oob_score=True, random_state=42).fit(X_train, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Out of bag estimation only available if bootstrap=True</code></pre>
+                </div>
+                <p><strong>What it means:</strong> without bootstrap sampling every tree sees every row, so no row is ever out of the bag. <strong>Fix:</strong> keep <code>bootstrap=True</code> (the default) when you want OOB scores, or use cross-validation.</p>
+
+                <h3>3. Too Few Trees for an OOB Score</h3>
+
+                <pre><code class="language-python">import warnings
+
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    tiny = RandomForestClassifier(n_estimators=5, oob_score=True, random_state=42).fit(X_train, y_train)
+
+print(caught[0].category.__name__)
+print(str(caught[0].message).splitlines()[0])
+print(f"OOB accuracy anyway: {tiny.oob_score_:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>UserWarning
+Some inputs do not have OOB scores. This probably means too few trees were used to compute any reliable OOB estimates.
+OOB accuracy anyway: 0.831</code></pre>
+                </div>
+                <p><strong>What it means:</strong> with 5 trees, each customer has a (0.632)⁵ ≈ 10% chance of being in <em>every</em> bootstrap sample, so some customers have no OOB prediction at all, and the rest are judged by only one or two trees. The number printed is not trustworthy. <strong>Fix:</strong> use enough trees (100 or more) whenever you rely on OOB.</p>
+
+                <h3>4. Judging a Forest on Its Training Data</h3>
+
+                <pre><code class="language-python">train_auc = roc_auc_score(y_train, forest.predict_proba(X_train)[:, 1])
+oob_check = RandomForestClassifier(n_estimators=100, oob_score=True, random_state=42, n_jobs=-1).fit(X_train, y_train)
+print(f"training AUC {train_auc:.3f}   OOB AUC {roc_auc_score(y_train, oob_check.oob_decision_function_[:, 1]):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>training AUC 1.000   OOB AUC 0.851</code></pre>
+                </div>
+                <p><strong>What happened:</strong> every training customer was in the bootstrap sample of about 63% of the trees, which memorized them. A near-perfect training score says nothing about new customers. <strong>Fix:</strong> judge a forest by OOB, cross-validation or the test set, never by <code>predict</code> on its own training rows. (This is also why a forest's training predictions must never be fed into a second model as features; Lesson 5.4 shows the right way.)</p>
+
+                <h3>5. Forgetting random_state</h3>
+
+                <pre><code class="language-python">p1 = RandomForestClassifier(n_estimators=100).fit(X_train, y_train).predict_proba(X_test)[:, 1]
+p2 = RandomForestClassifier(n_estimators=100).fit(X_train, y_train).predict_proba(X_test)[:, 1]
+print("same predictions twice:", np.array_equal(p1, p2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>same predictions twice: False</code></pre>
+                </div>
+                <p><strong>What happened:</strong> without a seed, each fit draws different bootstrap samples and feature subsets, so scores change slightly every run. When you compare two settings, you cannot tell an improvement from luck, and a colleague cannot reproduce your result. <strong>Fix:</strong> set <code>random_state</code> on every forest; to judge how much luck matters, deliberately rerun with a few different seeds.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: A Churn Forest and a Call List</h2>
+
+                <p>In Lesson 5.1 you gave the care team a readable rule book. Now the team wants the best possible list of 50 customers to call this month. Build a random forest on all the useful columns inside a pipeline, tune it with OOB scores, compare it on the test set with a baseline, logistic regression and the rule tree, build the call list and check which columns the forest really relies on. Work in a new notebook called <code>lesson_5_2_project</code>. Allow about 40 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load, choose columns and split <span class="step-time">(5 min)</span></h3>
+                    <p>The same columns and split as the Lesson 5.1 project.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+           "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user", "email_opens_90d"]
+categorical = ["home_store", "age_group", "loyalty_tier", "preferred_category"]
+
+train, test = train_test_split(customers, test_size=0.25, stratify=customers["churned"], random_state=42)
+X_train, y_train = train[numeric + categorical], train["churned"]
+X_test, y_test = test[numeric + categorical], test["churned"]
+print(X_train.shape, X_test.shape, test["customer_id"].iloc[0])</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(4500, 15) (1500, 15) C102112</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: A forest pipeline, tuned out-of-bag <span class="step-time">(10 min)</span></h3>
+                    <p>Like a single tree, a forest needs no scaling and handles the gaps in numeric columns. The one-hot encoder learns only the category names, never the target, so the OOB score stays honest. Try a few leaf sizes.</p>
+                    <pre><code class="language-python">from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.pipeline import make_pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import roc_auc_score
+
+tree_prep = ColumnTransformer(
+    [("num", "passthrough", numeric),
+     ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), categorical)],
+    verbose_feature_names_out=False,
+).set_output(transform="pandas")
+
+for leaf in [1, 5, 10, 20, 40]:
+    pipe = make_pipeline(tree_prep, RandomForestClassifier(n_estimators=300, min_samples_leaf=leaf, oob_score=True,
+                                                           random_state=42, n_jobs=-1))
+    pipe.fit(X_train, y_train)
+    oob = roc_auc_score(y_train, pipe[-1].oob_decision_function_[:, 1])
+    print(f"min_samples_leaf={leaf:2d}  OOB ROC AUC {oob:.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>min_samples_leaf= 1  OOB ROC AUC 0.863
+min_samples_leaf= 5  OOB ROC AUC 0.865
+min_samples_leaf=10  OOB ROC AUC 0.868
+min_samples_leaf=20  OOB ROC AUC 0.866
+min_samples_leaf=40  OOB ROC AUC 0.864</code></pre>
+                    </div>
+                    <p>Pick the best leaf size from this table (not from the test set) and refit it as <code>forest</code> in the next step.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: One test, four models <span class="step-time">(10 min)</span></h3>
+                    <p>Fit the chosen forest and three competitors on the training set, then score all four on the test set, once.</p>
+                    <pre><code class="language-python">from sklearn.dummy import DummyClassifier
+from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
-from sklearn.inspection import permutation_importance
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
-
-# Generate classification data
-X_class, y_class = make_classification(
-    n_samples=1000, 
-    n_features=20,
-    n_informative=15,
-    n_redundant=5,
-    n_classes=3,
-    random_state=42
-)
-
-# Generate regression data
-X_reg, y_reg = make_regression(
-    n_samples=1000,
-    n_features=20,
-    n_informative=15,
-    noise=0.1,
-    random_state=42
-)
-
-class RandomForestAnalyzer:
-    """Comprehensive Random Forest Analysis Tool"""
-    
-    def __init__(self, task='classification'):
-        self.task = task
-        self.model = None
-        self.bootstrap_samples = []
-        self.oob_scores = []
-        
-    def manual_bagging_demo(self, X, y, n_estimators=5):
-        """
-        Demonstrate bagging concept manually
-        """
-        n_samples = X.shape[0]
-        predictions = []
-        
-        print("Manual Bagging Demonstration")
-        print("="*50)
-        
-        for i in range(n_estimators):
-            # Bootstrap sampling
-            indices = np.random.choice(n_samples, n_samples, replace=True)
-            X_bootstrap = X[indices]
-            y_bootstrap = y[indices]
-            
-            # Track out-of-bag samples
-            oob_indices = np.setdiff1d(np.arange(n_samples), indices)
-            
-            # Train simple decision tree
-            tree = DecisionTreeClassifier(max_depth=3, random_state=i)
-            tree.fit(X_bootstrap, y_bootstrap)
-            
-            # Store predictions
-            predictions.append(tree.predict(X))
-            
-            # Calculate unique samples ratio
-            unique_ratio = len(np.unique(indices)) / n_samples
-            
-            print(f"Tree {i+1}:")
-            print(f"  Unique samples: {len(np.unique(indices))}/{n_samples} ({unique_ratio:.1%})")
-            print(f"  OOB samples: {len(oob_indices)}")
-            
-            self.bootstrap_samples.append(indices)
-        
-        # Ensemble prediction (majority voting)
-        predictions = np.array(predictions)
-        ensemble_pred = np.apply_along_axis(
-            lambda x: np.bincount(x).argmax(), 0, predictions
-        )
-        
-        return ensemble_pred, predictions
-    
-    def fit_random_forest(self, X_train, y_train, X_test, y_test, **kwargs):
-        """Fit Random Forest with analysis"""
-        
-        if self.task == 'classification':
-            self.model = RandomForestClassifier(
-                n_estimators=kwargs.get('n_estimators', 100),
-                max_depth=kwargs.get('max_depth', None),
-                min_samples_split=kwargs.get('min_samples_split', 2),
-                min_samples_leaf=kwargs.get('min_samples_leaf', 1),
-                max_features=kwargs.get('max_features', 'sqrt'),
-                bootstrap=kwargs.get('bootstrap', True),
-                oob_score=kwargs.get('oob_score', True),
-                random_state=42,
-                n_jobs=-1
-            )
-        else:
-            self.model = RandomForestRegressor(
-                n_estimators=kwargs.get('n_estimators', 100),
-                max_depth=kwargs.get('max_depth', None),
-                min_samples_split=kwargs.get('min_samples_split', 2),
-                min_samples_leaf=kwargs.get('min_samples_leaf', 1),
-                max_features=kwargs.get('max_features', 'sqrt'),
-                bootstrap=kwargs.get('bootstrap', True),
-                oob_score=kwargs.get('oob_score', True),
-                random_state=42,
-                n_jobs=-1
-            )
-        
-        # Fit model
-        self.model.fit(X_train, y_train)
-        
-        # Predictions
-        self.y_train_pred = self.model.predict(X_train)
-        self.y_test_pred = self.model.predict(X_test)
-        
-        # Store data for analysis
-        self.X_train = X_train
-        self.X_test = X_test
-        self.y_train = y_train
-        self.y_test = y_test
-        
-        return self
-    
-    def analyze_tree_diversity(self):
-        """Analyze diversity among trees in the forest"""
-        
-        if not hasattr(self.model, 'estimators_'):
-            print("Model not fitted yet!")
-            return
-        
-        n_trees = len(self.model.estimators_)
-        n_samples = min(100, len(self.X_test))  # Use subset for efficiency
-        X_subset = self.X_test[:n_samples]
-        
-        # Get predictions from each tree
-        tree_predictions = np.array([
-            tree.predict(X_subset) for tree in self.model.estimators_
-        ])
-        
-        # Calculate pairwise agreement between trees
-        agreement_matrix = np.zeros((n_trees, n_trees))
-        for i in range(n_trees):
-            for j in range(n_trees):
-                agreement = np.mean(tree_predictions[i] == tree_predictions[j])
-                agreement_matrix[i, j] = agreement
-        
-        # Visualize
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Agreement heatmap
-        sns.heatmap(agreement_matrix[:20, :20], cmap='coolwarm', 
-                   vmin=0, vmax=1, center=0.5,
-                   ax=axes[0], cbar_kws={'label': 'Agreement'})
-        axes[0].set_title('Tree Agreement Matrix (First 20 Trees)')
-        axes[0].set_xlabel('Tree Index')
-        axes[0].set_ylabel('Tree Index')
-        
-        # Agreement distribution
-        upper_triangle = agreement_matrix[np.triu_indices(n_trees, k=1)]
-        axes[1].hist(upper_triangle, bins=30, edgecolor='black', alpha=0.7)
-        axes[1].axvline(x=upper_triangle.mean(), color='red', 
-                       linestyle='--', label=f'Mean: {upper_triangle.mean():.3f}')
-        axes[1].set_xlabel('Pairwise Agreement')
-        axes[1].set_ylabel('Frequency')
-        axes[1].set_title('Distribution of Tree Agreement')
-        axes[1].legend()
-        axes[1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Tree Diversity Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return agreement_matrix
-    
-    def feature_importance_analysis(self):
-        """Comprehensive feature importance analysis"""
-        
-        if not self.model:
-            print("Model not fitted yet!")
-            return
-        
-        # Get feature importances
-        importances = self.model.feature_importances_
-        feature_names = [f'Feature_{i}' for i in range(len(importances))]
-        
-        # Calculate standard deviation across trees
-        std = np.std([tree.feature_importances_ 
-                     for tree in self.model.estimators_], axis=0)
-        
-        # Create DataFrame
-        importance_df = pd.DataFrame({
-            'Feature': feature_names,
-            'Importance': importances,
-            'Std': std
-        }).sort_values('Importance', ascending=False)
-        
-        # Permutation importance for comparison
-        perm_importance = permutation_importance(
-            self.model, self.X_test, self.y_test,
-            n_repeats=10, random_state=42, n_jobs=-1
-        )
-        
-        importance_df['Permutation_Importance'] = perm_importance.importances_mean
-        importance_df['Perm_Std'] = perm_importance.importances_std
-        
-        # Visualization
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        
-        # 1. MDI Feature Importance
-        top_n = 10
-        top_features = importance_df.head(top_n)
-        
-        axes[0, 0].barh(range(top_n), top_features['Importance'].values)
-        axes[0, 0].set_yticks(range(top_n))
-        axes[0, 0].set_yticklabels(top_features['Feature'].values)
-        axes[0, 0].set_xlabel('Mean Decrease in Impurity')
-        axes[0, 0].set_title('Top 10 Features (MDI)')
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # Add error bars
-        axes[0, 0].barh(range(top_n), top_features['Importance'].values,
-                       xerr=top_features['Std'].values, alpha=0.7)
-        
-        # 2. Permutation Importance
-        axes[0, 1].barh(range(top_n), top_features['Permutation_Importance'].values)
-        axes[0, 1].set_yticks(range(top_n))
-        axes[0, 1].set_yticklabels(top_features['Feature'].values)
-        axes[0, 1].set_xlabel('Permutation Importance')
-        axes[0, 1].set_title('Top 10 Features (Permutation)')
-        axes[0, 1].grid(True, alpha=0.3)
-        
-        # 3. Importance Comparison
-        axes[1, 0].scatter(importance_df['Importance'], 
-                          importance_df['Permutation_Importance'], alpha=0.6)
-        axes[1, 0].set_xlabel('MDI Importance')
-        axes[1, 0].set_ylabel('Permutation Importance')
-        axes[1, 0].set_title('MDI vs Permutation Importance')
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # Add diagonal line
-        max_val = max(importance_df['Importance'].max(), 
-                     importance_df['Permutation_Importance'].max())
-        axes[1, 0].plot([0, max_val], [0, max_val], 'r--', alpha=0.5)
-        
-        # 4. Cumulative Importance
-        cumsum = np.cumsum(importance_df['Importance'].values)
-        axes[1, 1].plot(range(len(cumsum)), cumsum / cumsum[-1], 'b-', linewidth=2)
-        axes[1, 1].axhline(y=0.8, color='r', linestyle='--', 
-                          label='80% variance explained')
-        axes[1, 1].set_xlabel('Number of Features')
-        axes[1, 1].set_ylabel('Cumulative Importance')
-        axes[1, 1].set_title('Cumulative Feature Importance')
-        axes[1, 1].legend()
-        axes[1, 1].grid(True, alpha=0.3)
-        
-        # Find number of features for 80% importance
-        n_features_80 = np.argmax(cumsum / cumsum[-1] >= 0.8) + 1
-        axes[1, 1].axvline(x=n_features_80, color='g', linestyle='--',
-                          label=f'{n_features_80} features for 80%')
-        axes[1, 1].legend()
-        
-        plt.suptitle('Feature Importance Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return importance_df
-    
-    def convergence_analysis(self):
-        """Analyze model convergence with number of trees"""
-        
-        if not self.model:
-            print("Model not fitted yet!")
-            return
-        
-        # Calculate scores for increasing number of estimators
-        n_estimators_range = range(1, len(self.model.estimators_) + 1, 5)
-        train_scores = []
-        test_scores = []
-        oob_scores = []
-        
-        for n in n_estimators_range:
-            # Use first n trees
-            subset_predictions_train = np.array([
-                self.model.estimators_[i].predict(self.X_train)
-                for i in range(n)
-            ])
-            subset_predictions_test = np.array([
-                self.model.estimators_[i].predict(self.X_test)
-                for i in range(n)
-            ])
-            
-            # Aggregate predictions
-            if self.task == 'classification':
-                ensemble_train = np.apply_along_axis(
-                    lambda x: np.bincount(x.astype(int)).argmax(), 
-                    0, subset_predictions_train
-                )
-                ensemble_test = np.apply_along_axis(
-                    lambda x: np.bincount(x.astype(int)).argmax(), 
-                    0, subset_predictions_test
-                )
-                train_score = accuracy_score(self.y_train, ensemble_train)
-                test_score = accuracy_score(self.y_test, ensemble_test)
-            else:
-                ensemble_train = np.mean(subset_predictions_train, axis=0)
-                ensemble_test = np.mean(subset_predictions_test, axis=0)
-                train_score = r2_score(self.y_train, ensemble_train)
-                test_score = r2_score(self.y_test, ensemble_test)
-            
-            train_scores.append(train_score)
-            test_scores.append(test_score)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Score convergence
-        axes[0].plot(n_estimators_range, train_scores, label='Train', alpha=0.7)
-        axes[0].plot(n_estimators_range, test_scores, label='Test', alpha=0.7)
-        if hasattr(self.model, 'oob_score_'):
-            axes[0].axhline(y=self.model.oob_score_, color='g', 
-                           linestyle='--', label=f'OOB Score: {self.model.oob_score_:.3f}')
-        axes[0].set_xlabel('Number of Trees')
-        axes[0].set_ylabel('Score')
-        axes[0].set_title('Model Convergence')
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3)
-        
-        # Score stability (variance reduction)
-        window = 10
-        if len(test_scores) > window:
-            rolling_mean = pd.Series(test_scores).rolling(window).mean()
-            rolling_std = pd.Series(test_scores).rolling(window).std()
-            
-            axes[1].plot(n_estimators_range, test_scores, alpha=0.3, label='Test Score')
-            axes[1].plot(n_estimators_range, rolling_mean, 'b-', 
-                        label=f'Rolling Mean (window={window})')
-            axes[1].fill_between(n_estimators_range,
-                                rolling_mean - rolling_std,
-                                rolling_mean + rolling_std,
-                                alpha=0.2, label='±1 Std Dev')
-            axes[1].set_xlabel('Number of Trees')
-            axes[1].set_ylabel('Test Score')
-            axes[1].set_title('Score Stability')
-            axes[1].legend()
-            axes[1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Convergence Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return train_scores, test_scores
-
-# Initialize analyzer
-print("="*60)
-print("RANDOM FOREST FUNDAMENTALS")
-print("="*60)
-
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(
-    X_class, y_class, test_size=0.3, stratify=y_class, random_state=42
-)
-
-# Manual bagging demonstration
-rf_analyzer = RandomForestAnalyzer(task='classification')
-ensemble_pred, individual_preds = rf_analyzer.manual_bagging_demo(
-    X_train[:100], y_train[:100], n_estimators=5
-)
-
-print(f"\nEnsemble Accuracy: {accuracy_score(y_train[:100], ensemble_pred):.3f}")
-
-# Fit full Random Forest
-rf_analyzer.fit_random_forest(
-    X_train, y_train, X_test, y_test,
-    n_estimators=100,
-    max_depth=10,
-    min_samples_split=5,
-    max_features='sqrt'
-)
-
-# Model performance
-print("\n" + "="*60)
-print("MODEL PERFORMANCE")
-print("="*60)
-print(f"Train Accuracy: {accuracy_score(y_train, rf_analyzer.y_train_pred):.4f}")
-print(f"Test Accuracy: {accuracy_score(y_test, rf_analyzer.y_test_pred):.4f}")
-if hasattr(rf_analyzer.model, 'oob_score_'):
-    print(f"OOB Score: {rf_analyzer.model.oob_score_:.4f}")
-
-print("\nClassification Report:")
-print(classification_report(y_test, rf_analyzer.y_test_pred))
-
-# Analyze tree diversity
-agreement_matrix = rf_analyzer.analyze_tree_diversity()
-
-# Feature importance
-importance_df = rf_analyzer.feature_importance_analysis()
-print("\nTop 5 Most Important Features:")
-print(importance_df[['Feature', 'Importance', 'Permutation_Importance']].head())
-
-# Convergence analysis
-train_scores, test_scores = rf_analyzer.convergence_analysis()</code></pre>
-
-    <h2>Random Forest vs Single Decision Tree</h2>
-    
-    <h3>Comparing Performance and Robustness</h3>
-    <pre class="language-python"><code>class ForestVsTreeComparison:
-    """Compare Random Forest with Single Decision Tree"""
-    
-    def __init__(self):
-        self.models = {}
-        self.results = {}
-        
-    def compare_models(self, X_train, y_train, X_test, y_test):
-        """Compare different tree-based models"""
-        
-        # Single Decision Tree
-        self.models['Single Tree'] = DecisionTreeClassifier(
-            max_depth=10, random_state=42
-        )
-        
-        # Random Forest
-        self.models['Random Forest'] = RandomForestClassifier(
-            n_estimators=100, max_depth=10, random_state=42, n_jobs=-1
-        )
-        
-        # Extremely Randomized Trees
-        from sklearn.ensemble import ExtraTreesClassifier
-        self.models['Extra Trees'] = ExtraTreesClassifier(
-            n_estimators=100, max_depth=10, random_state=42, n_jobs=-1
-        )
-        
-        # Fit and evaluate all models
-        for name, model in self.models.items():
-            # Fit
-            model.fit(X_train, y_train)
-            
-            # Predictions
-            y_train_pred = model.predict(X_train)
-            y_test_pred = model.predict(X_test)
-            
-            # Store results
-            self.results[name] = {
-                'train_accuracy': accuracy_score(y_train, y_train_pred),
-                'test_accuracy': accuracy_score(y_test, y_test_pred),
-                'overfitting': accuracy_score(y_train, y_train_pred) - 
-                              accuracy_score(y_test, y_test_pred),
-                'y_test_pred': y_test_pred
-            }
-        
-        return self
-    
-    def visualize_decision_boundaries(self, X, y):
-        """Visualize decision boundaries (for 2D data)"""
-        
-        if X.shape[1] != 2:
-            print("Can only visualize 2D data")
-            return
-        
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # Create mesh
-        h = 0.02
-        x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
-        y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
-        xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
-                            np.arange(y_min, y_max, h))
-        
-        for idx, (name, model) in enumerate(self.models.items()):
-            # Predict on mesh
-            Z = model.predict(np.c_[xx.ravel(), yy.ravel()])
-            Z = Z.reshape(xx.shape)
-            
-            # Plot
-            axes[idx].contourf(xx, yy, Z, alpha=0.8, cmap=plt.cm.RdYlBu)
-            axes[idx].scatter(X[:, 0], X[:, 1], c=y, 
-                            cmap=plt.cm.RdYlBu, edgecolor='black', s=30)
-            axes[idx].set_title(f'{name}')
-            axes[idx].set_xlabel('Feature 1')
-            axes[idx].set_ylabel('Feature 2')
-        
-        plt.suptitle('Decision Boundaries Comparison', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-    
-    def noise_robustness_test(self, X, y, noise_levels=[0, 0.1, 0.2, 0.3, 0.4]):
-        """Test robustness to noise"""
-        
-        results = {name: [] for name in self.models.keys()}
-        
-        for noise_level in noise_levels:
-            # Add noise to features
-            X_noisy = X + np.random.normal(0, noise_level, X.shape)
-            
-            # Split data
-            X_train, X_test, y_train, y_test = train_test_split(
-                X_noisy, y, test_size=0.3, random_state=42
-            )
-            
-            # Evaluate each model
-            for name, model in self.models.items():
-                model.fit(X_train, y_train)
-                score = accuracy_score(y_test, model.predict(X_test))
-                results[name].append(score)
-        
-        # Visualization
-        plt.figure(figsize=(10, 6))
-        for name, scores in results.items():
-            plt.plot(noise_levels, scores, marker='o', label=name, linewidth=2)
-        
-        plt.xlabel('Noise Level (Standard Deviation)')
-        plt.ylabel('Test Accuracy')
-        plt.title('Model Robustness to Feature Noise')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.show()
-        
-        return results
-
-# Compare models
-comparison = ForestVsTreeComparison()
-comparison.compare_models(X_train, y_train, X_test, y_test)
-
-print("\n" + "="*60)
-print("MODEL COMPARISON")
-print("="*60)
-
-# Print results
-comparison_df = pd.DataFrame(comparison.results).T
-print(comparison_df.to_string())
-
-# Test noise robustness
-print("\nTesting Noise Robustness...")
-noise_results = comparison.noise_robustness_test(X_class, y_class)
-
-# Create 2D dataset for visualization
-from sklearn.datasets import make_moons
-X_2d, y_2d = make_moons(n_samples=300, noise=0.3, random_state=42)
-
-# Fit models on 2D data
-comparison_2d = ForestVsTreeComparison()
-comparison_2d.compare_models(X_2d, y_2d, X_2d, y_2d)  # Using same data for simplicity
-comparison_2d.visualize_decision_boundaries(X_2d, y_2d)</code></pre>
-
-    <h2>Hyperparameter Tuning</h2>
-    
-    <h3>Optimizing Random Forest Performance</h3>
-    <pre class="language-python"><code>class RandomForestTuner:
-    """Comprehensive hyperparameter tuning for Random Forests"""
-    
-    def __init__(self, task='classification'):
-        self.task = task
-        self.best_model = None
-        self.cv_results = None
-        self.param_importance = {}
-        
-    def grid_search_tuning(self, X_train, y_train):
-        """Perform grid search with cross-validation"""
-        
-        if self.task == 'classification':
-            model = RandomForestClassifier(random_state=42)
-            param_grid = {
-                'n_estimators': [50, 100, 200],
-                'max_depth': [5, 10, 20, None],
-                'min_samples_split': [2, 5, 10],
-                'min_samples_leaf': [1, 2, 4],
-                'max_features': ['sqrt', 'log2', 0.5]
-            }
-        else:
-            model = RandomForestRegressor(random_state=42)
-            param_grid = {
-                'n_estimators': [50, 100, 200],
-                'max_depth': [5, 10, 20, None],
-                'min_samples_split': [2, 5, 10],
-                'min_samples_leaf': [1, 2, 4],
-                'max_features': ['sqrt', 'log2', 0.5]
-            }
-        
-        # Grid search
-        grid_search = GridSearchCV(
-            model, param_grid,
-            cv=5, scoring='accuracy' if self.task == 'classification' else 'r2',
-            n_jobs=-1, verbose=1
-        )
-        
-        grid_search.fit(X_train, y_train)
-        
-        self.best_model = grid_search.best_estimator_
-        self.cv_results = pd.DataFrame(grid_search.cv_results_)
-        
-        return grid_search.best_params_, grid_search.best_score_
-    
-    def parameter_importance_analysis(self, X_train, y_train):
-        """Analyze importance of each hyperparameter"""
-        
-        base_params = {
-            'n_estimators': 100,
-            'max_depth': 10,
-            'min_samples_split': 5,
-            'min_samples_leaf': 2,
-            'max_features': 'sqrt',
-            'random_state': 42
-        }
-        
-        param_ranges = {
-            'n_estimators': [10, 50, 100, 200, 500],
-            'max_depth': [3, 5, 10, 20, None],
-            'min_samples_split': [2, 5, 10, 20],
-            'min_samples_leaf': [1, 2, 4, 8],
-            'max_features': [0.3, 0.5, 'sqrt', 'log2', None]
-        }
-        
-        results = {}
-        
-        for param_name, param_values in param_ranges.items():
-            scores = []
-            
-            for value in param_values:
-                # Update parameter
-                params = base_params.copy()
-                params[param_name] = value
-                
-                # Create and evaluate model
-                if self.task == 'classification':
-                    model = RandomForestClassifier(**params)
-                else:
-                    model = RandomForestRegressor(**params)
-                
-                # Cross-validation score
-                cv_scores = cross_val_score(
-                    model, X_train, y_train, cv=3,
-                    scoring='accuracy' if self.task == 'classification' else 'r2'
-                )
-                scores.append(cv_scores.mean())
-            
-            results[param_name] = {
-                'values': param_values,
-                'scores': scores,
-                'variance': np.var(scores)
-            }
-        
-        self.param_importance = results
-        
-        # Visualization
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-        axes = axes.flatten()
-        
-        for idx, (param_name, data) in enumerate(results.items()):
-            if idx < len(axes):
-                # Convert None and string values for plotting
-                x_values = []
-                for v in data['values']:
-                    if v is None:
-                        x_values.append('None')
-                    elif isinstance(v, str):
-                        x_values.append(v)
-                    else:
-                        x_values.append(str(v))
-                
-                axes[idx].plot(x_values, data['scores'], 'o-', linewidth=2, markersize=8)
-                axes[idx].set_xlabel(param_name)
-                axes[idx].set_ylabel('CV Score')
-                axes[idx].set_title(f'{param_name} (var={data["variance"]:.4f})')
-                axes[idx].grid(True, alpha=0.3)
-                axes[idx].tick_params(axis='x', rotation=45)
-        
-        # Remove empty subplot
-        if len(results) < len(axes):
-            fig.delaxes(axes[-1])
-        
-        plt.suptitle('Hyperparameter Sensitivity Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return results
-    
-    def learning_curves(self, X_train, y_train, X_test, y_test):
-        """Generate learning curves"""
-        
-        train_sizes = np.linspace(0.1, 1.0, 10)
-        train_scores = []
-        test_scores = []
-        
-        for train_size in train_sizes:
-            n_samples = int(train_size * len(X_train))
-            
-            # Use subset of data
-            X_subset = X_train[:n_samples]
-            y_subset = y_train[:n_samples]
-            
-            # Train model
-            if self.task == 'classification':
-                model = RandomForestClassifier(n_estimators=100, random_state=42)
-            else:
-                model = RandomForestRegressor(n_estimators=100, random_state=42)
-            
-            model.fit(X_subset, y_subset)
-            
-            # Evaluate
-            train_pred = model.predict(X_subset)
-            test_pred = model.predict(X_test)
-            
-            if self.task == 'classification':
-                train_score = accuracy_score(y_subset, train_pred)
-                test_score = accuracy_score(y_test, test_pred)
-            else:
-                train_score = r2_score(y_subset, train_pred)
-                test_score = r2_score(y_test, test_pred)
-            
-            train_scores.append(train_score)
-            test_scores.append(test_score)
-        
-        # Visualization
-        plt.figure(figsize=(10, 6))
-        plt.plot(train_sizes * len(X_train), train_scores, 
-                'o-', label='Training score', linewidth=2)
-        plt.plot(train_sizes * len(X_train), test_scores, 
-                'o-', label='Test score', linewidth=2)
-        plt.xlabel('Training Set Size')
-        plt.ylabel('Score')
-        plt.title('Learning Curves')
-        plt.legend(loc='best')
-        plt.grid(True, alpha=0.3)
-        plt.show()
-        
-        return train_scores, test_scores
-
-# Hyperparameter tuning
-print("\n" + "="*60)
-print("HYPERPARAMETER TUNING")
-print("="*60)
-
-tuner = RandomForestTuner(task='classification')
-
-# Quick parameter importance analysis
-print("Analyzing parameter importance...")
-param_results = tuner.parameter_importance_analysis(X_train[:500], y_train[:500])
-
-# Grid search (using smaller subset for speed)
-print("\nPerforming grid search...")
-best_params, best_score = tuner.grid_search_tuning(X_train[:500], y_train[:500])
-
-print(f"\nBest Parameters: {best_params}")
-print(f"Best CV Score: {best_score:.4f}")
-
-# Learning curves
-print("\nGenerating learning curves...")
-train_scores, test_scores = tuner.learning_curves(X_train, y_train, X_test, y_test)</code></pre>
-
-    <h2>Best Practices and Guidelines</h2>
-    
-    <pre class="language-python"><code>class RandomForestBestPractices:
-    """Best practices and guidelines for Random Forests"""
-    
-    @staticmethod
-    def parameter_guidelines():
-        """Guidelines for setting Random Forest parameters"""
-        
-        print("\n" + "="*60)
-        print("RANDOM FOREST PARAMETER GUIDELINES")
-        print("="*60)
-        
-        guidelines = {
-            'n_estimators': {
-                'default': 100,
-                'range': '50-500',
-                'tip': 'More trees = better performance but diminishing returns after ~100-200',
-                'computational': 'Linear with n_estimators'
-            },
-            'max_depth': {
-                'default': None,
-                'range': '3-20 or None',
-                'tip': 'None = fully grown trees. Limit for overfitting control',
-                'computational': 'Exponential with depth'
-            },
-            'min_samples_split': {
-                'default': 2,
-                'range': '2-20',
-                'tip': 'Higher values prevent overfitting but may underfit',
-                'computational': 'Reduces tree complexity'
-            },
-            'min_samples_leaf': {
-                'default': 1,
-                'range': '1-10',
-                'tip': 'Minimum samples in leaf nodes. Higher = smoother boundaries',
-                'computational': 'Reduces tree size'
-            },
-            'max_features': {
-                'default': 'sqrt',
-                'range': 'sqrt, log2, 0.3-0.8, None',
-                'tip': 'sqrt for classification, 1/3 for regression. Controls diversity',
-                'computational': 'Reduces features to consider at each split'
-            },
-            'bootstrap': {
-                'default': True,
-                'range': 'True/False',
-                'tip': 'True for bagging. False = use whole dataset (Extra Trees)',
-                'computational': 'No impact'
-            },
-            'oob_score': {
-                'default': False,
-                'range': 'True/False',
-                'tip': 'True to get free validation score. Only with bootstrap=True',
-                'computational': 'Small overhead'
-            },
-            'n_jobs': {
-                'default': 1,
-                'range': '-1 for all cores',
-                'tip': 'Parallelize tree building. -1 uses all CPU cores',
-                'computational': 'Linear speedup with cores'
-            }
-        }
-        
-        for param, info in guidelines.items():
-            print(f"\n{param}:")
-            print(f"  Default: {info['default']}")
-            print(f"  Typical Range: {info['range']}")
-            print(f"  Tip: {info['tip']}")
-            print(f"  Computational Impact: {info['computational']}")
-    
-    @staticmethod
-    def when_to_use_random_forests():
-        """When to use Random Forests"""
-        
-        print("\n" + "="*60)
-        print("WHEN TO USE RANDOM FORESTS")
-        print("="*60)
-        
-        use_cases = {
-            'Ideal For': [
-                'Mixed data types (numerical and categorical)',
-                'Non-linear relationships',
-                'Feature importance is needed',
-                'Robust predictions without much tuning',
-                'Both classification and regression',
-                'Handle missing values (with proper imputation)',
-                'Parallel processing available',
-                'Moderate to large datasets'
-            ],
-            'Advantages': [
-                'No feature scaling required',
-                'Handles non-linearity well',
-                'Robust to outliers',
-                'Low risk of overfitting',
-                'Feature importance built-in',
-                'OOB error estimation',
-                'Can handle thousands of features',
-                'Works well out-of-the-box'
-            ],
-            'Disadvantages': [
-                'Black box model (less interpretable)',
-                'Can be slow for real-time predictions',
-                'Large memory footprint',
-                'Biased toward high-cardinality features',
-                'Cannot extrapolate (predictions bounded by training range)',
-                'May overfit with noisy data',
-                'Difficult to capture linear relationships'
-            ],
-            'Avoid When': [
-                'Need model interpretability',
-                'Very small datasets (<100 samples)',
-                'Linear relationships dominate',
-                'Real-time prediction with strict latency',
-                'Extrapolation is needed',
-                'Memory constraints exist',
-                'Sparse high-dimensional data (use linear models)'
-            ]
-        }
-        
-        for category, items in use_cases.items():
-            print(f"\n{category}:")
-            for item in items:
-                print(f"  • {item}")
-
-# Print best practices
-practices = RandomForestBestPractices()
-practices.parameter_guidelines()
-practices.when_to_use_random_forests()
-
-# Final comparison summary
-print("\n" + "="*60)
-print("RANDOM FOREST VS OTHER ALGORITHMS")
-print("="*60)
-
-comparison_data = {
-    'Algorithm': ['Random Forest', 'Gradient Boosting', 'SVM', 'Neural Network', 'Linear Model'],
-    'Training Speed': ['Medium', 'Slow', 'Slow', 'Slow', 'Fast'],
-    'Prediction Speed': ['Medium', 'Fast', 'Fast', 'Fast', 'Very Fast'],
-    'Accuracy': ['High', 'Very High', 'High', 'Very High', 'Medium'],
-    'Interpretability': ['Medium', 'Low', 'Low', 'Very Low', 'High'],
-    'Tuning Required': ['Low', 'High', 'High', 'Very High', 'Low'],
-    'Handles Non-linearity': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
-    'Feature Scaling': ['No', 'No', 'Yes', 'Yes', 'Yes']
+logit_prep = ColumnTransformer([
+    ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric),
+    ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"), OneHotEncoder(handle_unknown="ignore")), categorical),
+])
+models = {
+    "do-nothing baseline": DummyClassifier(strategy="most_frequent"),
+    "logistic regression": make_pipeline(logit_prep, LogisticRegression(max_iter=1000)),
+    "rule tree (5.1)": make_pipeline(tree_prep, DecisionTreeClassifier(max_leaf_nodes=12, min_samples_leaf=30, random_state=42)),
+    "random forest": make_pipeline(tree_prep, RandomForestClassifier(n_estimators=300, min_samples_leaf=10,
+                                                                    random_state=42, n_jobs=-1)),
 }
+proba = {}
+for name, model in models.items():
+    proba[name] = model.fit(X_train, y_train).predict_proba(X_test)[:, 1]
+    print(f"{name:20s} test ROC AUC {roc_auc_score(y_test, proba[name]):.3f}")
+forest = models["random forest"]</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>do-nothing baseline  test ROC AUC 0.500
+logistic regression  test ROC AUC 0.825
+rule tree (5.1)      test ROC AUC 0.837
+random forest        test ROC AUC 0.863</code></pre>
+                    </div>
+                </div>
 
-comparison_df = pd.DataFrame(comparison_data)
-print(comparison_df.to_string(index=False))</code></pre>
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: The call list <span class="step-time">(5 min)</span></h3>
+                    <p>The care team can make 50 calls. Count how many of each model's top 50 really churned.</p>
+                    <pre><code class="language-python">expected_random = 50 * y_test.mean()
+print(f"random list: {expected_random:.1f} churners expected")
+for name in ["logistic regression", "rule tree (5.1)", "random forest"]:
+    top50 = np.argsort(-proba[name], kind="stable")[:50]
+    print(f"{name:20s} {y_test.iloc[top50].sum()} of 50 really churned")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>random list: 8.3 churners expected
+logistic regression  31 of 50 really churned
+rule tree (5.1)      36 of 50 really churned
+random forest        41 of 50 really churned</code></pre>
+                    </div>
+                    <p>The forest's list reaches 41 real churners, five times a random list and ten more than logistic regression. The rule tree lands in between, but notice how it builds its list: everyone in a leaf shares one score, so its top 50 is a whole 42-customer leaf plus 8 customers picked arbitrarily from the next tied leaf. The forest scores every customer individually.</p>
+                </div>
 
-    <h2>Practice Exercises</h2>
-    
-    <h3>Exercise 1: Custom Random Forest Implementation</h3>
-    <p>Implement a simplified Random Forest from scratch:</p>
-    <ol>
-        <li>Create bootstrap samples</li>
-        <li>Build decision trees with random feature selection</li>
-        <li>Implement voting/averaging for predictions</li>
-        <li>Calculate OOB error</li>
-        <li>Compare with scikit-learn implementation</li>
-    </ol>
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: What does the forest rely on? <span class="step-time">(5 min)</span></h3>
+                    <p>Run permutation importance on the whole pipeline with the raw test table. Each <em>original</em> column is shuffled as a unit, so a categorical column counts once, not once per one-hot column.</p>
+                    <pre><code class="language-python">from sklearn.inspection import permutation_importance
 
-    <h3>Exercise 2: Feature Importance Study</h3>
-    <p>Conduct a comprehensive feature importance analysis:</p>
-    <ol>
-        <li>Compare MDI vs permutation importance</li>
-        <li>Implement SHAP values for Random Forest</li>
-        <li>Analyze feature interactions</li>
-        <li>Create feature importance stability analysis</li>
-        <li>Build automated feature selection pipeline</li>
-    </ol>
+perm = permutation_importance(forest, X_test, y_test, scoring="roc_auc", n_repeats=5, random_state=42)
+drops = pd.Series(perm.importances_mean, index=X_test.columns).sort_values(ascending=False)
+print(drops.round(3))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>days_since_last_order    0.144
+discount_share           0.070
+tenure_months            0.037
+support_tickets_12m      0.012
+app_user                 0.010
+email_opens_90d          0.008
+return_rate              0.004
+loyalty_tier             0.002
+avg_order_value          0.001
+returns_12m              0.001
+age_group                0.000
+home_store              -0.000
+preferred_category      -0.000
+spend_12m               -0.001
+orders_12m              -0.003
+dtype: float64</code></pre>
+                    </div>
+                    <p>Recency, discount share and tenure carry the model, followed by app use and support tickets; the categorical columns add little once the behavior columns are known. Remember: this describes what the forest uses, not what causes churn.</p>
+                </div>
 
-    <h3>Exercise 3: Ensemble Method Comparison</h3>
-    <p>Compare Random Forest with other ensemble methods:</p>
-    <ol>
-        <li>Implement voting classifier with different base models</li>
-        <li>Compare with AdaBoost and Gradient Boosting</li>
-        <li>Analyze diversity vs accuracy trade-off</li>
-        <li>Create stacking ensemble with Random Forest</li>
-        <li>Benchmark on multiple datasets</li>
-    </ol>
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save the list and summarize <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">call_list = (test[["customer_id"]].assign(churn_probability=proba["random forest"])
+             .nlargest(50, "churn_probability").round(3))
+call_list.to_csv("call_list.csv", index=False)
 
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>🌲 Random Forests combine multiple decision trees through bagging</li>
-        <li>🎲 Bootstrap sampling + random feature selection = diversity</li>
-        <li>📊 Excellent for both classification and regression tasks</li>
-        <li>⚖️ Natural balance between bias and variance</li>
-        <li>🎯 OOB provides free validation without separate test set</li>
-        <li>📈 Feature importance helps with interpretation and selection</li>
-        <li>🚀 Embarrassingly parallel - scales well with cores</li>
-        <li>🛡️ Robust to outliers and noise</li>
-        <li>⚡ No feature scaling required</li>
-        <li>🔍 Cannot extrapolate beyond training data range</li>
-    </ul>
+print(f"""Churn forest summary
+Test customers           : {len(test):,}
+Forest test ROC AUC      : {roc_auc_score(y_test, proba['random forest']):.3f} (baseline 0.500)
+Real churners in top 50  : {y_test.loc[call_list.index].sum()} (random list: {expected_random:.1f})
+Top three columns        : {', '.join(drops.index[:3])}
+Saved                    : call_list.csv ({len(call_list)} rows)""")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>Churn forest summary
+Test customers           : 1,500
+Forest test ROC AUC      : 0.863 (baseline 0.500)
+Real churners in top 50  : 41 (random list: 8.3)
+Top three columns        : days_since_last_order, discount_share, tenure_months
+Saved                    : call_list.csv (50 rows)</code></pre>
+                    </div>
+                </div>
 
-    <h2>Further Resources</h2>
-    <ul>
-        <li><a href="https://www.stat.berkeley.edu/~breiman/RandomForests/">Original Random Forests Paper (Breiman)</a></li>
-        <li><a href="https://scikit-learn.org/stable/modules/ensemble.html#forest">Scikit-learn Ensemble Methods</a></li>
-        <li><a href="https://explained.ai/rf-importance/">Understanding Random Forest Feature Importance</a></li>
-        <li><a href="https://christophm.github.io/interpretable-ml-book/random-forest.html">Interpretable ML - Random Forests</a></li>
-        <li><a href="https://arxiv.org/abs/1407.7502">Understanding Random Forests: From Theory to Practice</a></li>
-        <li><a href="https://www.kaggle.com/learn/intermediate-machine-learning">Kaggle Learn - Random Forests</a></li>
-    </ul>
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>The forest lives in a pipeline with the encoder, and its leaf size was chosen with OOB scores on the training set</li>
+                        <li>All four models were fitted on the training set and scored on the test set exactly once</li>
+                        <li>You can say how much the forest beats logistic regression and the rule tree on test ROC AUC</li>
+                        <li>You counted real churners in each model's top 50 and compared with a random list</li>
+                        <li>Permutation importance was computed on the test set, on the original columns</li>
+                        <li><code>call_list.csv</code> holds 50 customer IDs and probabilities, with no outcome column</li>
+                    </ul>
+                </div>
+            </section>
 
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> A random forest is "the wisdom of a crowd of trees." Where else have you seen
-            many imperfect opinions combine into a better answer than any single expert could give?</p>
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>Try each one before opening the solution. These continue in the project notebook, so <code>X_train</code>, <code>tree_prep</code>, <code>logit_prep</code> and friends already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: The 63% Rule</h3>
+                    <p>Compute 1 − (1 − 1/n)ⁿ for n = 10, 100, 4,500 and 1,000,000, and compare with 1 − 1/e. Then draw five bootstrap samples of size 4,500 with <code>np.random.default_rng(7)</code> and print the share of distinct rows in each.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>np.e</code> is Euler's number. For the simulation, <code>len(np.unique(rng.integers(0, n, size=n))) / n</code> is the share of distinct rows.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for size in [10, 100, 4_500, 1_000_000]:
+    print(f"n={size:&gt;9,}  share in a bootstrap sample {1 - (1 - 1 / size) ** size:.4f}")
+print(f"limit 1 - 1/e                        {1 - 1 / np.e:.4f}")
+
+rng7 = np.random.default_rng(7)
+shares = [len(np.unique(rng7.integers(0, 4_500, size=4_500))) / 4_500 for _ in range(5)]
+print("simulated:", np.round(shares, 3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>n=       10  share in a bootstrap sample 0.6513
+n=      100  share in a bootstrap sample 0.6340
+n=    4,500  share in a bootstrap sample 0.6322
+n=1,000,000  share in a bootstrap sample 0.6321
+limit 1 - 1/e                        0.6321
+simulated: [0.631 0.634 0.628 0.628 0.63 ]</code></pre>
+                        </div>
+                        <p>The share settles at 63.2% almost immediately; even 100 rows are close. The simulated samples wobble around it by a fraction of a percent.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Bagging a Stable Model</h3>
+                    <p>Using the ten numeric features from the start of the lesson, cross-validate (5 folds, ROC AUC) a <code>make_pipeline(StandardScaler(), LogisticRegression())</code> model, and the same pipeline wrapped in <code>BaggingClassifier(..., n_estimators=30, random_state=42)</code>. Does bagging help? Why or why not?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Pass the whole pipeline as <code>estimator=</code>: bagging works with any classifier, including a pipeline. Recreate <code>cv</code> with <code>StratifiedKFold(n_splits=5, shuffle=True, random_state=42)</code>. One catch: <code>BaggingClassifier</code> hands its estimator NumPy arrays, not DataFrames, so a pipeline whose <code>ColumnTransformer</code> picks columns by name (like the project's <code>logit_prep</code>) fails with "Specifying the columns using strings is only supported for dataframes". That is why this exercise uses an all-numeric pipeline.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.ensemble import BaggingClassifier
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+
+ten = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+       "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+logit = make_pipeline(StandardScaler(), LogisticRegression())
+for name, model in [("logistic regression", logit),
+                    ("bagged logistic", BaggingClassifier(estimator=logit, n_estimators=30, random_state=42))]:
+    scores = cross_val_score(model, X_train[ten], y_train, cv=cv, scoring="roc_auc")
+    print(f"{name:20s} CV ROC AUC {scores.mean():.4f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>logistic regression  CV ROC AUC 0.8295
+bagged logistic      CV ROC AUC 0.8292</code></pre>
+                        </div>
+                        <p>No real change. A logistic regression trained on a bootstrap sample is nearly the same model as one trained on the full data: there is little variance to average away. Its limitation is bias (a straight-line boundary), which bagging cannot fix. Bag high-variance models; for low-variance ones, look elsewhere (boosting in Lesson 5.3 attacks bias).</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Extra-Trees vs Random Forest</h3>
+                    <p>With the same ten features, compare <code>RandomForestClassifier</code> and <code>ExtraTreesClassifier</code>, both with 300 trees, <code>min_samples_leaf=5</code>, <code>oob_score=True</code> and <code>random_state=42</code>, by OOB ROC AUC. Extra-Trees needs <code>bootstrap=True</code> to have an OOB score.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>from sklearn.ensemble import ExtraTreesClassifier</code>. Its default is <code>bootstrap=False</code>, which would raise the error from Common Mistake 2.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.ensemble import ExtraTreesClassifier
+
+settings = dict(n_estimators=300, min_samples_leaf=5, oob_score=True, random_state=42, n_jobs=-1)
+for name, model in [("random forest", RandomForestClassifier(**settings)),
+                    ("extra-trees", ExtraTreesClassifier(bootstrap=True, **settings))]:
+    model.fit(X_train[ten], y_train)
+    print(f"{name:14s} OOB ROC AUC {roc_auc_score(y_train, model.oob_decision_function_[:, 1]):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>random forest  OOB ROC AUC 0.866
+extra-trees    OOB ROC AUC 0.862</code></pre>
+                        </div>
+                        <p>Here the random forest is slightly ahead. The churn effects are sharp thresholds (recency near 170 days, discount share near 0.35), and searching for the best threshold finds them, while random thresholds only approximate them. On data with smoother effects Extra-Trees is often as good and faster. The point is not which one wins in general: it is that you check, with validation data.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: A Forest Cannot Extrapolate (Stretch)</h3>
+                    <p>Predict weekly <code>units_sold</code> in <code>data/weekly_demand.csv</code>: train on 2024 and test on 2025, with the features <code>["price", "discount_pct", "promo", "holiday_week", "avg_high_temp_f", "week_of_year", "store_sqft"]</code> plus one-hot <code>store</code>, <code>product_id</code> and <code>category</code>. Use <code>RandomForestRegressor(n_estimators=200, min_samples_leaf=3, random_state=42, n_jobs=-1)</code>. Report the test MAE against a per-product-mean baseline, then compare the total units the forest predicts for 2025 with the real 2025 total and the 2024 total. What do you notice?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>pd.get_dummies(..., dtype=int)</code> is enough for the one-hot step here, because training and test share the same categories. The per-product baseline is <code>train.groupby("product_id")["units_sold"].mean()</code> mapped onto the test rows.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error
+
+demand = pd.read_csv("data/weekly_demand.csv")
+cols = ["price", "discount_pct", "promo", "holiday_week", "avg_high_temp_f", "week_of_year", "store_sqft"]
+Xd = pd.get_dummies(demand[cols + ["store", "product_id", "category"]], dtype=int)
+is_train = demand["year"] == 2024
+d_train, d_test = demand[is_train], demand[~is_train]
+
+reg = RandomForestRegressor(n_estimators=200, min_samples_leaf=3, random_state=42, n_jobs=-1)
+reg.fit(Xd[is_train], d_train["units_sold"])
+pred = reg.predict(Xd[~is_train])
+
+per_product = d_test["product_id"].map(d_train.groupby("product_id")["units_sold"].mean())
+print(f"per-product mean  MAE {mean_absolute_error(d_test['units_sold'], per_product):.2f}")
+print(f"random forest     MAE {mean_absolute_error(d_test['units_sold'], pred):.2f}")
+print(f"units 2024 actual {d_train['units_sold'].sum():,}   2025 actual {d_test['units_sold'].sum():,}   "
+      f"2025 forest {pred.sum():,.0f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>per-product mean  MAE 13.42
+random forest     MAE 8.44
+units 2024 actual 123,995   2025 actual 128,970   2025 forest 121,744</code></pre>
+                        </div>
+                        <p>The forest cuts the error well below the baseline, because it learns price, promotion, holiday and seasonal effects per product. But look at the totals: sales grew from 2024 to 2025, and the forest predicts slightly <em>less</em> than 2024. Every prediction is an average of 2024 leaf values, so a forest can never forecast beyond the range it was trained on: it cannot follow a trend into the future. The usual fixes are to model the trend separately, predict changes rather than levels, or use a model that can extrapolate. Lesson 10.4 returns to forecasting.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> You draw a bootstrap sample of 10,000 rows from a table of 10,000 rows. About how many <em>distinct</em> rows does it contain?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Sampling with replacement allows repeats. If some rows appear twice, can every row appear?">
+                                A) All 10,000
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Each row is missed with probability (1 - 1/n) to the power n, about 1/e = 0.368, so about 63.2% of rows (6,320) appear at least once. The other 36.8% are out-of-bag.">
+                                B) About 6,300
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Half would be right if each row had a coin-flip chance. Work out the chance a row is missed in all 10,000 draws.">
+                                C) About 5,000
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> Which change makes the trees in a random forest <em>less correlated</em> with each other?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="With fewer candidate features at each split, trees are often denied the single best feature and must find different splits, so their errors overlap less. That shrinks the shared-error term of the variance formula.">
+                                A) Lowering <code>max_features</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="More trees make the average more precise, but does adding a tree change how similar the existing trees are?">
+                                B) Raising <code>n_estimators</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="max_features=None lets every tree consider every feature at every split. Does that make trees more alike or less?">
+                                C) Setting <code>max_features=None</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> In a forest fitted with <code>oob_score=True</code>, which trees produce the out-of-bag prediction for a particular training customer?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Trees that trained on this customer have effectively memorized them. Would their vote be an honest test?">
+                                A) All the trees in the forest
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="OOB never touches the test set: it works entirely within the training data.">
+                                B) Trees refitted on the test set
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Only trees whose bootstrap sample happened to leave this customer out (about 37% of them) vote, so the prediction is made on unseen data, like a built-in validation set.">
+                                C) Only the trees whose bootstrap sample did not include that customer
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> A forest with 300 trees has an OOB ROC AUC of 0.866. What is the most likely result of raising <code>n_estimators</code> to 3,000?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Adding trees makes the average more precise; it does not make each tree more complex. Did the trees curve ever turn down?">
+                                A) The forest overfits and the OOB AUC drops
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Look at the number-of-trees curve: where did most of the gain come from?">
+                                B) The OOB AUC rises substantially, to about 0.90
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="By 300 trees the curve has plateaued. Ten times more trees gives almost the same score, slightly more stable, for ten times the training time and memory.">
+                                C) About the same AUC, with ten times the fitting time
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> A column of random noise gets an impurity-based importance of 0.06 in a forest, but a permutation importance close to zero on the test set. What is the best conclusion?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="MDI is computed from training-data splits and rewards columns with many distinct values that win chance splits. Shuffling the column on unseen data does not hurt the model, so it carries no real information.">
+                                A) The column is useless; MDI inflated it because a continuous column can win chance splits on training data
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Permutation importance shuffles the column on held-out data. If the model truly needed it, what would shuffling do to the AUC?">
+                                B) The column is useful; permutation importance missed it because the test set is small
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Neither importance measure says anything about causes. What does each one measure about the model?">
+                                C) The column has a small causal effect on churn
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Does a forest vote or average?</summary>
+                    <p>scikit-learn's <code>RandomForestClassifier</code> averages the trees' predicted probabilities (soft voting) and predicts the class with the highest average. The original random forest paper used a majority vote of class labels (hard voting). Averaging probabilities keeps more information and gives the fine-grained scores you used for the call list. <code>RandomForestRegressor</code> averages the trees' numeric predictions.</p>
+                </details>
+                <details>
+                    <summary>Can I still look at the individual trees?</summary>
+                    <p>Yes: <code>forest.estimators_[0]</code> is an ordinary fitted <code>DecisionTreeClassifier</code>, so <code>export_text</code> and <code>plot_tree</code> work on it. But no single tree explains the forest: each is a deep, quirky tree trained on a resample with random feature limits. To explain a forest, use model-level tools such as permutation importance and partial dependence (Lesson 7.1) or SHAP (Lesson 7.2).</p>
+                </details>
+                <details>
+                    <summary>Forests are large. How do I make one smaller or faster?</summary>
+                    <p>Memory grows with the number of trees and the number of leaves. A larger <code>min_samples_leaf</code> or a <code>max_depth</code> shrinks each tree, often with no loss, as the tuning table showed. <code>max_samples=0.5</code> trains each tree on half the rows, and <code>n_jobs=-1</code> uses every CPU core. If prediction speed matters a lot, gradient boosting (Lesson 5.3) usually reaches the same accuracy with smaller trees.</p>
+                </details>
+                <details>
+                    <summary>The churn rate is only 16.5%. Should I set <code>class_weight</code>?</summary>
+                    <p>For ranking customers (ROC AUC, a top-50 list) it usually makes little difference, because weighting mostly shifts the probabilities rather than reordering them. It matters when you use the default 0.5 threshold to make yes-or-no decisions. Lesson 2.5 covers the options, and Lesson 1.4 showed how to choose a threshold from the probabilities instead.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Write your own <code>MiniForest</code> class with <code>fit(X, y)</code> and <code>predict_proba(X)</code>: for each of <code>n_estimators</code> trees, draw a bootstrap sample with a NumPy generator, fit <code>DecisionTreeClassifier(max_features="sqrt", min_samples_leaf=5, random_state=i)</code> on it, and remember which rows were out of bag. Average the trees' probabilities to predict, and compute your own OOB ROC AUC by averaging, for each training row, only the trees that did not see it. Check that your test AUC and OOB AUC are close to <code>RandomForestClassifier</code>'s with the same settings.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain to a colleague, using the panel of new hires, why 100 overfitted trees can predict better than one carefully pruned tree. Use the variance formula's two terms in your explanation. Then write down your project's numbers: the forest's test AUC, the rule tree's, and the two top-50 counts. When would you still hand the care team the rule tree?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>A bootstrap sample draws n rows with replacement and contains about 63.2% of the distinct rows; the rest are out-of-bag</li>
+                        <li>Bagging fits one model per bootstrap sample and averages them; it reduces variance, so it helps unstable models such as deep trees</li>
+                        <li>The variance of an average is ρσ² + (1 − ρ)σ²/n: more models shrink one term, less correlated models shrink the other</li>
+                        <li>A random forest is bagged trees plus a random subset of features at every split (<code>max_features</code>), which decorrelates the trees</li>
+                        <li>More trees never overfit; the score plateaus. Leaf size and <code>max_features</code> matter more, and forests are forgiving to tune</li>
+                        <li>OOB predictions give a validation score from a single fit, close to cross-validation, as long as preprocessing does not learn from the target</li>
+                        <li><code>BaggingClassifier</code> takes <code>estimator=</code> (not <code>base_estimator=</code>) and works with any model</li>
+                        <li>Impurity-based importance rewards chance splits; check it with permutation importance on held-out data, and treat both as descriptions of the model</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You built bagging from scratch and watched averaging lift an overfitted tree from 0.68 to about 0.85 AUC</li>
+                        <li>You measured the correlation between trees and saw why a forest beats plain bagging</li>
+                        <li>You validated a forest out-of-bag and matched the result against cross-validation</li>
+                        <li>You exposed a pure-noise column that impurity importance had ranked above real features</li>
+                        <li>You built a churn forest in a pipeline and a 50-customer call list that beats a logistic regression's</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="trees_gradient_boosting.html"><strong>Lesson 5.3: Gradient Boosting</strong></a> you will build a tree ensemble the opposite way. Instead of growing many independent deep trees and averaging them, boosting grows small trees one after another, each correcting the errors of the ones before. You will meet <code>HistGradientBoostingClassifier</code>, XGBoost and LightGBM, and see why boosting, once tuned, is so often the strongest choice for tables like Pinecrest's.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook: Lesson 5.3 compares boosting with your forest on the same split.</li>
+                    <li>Refit the project forest with <code>n_estimators=50</code> and <code>1000</code>. How much do the test AUC and the top-50 count move?</li>
+                    <li>Bagging attacks variance. Write down, in one sentence, what kind of error a method would need to attack to improve a model that is too simple. That is boosting's job.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You took the most overfitted model in the course, a tree that memorizes every customer, and turned it into one of the most reliable models there is, using nothing but resampling and averaging. That is a deep idea, and you built it by hand before letting scikit-learn do it for you. If the variance formula still feels abstract, come back to the trees curve: the quick climb is n doing its work, and the purple line overtaking the gray one is ρ.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="trees_decision.html" class="prev-lesson">← Previous: Decision Trees</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="trees_gradient_boosting.html" class="next-lesson">Next: Gradient Boosting →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>A random forest is an ensemble of decorrelated trees built with bagging plus random feature selection.</li>
-                <li>Averaging many diverse trees reduces variance and overfits far less than a single tree.</li>
-                <li>Out-of-bag samples provide a built-in validation estimate for free.</li>
-                <li>Forests are robust, need little tuning, and give reliable feature importances.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now build a robust random forest, tune it, and use its out-of-bag error and feature importances — a dependable
-        workhorse you'll reach for again and again on tabular problems.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>Why is it called "random"?</summary>
-            <p>Each tree is trained on a bootstrap (random) sample of the rows and considers only a random subset of features at each
-            split. That double randomness decorrelates the trees so their errors cancel out when averaged.</p>
-        </details>
-        <details>
-            <summary>Are more trees always better?</summary>
-            <p>More trees never hurt accuracy — they reduce variance — but the gains flatten out and each extra tree costs compute.
-            Add trees until performance plateaus, then stop.</p>
-        </details>
-        <details>
-            <summary>Random forest or gradient boosting?</summary>
-            <p>Forests are robust and low-maintenance, making them a great baseline. Boosting often scores higher but demands careful
-            tuning. Start with a forest, then try boosting if you need more accuracy.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Bagging (building trees in parallel) leads naturally into boosting, where trees are built sequentially to correct each
-        other and push accuracy even further.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Train a random forest and compare its test accuracy to a single decision tree on the same data.</li>
-            <li>Inspect the feature importances and experiment with <code>n_estimators</code> and <code>max_features</code>.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Random forests are the dependable workhorse of machine learning — reliable, powerful, and forgiving. You've just added a
-            true professional staple to your toolkit. Keep growing.</p>
-        </div>
-    </section>
-
-    <!-- Navigation at the bottom -->
-    <nav class="lesson-nav" aria-label="Lesson navigation">
-        <a href="ml_decision_trees.html" class="prev-lesson" aria-label="Previous lesson">Previous: Decision Trees</a>
-        <a href="index.html" class="home-link" aria-label="Course home">Course Home</a>
-        <a href="ml_support_vector_machines.html" class="next-lesson" aria-label="Next lesson">Next: Support Vector Machines</a>
-    </nav>
-    
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1141,8 +1013,10 @@ print(comparison_df.to_string(index=False))</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>

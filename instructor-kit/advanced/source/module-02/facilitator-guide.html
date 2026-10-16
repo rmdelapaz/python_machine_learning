@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facilitator Guide: Session 2</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">contains answers &amp; timing · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Facilitator Guide</div>
+    <h1>Session 2: Local Explanations, Fairness and K-Means</h1>
+    <p class="sub">How to teach the second session of Advanced Machine Learning: explain one prediction with a flat local map (LIME), learn when not to trust it, and audit the churn campaign for fairness across age groups (7.3); then leave labels behind and find customer groups with K-Means, learning the algorithm, its pitfalls and why scaling is a choice (8.1).</p>
+    <div class="meta-row">
+      <span class="chip"><b>2</b> lessons</span>
+      <span class="chip"><b>3 hrs</b> session</span>
+      <span class="chip">Lessons <b>7.3–8.1</b></span>
+      <span class="chip">Session <b>2</b> of 13</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>How to Use This Guide</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Same rhythm as every session: warm-up → for each lesson: frame and mental model → live demo → guided lab → start the lesson project; exercises, quiz and journal go home.</li>
+  <li>Every code block below was run to produce the output printed under it (Python 3.12, scikit-learn 1.9.1, shap 0.53, lime 0.2, 4 CPU threads). LIME is random: the outputs match because every explainer gets <code class="inline">random_state</code>.</li>
+  <li>Keep <code class="inline">interpretability_lime.html</code> and <code class="inline">clustering_kmeans.html</code> open for the figures (LIME's bar chart, the four-panel Lloyd figure, the stuck run, raw vs scaled scatter, moons). Labs live in <code class="inline">labs/module-02/</code>.</li>
+  <li>This session changes gear at the break: Module 7 ends with fairness, Module 8 starts unsupervised learning. Say so out loud; the second half has no target column at all.</li>
+</ul>
+<div class="note warn"><div class="t">The #1 risk of Session 2: fairness becomes a debate, or a verdict</div>
+<p>The age-group table invites strong reactions ("the model discriminates against young people!") and equally strong dismissals ("the model never sees age, so it is fair"). Both skip the lesson. Keep the room on the procedure: which harm, which metric, how many people per group, is the gap bigger than chance, what was not checked. The permutation test is the hinge: practice saying "no evidence of a difference, and not enough data to rule one out" before the session. Do not let the audit drift into whether Pinecrest should collect age at all; park it for the journal prompt.</p>
+</div>
+
+  <div class="sec"><h2>Before the Session</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ <b>Run the kit check:</b> <code class="inline">python3 labs/check_labs.py module-02</code> (8 files, about a minute). LIME and K-Means labs are all under 30 seconds.</li>
+  <li>☐ <b>Projector machine:</b> notebooks <code class="inline">lesson_7_3</code> and <code class="inline">lesson_8_1</code>; run <code class="inline">import lime, shap</code> once beforehand (first imports are slow). Browser tabs: the two lesson pages.</li>
+  <li>☐ <b>Downloads:</b> none. (Image data is needed from Session 5; remind anyone whose check said READY for Sessions 1 to 4.)</li>
+  <li>☐ <b>Board:</b> "fidelity · stability" (two checks before trusting LIME); the three fairness views (flag rate, recall, precision) with "which harm?" above them; for 8.1, a sketch of campfires: assign, move, repeat.</li>
+  <li>☐ <b>Sort the Session 1 exit tickets.</b> Question 2 (units) usually splits the room; W3 in the warm-up revisits it.</li>
+</ul>
+<div class="blk warn"><div class="h">Known environment traps</div>
+<table class="timing">
+<thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td><code class="inline">ValueError: Domain error in arguments. The scale parameter must be positive ...</code></td><td>Missing values in the data given to <code class="inline">LimeTabularExplainer</code></td><td>Fill with training medians, in the explainer's data and in the row you explain.</td></tr>
+<tr><td><code class="inline">KeyError: 0</code> from <code class="inline">explain_instance</code></td><td>A pandas row was passed</td><td><code class="inline">.to_numpy()</code> on the row.</td></tr>
+<tr><td><code class="inline">NotImplementedError: LIME does not currently support classifier models without probability scores</code></td><td>The function returns <code class="inline">predict</code> labels</td><td>Return <code class="inline">predict_proba(...)</code>, one column per class.</td></tr>
+<tr><td>Learners' LIME weights differ from the slides in the second decimal</td><td>No <code class="inline">random_state</code>, or another lime version</td><td><code class="inline">random_state=42</code> on the explainer; check <code class="inline">lime</code> 0.2.0.1 in <code class="inline">check_environment.py</code>.</td></tr>
+<tr><td>A UserWarning about feature names from LIME runs</td><td>LIME passes NumPy arrays to a model fitted on a DataFrame</td><td>Harmless; the <code class="inline">predict_fn</code> that rebuilds a DataFrame avoids most of them.</td></tr>
+<tr><td><code class="inline">ValueError: could not convert string to float</code> or <code class="inline">Input X contains NaN</code> from KMeans</td><td>A text column or gaps in X</td><td>Cluster numeric behavior columns only (Common Mistakes 1 and 2).</td></tr>
+</tbody>
+</table>
+</div>
+
+  <div class="sec"><h2>Session 2 Agenda (3 hours)</h2><span class="rule"></span></div>
+  <table class="timing">
+    <thead><tr><th>Clock</th><th>Minutes</th><th>Segment</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="t">0:00</td><td class="t">10</td><td>Warm-up</td><td>Five retrieval questions on Session 1 (odds ratios, permutation importance, SHAP units), homework check.</td></tr>
+      <tr><td class="t">0:10</td><td class="t">10</td><td><b>7.3</b> Frame and mental model</td><td>The Earth looks flat from your street: a flat map of the model near one customer. Then a different question: fairness.</td></tr>
+      <tr><td class="t">0:20</td><td class="t">25</td><td><b>7.3</b> Live demo</td><td>LIME by hand, the lime library, fidelity and stability, a what-if, a fairness audit by age group, a permutation test, two errors.</td></tr>
+      <tr><td class="t">0:45</td><td class="t">20</td><td><b>7.3</b> Guided lab</td><td><code class="inline">labs/module-02/l7_3-lime-fairness/lime_fraud_starter.py</code>, then <code class="inline">labs/module-02/l7_3-lime-fairness/fairness_calibration_starter.py</code> in pairs.</td></tr>
+      <tr><td class="t">1:05</td><td class="t">15</td><td><b>7.3</b> Start the lesson project</td><td>Auditing the retention campaign, Steps 1 and 2; Steps 3 to 5 go home.</td></tr>
+      <tr><td class="t">1:20</td><td class="t">10</td><td>Break</td><td>Leave "fidelity, stability" and "flag rate, recall, precision" on the board.</td></tr>
+      <tr><td class="t">1:30</td><td class="t">10</td><td><b>8.1</b> Frame and mental model</td><td>No labels: campfires on a big campground. Assign, move, repeat.</td></tr>
+      <tr><td class="t">1:40</td><td class="t">30</td><td><b>8.1</b> Live demo</td><td>A first K-Means, inertia by hand, Lloyd's loop, local minima and k-means++, scaling, new customers, three mistakes.</td></tr>
+      <tr><td class="t">2:10</td><td class="t">25</td><td><b>8.1</b> Guided lab</td><td><code class="inline">labs/module-02/l8_1-kmeans/scaling_choices_starter.py</code>, then <code class="inline">labs/module-02/l8_1-kmeans/payment_clusters_starter.py</code>.</td></tr>
+      <tr><td class="t">2:35</td><td class="t">15</td><td><b>8.1</b> Start the lesson project</td><td>Pinecrest's first customer groups, Steps 1 to 3; Steps 4 to 6 go home.</td></tr>
+      <tr><td class="t">2:50</td><td class="t">10</td><td>Wrap-up</td><td>Exit ticket (3 questions), homework, bring list for Session 3.</td></tr>
+      <tr><td class="t"><b>Total</b></td><td class="t"><b>180</b></td><td></td><td>Ends at 3:00.</td></tr>
+    </tbody>
+  </table>
+<p><b>In the room.</b> The lessons estimate 100 + 95 = 195 minutes alone; the room has 150 after the warm-up, break and wrap-up. Each lesson gets its mental model, demo, one guided lab and the start of its project.</p>
+<p><b>Goes home (2 to 3 hours).</b> The audit project Steps 3 to 5 and the customer-groups project Steps 4 to 6; Exercises 1 to 3 of each lesson; both quizzes; both journal entries; Lesson 8.1's "Before the Next Lesson" list.</p>
+<p><b>Protect:</b> 7.3 Steps 2, 6 and 7 (LIME by hand, the audit, the permutation test); 8.1 Steps 4, 5 and 8 (Lloyd's loop, local minima, raw vs scaled). <b>Cut first:</b> 7.3 Step 8 (errors: point at the trap table), then 8.1 Step 9 (new customers: Lesson 8.2 repeats it with a pipeline), then the fairness lab (B) moves to homework.</p>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">0:00</span><h3>Retrieval: Interpreting Models and SHAP</h3><span class="dur">10 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Questions (on the slide; learners answer in the workbook)</div>
+<div class="q"><div class="qn">W1</div><div class="qt">A scaled logistic regression gives <code class="inline">discount_share</code> a coefficient of 0.68. Say what that means in one sentence.</div><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">Shuffling <code class="inline">days_since_last_order</code> in the TEST set lowers the boosting model's ROC AUC by 0.140. What does that measure, and why the test set?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> scipy.special <span class="k">import</span> expit
+base = -<span class="s">2.95</span>                     <span class="c"># C104051's waterfall starts here (log-odds)</span>
+total_shares = <span class="s">6.50</span>              <span class="c"># and its 11 SHAP values add up to this</span>
+print(round(base + total_shares, <span class="s">2</span>), round(expit(base + total_shares), <span class="s">3</span>))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Why should a briefing never rank features with a forest's <code class="inline">feature_importances_</code>?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Which phrase can an agent read aloud: "you are leaving because you stopped buying" or "no order in 240 days"? Why?</div><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Answers</div>
+<ul class="tick">
+  <li><b>W1</b> One more standard deviation of discount share multiplies the odds of churn by e^0.68, about 2.0, other features held fixed.</li>
+  <li><b>W2</b> How much the model's held-out score depends on that feature (permutation importance); on training rows memorized noise would look important too.</li>
+  <li><b>W3</b> <code class="inline">3.55 0.972</code>: base + shares = 3.55 log-odds; <code class="inline">expit(3.55)</code> = 0.972, C104051's churn probability.</li>
+  <li><b>W4</b> It is measured on training data and favors many-valued columns: in Lesson 7.1 it ranked a column of pure noise sixth.</li>
+  <li><b>W5</b> "No order in 240 days": a neutral fact about the account. The other turns a model's association into a claim about the person's motives.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">How to run it</div>
+<p>Four minutes writing, four minutes cold-calling, two minutes on the homework: who finished both projects? Ask one learner to read their three reason codes for C104051 aloud, and the room to vote on whether an agent could say them. W3 is the units question from Session 1's exit ticket: if more than a third get it wrong, redo the end points on the board (add in log-odds, squash at the end).</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Lesson Plans</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">7.3</span><h3>LIME and Fairness Checks</h3><span class="dur">70 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Describe LIME's recipe (perturb, predict, weight by closeness, fit a simple model) and build a basic version by hand</li>
+  <li>Explain a prediction with <code class="inline">lime.lime_tabular.LimeTabularExplainer</code> and judge it by its fidelity score and its stability across random seeds</li>
+  <li>Say when LIME and SHAP answer different questions, and run simple what-if checks on one customer</li>
+  <li>Run a fairness check: compare flag rate, recall and precision across age groups and test whether a gap is larger than chance</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: a flat map near one customer; fidelity and stability; then: does the model treat groups alike?</td></tr>
+<tr><td class="t">25m</td><td>Live demo: LIME by hand, the library, stability, a what-if, the age audit, a permutation test, two errors</td></tr>
+<tr><td class="t">20m</td><td>Guided lab: <code class="inline">lime_fraud_starter.py</code> (12m), then <code class="inline">fairness_calibration_starter.py</code> TODO 1 and 2 in pairs (8m)</td></tr>
+<tr><td class="t">15m</td><td>Start the lesson project: auditing the retention campaign, Steps 1 and 2</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"The Earth is round, but a map of your neighborhood can be flat and still be accurate, because you only use it nearby. LIME draws a flat map of the model around one customer: make thousands of nearby variants, ask the model about each, weight them by closeness, fit a straight line. Useful for 'what pushes this customer's risk around?'; misleading if you carry it across the country."</p>
+<p>Then the second half, a different question entirely: "Explanations tell you how a model decides. A fairness check asks whether its decisions land differently on different groups of people. Not using a sensitive attribute guarantees nothing; you have to measure, and measure honestly when groups are small."</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook, <code class="inline">lesson_7_3</code>.</p>
+<ol class="steps">
+  <li><b>Same model, same customer (2m).</b> "Lesson 7.2's model and its riskiest customer. This time we split the whole table, because we will need the age groups later."
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+<span class="k">from</span> sklearn.ensemble <span class="k">import</span> HistGradientBoostingClassifier
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+features = [<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"days_since_last_order"</span>,
+            <span class="s">"returns_12m"</span>, <span class="s">"return_rate"</span>, <span class="s">"support_tickets_12m"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>,
+            <span class="s">"email_opens_90d"</span>]
+train, test = train_test_split(customers, test_size=<span class="s">0.25</span>, stratify=customers[<span class="s">"churned"</span>], random_state=<span class="s">42</span>)
+X_train, X_test = train[features].astype(float), test[features].astype(float)
+
+model = HistGradientBoostingClassifier(random_state=<span class="s">42</span>).fit(X_train, train[<span class="s">"churned"</span>])
+proba = model.predict_proba(X_test)[:, <span class="s">1</span>]
+i = int(proba.argmax())
+x0 = X_test.iloc[i]
+print(test[<span class="s">"customer_id"</span>].iloc[i], <span class="s">f"churn probability {proba[i]:.3f}"</span>)</pre>
+<pre class="out">C104051 churn probability 0.972</pre></li>
+  <li><b>LIME by hand: the flat map (5m).</b> "Make 3,000 variants of this customer, ask the model about each, weight each by how close it is, fit a weighted straight line. The line's slopes are the explanation." Walk the four numbered comments.
+<pre class="code"><span class="k">from</span> sklearn.linear_model <span class="k">import</span> Ridge
+
+rng = np.random.default_rng(<span class="s">42</span>)
+sd = X_train.std()
+
+<span class="c"># 1. variants near the customer, kept inside the training range</span>
+noise = rng.normal(size=(<span class="s">3000</span>, len(features)))
+variants = pd.DataFrame(x0.to_numpy() + noise * sd.to_numpy(), columns=features)
+variants = variants.clip(lower=X_train.min(), upper=X_train.max(), axis=<span class="s">1</span>)
+variants[<span class="s">"app_user"</span>] = (variants[<span class="s">"app_user"</span>] &gt; <span class="s">0.5</span>).astype(float)
+
+<span class="c"># 2. ask the model</span>
+scores = model.predict_proba(variants)[:, <span class="s">1</span>]
+
+<span class="c"># 3. weight by closeness (distance in standard deviations)</span>
+steps = (variants - x0) / sd
+distance = np.sqrt((steps ** <span class="s">2</span>).sum(axis=<span class="s">1</span>))
+width = <span class="s">0.75</span> * np.sqrt(len(features))        <span class="c"># LIME's default kernel width</span>
+weights = np.exp(-distance ** <span class="s">2</span> / width ** <span class="s">2</span>)
+
+<span class="c"># 4. fit a simple weighted model: its slopes are the explanation</span>
+surrogate = Ridge(alpha=<span class="s">1.0</span>).fit(steps, scores, sample_weight=weights)
+local = pd.Series(surrogate.coef_, index=features).sort_values(key=abs, ascending=<span class="k">False</span>)
+print(local.round(<span class="s">3</span>).head(<span class="s">5</span>))
+print(<span class="s">f"fidelity (weighted R2): {surrogate.score(steps, scores, sample_weight=weights):.3f}"</span>)
+print(<span class="s">f"surrogate at the customer: {surrogate.intercept_:.3f}   model: {proba[i]:.3f}"</span>)</pre>
+<pre class="out">discount_share           0.086
+tenure_months            0.080
+app_user                -0.059
+days_since_last_order    0.050
+orders_12m              -0.016
+dtype: float64
+fidelity (weighted R2): 0.496
+surrogate at the customer: 0.897   model: 0.972</pre>
+The surprise: recency is NOT the top slope, though SHAP gave it the biggest share. Ask why before you explain: at 364 days the risk curve is already flat, so nudging recency changes little; SHAP measures the gap from a typical customer, LIME the sensitivity nearby. Both right, different questions. Fidelity 0.50 means "roughly".</li>
+  <li><b>The lime library (3m).</b> "The package wraps the same recipe. Two details: fill missing values first, and give it a function that returns probabilities."
+<pre class="code"><span class="k">from</span> lime.lime_tabular <span class="k">import</span> LimeTabularExplainer
+
+fill = X_train.median()
+
+<span class="k">def</span> predict_fn(rows):
+    <span class="k">return</span> model.predict_proba(pd.DataFrame(rows, columns=features))
+
+lime_explainer = LimeTabularExplainer(
+    X_train.fillna(fill).to_numpy(), feature_names=features,
+    class_names=[<span class="s">"stayed"</span>, <span class="s">"churned"</span>], mode=<span class="s">"classification"</span>, random_state=<span class="s">42</span>,
+)
+exp = lime_explainer.explain_instance(x0.fillna(fill).to_numpy(), predict_fn, num_features=<span class="s">5</span>, num_samples=<span class="s">5000</span>)
+
+<span class="k">for</span> rule, weight <span class="k">in</span> exp.as_list():
+    print(<span class="s">f"{rule:35s} {weight:+.3f}"</span>)
+print(<span class="s">f"fidelity {exp.score:.3f}   surrogate prediction {exp.local_pred[0]:.3f}   model {proba[i]:.3f}"</span>)</pre>
+<pre class="out">days_since_last_order &gt; 110.00      +0.295
+discount_share &gt; 0.29               +0.238
+39.00 &lt; tenure_months &lt;= 68.00      -0.069
+support_tickets_12m &gt; 1.00          +0.066
+app_user &lt;= 0.00                    +0.060
+fidelity 0.512   surrogate prediction 0.580   model 0.972</pre>
+Binned rules ("days &gt; 110") turn the question back to "what about this customer is unusual and risky?", so the ranking resembles SHAP's. Point at the last line: the surrogate says 0.58 for a 0.97 customer.</li>
+  <li><b>Is it stable? (3m).</b> "LIME is random. Rerun with three seeds, at 300 and at 5,000 variants."
+<pre class="code"><span class="k">for</span> n_samples <span class="k">in</span> [<span class="s">300</span>, <span class="s">5000</span>]:
+    print(<span class="s">f"num_samples={n_samples}"</span>)
+    <span class="k">for</span> seed <span class="k">in</span> [<span class="s">1</span>, <span class="s">2</span>, <span class="s">3</span>]:
+        explainer_s = LimeTabularExplainer(X_train.fillna(fill).to_numpy(), feature_names=features,
+                                           class_names=[<span class="s">"stayed"</span>, <span class="s">"churned"</span>], random_state=seed)
+        e = explainer_s.explain_instance(x0.fillna(fill).to_numpy(), predict_fn, num_features=<span class="s">3</span>,
+                                         num_samples=n_samples)
+        print(<span class="s">f"  seed {seed}:"</span>, <span class="s">" | "</span>.join(<span class="s">f"{rule} {w:+.2f}"</span> <span class="k">for</span> rule, w <span class="k">in</span> e.as_list()))</pre>
+<pre class="out">num_samples=300
+  seed 1: days_since_last_order &gt; 110.00 +0.29 | discount_share &gt; 0.29 +0.27 | 39.00 &lt; tenure_months &lt;= 68.00 -0.07
+  seed 2: days_since_last_order &gt; 110.00 +0.29 | discount_share &gt; 0.29 +0.21 | support_tickets_12m &gt; 1.00 +0.08
+  seed 3: days_since_last_order &gt; 110.00 +0.29 | discount_share &gt; 0.29 +0.25 | support_tickets_12m &gt; 1.00 +0.07
+num_samples=5000
+  seed 1: days_since_last_order &gt; 110.00 +0.30 | discount_share &gt; 0.29 +0.24 | 39.00 &lt; tenure_months &lt;= 68.00 -0.08
+  seed 2: days_since_last_order &gt; 110.00 +0.30 | discount_share &gt; 0.29 +0.24 | 39.00 &lt; tenure_months &lt;= 68.00 -0.07
+  seed 3: days_since_last_order &gt; 110.00 +0.30 | discount_share &gt; 0.29 +0.26 | 39.00 &lt; tenure_months &lt;= 68.00 -0.07</pre>
+The top two hold everywhere; the third reason wanders at 300 variants and settles at 5,000. On the board: <b>fidelity</b> and <b>stability</b>, the two checks before trusting a LIME explanation.</li>
+  <li><b>A what-if check (2m).</b> "The simplest local explanation: change one thing and ask again."
+<pre class="code">what_if = X_test.iloc[[i]].copy()
+<span class="k">for</span> days <span class="k">in</span> [<span class="s">364</span>, <span class="s">200</span>, <span class="s">150</span>, <span class="s">120</span>, <span class="s">60</span>]:
+    what_if[<span class="s">"days_since_last_order"</span>] = days
+    print(<span class="s">f"{days:3d} days -&gt; predicted churn {model.predict_proba(what_if)[0, 1]:.3f}"</span>)</pre>
+<pre class="out">364 days -&gt; predicted churn 0.972
+200 days -&gt; predicted churn 0.899
+150 days -&gt; predicted churn 0.716
+120 days -&gt; predicted churn 0.619
+ 60 days -&gt; predicted churn 0.645</pre>
+Even at 60 days the model says 0.645: discounts and tickets still hold the risk up. And a what-if describes the model's answer, not what the customer would do.</li>
+  <li><b>A fairness audit by age group (4m).</b> "The model never sees age. That settles nothing: other features can act as proxies. Age is used here only to audit, never as an input." Write the three definitions on the board: flag rate, recall, precision.
+<pre class="code">audit = test[[<span class="s">"customer_id"</span>, <span class="s">"age_group"</span>, <span class="s">"churned"</span>]].copy()
+audit[<span class="s">"age"</span>] = audit[<span class="s">"age_group"</span>].fillna(<span class="s">"unknown"</span>)
+audit[<span class="s">"p"</span>] = proba
+audit[<span class="s">"flag"</span>] = audit[<span class="s">"p"</span>] &gt;= audit[<span class="s">"p"</span>].quantile(<span class="s">0.80</span>)   <span class="c"># calls for the top 20%</span>
+
+by_age = audit.groupby(<span class="s">"age"</span>).agg(customers=(<span class="s">"churned"</span>, <span class="s">"size"</span>), churners=(<span class="s">"churned"</span>, <span class="s">"sum"</span>),
+                                  churn_rate=(<span class="s">"churned"</span>, <span class="s">"mean"</span>), flag_rate=(<span class="s">"flag"</span>, <span class="s">"mean"</span>))
+by_age[<span class="s">"recall"</span>] = audit[audit[<span class="s">"churned"</span>] == <span class="s">1</span>].groupby(<span class="s">"age"</span>)[<span class="s">"flag"</span>].mean()
+by_age[<span class="s">"precision"</span>] = audit[audit[<span class="s">"flag"</span>]].groupby(<span class="s">"age"</span>)[<span class="s">"churned"</span>].mean()
+print(by_age.round(<span class="s">3</span>))</pre>
+<pre class="out">         customers  churners  churn_rate  flag_rate  recall  precision
+age                                                                   
+18-24          162        28       0.173      0.173   0.536      0.536
+25-34          309        55       0.178      0.184   0.564      0.544
+35-44          295        51       0.173      0.173   0.569      0.569
+45-54          255        31       0.122      0.212   0.710      0.407
+55-64          204        34       0.167      0.255   0.765      0.500
+65+            147        24       0.163      0.211   0.708      0.548
+unknown        128        25       0.195      0.211   0.680      0.630</pre>
+77% of churners aged 55 to 64 are reached, 54% of those aged 18 to 24: a 23-point gap. Before anyone reacts, point at the churners column: 28 people.</li>
+  <li><b>Is the gap more than chance? (3m).</b> "Shuffle the age labels among the churners, so age has nothing to do with being flagged, and see how big the gap gets by chance. 2,000 times."
+<pre class="code"><span class="k">def</span> recall_gap(frame):
+    recall = frame.groupby(<span class="s">"age"</span>)[<span class="s">"flag"</span>].mean()
+    <span class="k">return</span> recall.max() - recall.min()
+
+churners = audit[audit[<span class="s">"churned"</span>] == <span class="s">1</span>]
+observed = recall_gap(churners)
+
+rng = np.random.default_rng(<span class="s">42</span>)
+shuffled_gaps = np.array([recall_gap(churners.assign(age=rng.permutation(churners[<span class="s">"age"</span>].to_numpy())))
+                          <span class="k">for</span> _ <span class="k">in</span> range(<span class="s">2000</span>)])
+print(<span class="s">f"observed recall gap: {observed:.3f}"</span>)
+print(<span class="s">f"typical gap by chance (median): {np.median(shuffled_gaps):.3f}"</span>)
+print(<span class="s">f"share of shuffles with a gap at least as large: {(shuffled_gaps &gt;= observed).mean():.3f}"</span>)</pre>
+<pre class="out">observed recall gap: 0.229
+typical gap by chance (median): 0.223
+share of shuffles with a gap at least as large: 0.473</pre>
+Half the shuffles produce a gap this large. The honest sentence: no evidence that recall differs by age, and not enough data to rule out a moderate difference.</li>
+  <li><b>Errors on purpose (3m).</b> "Two LIME errors whose messages do not say what is wrong."
+<pre class="code">broken = LimeTabularExplainer(X_train.to_numpy(), feature_names=features, random_state=<span class="s">42</span>)
+broken.explain_instance(x0.fillna(fill).to_numpy(), predict_fn)
+
+lime_explainer.explain_instance(x0.fillna(fill).to_numpy(),
+                                <span class="k">lambda</span> rows: model.predict(pd.DataFrame(rows, columns=features)))</pre>
+<pre class="out">ValueError: Domain error in arguments. The `scale` parameter must be positive for all distributions, and many  ...
+NotImplementedError: LIME does not currently support classifier models without probability scores. I ...</pre>
+The first is missing values in <code class="inline">email_opens_90d</code> (LIME's summary statistics become NaN); the second is <code class="inline">predict</code> instead of <code class="inline">predict_proba</code>. A third (a pandas row instead of <code class="inline">.to_numpy()</code>) raises <code class="inline">KeyError: 0</code>: it is in <code class="inline">debug_lime.py</code>.</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>Trusting a LIME explanation without its two checks.</b> Coach: "What is <code class="inline">exp.score</code>? Is <code class="inline">exp.local_pred</code> on the same side of your threshold as the model? Does the top reason survive another seed?" The fraud lab makes this vivid: fidelity 0.12, surrogate 0.077 for a 0.990 payment.</li>
+  <li><b>"We removed age, so the model is fair."</b> Coach with the audit table: the model never saw age, and recall still varies from 54% to 77%. Whether that is chance is a separate question; you only know because you measured.</li>
+  <li><b>A gap read as a verdict, or a non-significant test read as proof.</b> Coach the two-part sentence: "no evidence of a difference" AND "groups too small to rule one out". Ask for group sizes every time a rate is quoted.</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (12m, everyone):</b> <code class="inline">labs/module-02/l7_3-lime-fairness/lime_fraud_starter.py</code>; reference <code class="inline">labs/module-02/l7_3-lime-fairness/lime_fraud_solution.py</code>. LIME meets a rare class: three fraud payments at different risk levels. <b>Expected:</b> the riskiest payment (T031633, 0.990) gets velocity and country-mismatch rules with fidelity 0.12 and a surrogate of 0.077; at 500 variants the top rule agrees in 3, 2 and 1 of 3 seeds, at 5,000 in 2, 3 and 3, fidelities 0.05 to 0.35; SHAP names velocity, velocity, new device.</li>
+  <li><b>Debrief Lab A (2m):</b> "Why does the flat map fail here when it worked roughly on churn?" Fraud is 0.88% of the data: almost every random variant of a payment looks legitimate, so the neighborhood the line is fitted to is nearly flat at zero. For this model, report SHAP.</li>
+  <li><b>Lab B (8m, pairs, TODO 1 and 2 in class):</b> <code class="inline">labs/module-02/l7_3-lime-fairness/fairness_calibration_starter.py</code>; reference <code class="inline">labs/module-02/l7_3-lime-fairness/fairness_calibration_solution.py</code>. Two views the lesson did not take: calibration by group and campaign profit by group, at the $15 / $60 break-even (which flags exactly the same 300 customers as the lesson's top 20%). <b>Expected:</b> gaps from -0.042 (35 to 44) to +0.025 (45 to 54); 45 to 54 earns $2.00 per customer, unknown $4.80; the largest gap is matched by 64% of shuffles. TODO 3 and 4 go home.</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-02/l7_3-lime-fairness/debug_lime.py</code>: three errors whose messages hide the cause, and one silent problem (100 variants).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The lesson project is <b>auditing the retention campaign</b>: LIME on three flagged customers with stability checks, flag rates by age with a permutation test, saved as <code class="inline">fairness_audit.csv</code>. In the room, Steps 1 and 2 (15 minutes).</p>
+<ul class="tick">
+  <li>Step 1: train and flag the top 20%. <b>Done</b> = <code class="inline">flagged 300 of 1500; churners among them 52.3%</code>.</li>
+  <li>Step 2: three customers at different risk levels. <b>Done</b> = C104051 fidelity 0.48, C103674 0.36 (its surrogate lands on the other side of 0.5), C104266 0.27. Ask: "Which of these three explanations would you give an agent?"</li>
+  <li><b>Goes home:</b> Step 3 (stability: 5 of 5 seeds for all three), Step 4 (flag rates by age, permutation p = 0.395), Step 5 (<code class="inline">fairness_audit.csv</code> and a note that lists what was NOT checked).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these out loud:</p>
+<ul class="tick">
+  <li>What are LIME's four steps? <b>Answer:</b> perturb, predict, weight by closeness, fit a simple weighted model.</li>
+  <li>Why can LIME's top slope differ from SHAP's top share? <b>Answer:</b> the slope is sensitivity nearby; the share is the contribution to the gap from a typical customer. At 364 days the curve is flat, so the slope is small and the share large.</li>
+  <li>Which fairness view matches "a churner who misses out on an offer"? <b>Answer:</b> recall by group (equal opportunity).</li>
+  <li>What does a permutation test of a recall gap shuffle? <b>Answer:</b> the group labels among the churners, so group has nothing to do with being flagged.</li>
+</ul>
+<p>Workbook self-check, items Q1 to Q6.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q1</b> <span data-sc="1">A) Treat it as unreliable: the flat map does not imitate the model near this payment; report SHAP's reasons, or fewer reasons</span>; <b>Q2</b> <span data-sc="2"><code class="inline">[1.    0.368 0.018]</code></span>; <b>Q3</b> <span data-sc="3">C) A single top reason hides the rest: discounts and tickets still hold the risk up, and the what-if describes the model, not the customer</span>; <b>Q4</b> <span data-sc="4">B) Recall among churners (equal opportunity)</span>; <b>Q5</b> <span data-sc="5"><code class="inline">[0.5, 0.67]</code></span>; <b>Q6</b> <span data-sc="6">D) No evidence of a real calibration difference at this sample size; the groups are small, so keep monitoring</span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> a card with the two LIME checks and the three fairness definitions. In Lab A, let pairs skip the 500-variant loop and only compare seeds at 5,000.</p>
+<p><b>Stretch:</b> Lesson 7.3 Exercise 4 (a counterfactual: the smallest change that flips C104051 below 0.5) and the Bonus Challenge (the recall audit at 10%, 20% and 40% of customers called).</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">8.1</span><h3>K-Means Clustering</h3><span class="dur">80 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Explain what clustering is for and how it differs from the supervised models of Modules 1 to 7</li>
+  <li>Describe Lloyd's algorithm (assign each point to the nearest center, move each center to the mean) and write it in NumPy</li>
+  <li>Fit <code class="inline">KMeans</code> and read <code class="inline">labels_</code>, <code class="inline">cluster_centers_</code>, <code class="inline">inertia_</code> and <code class="inline">n_iter_</code></li>
+  <li>Explain why K-Means needs scaled features and several starts (<code class="inline">n_init</code>, k-means++), and show what goes wrong without them</li>
+  <li>Profile clusters in the original units and recognize the cluster shapes K-Means cannot find</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: no answer column; campfires on a campground; inertia</td></tr>
+<tr><td class="t">30m</td><td>Live demo: blobs, K-Means, inertia by hand, Lloyd's loop, local minima, k-means++, raw vs scaled, new customers, mistakes</td></tr>
+<tr><td class="t">25m</td><td>Guided lab: <code class="inline">scaling_choices_starter.py</code> (12m), then <code class="inline">payment_clusters_starter.py</code> (13m)</td></tr>
+<tr><td class="t">15m</td><td>Start the lesson project: Pinecrest's first customer groups, Steps 1 to 3</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"Every model so far learned from examples with an answer. Marketing now asks what kinds of customers Pinecrest has, and nobody has labeled them. Picture a campground at night: hundreds of hikers and k campfires lit at random spots. Each hiker walks to the nearest fire. Each fire is moved to the middle of its crowd. Some hikers are now closer to another fire and walk over; the fires move again. After a few rounds nobody switches."</p>
+<p>Then on the board: fires = <b>centroids</b>; walk to the nearest = <b>assign</b>; move to the middle = <b>update</b>; k = the number of fires, <b>you</b> choose it (Lesson 8.2 asks how). The one number each round lowers: <b>inertia</b>, the total squared distance to the own center. And the warning: "K-Means always answers, even in data with no groups. Checking the answer is your job."</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook, <code class="inline">lesson_8_1</code>.</p>
+<ol class="steps">
+  <li><b>Data where we know groups exist (2m).</b> "Before real customers, round clouds where we know the answer. The underscore throws the true labels away: a clustering algorithm never sees them."
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.datasets <span class="k">import</span> make_blobs
+<span class="k">from</span> sklearn.cluster <span class="k">import</span> KMeans
+
+X_toy, _ = make_blobs(n_samples=<span class="s">300</span>, centers=<span class="s">4</span>, cluster_std=<span class="s">1.0</span>, random_state=<span class="s">42</span>)
+print(X_toy.shape)
+print(X_toy[:<span class="s">3</span>].round(<span class="s">2</span>))</pre>
+<pre class="out">(300, 2)
+[[-9.3   6.47]
+ [-9.7   6.94]
+ [-1.69  7.79]]</pre></li>
+  <li><b>A first K-Means (3m).</b> "An estimator like any other, except that <code class="inline">fit</code> takes only X."
+<pre class="code">km = KMeans(n_clusters=<span class="s">4</span>, n_init=<span class="s">10</span>, random_state=<span class="s">42</span>)
+km.fit(X_toy)
+
+print(km.labels_[:<span class="s">12</span>])
+print(km.cluster_centers_.round(<span class="s">2</span>))
+print(<span class="s">f"inertia: {km.inertia_:.1f}   iterations: {km.n_iter_}"</span>)</pre>
+<pre class="out">[3 3 0 1 3 1 2 1 0 2 0 2]
+[[-2.71  8.97]
+ [-6.83 -6.83]
+ [ 4.72  2.04]
+ [-8.87  7.17]]
+inertia: 564.9   iterations: 2</pre>
+Four learned attributes, trailing underscores as always. Labels are names, not ranks.</li>
+  <li><b>Inertia is not magic (2m).</b> "Each point's own center, subtract, square, add up."
+<pre class="code">own_center = km.cluster_centers_[km.labels_]      <span class="c"># one row per point: the center of its cluster</span>
+inertia_by_hand = ((X_toy - own_center) ** <span class="s">2</span>).sum()
+print(<span class="s">f"{inertia_by_hand:.1f}"</span>)</pre>
+<pre class="out">564.9</pre>
+<code class="inline">cluster_centers_[labels_]</code> uses the 300 labels as row numbers into the 4-row table of centers.</li>
+  <li><b>Lloyd's loop in fifteen lines (5m).</b> "Assign, move, repeat until nothing moves." Narrate the broadcasting line once: every point minus every center at once, shape (points, k, features).
+<pre class="code"><span class="k">def</span> lloyd(X, centers, max_steps=<span class="s">20</span>):
+    <span class="s">"""Plain K-Means: assign each point to its nearest center, move each center to its points' mean."""</span>
+    history = [centers]
+    <span class="k">for</span> _ <span class="k">in</span> range(max_steps):
+        sq_dist = ((X[:, <span class="k">None</span>, :] - centers[<span class="k">None</span>, :, :]) ** <span class="s">2</span>).sum(axis=<span class="s">2</span>)   <span class="c"># shape (n_points, k)</span>
+        labels = sq_dist.argmin(axis=<span class="s">1</span>)                                      <span class="c"># step 1: assign</span>
+        new_centers = np.array([X[labels == j].mean(axis=<span class="s">0</span>) <span class="k">for</span> j <span class="k">in</span> range(len(centers))])  <span class="c"># step 2: move</span>
+        history.append(new_centers)
+        <span class="k">if</span> np.allclose(new_centers, centers):                                <span class="c"># nothing moved: converged</span>
+            <span class="k">break</span>
+        centers = new_centers
+    <span class="k">return</span> labels, centers, history
+
+rng = np.random.default_rng(<span class="s">12</span>)     <span class="c"># a seed whose random start is clearly poor, so there is something to watch</span>
+start = X_toy[rng.choice(len(X_toy), size=<span class="s">4</span>, replace=<span class="k">False</span>)]     <span class="c"># 4 random points as starting centers</span>
+labels, centers, history = lloyd(X_toy, start)
+
+my_inertia = ((X_toy - centers[labels]) ** <span class="s">2</span>).sum()
+print(<span class="s">f"rounds: {len(history) - 1}   inertia: {my_inertia:.1f}"</span>)</pre>
+<pre class="out">rounds: 6   inertia: 564.9</pre>
+Show the lesson page's four-panel figure of the centers drifting. Same inertia as scikit-learn.</li>
+  <li><b>Local minima (3m).</b> "Downhill from where you start is not the lowest point there is. Five purely random starts:"
+<pre class="code"><span class="k">for</span> seed <span class="k">in</span> range(<span class="s">5</span>):
+    one_run = KMeans(n_clusters=<span class="s">4</span>, init=<span class="s">"random"</span>, n_init=<span class="s">1</span>, random_state=seed).fit(X_toy)
+    print(<span class="s">f"seed {seed}: inertia {one_run.inertia_:7.1f}   rounds {one_run.n_iter_}"</span>)</pre>
+<pre class="out">seed 0: inertia   564.9   rounds 3
+seed 1: inertia  8422.6   rounds 4
+seed 2: inertia  2062.1   rounds 4
+seed 3: inertia  2059.1   rounds 2
+seed 4: inertia   564.9   rounds 2</pre>
+Same data, same k: 565 to 8,423. Show the "stuck run" figure: one center between two clouds, two splitting one.</li>
+  <li><b>The two defenses (2m).</b> "k-means++ spreads the starting centers out; <code class="inline">n_init</code> runs several starts and keeps the best."
+<pre class="code"><span class="k">for</span> seed <span class="k">in</span> range(<span class="s">5</span>):
+    one_run = KMeans(n_clusters=<span class="s">4</span>, init=<span class="s">"k-means++"</span>, n_init=<span class="s">1</span>, random_state=seed).fit(X_toy)
+    print(<span class="s">f"seed {seed}: inertia {one_run.inertia_:7.1f}"</span>)
+
+print(<span class="s">"default n_init:"</span>, KMeans(n_clusters=<span class="s">4</span>).n_init)</pre>
+<pre class="out">seed 0: inertia   564.9
+seed 1: inertia   564.9
+seed 2: inertia   564.9
+seed 3: inertia   564.9
+seed 4: inertia   564.9
+default n_init: auto</pre>
+<code class="inline">auto</code> means one run with k-means++. The course writes <code class="inline">n_init=10</code> whenever the result matters.</li>
+  <li><b>Real customers, two columns (2m).</b> "Orders run from 1 to 21; order values from about $30 to $625."
+<pre class="code">customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+two = customers[[<span class="s">"orders_12m"</span>, <span class="s">"avg_order_value"</span>]]
+print(two.describe().loc[[<span class="s">"mean"</span>, <span class="s">"std"</span>, <span class="s">"min"</span>, <span class="s">"max"</span>]].round(<span class="s">1</span>))</pre>
+<pre class="out">      orders_12m  avg_order_value
+mean         5.0            140.9
+std          3.2            103.6
+min          1.0             29.8
+max         21.0            625.2</pre>
+Ask: "K-Means measures straight-line distance. Which column will decide the clusters?"</li>
+  <li><b>Raw versus scaled (5m).</b> "Cluster the raw numbers, then the standardized ones, and read both sets of centers in dollars and orders."
+<pre class="code"><span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+
+raw_km = KMeans(n_clusters=<span class="s">4</span>, n_init=<span class="s">10</span>, random_state=<span class="s">42</span>).fit(two)
+
+scaler2 = StandardScaler().set_output(transform=<span class="s">"pandas"</span>)
+two_scaled = scaler2.fit_transform(two)
+scaled_km = KMeans(n_clusters=<span class="s">4</span>, n_init=<span class="s">10</span>, random_state=<span class="s">42</span>).fit(two_scaled)
+
+print(<span class="s">"raw centers:"</span>)
+print(pd.DataFrame(raw_km.cluster_centers_, columns=two.columns).round(<span class="s">1</span>).sort_values(<span class="s">"avg_order_value"</span>))
+print(<span class="s">"scaled centers, back in original units:"</span>)
+print(pd.DataFrame(scaler2.inverse_transform(scaled_km.cluster_centers_), columns=two.columns)
+      .round(<span class="s">1</span>).sort_values(<span class="s">"avg_order_value"</span>))</pre>
+<pre class="out">raw centers:
+   orders_12m  avg_order_value
+0         5.5             80.5
+2         5.7            163.7
+1         2.7            300.6
+3         2.4            423.2
+scaled centers, back in original units:
+   orders_12m  avg_order_value
+2         2.4             94.4
+3        10.8             96.7
+0         6.4             98.7
+1         2.6            332.3</pre>
+Raw: bands of dollars ($80, $160, $300, $420); orders had no say. Scaled: three groups with similar baskets separated by how often they buy, and one big-ticket group. Show the lesson's side-by-side scatter. Scaling is a choice about what "similar" means.</li>
+  <li><b>New customers (3m).</b> "<code class="inline">predict</code> gives the nearest center; <code class="inline">transform</code> gives the distance to every center."
+<pre class="code">newcomers = pd.DataFrame({<span class="s">"orders_12m"</span>: [<span class="s">12</span>, <span class="s">2</span>, <span class="s">8.6</span>], <span class="s">"avg_order_value"</span>: [<span class="s">80.0</span>, <span class="s">450.0</span>, <span class="s">97.0</span>]})
+newcomers_scaled = scaler2.transform(newcomers)
+
+print(scaled_km.predict(newcomers_scaled))
+print(scaled_km.transform(newcomers_scaled).round(<span class="s">2</span>))</pre>
+<pre class="out">[3 1 3]
+[[1.72 3.79 2.96 0.41]
+ [3.66 1.15 3.44 4.35]
+ [0.67 2.93 1.91 0.67]]</pre>
+The third newcomer is 0.67 from two centers: K-Means gives a confident single label anyway. Gaussian mixtures (Lesson 8.5) soften that.</li>
+  <li><b>Three mistakes (3m).</b> "Two errors, and one silent trap."
+<pre class="code">KMeans(n_clusters=<span class="s">3</span>, n_init=<span class="s">10</span>, random_state=<span class="s">42</span>).fit(customers[[<span class="s">"orders_12m"</span>, <span class="s">"home_store"</span>]])
+
+KMeans(n_clusters=<span class="s">3</span>, n_init=<span class="s">10</span>, random_state=<span class="s">42</span>).fit(customers[[<span class="s">"orders_12m"</span>, <span class="s">"email_opens_90d"</span>]])
+
+rerun = KMeans(n_clusters=<span class="s">4</span>, n_init=<span class="s">10</span>, random_state=<span class="s">7</span>).fit(two_scaled)
+print(pd.crosstab(scaled_km.labels_, rerun.labels_, rownames=[<span class="s">"seed 42"</span>], colnames=[<span class="s">"seed 7"</span>]))</pre>
+<pre class="out">ValueError: could not convert string to float: 'Bend'
+ValueError: Input X contains NaN.
+seed 7      0     1     2    3
+seed 42                       
+0        1978     0     0    0
+1           0  1128     0    0
+2           0     0  1993    0
+3           0     0     0  901</pre>
+Text and gaps raise errors. The crosstab is the trap: the same four groups with shuffled numbers. Code that says "cluster 2 is our premium segment" breaks when anything changes. Then show the lesson's moons / stretched / unequal-spread figure in one sentence: K-Means always answers, checking is your job.</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>Clustering unscaled columns.</b> No error; the biggest numbers decide. Coach: "Read the centers in real units. Does every column vary across clusters?" Lab 8.1 B shows it on recency, spend and tickets; Lab 8.1 A on payments.</li>
+  <li><b>Reading scaled centers as real values.</b> "0.44 orders of -0.41 dollars." Coach: <code class="inline">inverse_transform</code>, or simply a groupby of the original columns by label.</li>
+  <li><b>Treating cluster numbers as names.</b> Code that hard-codes "cluster 4" breaks when the seed or the data change (<code class="inline">debug_kmeans.py</code> has exactly this bug). Coach: name clusters from their profiles.</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab B first (12m, everyone):</b> <code class="inline">labs/module-02/l8_1-kmeans/scaling_choices_starter.py</code>; reference <code class="inline">labs/module-02/l8_1-kmeans/scaling_choices_solution.py</code>. Four groups from recency, spend and tickets, three ways. <b>Expected:</b> raw = spend bands ($236 to $1,692, churn 4% to 25%); standardized finds 780 silent customers (271 days, churn 51%) and 1,201 who complain (2.5 tickets, churn 22%); recency counted twice gives 539 at 307 days (churn 53%); the crosstab shows different groupings, not renamed ones.</li>
+  <li><b>Lab A (13m):</b> <code class="inline">labs/module-02/l8_1-kmeans/payment_clusters_starter.py</code>; reference <code class="inline">labs/module-02/l8_1-kmeans/payment_clusters_solution.py</code>. 50,000 payments. <b>Expected:</b> raw = bands of account age; after log + scale four named groups, fraud 0.27% (small everyday orders) to 2.13% (busy cards, 243 of the 438 frauds); inertia 97,067 for every seed.</li>
+  <li><b>Debrief (2m):</b> "Is 'Busy cards' a fraud detector?" No: 97.9% of its payments are legitimate. Differences in an outcome the clustering never saw show the groups are real; detecting rare events is Lesson 8.6's job.</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-02/l8_1-kmeans/debug_kmeans.py</code>: a text column, a gap, scaled centers shown as real ones, and a hard-coded cluster number.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The lesson project is <b>Pinecrest's first customer groups</b>: five clusters on four behavior columns, profiled in plain units, with churn rates, saved as <code class="inline">customer_groups.csv</code>. In the room, Steps 1 to 3 (15 minutes).</p>
+<ul class="tick">
+  <li>Step 1: <code class="inline">(6000, 4) missing: 0</code>. Step 2: <code class="inline">inertia 5713 after 5 rounds</code>. Step 3: the same 5713 for seeds 0, 1 and 2.</li>
+  <li>Before anyone profiles, ask the room for the Before-the-Next-Lesson guess from 7.3: "which three or four types of customers do you picture?" Write them on the board; compare at the next session.</li>
+  <li><b>Goes home:</b> Step 4 (the profile: churn 3% to 32% across groups, though churn played no part), Step 5 (names: Discount Seekers 0.317 ... Loyal Regulars 0.034), Step 6 (<code class="inline">customer_groups.csv</code>, 6,000 rows).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these out loud:</p>
+<ul class="tick">
+  <li>What two steps does Lloyd's loop repeat, and what number can only go down? <b>Answer:</b> assign to the nearest center, move each center to its points' mean; inertia.</li>
+  <li>Why scale before K-Means? <b>Answer:</b> distances depend on units; without scaling the column with the largest spread decides the clusters.</li>
+  <li>What do k-means++ and <code class="inline">n_init</code> protect against? <b>Answer:</b> local minima from a poor start.</li>
+  <li>Why is there no train/test split in this lesson? <b>Answer:</b> there are no answers to check predictions against; we describe the customers we have. (Stability checks come in 8.2.)</li>
+</ul>
+<p>Workbook self-check, items Q7 to Q12.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q7</b> <span data-sc="7"><code class="inline">10.0</code></span>; <b>Q8</b> <span data-sc="8">D) Distances are dominated by the column with the largest spread: account age varies by about 700 days, items by about 1</span>; <b>Q9</b> <span data-sc="9">A) Runs the whole algorithm from ten starts and keeps the run with the lowest inertia</span>; <b>Q10</b> <span data-sc="10">B) Pass the fitted scaler's <code class="inline">transform</code> of their rows to the fitted model's <code class="inline">predict</code></span>; <b>Q11</b> <span data-sc="11"><code class="inline">[[6.449]]</code></span>; <b>Q12</b> <span data-sc="12">B) The groups differ in fraud, which shows they capture real behavior, but 97.9% of busy-card payments are legitimate: a cluster describes, it does not detect</span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> a card with the campfire picture and the two steps. In Lab B, give struggling learners the <code class="inline">profile</code> function's output to read first, before they fit anything.</p>
+<p><b>Stretch:</b> Lesson 8.1 Exercise 4 (write k-means++ seeding) and the Bonus Challenge (color quantization of a picture drawn with NumPy).</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Closing</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Exit ticket (3 questions, no notes, 4 minutes)</div>
+<ol class="steps">
+  <li>Name the two checks before you trust a LIME explanation, and how you run each. <b>Answer:</b> fidelity (<code class="inline">exp.score</code>, and <code class="inline">exp.local_pred</code> on the same side of the threshold as the model) and stability (rerun with other seeds; the top reasons should hold).</li>
+  <li>The churn model never sees age. Why audit by age anyway, and which metric fits "a churner misses out on an offer"? <b>Answer:</b> other features can act as proxies, so outcomes can still differ; recall by group (equal opportunity), with group sizes and a permutation test.</li>
+  <li>Why scale features before K-Means, and what does <code class="inline">n_init=10</code> do? <b>Answer:</b> distances depend on units, so the largest-spread column would decide the clusters; ten starts, keeping the lowest-inertia run, to avoid a poor local minimum.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Homework (about 2 to 3 hours)</div>
+<ul class="tick">
+  <li><b>Finish both lesson projects.</b> The campaign audit (Steps 3 to 5: stability, flag rates with a permutation test, <code class="inline">fairness_audit.csv</code>) and the customer groups (Steps 4 to 6: profile, names, <code class="inline">customer_groups.csv</code>).</li>
+  <li><b>Lesson exercises.</b> 7.3: Exercises 1 to 3; 8.1: Exercises 1 to 3. Exercise 4 of each is a stretch.</li>
+  <li><b>Both Quick Quizzes</b> and <b>both journal entries</b> (the 7.3 prompt: report a 23-point gap and its permutation test to a manager in three sentences).</li>
+  <li><b>Lab 7.3 B</b> TODO 3 and 4 if not done in class.</li>
+  <li><b>Before the Next Lesson (from 8.1):</b> keep the notebook and <code class="inline">customer_groups.csv</code>; plot histograms of <code class="inline">avg_order_value</code> and <code class="inline">orders_12m</code> (symmetric or skewed?); rerun the project with 4 and 6 clusters and note which named groups merge or split.</li>
+  <li><b>Image data:</b> anyone whose check said READY for Sessions 1 to 4 runs it with <code class="inline">--download</code> before Session 5.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Bring list for Session 3</div>
+<ul class="tick">
+  <li>A READY laptop; the <code class="inline">pinecrest-ml</code> folder with <code class="inline">data/</code> and <code class="inline">labs/</code> (Session 3's starters are in <code class="inline">labs/module-03/</code>).</li>
+  <li>The Lesson 8.1 project notebook and <code class="inline">customer_groups.csv</code>: Lesson 8.2 asks whether five groups was the right number.</li>
+  <li>Your histograms and your k = 4 / k = 6 notes from 8.1's Before the Next Lesson.</li>
+  <li>The workbook and the journal. No downloads needed for Session 3.</li>
+</ul>
+</div>
+
+  <div class="sec"><h2>If You Run Long or Short</h2><span class="rule"></span></div>
+<div class="blk warn"><div class="h">Running long: what to protect and what to cut first</div>
+<ul class="tick">
+  <li><b>Protect:</b> LIME by hand and its fidelity; the audit and the permutation test; Lloyd's loop; raw vs scaled.</li>
+  <li><b>Cut first (saves 3m):</b> 7.3 Step 8 (errors): point at the trap table.</li>
+  <li><b>Cut second (saves 3m):</b> 8.1 Step 9 (new customers): Lesson 8.2 repeats it with a pipeline.</li>
+  <li><b>Cut third (saves 8m):</b> Lab 7.3 B moves to homework in full.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Running short: what to add</div>
+<ul class="tick">
+  <li>Lab 7.3 B's TODO 3 for everyone: a permutation test on a calibration gap, and the two-sentence report.</li>
+  <li>Lesson 8.1 Exercise 2 live: borderline customers (114 within 0.1 of a second group).</li>
+  <li>The workbook's worked example on Lloyd's loop from a poor start (the 30 that never gets its own cluster).</li>
+</ul>
+</div>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 2 · Facilitator Guide · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

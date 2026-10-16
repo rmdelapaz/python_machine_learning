@@ -3,1102 +3,828 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Master Hierarchical Clustering in Python. Learn agglomerative and divisive clustering, dendrograms, linkage methods, and practical applications.">
-    <title>Hierarchical Clustering Path - Python Machine Learning</title>
+    <meta name="description" content="Build a tree of merges with agglomerative clustering, read and cut dendrograms, compare single, complete, average and Ward linkage, and group Pinecrest Outfitters products by who buys them together. Python Machine Learning Lesson 8.3.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Hierarchical Clustering - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
-    <main id="main-content">
-    <header role="banner">
-        <h1>Hierarchical Clustering</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Unsupervised Learning</a>
-        <span class="separator">›</span>
-        <span class="current">Hierarchical Clustering</span>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
     </nav>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Explain how agglomerative (bottom-up) and divisive (top-down) hierarchical clustering build a hierarchy of clusters</li>
-            <li>Compare linkage methods (single, complete, average, and Ward) and choose one that fits your data</li>
-            <li>Build and read a dendrogram to decide how many clusters to keep</li>
-            <li>Apply different distance metrics (Euclidean, Manhattan, cosine) and understand how they change results</li>
-            <li>Combine scikit-learn's <code>AgglomerativeClustering</code> with SciPy's <code>linkage</code> and <code>dendrogram</code></li>
-            <li>Recognize when hierarchical clustering fits better than K-means</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Cluster a real dataset with agglomerative clustering, plot its dendrogram, and cut the tree to extract meaningful groups.</p>
-    </div>
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>🌳 Lesson 8.3: Hierarchical Clustering</h1>
+                <p class="lead">Instead of fixing the number of groups in advance, build a whole family tree of merges and decide afterwards where to cut it.</p>
 
-    <h2>Building Cluster Hierarchies! 🌳</h2>
-    
-    <blockquote>
-        <p>Hierarchical clustering builds a tree of clusters, revealing relationships at multiple scales. Unlike K-means, it doesn't require specifying the number of clusters upfront and provides a complete hierarchy of clustering solutions. Master dendrograms, linkage methods, and discover natural groupings in your data through this powerful unsupervised learning technique.</p>
-    </blockquote>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain how agglomerative clustering builds a hierarchy by repeatedly merging the two closest groups</li>
+                        <li>Read a SciPy linkage matrix and a dendrogram, and cut the tree by number of clusters or by height</li>
+                        <li>Compare single, complete, average and Ward linkage and predict how each behaves on chains, blobs and outliers</li>
+                        <li>Use <code>AgglomerativeClustering</code> with the right <code>metric</code> and <code>linkage</code>, including non-Euclidean distances</li>
+                        <li>Judge when hierarchical clustering beats K-Means, and when its cost rules it out</li>
+                    </ul>
+                </div>
 
-    <h2>Hierarchical Clustering Framework</h2>
-    
-    <div class="mermaid">
-    graph TD
-        A[Hierarchical Clustering] --> B[Agglomerative]
-        A --> C[Divisive]
-        
-        B --> D[Bottom-Up]
-        B --> E[Linkage Methods]
-        
-        C --> F[Top-Down]
-        C --> G[Split Criteria]
-        
-        E --> H[Single Linkage]
-        E --> I[Complete Linkage]
-        E --> J[Average Linkage]
-        E --> K[Ward Linkage]
-        
-        D --> L[Start: Individual Points]
-        D --> M[Merge Closest]
-        D --> N[End: Single Cluster]
-        
-        F --> O[Start: All Points]
-        F --> P[Split Clusters]
-        F --> Q[End: Individual Points]
-        
-        style A fill:#f9f,stroke:#333,stroke-width:2px
-        style B fill:#bbf,stroke:#333,stroke-width:2px
-        style E fill:#9f9,stroke:#333,stroke-width:2px
-    </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 95 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="clustering_kmeans_optimization.html">Lesson 8.2: Choosing k and Customer Segments</a></li>
+                    <li><span class="meta-label">🛠️ You will build</span> A product family tree: Pinecrest's 200 products grouped by who buys them together, checked against each product's main activity</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code>, <code>data/interactions.csv</code> and <code>data/products_ml.csv</code></li>
+                </ul>
+            </header>
 
-    <h2>Understanding Hierarchical Clustering</h2>
-    
-    <h3>Core Concepts and Implementation</h3>
-    <pre class="language-python"><code>import numpy as np
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">A Family Tree of Groups</a></li>
+                        <li><a href="#by-hand" class="toc-link">Six Points, Five Merges</a></li>
+                        <li><a href="#linkage" class="toc-link">Linkage: Distance Between Groups</a></li>
+                        <li><a href="#cutting" class="toc-link">Cutting the Tree</a></li>
+                        <li><a href="#customers" class="toc-link">Pinecrest Customers: Ward vs K-Means</a></li>
+                        <li><a href="#metrics" class="toc-link">Beyond Straight-Line Distance</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: A Product Family Tree</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 A Family Tree of Groups</h2>
+
+                <p>K-Means asks for <em>k</em> up front and returns one flat answer. But groups often nest. Pinecrest's catalog has climbing shoes and chalk bags, which belong together as "climbing"; climbing and hiking gear are both "mountain"; mountain and paddling gear are all "outdoor". Which level is right depends on the question: a store layout needs a few big sections, a recommendation engine wants small tight families. <strong>Hierarchical clustering</strong> gives you every level at once.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: Tidying the Gear Closet</h4>
+                    <p>Start with every item lying on its own. Find the two most similar items (two nearly identical headlamps) and put them in a box together. Now treat that box as one item and repeat: find the two closest things, items or boxes, and box them together. Keep going until everything is in one big box. Write down every merge and how far apart the two things were. That record is the hierarchy, and you can later open the boxes down to any level you like.</p>
+                </div>
+
+                <p>This bottom-up method is called <strong>agglomerative</strong> clustering, and it is what scikit-learn and SciPy implement. (The top-down alternative, divisive clustering, splits one big group again and again; it is rarely used in practice.) The loop is:</p>
+
+                <div class="mermaid">
+graph TD
+    A["Every point is its own cluster"] --> B["Find the two closest clusters"]
+    B --> C["Merge them; record the distance"]
+    C --> D{"More than one cluster left?"}
+    D -->|"yes"| B
+    D -->|"no"| E["Full tree: the dendrogram"]
+                </div>
+
+                <p>With <em>n</em> points there are always exactly <em>n</em> − 1 merges. The record of merges is drawn as a <strong>dendrogram</strong> (Greek for "tree drawing"): the leaves at the bottom are the points, and each merge is a horizontal bar drawn at the height of the merge distance. Cutting the tree with a horizontal line at some height gives a flat clustering: everything still connected below the line is one cluster.</p>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>Three things make this family worth learning next to K-Means. You see the structure at every scale before committing to a number. You can use any distance, not just straight-line distance, which matters for things like purchase histories. And the result is deterministic: there is no random start, so no <code>n_init</code> and no local minima from bad luck. The price is speed, as you will see.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="by-hand" class="lesson-section">
+                <h2>🔬 Six Points, Five Merges</h2>
+
+                <p>Take six points small enough to follow by eye: a tight pair at the bottom left, a group of three in the middle, and a loner on the right.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.cluster import AgglomerativeClustering
-from sklearn.datasets import make_blobs, make_moons, make_circles
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score, adjusted_rand_score
-from scipy.cluster.hierarchy import dendrogram, linkage, fcluster, cut_tree
-from scipy.spatial.distance import pdist, squareform
-import warnings
-warnings.filterwarnings('ignore')
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
+points = np.array([[1.0, 1.0], [1.4, 1.0], [5.0, 5.0], [5.6, 5.1], [5.3, 6.0], [9.0, 1.0]])
+names = ["A", "B", "C", "D", "E", "F"]
 
-# Generate different types of data
-np.random.seed(42)
+Z_tiny = linkage(points, method="single")
+print(Z_tiny.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>[[0.    1.    0.4   2.   ]
+ [2.    3.    0.608 2.   ]
+ [4.    7.    0.949 3.   ]
+ [5.    8.    5.326 4.   ]
+ [6.    9.    5.381 6.   ]]</code></pre>
+                </div>
 
-# Blob data
-X_blobs, y_blobs = make_blobs(n_samples=150, centers=3, n_features=2,
-                              cluster_std=0.5, random_state=42)
+                <p>That is SciPy's <strong>linkage matrix</strong>: one row per merge, in the order they happened. Each row holds the two clusters merged, the distance between them and the size of the new cluster. Original points are numbered 0 to 5; each new cluster gets the next number, starting at 6. Reading it:</p>
+                <ul>
+                    <li>Row 1: points 0 and 1 (A and B), 0.4 apart, merge into cluster 6 with 2 points.</li>
+                    <li>Row 2: points 2 and 3 (C and D), 0.608 apart, become cluster 7.</li>
+                    <li>Row 3: point 4 (E) joins cluster 7, making cluster 8 with 3 points.</li>
+                    <li>Rows 4 and 5: the big jumps. The loner F joins the middle group at 5.326 (its nearest member there is D), and the A-B pair joins last at 5.381.</li>
+                </ul>
 
-# Non-convex shapes
-X_moons, y_moons = make_moons(n_samples=150, noise=0.1, random_state=42)
-X_circles, y_circles = make_circles(n_samples=150, noise=0.05, factor=0.5, 
-                                   random_state=42)
+                <pre><code class="language-python">fig, ax = plt.subplots(figsize=(8, 3.6), layout="constrained")
+dendrogram(Z_tiny, labels=names, ax=ax, color_threshold=2.5)
+ax.axhline(2.5, color="black", linestyle="--", linewidth=1, label="cut at height 2.5")
+ax.set_ylabel("merge distance")
+ax.set_title("Dendrogram of six points (single linkage)")
+ax.legend()
+plt.show()
 
-class HierarchicalClusteringAnalyzer:
-    """Comprehensive Hierarchical Clustering Analysis"""
-    
-    def __init__(self):
-        self.linkage_matrix = None
-        self.labels = None
-        self.models = {}
-        
-    def manual_agglomerative(self, X, linkage='single'):
-        """
-        Manual implementation of agglomerative clustering
-        """
-        n_samples = X.shape[0]
-        
-        # Initialize: each point is its own cluster
-        clusters = [[i] for i in range(n_samples)]
-        
-        # Distance matrix
-        distances = squareform(pdist(X, metric='euclidean'))
-        np.fill_diagonal(distances, np.inf)
-        
-        # History for dendrogram
-        history = []
-        cluster_distances = []
-        
-        print(f"Manual Agglomerative Clustering ({linkage} linkage)")
-        print("="*50)
-        
-        cluster_id = n_samples
-        
-        while len(clusters) > 1:
-            # Find minimum distance
-            min_dist = np.inf
-            merge_i, merge_j = -1, -1
-            
-            for i in range(len(clusters)):
-                for j in range(i + 1, len(clusters)):
-                    # Calculate distance between clusters
-                    if linkage == 'single':
-                        # Minimum distance between points
-                        dist = np.min([distances[p1, p2] 
-                                      for p1 in clusters[i] 
-                                      for p2 in clusters[j]])
-                    elif linkage == 'complete':
-                        # Maximum distance between points
-                        dist = np.max([distances[p1, p2] 
-                                      for p1 in clusters[i] 
-                                      for p2 in clusters[j]])
-                    elif linkage == 'average':
-                        # Average distance between points
-                        dist = np.mean([distances[p1, p2] 
-                                       for p1 in clusters[i] 
-                                       for p2 in clusters[j]])
-                    
-                    if dist < min_dist:
-                        min_dist = dist
-                        merge_i, merge_j = i, j
-            
-            # Merge clusters
-            new_cluster = clusters[merge_i] + clusters[merge_j]
-            
-            # Record merge
-            history.append([merge_i, merge_j, min_dist, len(new_cluster)])
-            cluster_distances.append(min_dist)
-            
-            # Update clusters list
-            clusters = [c for idx, c in enumerate(clusters) 
-                       if idx not in [merge_i, merge_j]]
-            clusters.append(new_cluster)
-            
-            cluster_id += 1
-            
-            if len(clusters) % 10 == 0:
-                print(f"Clusters remaining: {len(clusters)}")
-        
-        return history, cluster_distances
-    
-    def compare_linkage_methods(self, X, n_clusters=3):
-        """Compare different linkage methods"""
-        
-        linkage_methods = ['single', 'complete', 'average', 'ward']
-        
-        fig, axes = plt.subplots(2, 4, figsize=(16, 8))
-        
-        for idx, method in enumerate(linkage_methods):
-            # Perform clustering
-            model = AgglomerativeClustering(n_clusters=n_clusters, linkage=method)
-            labels = model.fit_predict(X)
-            self.models[method] = model
-            
-            # Plot clusters
-            axes[0, idx].scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', 
-                               s=50, alpha=0.7)
-            axes[0, idx].set_title(f'{method.capitalize()} Linkage')
-            axes[0, idx].grid(True, alpha=0.3)
-            
-            # Calculate silhouette score
-            if len(np.unique(labels)) > 1:
-                score = silhouette_score(X, labels)
-                axes[0, idx].text(0.02, 0.98, f'Silhouette: {score:.3f}',
-                                transform=axes[0, idx].transAxes,
-                                fontsize=10, verticalalignment='top',
-                                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-            
-            # Create dendrogram
-            Z = linkage(X, method=method)
-            dendrogram(Z, ax=axes[1, idx], truncate_mode='level', p=4,
-                      no_labels=True, color_threshold=0)
-            axes[1, idx].set_title(f'{method.capitalize()} Dendrogram')
-            axes[1, idx].set_xlabel('Sample Index')
-            axes[1, idx].set_ylabel('Distance')
-        
-        plt.suptitle('Linkage Methods Comparison', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return self.models
-    
-    def create_dendrogram(self, X, method='ward', color_threshold=None):
-        """Create and analyze dendrogram"""
-        
-        # Compute linkage matrix
-        self.linkage_matrix = linkage(X, method=method)
-        
-        # Create figure with subplots
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # Full dendrogram
-        dend = dendrogram(self.linkage_matrix, ax=axes[0],
-                         color_threshold=color_threshold,
-                         above_threshold_color='gray')
-        axes[0].set_title('Full Dendrogram')
-        axes[0].set_xlabel('Sample Index')
-        axes[0].set_ylabel('Distance')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Truncated dendrogram
-        dendrogram(self.linkage_matrix, ax=axes[1],
-                  truncate_mode='level', p=3,
-                  color_threshold=color_threshold,
-                  above_threshold_color='gray')
-        axes[1].set_title('Truncated Dendrogram (Level 3)')
-        axes[1].set_xlabel('Sample Index or (Cluster Size)')
-        axes[1].set_ylabel('Distance')
-        axes[1].grid(True, alpha=0.3)
-        
-        # Distance plot
-        distances = self.linkage_matrix[:, 2]
-        axes[2].plot(range(1, len(distances) + 1), distances[::-1], 'o-')
-        axes[2].set_xlabel('Number of Clusters')
-        axes[2].set_ylabel('Distance')
-        axes[2].set_title('Cluster Distance Evolution')
-        axes[2].grid(True, alpha=0.3)
-        
-        # Find elbow
-        if len(distances) > 2:
-            # Calculate second derivative
-            accel = np.diff(distances, 2)
-            if len(accel) > 0:
-                elbow_idx = np.argmax(accel) + 2
-                axes[2].axvline(x=len(distances) - elbow_idx, color='red', 
-                               linestyle='--', label=f'Elbow: {len(distances) - elbow_idx} clusters')
-                axes[2].legend()
-        
-        plt.suptitle('Dendrogram Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return self.linkage_matrix, dend
-    
-    def cut_dendrogram(self, X, linkage_matrix=None, n_clusters=None, 
-                      distance_threshold=None):
-        """Cut dendrogram at different levels"""
-        
-        if linkage_matrix is None:
-            linkage_matrix = self.linkage_matrix
-        
-        if linkage_matrix is None:
-            raise ValueError("No linkage matrix available. Run create_dendrogram first.")
-        
-        # Different ways to cut the dendrogram
-        cuts = {}
-        
-        if n_clusters:
-            # Cut to get specific number of clusters
-            cuts['n_clusters'] = fcluster(linkage_matrix, n_clusters, 
-                                         criterion='maxclust')
-        
-        if distance_threshold:
-            # Cut at specific distance
-            cuts['distance'] = fcluster(linkage_matrix, distance_threshold,
-                                       criterion='distance')
-        
-        # Visualize cuts
-        fig, axes = plt.subplots(1, len(cuts), figsize=(6*len(cuts), 5))
-        
-        if len(cuts) == 1:
-            axes = [axes]
-        
-        for idx, (method, labels) in enumerate(cuts.items()):
-            axes[idx].scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis',
-                            s=50, alpha=0.7)
-            axes[idx].set_title(f'Cut Method: {method}\n{len(np.unique(labels))} clusters')
-            axes[idx].grid(True, alpha=0.3)
-            
-            # Calculate and display silhouette score
-            if len(np.unique(labels)) > 1:
-                score = silhouette_score(X, labels)
-                axes[idx].text(0.02, 0.98, f'Silhouette: {score:.3f}',
-                             transform=axes[idx].transAxes,
-                             fontsize=10, verticalalignment='top',
-                             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        
-        plt.suptitle('Dendrogram Cutting Methods', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return cuts
-    
-    def hierarchical_heatmap(self, X, method='ward', metric='euclidean'):
-        """Create hierarchical clustering heatmap"""
-        
-        # Compute linkage for both rows and columns
-        row_linkage = linkage(X, method=method, metric=metric)
-        
-        # If X is square, we can cluster columns too
-        if X.shape[0] == X.shape[1]:
-            col_linkage = linkage(X.T, method=method, metric=metric)
-        else:
-            col_linkage = None
-        
-        # Create clustermap
-        g = sns.clustermap(X, row_linkage=row_linkage, col_linkage=col_linkage,
-                          cmap='coolwarm', figsize=(10, 10),
-                          cbar_kws={'label': 'Value'})
-        
-        g.fig.suptitle('Hierarchical Clustering Heatmap', y=1.02)
-        plt.show()
-        
-        return g
-    
-    def stability_analysis(self, X, n_clusters_range=range(2, 10)):
-        """Analyze clustering stability across different numbers of clusters"""
-        
-        methods = ['single', 'complete', 'average', 'ward']
-        
-        results = {method: {'silhouette': [], 'calinski': []} 
-                  for method in methods}
-        
-        for n_clusters in n_clusters_range:
-            for method in methods:
-                model = AgglomerativeClustering(n_clusters=n_clusters, 
-                                              linkage=method)
-                labels = model.fit_predict(X)
-                
-                # Calculate metrics
-                if len(np.unique(labels)) > 1:
-                    from sklearn.metrics import calinski_harabasz_score
-                    
-                    silhouette = silhouette_score(X, labels)
-                    calinski = calinski_harabasz_score(X, labels)
-                    
-                    results[method]['silhouette'].append(silhouette)
-                    results[method]['calinski'].append(calinski)
-                else:
-                    results[method]['silhouette'].append(0)
-                    results[method]['calinski'].append(0)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Silhouette scores
-        for method in methods:
-            axes[0].plot(n_clusters_range, results[method]['silhouette'],
-                        'o-', label=method, linewidth=2)
-        axes[0].set_xlabel('Number of Clusters')
-        axes[0].set_ylabel('Silhouette Score')
-        axes[0].set_title('Silhouette Score vs Number of Clusters')
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3)
-        
-        # Calinski-Harabasz scores
-        for method in methods:
-            axes[1].plot(n_clusters_range, results[method]['calinski'],
-                        'o-', label=method, linewidth=2)
-        axes[1].set_xlabel('Number of Clusters')
-        axes[1].set_ylabel('Calinski-Harabasz Score')
-        axes[1].set_title('Calinski-Harabasz Score vs Number of Clusters')
-        axes[1].legend()
-        axes[1].grid(True, alpha=0.3)
-        
-        plt.suptitle('Clustering Stability Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return results
+print(fcluster(Z_tiny, t=2.5, criterion="distance"))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>[1 1 2 2 2 3]</code></pre>
+                </div>
 
-# Initialize analyzer
-analyzer = HierarchicalClusteringAnalyzer()
+                <figure>
+                    <img src="images/clustering_hierarchical_tiny_dendrogram.png" alt="Dendrogram of six points labeled A to F. A and B join at a height of 0.4, C and D at about 0.6, E joins them just below 1. F joins the C-D-E group at about 5.3 and the A-B pair joins last at about 5.4. A dashed line at 2.5 cuts the tree into three clusters: A-B, C-D-E and F." width="880" height="396" loading="lazy">
+                    <figcaption>Low bars are merges of close neighbors; tall bars are reluctant merges of distant groups. The dashed cut leaves three clusters.</figcaption>
+                </figure>
 
-print("="*60)
-print("HIERARCHICAL CLUSTERING FUNDAMENTALS")
-print("="*60)
+                <p><code>fcluster</code> turns a cut into labels: here every merge below height 2.5 is kept, which leaves three clusters, A-B, C-D-E and F. The long vertical gap between about 1 and 5 is the dendrogram telling you that three is a natural answer: any cut inside that gap gives the same three groups.</p>
+            </section>
 
-# Manual implementation
-print("\nManual Agglomerative Clustering:")
-history, distances = analyzer.manual_agglomerative(X_blobs[:20], linkage='single')
-print(f"Final merge distance: {distances[-1]:.3f}")
+            <!-- ============================================================ -->
+            <section id="linkage" class="lesson-section">
+                <h2>🔗 Linkage: Distance Between Groups</h2>
 
-# Compare linkage methods
-print("\n" + "="*60)
-print("LINKAGE METHODS COMPARISON")
-print("="*60)
-models = analyzer.compare_linkage_methods(X_blobs)
+                <p>Distance between two <em>points</em> is clear. Distance between two <em>groups</em> is a choice, and that choice, the <strong>linkage</strong>, changes everything:</p>
 
-# Create dendrogram
-print("\nCreating dendrogram analysis...")
-linkage_matrix, dend = analyzer.create_dendrogram(X_blobs, method='ward')
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Linkage</th><th>Distance between groups</th><th>Tends to</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Single</td><td>The <em>closest</em> pair of points, one from each group</td><td>Follow chains and curved shapes; one bridge point can glue two groups together</td></tr>
+                            <tr><td>Complete</td><td>The <em>farthest</em> pair of points</td><td>Make compact groups of similar diameter; sensitive to outliers</td></tr>
+                            <tr><td>Average</td><td>The average over all pairs</td><td>A compromise between single and complete; works with any distance</td></tr>
+                            <tr><td>Ward</td><td>How much the total within-cluster variance (the inertia of Lesson 8.1) would grow by merging</td><td>Make round groups of similar size, like K-Means; Euclidean distance only</td></tr>
+                        </tbody>
+                    </table>
+                </div>
 
-# Cut dendrogram
-print("\nCutting dendrogram at different levels...")
-cuts = analyzer.cut_dendrogram(X_blobs, linkage_matrix, 
-                              n_clusters=3, distance_threshold=10)
+                <p>scikit-learn's <code>AgglomerativeClustering</code> runs the same algorithm with the estimator API you know. It needs either <code>n_clusters</code> or a cut height (next section). Compare the four linkages on two shapes from Lesson 8.1: two moons, and three blobs with very different spreads.</p>
 
-# Stability analysis
-print("\nPerforming stability analysis...")
-stability_results = analyzer.stability_analysis(X_blobs)</code></pre>
+                <pre><code class="language-python">from sklearn.cluster import AgglomerativeClustering
+from sklearn.datasets import make_moons, make_blobs
 
-    <h2>Advanced Hierarchical Clustering</h2>
-    
-    <h3>Distance Metrics and Custom Linkage</h3>
-    <pre class="language-python"><code>from scipy.spatial.distance import cdist
-from sklearn.metrics import pairwise_distances
+X_moons, _ = make_moons(n_samples=300, noise=0.05, random_state=42)
+X_spread, _ = make_blobs(n_samples=300, centers=[[0, 0], [4, 0], [9, 0]],
+                         cluster_std=[0.4, 0.4, 2.2], random_state=42)
 
-class AdvancedHierarchical:
-    """Advanced hierarchical clustering techniques"""
-    
-    def __init__(self):
-        self.distance_matrices = {}
-        self.custom_linkages = {}
-        
-    def compare_distance_metrics(self, X, n_clusters=3):
-        """Compare different distance metrics"""
-        
-        metrics = ['euclidean', 'manhattan', 'cosine', 'correlation']
-        
-        fig, axes = plt.subplots(2, 4, figsize=(16, 8))
-        
-        for idx, metric in enumerate(metrics):
-            # Calculate distance matrix
-            if metric == 'correlation':
-                # Correlation distance
-                dist_matrix = 1 - np.corrcoef(X)
-            else:
-                dist_matrix = pairwise_distances(X, metric=metric)
-            
-            self.distance_matrices[metric] = dist_matrix
-            
-            # Perform clustering
-            model = AgglomerativeClustering(n_clusters=n_clusters,
-                                          affinity='precomputed',
-                                          linkage='average')
-            labels = model.fit_predict(dist_matrix)
-            
-            # Plot results
-            axes[0, idx].scatter(X[:, 0], X[:, 1], c=labels, 
-                               cmap='viridis', s=50, alpha=0.7)
-            axes[0, idx].set_title(f'{metric.capitalize()} Distance')
-            axes[0, idx].grid(True, alpha=0.3)
-            
-            # Plot distance matrix
-            im = axes[1, idx].imshow(dist_matrix, cmap='viridis', aspect='auto')
-            axes[1, idx].set_title(f'{metric.capitalize()} Distance Matrix')
-            axes[1, idx].set_xlabel('Sample')
-            axes[1, idx].set_ylabel('Sample')
-            plt.colorbar(im, ax=axes[1, idx], fraction=0.046)
-        
-        plt.suptitle('Distance Metrics Comparison', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return self.distance_matrices
-    
-    def custom_linkage_function(self, X):
-        """Implement custom linkage criterion"""
-        
-        def weighted_average_linkage(dist_matrix, clusters_i, clusters_j):
-            """
-            Custom weighted average linkage
-            Weight by cluster size
-            """
-            total_weight = len(clusters_i) + len(clusters_j)
-            weight_i = len(clusters_i) / total_weight
-            weight_j = len(clusters_j) / total_weight
-            
-            distances = []
-            for i in clusters_i:
-                for j in clusters_j:
-                    distances.append(dist_matrix[i, j])
-            
-            return weight_i * np.min(distances) + weight_j * np.max(distances)
-        
-        # Manual clustering with custom linkage
-        n_samples = X.shape[0]
-        dist_matrix = pairwise_distances(X)
-        
-        # Initialize clusters
-        clusters = [[i] for i in range(n_samples)]
-        merge_history = []
-        
-        while len(clusters) > 1:
-            min_dist = np.inf
-            merge_i, merge_j = -1, -1
-            
-            # Find clusters to merge
-            for i in range(len(clusters)):
-                for j in range(i + 1, len(clusters)):
-                    dist = weighted_average_linkage(dist_matrix, 
-                                                   clusters[i], 
-                                                   clusters[j])
-                    if dist < min_dist:
-                        min_dist = dist
-                        merge_i, merge_j = i, j
-            
-            # Merge clusters
-            new_cluster = clusters[merge_i] + clusters[merge_j]
-            merge_history.append((merge_i, merge_j, min_dist))
-            
-            # Update clusters
-            clusters = [c for idx, c in enumerate(clusters) 
-                       if idx not in [merge_i, merge_j]]
-            clusters.append(new_cluster)
-        
-        return merge_history
-    
-    def temporal_hierarchical(self, X, time_penalty=0.1):
-        """Hierarchical clustering with temporal constraints"""
-        
-        n_samples = X.shape[0]
-        
-        # Create distance matrix with temporal penalty
-        dist_matrix = pairwise_distances(X)
-        
-        # Add temporal penalty (samples further in time are less similar)
-        for i in range(n_samples):
-            for j in range(n_samples):
-                temporal_distance = abs(i - j) * time_penalty
-                dist_matrix[i, j] += temporal_distance
-        
-        # Perform clustering
-        model = AgglomerativeClustering(n_clusters=3, 
-                                      affinity='precomputed',
-                                      linkage='average')
-        labels = model.fit_predict(dist_matrix)
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # Original clustering
-        model_orig = AgglomerativeClustering(n_clusters=3)
-        labels_orig = model_orig.fit_predict(X)
-        
-        axes[0].scatter(range(n_samples), X[:, 0], c=labels_orig,
-                       cmap='viridis', s=50, alpha=0.7)
-        axes[0].set_xlabel('Time Index')
-        axes[0].set_ylabel('Feature 1')
-        axes[0].set_title('Standard Hierarchical Clustering')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Temporal clustering
-        axes[1].scatter(range(n_samples), X[:, 0], c=labels,
-                       cmap='viridis', s=50, alpha=0.7)
-        axes[1].set_xlabel('Time Index')
-        axes[1].set_ylabel('Feature 1')
-        axes[1].set_title(f'Temporal Hierarchical (penalty={time_penalty})')
-        axes[1].grid(True, alpha=0.3)
-        
-        # Distance matrix
-        im = axes[2].imshow(dist_matrix, cmap='viridis', aspect='auto')
-        axes[2].set_xlabel('Sample')
-        axes[2].set_ylabel('Sample')
-        axes[2].set_title('Temporal Distance Matrix')
-        plt.colorbar(im, ax=axes[2])
-        
-        plt.suptitle('Temporal Hierarchical Clustering', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return labels, dist_matrix
-    
-    def constrained_clustering(self, X, must_link=None, cannot_link=None):
-        """Hierarchical clustering with constraints"""
-        
-        n_samples = X.shape[0]
-        dist_matrix = pairwise_distances(X)
-        
-        # Apply constraints to distance matrix
-        if must_link is not None:
-            for i, j in must_link:
-                dist_matrix[i, j] = 0
-                dist_matrix[j, i] = 0
-        
-        if cannot_link is not None:
-            for i, j in cannot_link:
-                dist_matrix[i, j] = np.inf
-                dist_matrix[j, i] = np.inf
-        
-        # Perform clustering
-        model = AgglomerativeClustering(n_clusters=3,
-                                      affinity='precomputed',
-                                      linkage='average')
-        labels = model.fit_predict(dist_matrix)
-        
-        return labels
+fig, axes = plt.subplots(2, 4, figsize=(10, 5), layout="constrained")
+for row, (data, k) in enumerate([(X_moons, 2), (X_spread, 3)]):
+    for col, link in enumerate(["single", "complete", "average", "ward"]):
+        labels_l = AgglomerativeClustering(n_clusters=k, linkage=link).fit_predict(data)
+        axes[row, col].scatter(data[:, 0], data[:, 1], c=labels_l, s=6, cmap="tab10", vmin=0, vmax=9)
+        axes[row, col].set_title(f"{link}\nsizes {sorted(np.bincount(labels_l).tolist())}", fontsize=10)
+        axes[row, col].set_xticks([])
+        axes[row, col].set_yticks([])
+plt.show()</code></pre>
 
-# Advanced analysis
-advanced = AdvancedHierarchical()
+                <figure>
+                    <img src="images/clustering_hierarchical_linkages.png" alt="Grid of eight scatter plots. Top row, two moons: single linkage separates the two moons perfectly; complete, average and Ward cut across them. Bottom row, two tight blobs and one wide blob: single linkage puts almost everything in one cluster and splits off two stray points; complete linkage merges the two tight blobs and splits the wide one; average linkage merges the tight blobs and spends a cluster on two stray points; only Ward finds three blob-like groups, though it still gives some of the wide blob's edge to its tight neighbor." width="1100" height="550" loading="lazy">
+                    <figcaption>Single linkage follows the moons but collapses on the blobs; on the blobs only Ward comes close to the three true groups. No linkage wins everywhere.</figcaption>
+                </figure>
 
-print("\n" + "="*60)
-print("ADVANCED HIERARCHICAL CLUSTERING")
-print("="*60)
+                <p>The titles show cluster sizes, which tell the story even without the colors. Single linkage is the only method that traces the moons, because it only needs one short hop between neighbors to keep a chain together. The same property ruins it on the blobs: the wide blob's scattered edge points form bridges, and single linkage ends up with one giant cluster plus a few stragglers. That failure has a name, <strong>chaining</strong>, and you will see it again in the project. The bottom row also shows the other linkages' weak spots: complete linkage cannot accept the wide blob's large diameter and splits it, average linkage spends a cluster on two far-out points, and only Ward, which thinks in terms of variance like K-Means, comes close to the three blobs (sizes 75, 100 and 125 instead of 100 each: the wide blob's edge still leaks to its neighbor, just as it did for K-Means in Lesson 8.1).</p>
 
-# Compare distance metrics
-print("\nComparing distance metrics...")
-distance_matrices = advanced.compare_distance_metrics(X_blobs)
+                <div class="card card-success">
+                    <h4>✅ A Sensible Default</h4>
+                    <p>For numeric features with Euclidean distance, start with Ward: it behaves like K-Means but gives you the tree. For other distances (cosine, correlation, Manhattan), Ward is not allowed, and average linkage is the usual choice. Reach for single linkage only when you expect long, thin, well-separated shapes, and expect it to fail on noisy data.</p>
+                </div>
+            </section>
 
-# Temporal clustering
-print("\nTemporal hierarchical clustering...")
-# Generate time series-like data
-X_temporal = np.cumsum(np.random.randn(100, 2), axis=0)
-labels_temporal, dist_temporal = advanced.temporal_hierarchical(X_temporal)
+            <!-- ============================================================ -->
+            <section id="cutting" class="lesson-section">
+                <h2>✂️ Cutting the Tree</h2>
 
-# Constrained clustering
-print("\nConstrained clustering example...")
-must_link = [(0, 1), (5, 6)]  # These points must be in same cluster
-cannot_link = [(0, 10), (1, 11)]  # These points cannot be in same cluster
-labels_constrained = advanced.constrained_clustering(X_blobs[:20], 
-                                                    must_link, cannot_link)</code></pre>
+                <p>You can turn the tree into flat clusters in two ways. Ask for a number of clusters (<code>n_clusters=3</code>, or SciPy's <code>criterion="maxclust"</code>), or ask for a height (<code>distance_threshold</code>, or <code>criterion="distance"</code>) and let the number of clusters follow. The height is often more natural: "anything closer than this belongs together".</p>
 
-    <h2>Applications and Use Cases</h2>
-    
-    <h3>Real-world Applications</h3>
-    <pre class="language-python"><code>class HierarchicalApplications:
-    """Real-world applications of hierarchical clustering"""
-    
-    def __init__(self):
-        self.results = {}
-        
-    def customer_segmentation(self, n_customers=200):
-        """Customer segmentation example"""
-        
-        np.random.seed(42)
-        
-        # Generate synthetic customer data
-        # Features: [spending, frequency, recency, loyalty_score]
-        customers = []
-        
-        # High-value customers
-        customers.append(np.random.normal([800, 12, 5, 90], [100, 2, 1, 5], 
-                                        (n_customers//3, 4)))
-        # Regular customers
-        customers.append(np.random.normal([400, 6, 15, 60], [50, 1, 3, 10], 
-                                        (n_customers//3, 4)))
-        # Occasional customers
-        customers.append(np.random.normal([100, 2, 30, 30], [30, 1, 5, 10], 
-                                        (n_customers//3, 4)))
-        
-        X_customers = np.vstack(customers)
-        feature_names = ['Spending', 'Frequency', 'Recency', 'Loyalty']
-        
-        # Standardize features
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X_customers)
-        
-        # Perform clustering
-        model = AgglomerativeClustering(n_clusters=3, linkage='ward')
-        labels = model.fit_predict(X_scaled)
-        
-        # Create customer profiles
-        customer_df = pd.DataFrame(X_customers, columns=feature_names)
-        customer_df['Cluster'] = labels
-        
-        # Analyze clusters
-        cluster_summary = customer_df.groupby('Cluster').agg({
-            'Spending': ['mean', 'std'],
-            'Frequency': ['mean', 'std'],
-            'Recency': ['mean', 'std'],
-            'Loyalty': ['mean', 'std']
-        }).round(2)
-        
-        print("\nCustomer Segment Analysis:")
-        print(cluster_summary)
-        
-        # Visualization
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-        
-        # Dendrogram
-        Z = linkage(X_scaled, method='ward')
-        dendrogram(Z, ax=axes[0, 0], truncate_mode='level', p=3)
-        axes[0, 0].set_title('Customer Hierarchy')
-        axes[0, 0].set_xlabel('Customer Index')
-        axes[0, 0].set_ylabel('Distance')
-        
-        # Feature comparisons
-        for idx, feature in enumerate(feature_names[:4]):
-            row = (idx + 1) // 3
-            col = (idx + 1) % 3
-            customer_df.boxplot(column=feature, by='Cluster', ax=axes[row, col])
-            axes[row, col].set_title(f'{feature} by Cluster')
-            axes[row, col].set_xlabel('Cluster')
-            axes[row, col].set_ylabel(feature)
-        
-        # Remove empty subplot
-        fig.delaxes(axes[1, 2])
-        
-        plt.suptitle('Customer Segmentation Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return customer_df, cluster_summary
-    
-    def document_clustering(self, n_documents=100):
-        """Text document clustering example"""
-        
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        
-        # Generate synthetic documents
-        topics = [
-            ['machine', 'learning', 'algorithm', 'data', 'model', 'training'],
-            ['business', 'market', 'sales', 'revenue', 'customer', 'profit'],
-            ['health', 'medical', 'patient', 'treatment', 'disease', 'care']
-        ]
-        
-        documents = []
-        true_labels = []
-        
-        for topic_idx, topic_words in enumerate(topics):
-            for _ in range(n_documents // 3):
-                # Generate document
-                doc = ' '.join(np.random.choice(topic_words, 
-                                              size=np.random.randint(10, 30), 
-                                              replace=True))
-                documents.append(doc)
-                true_labels.append(topic_idx)
-        
-        # TF-IDF vectorization
-        vectorizer = TfidfVectorizer(max_features=50)
-        X_tfidf = vectorizer.fit_transform(documents).toarray()
-        
-        # Hierarchical clustering
-        model = AgglomerativeClustering(n_clusters=3, linkage='ward')
-        labels = model.fit_predict(X_tfidf)
-        
-        # Evaluate clustering
-        from sklearn.metrics import adjusted_rand_score, homogeneity_score
-        
-        ari = adjusted_rand_score(true_labels, labels)
-        homogeneity = homogeneity_score(true_labels, labels)
-        
-        print(f"\nDocument Clustering Performance:")
-        print(f"Adjusted Rand Index: {ari:.3f}")
-        print(f"Homogeneity Score: {homogeneity:.3f}")
-        
-        # Visualization
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Dendrogram
-        Z = linkage(X_tfidf, method='ward')
-        dendrogram(Z, ax=axes[0], truncate_mode='level', p=4,
-                  color_threshold=0.3*max(Z[:, 2]))
-        axes[0].set_title('Document Hierarchy')
-        axes[0].set_xlabel('Document Index')
-        axes[0].set_ylabel('Distance')
-        
-        # Cluster visualization (using PCA)
-        from sklearn.decomposition import PCA
-        pca = PCA(n_components=2)
-        X_pca = pca.fit_transform(X_tfidf)
-        
-        scatter = axes[1].scatter(X_pca[:, 0], X_pca[:, 1], 
-                                 c=labels, cmap='viridis', 
-                                 s=50, alpha=0.7)
-        axes[1].set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.1%})')
-        axes[1].set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.1%})')
-        axes[1].set_title('Document Clusters (PCA projection)')
-        plt.colorbar(scatter, ax=axes[1])
-        
-        plt.suptitle('Document Clustering Analysis', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return labels, X_tfidf
-    
-    def gene_expression_clustering(self):
-        """Gene expression clustering example"""
-        
-        # Simulate gene expression data
-        n_genes = 50
-        n_conditions = 8
-        
-        # Different expression patterns
-        patterns = []
-        
-        # Upregulated genes
-        patterns.append(np.tile(np.linspace(0, 2, n_conditions), (15, 1)) + 
-                       np.random.normal(0, 0.2, (15, n_conditions)))
-        
-        # Downregulated genes
-        patterns.append(np.tile(np.linspace(2, 0, n_conditions), (15, 1)) + 
-                       np.random.normal(0, 0.2, (15, n_conditions)))
-        
-        # Cyclic genes
-        x = np.linspace(0, 2*np.pi, n_conditions)
-        patterns.append(np.tile(np.sin(x), (10, 1)) + 
-                       np.random.normal(0, 0.2, (10, n_conditions)))
-        
-        # Constant genes
-        patterns.append(np.random.normal(1, 0.2, (10, n_conditions)))
-        
-        X_genes = np.vstack(patterns)
-        
-        # Create gene names
-        gene_names = [f'Gene_{i:03d}' for i in range(n_genes)]
-        condition_names = [f'C{i}' for i in range(n_conditions)]
-        
-        # Create DataFrame
-        gene_df = pd.DataFrame(X_genes, 
-                              index=gene_names,
-                              columns=condition_names)
-        
-        # Hierarchical clustering with heatmap
-        g = sns.clustermap(gene_df, method='ward', 
-                          cmap='RdBu_r', center=0,
-                          figsize=(10, 12),
-                          row_cluster=True, col_cluster=True,
-                          cbar_kws={'label': 'Expression Level'})
-        
-        g.fig.suptitle('Gene Expression Clustering', y=1.02)
-        
-        # Extract cluster assignments
-        row_dendro = g.dendrogram_row.dendrogram
-        clusters = fcluster(g.dendrogram_row.linkage, 4, criterion='maxclust')
-        
-        print("\nGene Cluster Sizes:")
-        unique, counts = np.unique(clusters, return_counts=True)
-        for cluster, count in zip(unique, counts):
-            print(f"Cluster {cluster}: {count} genes")
-        
-        return gene_df, clusters
+                <pre><code class="language-python">by_height = AgglomerativeClustering(n_clusters=None, distance_threshold=30, linkage="ward").fit(X_spread)
+print("clusters below height 30:", by_height.n_clusters_)
 
-# Applications
-apps = HierarchicalApplications()
+heights = np.sort(by_height.distances_)[::-1][:6]
+print("six highest merges:", heights.round(1))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>clusters below height 30: 3
+six highest merges: [78.2 47.6 24.  15.7 12.4 11.8]</code></pre>
+                </div>
 
-print("\n" + "="*60)
-print("REAL-WORLD APPLICATIONS")
-print("="*60)
+                <p>With a threshold, scikit-learn computes the full tree and stores every merge height in <code>distances_</code> (with <code>n_clusters</code> set instead, pass <code>compute_distances=True</code> to get them). The highest merges are the ones to read. Here the top two are far above the rest, a big gap after which merges become cheap: the tree is saying "three groups". That gap is the hierarchical version of the elbow from Lesson 8.2, and a cut anywhere inside it gives the same answer.</p>
 
-# Customer segmentation
-print("\nCustomer Segmentation:")
-customer_df, cluster_summary = apps.customer_segmentation()
+                <div class="card card-info">
+                    <h4>💡 The Units of Height</h4>
+                    <p>A merge height is in the units of the linkage. For single, complete and average linkage it is a distance between points, so with standardized data a height of 2 means "two standard deviations". Ward heights are on a different scale (they grow with the size of the groups merged), so compare Ward heights only with other Ward heights from the same data.</p>
+                </div>
+            </section>
 
-# Document clustering
-print("\nDocument Clustering:")
-doc_labels, doc_features = apps.document_clustering()
+            <!-- ============================================================ -->
+            <section id="customers" class="lesson-section">
+                <h2>👥 Pinecrest Customers: Ward vs K-Means</h2>
 
-# Gene expression clustering
-print("\nGene Expression Clustering:")
-gene_df, gene_clusters = apps.gene_expression_clustering()</code></pre>
+                <p>Run hierarchical clustering on the same customer features as Lesson 8.2 (log of orders and order value, then everything standardized) and see whether it tells the same story.</p>
 
-    <h2>Best Practices and Guidelines</h2>
-    
-    <pre class="language-python"><code>print("\n" + "="*60)
-print("HIERARCHICAL CLUSTERING BEST PRACTICES")
-print("="*60)
+                <pre><code class="language-python">from sklearn.cluster import KMeans
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
-best_practices = """
-KEY GUIDELINES:
+customers = pd.read_csv("data/customers_churn.csv")
+behavior = ["orders_12m", "avg_order_value", "discount_share", "return_rate"]
+log_some = ColumnTransformer(
+    [("log", FunctionTransformer(np.log, feature_names_out="one-to-one"), ["orders_12m", "avg_order_value"])],
+    remainder="passthrough", verbose_feature_names_out=False,
+)
+Z = make_pipeline(log_some, StandardScaler()).set_output(transform="pandas").fit_transform(customers[behavior])
 
-1. LINKAGE METHOD SELECTION:
-   • Single: Good for elongated clusters, sensitive to noise
-   • Complete: Good for compact clusters, sensitive to outliers  
-   • Average: Balance between single and complete
-   • Ward: Minimizes within-cluster variance, good general purpose
-   
-2. DISTANCE METRIC CHOICE:
-   • Euclidean: Standard for continuous features
-   • Manhattan: Robust to outliers
-   • Cosine: Good for high-dimensional data
-   • Correlation: For finding similar patterns
-   
-3. PREPROCESSING:
-   • Always standardize/normalize features
-   • Handle missing values appropriately
-   • Consider dimensionality reduction for high-D data
-   • Remove or downweight noisy features
-   
-4. DETERMINING NUMBER OF CLUSTERS:
-   • Use dendrogram to visualize hierarchy
-   • Look for large jumps in linkage distances
-   • Use silhouette analysis
-   • Consider domain knowledge
-   
-5. COMPUTATIONAL CONSIDERATIONS:
-   • O(n³) time complexity for most methods
-   • O(n²) space for distance matrix
-   • Consider sampling for large datasets
-   • Use scipy.cluster.hierarchy for efficiency
-   
-6. ADVANTAGES:
-   ✓ No need to specify k upfront
-   ✓ Creates hierarchy of clusters
-   ✓ Deterministic results
-   ✓ Works with any distance metric
-   ✓ Dendrogram provides insights
-   
-7. DISADVANTAGES:
-   ✗ Computationally expensive for large data
-   ✗ Sensitive to noise and outliers
-   ✗ Cannot undo merges (greedy)
-   ✗ Different linkages give different results
-   ✗ Difficult to interpret for large datasets
-"""
+Z_ward = linkage(Z, method="ward")
+print("eight highest merges:", Z_ward[-8:, 2][::-1].round(1))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>eight highest merges: [118.8  96.1  88.7  73.1  30.2  25.6  23.7  21.3]</code></pre>
+                </div>
 
-print(best_practices)
+                <p>Read from the top: the four highest merges are far above the fifth. Undo those four merges and you have five clusters; after that, each further split buys much less. A truncated dendrogram shows it (6,000 leaves would be a black smear, so <code>truncate_mode="lastp"</code> draws only the last 25 merged groups, with their sizes in brackets):</p>
 
-# Comparison with other clustering methods
-comparison_data = {
-    'Method': ['Hierarchical', 'K-Means', 'DBSCAN', 'Gaussian Mixture'],
-    'Scalability': ['Poor', 'Good', 'Medium', 'Poor'],
-    'Cluster Shape': ['Any', 'Spherical', 'Any', 'Elliptical'],
-    'Need k': ['No*', 'Yes', 'No', 'Yes'],
-    'Outlier Handling': ['Poor', 'Poor', 'Good', 'Medium'],
-    'Interpretability': ['High', 'High', 'Medium', 'Low'],
-    'Deterministic': ['Yes', 'No**', 'Yes', 'No']
-}
+                <pre><code class="language-python">fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+dendrogram(Z_ward, truncate_mode="lastp", p=25, ax=ax, color_threshold=50, leaf_font_size=8)
+ax.axhline(50, color="black", linestyle="--", linewidth=1, label="cut at height 50: five clusters")
+ax.set_ylabel("Ward merge height")
+ax.set_title("Pinecrest customers, Ward linkage (last 25 merges)")
+ax.legend()
+plt.show()</code></pre>
 
-comparison_df = pd.DataFrame(comparison_data)
-print("\n" + "="*60)
-print("CLUSTERING METHODS COMPARISON")
-print("="*60)
-print(comparison_df.to_string(index=False))
-print("\n* Need to cut dendrogram to get specific k")
-print("** K-means++ initialization is random")</code></pre>
+                <figure>
+                    <img src="images/clustering_hierarchical_customers_dendrogram.png" alt="Truncated dendrogram of 6,000 customers. Five colored subtrees join far above the rest: their internal merges are all below a height of about 30, while the merges joining the five subtrees happen between about 70 and 120. A dashed line at height 50 crosses exactly five vertical lines." width="990" height="440" loading="lazy">
+                    <figcaption>Five subtrees with a long empty stretch above them: the hierarchy agrees with Lesson 8.2's choice of five.</figcaption>
+                </figure>
 
-    <h2>Practice Exercises</h2>
-    
-    <h3>Exercise 1: Implement Divisive Clustering</h3>
-    <p>Create a top-down hierarchical clustering algorithm:</p>
-    <ol>
-        <li>Start with all points in one cluster</li>
-        <li>Recursively split clusters using K-means (k=2)</li>
-        <li>Choose split that maximizes inter-cluster distance</li>
-        <li>Stop when desired number of clusters reached</li>
-        <li>Compare with agglomerative approach</li>
-    </ol>
+                <p>Now compare the five Ward clusters with K-Means. scikit-learn's version gives labels directly; the adjusted Rand index from Lesson 8.2 measures agreement while ignoring cluster numbers.</p>
 
-    <h3>Exercise 2: Dynamic Hierarchical Clustering</h3>
-    <p>Handle streaming data with hierarchical clustering:</p>
-    <ol>
-        <li>Implement incremental agglomerative clustering</li>
-        <li>Update dendrogram with new points</li>
-        <li>Handle concept drift</li>
-        <li>Maintain clustering quality over time</li>
-    </ol>
+                <pre><code class="language-python">from sklearn.metrics import adjusted_rand_score, silhouette_score
 
-    <h3>Exercise 3: Multi-view Hierarchical Clustering</h3>
-    <p>Combine multiple data views:</p>
-    <ol>
-        <li>Cluster using different feature sets</li>
-        <li>Combine multiple dendrograms</li>
-        <li>Weighted consensus clustering</li>
-        <li>Evaluate against ground truth</li>
-    </ol>
+ward5 = AgglomerativeClustering(n_clusters=5, linkage="ward").fit(Z)
+km5 = KMeans(n_clusters=5, n_init=10, random_state=42).fit(Z)
 
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>🌳 Hierarchical clustering builds a tree of clusters</li>
-        <li>📊 Dendrograms visualize the complete hierarchy</li>
-        <li>🔗 Linkage methods determine how clusters merge</li>
-        <li>✂️ Cut dendrogram at any level for desired clusters</li>
-        <li>📏 Works with any distance metric</li>
-        <li>⚡ Computationally expensive: O(n³) time</li>
-        <li>🎯 No need to specify k upfront</li>
-        <li>🔒 Deterministic results (no randomness)</li>
-        <li>⚠️ Sensitive to noise and outliers</li>
-        <li>🔄 Cannot undo merges (greedy algorithm)</li>
-    </ul>
+print("Ward sizes   :", sorted(np.bincount(ward5.labels_).tolist()))
+print("K-Means sizes:", sorted(np.bincount(km5.labels_).tolist()))
+print(f"agreement (ARI): {adjusted_rand_score(km5.labels_, ward5.labels_):.3f}")
+print(f"silhouette  Ward {silhouette_score(Z, ward5.labels_):.3f}   K-Means {silhouette_score(Z, km5.labels_):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>Ward sizes   : [810, 1107, 1286, 1326, 1471]
+K-Means sizes: [811, 1113, 1253, 1374, 1449]
+agreement (ARI): 0.907
+silhouette  Ward 0.469   K-Means 0.479</code></pre>
+                </div>
 
-    <h2>Further Resources</h2>
-    <ul>
-        <li><a href="https://docs.scipy.org/doc/scipy/reference/cluster.hierarchy.html">SciPy Hierarchical Clustering</a></li>
-        <li><a href="https://scikit-learn.org/stable/modules/clustering.html#hierarchical-clustering">Scikit-learn Hierarchical Clustering</a></li>
-        <li><a href="https://www.cs.princeton.edu/courses/archive/fall08/cos436/Duda/PR_HierCl/HierClus.htm">Hierarchical Clustering Theory</a></li>
-        <li><a href="https://arxiv.org/abs/1908.07569">Modern Hierarchical Clustering Algorithms</a></li>
-        <li><a href="https://www.displayr.com/what-is-dendrogram/">Understanding Dendrograms</a></li>
-    </ul>
+                <p>Two algorithms with different ideas (minimize inertia from random starts, versus merge greedily with no randomness) find nearly the same five groups. That is strong evidence the segments are real structure, not an artifact of one method. K-Means scores a slightly higher silhouette because it directly optimizes tightness around centers, while Ward's greedy merges can never be undone.</p>
 
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> A dendrogram lets you choose the number of clusters <em>after</em> seeing the data's
-            structure, unlike K-means where you commit up front. How does having that "zoom level" change the way you'd approach
-            an unfamiliar dataset?</p>
+                <div class="card card-warning">
+                    <h4>⚠️ The Cost: Every Pair of Points</h4>
+                    <p>Agglomerative clustering needs the distance between every pair of points: for 6,000 customers that is 18 million distances (about 144 MB as floats), and time that grows at least with the square of <em>n</em>. At 100,000 rows it is 5 billion distances, more memory than most laptops have. Practical recipes for big data: cluster a random sample and assign the rest to the nearest cluster center, or run K-Means with a few hundred clusters first and build the tree on those centers.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="metrics" class="lesson-section">
+                <h2>📐 Beyond Straight-Line Distance</h2>
+
+                <p>K-Means is tied to squared Euclidean distance, because its update step uses the mean. Agglomerative clustering never computes a mean (except with Ward), so it works with any distance through the <code>metric</code> parameter: <code>"manhattan"</code>, <code>"cosine"</code>, or a precomputed distance matrix (<code>metric="precomputed"</code>). SciPy's <code>linkage</code> accepts even more, such as <code>"correlation"</code> and <code>"jaccard"</code>.</p>
+
+                <p>Why would you want that? Think about products described by who bought them: a row per product, a column per customer, 1 if that customer bought it. Popular products have many 1s and rare ones few, so the Euclidean distance between two products mostly measures how popular they are, not whether the <em>same people</em> buy them. A correlation distance asks the right question: when one product is bought, does the other tend to be bought too?</p>
+
+                <pre><code class="language-python">from scipy.spatial.distance import pdist
+
+rows = np.array([[1, 1, 1, 1, 0, 0, 0, 0, 0, 0],    # popular tent: 4 buyers
+                 [1, 1, 0, 0, 0, 0, 0, 0, 0, 0],    # niche tent, bought by the same kind of people
+                 [0, 0, 0, 0, 1, 1, 1, 1, 0, 0]])   # popular paddle: 4 different buyers
+
+print("euclidean  :", pdist(rows, metric="euclidean").round(2))
+print("correlation:", pdist(rows, metric="correlation").round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>euclidean  : [1.41 2.83 2.45]
+correlation: [0.39 1.67 1.41]</code></pre>
+                </div>
+
+                <p>The three numbers are the pairs (tent, niche tent), (tent, paddle) and (niche tent, paddle). By Euclidean distance the niche tent is 1.41 from the tent and 2.45 from the paddle: the numbers mostly count how many 1s differ, so they reflect popularity as much as taste. By correlation distance the two tents are close (0.39) and both are far from the paddle (1.67 and 1.41, above 1, meaning negatively correlated: people who buy one tend not to buy the other). Correlation distance is 1 minus the correlation, so it runs from 0 (always bought together) through 1 (unrelated) to 2 (never bought together). The project uses it on the real catalog.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Older tutorials use parameter names that no longer exist. These are the errors you will meet.</p>
+
+                <h3>1. The Old <code>affinity</code> Parameter</h3>
+                <pre data-raises="TypeError"><code class="language-python">AgglomerativeClustering(n_clusters=5, affinity="cosine", linkage="average").fit(Z)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>TypeError: AgglomerativeClustering.__init__() got an unexpected keyword argument 'affinity'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the parameter was renamed to <code>metric</code> and the old name has been removed. <strong>Fix:</strong> <code>AgglomerativeClustering(n_clusters=5, metric="cosine", linkage="average")</code>.</p>
+
+                <h3>2. Ward with a Non-Euclidean Distance</h3>
+                <pre data-raises="ValueError"><code class="language-python">AgglomerativeClustering(n_clusters=5, metric="cosine", linkage="ward").fit(Z)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: cosine was provided as metric. Ward can only work with euclidean distances (i.e. 'euclidean' and 'l2').</code></pre>
+                </div>
+                <p><strong>What it means:</strong> Ward merges by increase in variance, which is defined only for Euclidean distance. <strong>Fix:</strong> keep Euclidean with Ward, or switch to <code>linkage="average"</code> (or <code>"complete"</code>) for other metrics.</p>
+
+                <h3>3. Both a Number of Clusters and a Cut Height</h3>
+                <pre data-raises="ValueError"><code class="language-python">AgglomerativeClustering(n_clusters=5, distance_threshold=50).fit(Z)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Exactly one of n_clusters and distance_threshold has to be set, and the other needs to be None.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the two ways of cutting the tree conflict, and the default <code>n_clusters=2</code> counts as set. <strong>Fix:</strong> pass <code>n_clusters=None</code> together with <code>distance_threshold</code>.</p>
+
+                <h3>4. Expecting a <code>predict</code> Method</h3>
+                <pre data-raises="AttributeError"><code class="language-python">ward5.predict(Z.head(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>AttributeError: 'AgglomerativeClustering' object has no attribute 'predict'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the tree is built from the training points only; there is no rule for where a new point would have been merged. <strong>Fix:</strong> use <code>fit_predict</code> on the data you have. To assign new rows, compute each cluster's mean and assign to the nearest one (Exercise 3), or train a classifier such as k-nearest neighbors on the cluster labels.</p>
+
+                <h3>5. Trusting Single Linkage on Noisy Data</h3>
+                <pre><code class="language-python">single5 = AgglomerativeClustering(n_clusters=5, linkage="single").fit(Z)
+print("single linkage sizes:", sorted(np.bincount(single5.labels_).tolist()))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>single linkage sizes: [1, 1, 1, 392, 5605]</code></pre>
+                </div>
+                <p><strong>What happened:</strong> customers fill the space between segments, so a chain of close neighbors links almost everyone into one cluster, and the other "clusters" are single outliers. The code ran fine. <strong>Fix:</strong> always print cluster sizes. On data without clear gaps, use Ward or average linkage.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: A Product Family Tree</h2>
+
+                <p>Pinecrest's merchandising team wants to know which products "belong together" in customers' eyes, to plan store sections and bundles. The best evidence is purchase behavior: products bought by the same people are related, whatever their category label says. You will build a product × customer purchase matrix, cluster the 200 products with average linkage and correlation distance, read the dendrogram, and check the families against each product's <code>primary_activity</code>, a column the clustering never sees. Start a fresh notebook, <code>lesson_8_3_project</code>. Allow about 40 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Build the product × customer matrix <span class="step-time">(5 min)</span></h3>
+                    <p>Each row of <code>interactions.csv</code> is one customer-product pair. <code>pd.crosstab</code> turns it into a table with one row per product and one column per customer; <code>clip(upper=1)</code> turns counts into "bought or not".</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+
+interactions = pd.read_csv("data/interactions.csv")
+products = pd.read_csv("data/products_ml.csv").set_index("product_id")
+
+bought = pd.crosstab(interactions["product_id"], interactions["customer_id"]).clip(upper=1)
+products = products.loc[bought.index]          # same row order as the matrix
+print(bought.shape)
+print(f"share of cells that are 1: {bought.to_numpy().mean():.3f}")
+print(bought.sum(axis=1).describe().round(1))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(200, 3000)
+share of cells that are 1: 0.054
+count    200.0
+mean     160.9
+std      135.7
+min       19.0
+25%       85.8
+50%      120.0
+75%      180.0
+max      992.0
+dtype: float64</code></pre>
+                    </div>
+                    <p>200 products, 3,000 customers, and only about 5% of cells filled. Popularity ranges widely (look at the minimum and maximum buyers per product): exactly the situation where correlation distance beats Euclidean.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Build the tree <span class="step-time">(5 min)</span></h3>
+                    <p>SciPy computes the correlation distance between every pair of products and merges with average linkage.</p>
+                    <pre><code class="language-python">Z_products = linkage(bought.to_numpy(), method="average", metric="correlation")
+print("merges:", len(Z_products))
+print("six highest merge heights:", Z_products[-6:, 2][::-1].round(3))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>merges: 199
+six highest merge heights: [1.014 1.01  1.    0.983 0.962 0.955]</code></pre>
+                    </div>
+                    <p>199 merges for 200 products. The top heights are all near 1: at the top level, the product families are uncorrelated with each other (each family is bought by its own kind of customer).</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Draw the dendrogram <span class="step-time">(10 min)</span></h3>
+                    <p>200 labeled leaves are too many to read, so hide the labels and color the subtrees below a cut height of 0.97.</p>
+                    <pre><code class="language-python">fig, ax = plt.subplots(figsize=(10, 4), layout="constrained")
+dendrogram(Z_products, no_labels=True, color_threshold=0.97, ax=ax)
+ax.axhline(0.97, color="black", linestyle="--", linewidth=1, label="cut at 0.97")
+ax.set_ylim(0.6, 1.03)
+ax.set_ylabel("correlation distance")
+ax.set_title("Pinecrest products clustered by who buys them (average linkage)")
+ax.legend(loc="lower right")
+plt.show()</code></pre>
+                    <figure>
+                        <img src="images/clustering_hierarchical_product_tree.png" alt="Dendrogram of 200 products with the y-axis from 0.6 to 1.03. Below a dashed cut line at 0.97 the leaves form five colored subtrees of roughly 30 to 60 products each, whose internal merges happen between about 0.65 and 0.96. Above the line the five subtrees join at heights close to 1." width="1100" height="440" loading="lazy">
+                        <figcaption>Five product families, each bought by its own group of customers, join only at a correlation distance near 1: unrelated buying.</figcaption>
+                    </figure>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Cut into families and check them <span class="step-time">(10 min)</span></h3>
+                    <p>Cut at the same height, then compare the families with <code>primary_activity</code>, which the clustering never saw.</p>
+                    <pre><code class="language-python">products["family"] = fcluster(Z_products, t=0.97, criterion="distance")
+print(products["family"].value_counts().sort_index())
+print(pd.crosstab(products["family"], products["primary_activity"]))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>family
+1    36
+2    59
+3    36
+4    31
+5    38
+Name: count, dtype: int64
+primary_activity  camping  climbing  general  hiking  paddling  running
+family
+1                       0         0        5      31         0        0
+2                      46         0       13       0         0        0
+3                       0        36        0       0         0        0
+4                       0         0        0       0         0       31
+5                       0         0        3       0        35        0</code></pre>
+                    </div>
+                    <p>Purchase behavior alone recovered the activities: one family each for climbing, running, paddling and hiking, plus a camping family. The "general" products (headlamps, bottles and the like, for no single activity) are spread over the families of the people who buy them most, which is more useful for bundling than their catalog label.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Watch single linkage chain <span class="step-time">(5 min)</span></h3>
+                    <p>Same distances, single linkage, cut into five clusters by number:</p>
+                    <pre><code class="language-python">from sklearn.metrics import adjusted_rand_score
+
+Z_single = linkage(bought.to_numpy(), method="single", metric="correlation")
+single_families = fcluster(Z_single, t=5, criterion="maxclust")
+print("single linkage sizes :", np.bincount(single_families)[1:])
+print(f"ARI with activity, average linkage: {adjusted_rand_score(products['primary_activity'], products['family']):.3f}")
+print(f"ARI with activity, single linkage : {adjusted_rand_score(products['primary_activity'], single_families):.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>single linkage sizes : [ 36 161   1   1   1]
+ARI with activity, average linkage: 0.840
+ARI with activity, single linkage : 0.162</code></pre>
+                    </div>
+                    <p>Single linkage keeps one family apart and chains nearly everything else together, leaving three one-product "clusters". The ARI against the activities collapses. Same data, same distance: the linkage made the difference.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Name the families and save <span class="step-time">(5 min)</span></h3>
+                    <p>Name each family after its most common activity, then save the result for the merchandising team.</p>
+                    <pre><code class="language-python">family_names = (products.groupby("family")["primary_activity"]
+                .agg(lambda s: s.value_counts().index[0]).str.title() + " family")
+products["family_name"] = products["family"].map(family_names)
+
+products[["name", "category", "family_name"]].to_csv("product_families.csv")
+print(products.groupby("family_name")["category"].agg(lambda s: ", ".join(s.value_counts().index[:3])))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>family_name
+Camping family     Camp Kitchen, Sleeping, Accessories
+Climbing family            Climbing, Apparel, Footwear
+Hiking family             Footwear, Packs, Accessories
+Paddling family            Paddling, Apparel, Footwear
+Running family              Running, Apparel, Footwear
+Name: category, dtype: str</code></pre>
+                    </div>
+                    <p>Each family mixes several catalog categories (apparel and footwear turn up everywhere), which is exactly the point: a "Paddling family" section could put paddling apparel next to the boats, because those are the things the same people buy.</p>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Your purchase matrix has 200 product rows and 3,000 customer columns of 0s and 1s</li>
+                        <li>You built the tree with average linkage and correlation distance, and can explain why not Euclidean</li>
+                        <li>Your dendrogram shows five colored families below the cut at 0.97</li>
+                        <li>The crosstab shows each family dominated by one activity, which the clustering never saw</li>
+                        <li>You showed single linkage chaining, with sizes and ARI as evidence</li>
+                        <li><code>product_families.csv</code> lists every product with its family name</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>Exercise 1 is pencil-and-code; the others continue in the project notebook, and Exercise 3 reuses <code>Z</code> and <code>ward5</code> from the lesson (rerun the customer section's code if you are in a fresh notebook).</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Three Linkages by Hand</h3>
+                    <p>Group G1 holds the points 1 and 2 on a number line; group G2 holds 6 and 10. Before running anything, work out the single, complete and average linkage distances between the groups. Then check with <code>scipy.spatial.distance.cdist</code>.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>List the four cross-group pairs: (1, 6), (1, 10), (2, 6), (2, 10). Single takes the smallest, complete the largest, average the mean.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from scipy.spatial.distance import cdist
+
+pair_d = cdist([[1], [2]], [[6], [10]])
+print(pair_d)
+print("single:", pair_d.min(), " complete:", pair_d.max(), " average:", pair_d.mean())</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>[[5. 9.]
+ [4. 8.]]
+single: 4.0  complete: 9.0  average: 6.5</code></pre>
+                        </div>
+                        <p>Single linkage sees only the nearest pair (4), complete only the farthest (9), and average all four (6.5). A single far-out point like 10 moves complete linkage a lot and single linkage not at all, which is why complete linkage is sensitive to outliers.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Families at Different Heights</h3>
+                    <p>Cut <code>Z_products</code> at heights 0.90, 0.95, 0.97 and 1.0 and print how many families each cut gives and the size of the largest. Which range of heights gives five families? What happens below it?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>fcluster(Z_products, t=h, criterion="distance")</code>, then <code>len(np.unique(...))</code> and <code>np.bincount(...).max()</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for h in [0.90, 0.95, 0.97, 1.0]:
+    cut = fcluster(Z_products, t=h, criterion="distance")
+    print(f"height {h:.2f}: {len(np.unique(cut)):3d} families, largest {np.bincount(cut).max()}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>height 0.90:  34 families, largest 36
+height 0.95:   7 families, largest 58
+height 0.97:   5 families, largest 59
+height 1.00:   4 families, largest 95</code></pre>
+                        </div>
+                        <p>Low cuts break the families into many small pieces (tight sub-families such as products bought by the same few dozen customers). The stretch of heights giving five families is the "gap" in the dendrogram; above it, families merge into big, meaningless groups. A height inside the widest gap is the most robust cut.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Assigning New Customers</h3>
+                    <p><code>AgglomerativeClustering</code> has no <code>predict</code>. Build one: compute the mean of <code>Z</code> for each of <code>ward5</code>'s clusters, then assign rows to the nearest mean with <code>pairwise_distances_argmin</code> from <code>sklearn.metrics</code>. How many of the 6,000 customers would be assigned to a different cluster than Ward gave them?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>Z.groupby(ward5.labels_).mean()</code> gives one row per cluster, in label order.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.metrics import pairwise_distances_argmin
+
+ward_means = Z.groupby(ward5.labels_).mean()
+nearest = pairwise_distances_argmin(Z, ward_means)
+print(f"customers whose nearest mean is not their Ward cluster: {(nearest != ward5.labels_).sum()}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>customers whose nearest mean is not their Ward cluster: 190</code></pre>
+                        </div>
+                        <p>A couple of hundred customers sit closer to another cluster's mean than to their own. Ward's greedy merges, once made, are never revisited, so some border points end up on the "wrong" side. Running one round of K-Means from the Ward means would move them, and K-Means initialized from a hierarchical clustering is a classic combination.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Which Linkage Keeps the Distances? (Stretch)</h3>
+                    <p>The <strong>cophenetic distance</strong> between two points is the height at which they first end up in the same cluster. A good tree keeps the original distances: the <em>cophenetic correlation</em> between the original and the cophenetic distances is close to 1. Compute it with <code>scipy.cluster.hierarchy.cophenet(Z_tree, original_distances)</code> for single, complete and average linkage on the products (correlation distance). Which linkage preserves the distances best?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Compute <code>d = pdist(bought.to_numpy(), metric="correlation")</code> once; <code>linkage</code> also accepts this condensed distance array directly. <code>cophenet</code> returns a pair: the correlation and the distances.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from scipy.cluster.hierarchy import cophenet
+from scipy.spatial.distance import pdist
+
+d = pdist(bought.to_numpy(), metric="correlation")
+for method in ["single", "complete", "average"]:
+    coph_corr, _ = cophenet(linkage(d, method=method), d)
+    print(f"{method:8s} cophenetic correlation {coph_corr:.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>single   cophenetic correlation 0.784
+complete cophenetic correlation 0.810
+average  cophenetic correlation 0.904</code></pre>
+                        </div>
+                        <p>Average linkage preserves the original distances best, which is a known property: it is, by construction, the merge rule closest to "keep the average distance". This is another reason it is the standard choice for non-Euclidean distances. The cophenetic correlation tells you how faithful the tree is, not whether its clusters are useful, so it complements rather than replaces the activity check.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_Z = linkage([[0.0], [1.0], [5.0], [6.0], [20.0]], method="single")
+print(len(quiz_Z), quiz_Z[-1, 3])</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="How many merges does it take to turn 5 single points into one cluster?">
+                                A) <code>5 5.0</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="With 5 points there are always 4 merges, so the linkage matrix has 4 rows. The last merge creates the cluster holding all 5 points, and column 3 is the size of the new cluster.">
+                                B) <code>4 5.0</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Column 3 of a linkage row is the size of the newly merged cluster. What is the size after the very last merge?">
+                                C) <code>4 2.0</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> Two groups of customers are separated by a thin trail of in-between customers. Which linkage is most likely to merge the two groups too early?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Single linkage uses the closest pair of points, so a chain of nearby in-between points makes the two groups look close. That is chaining.">
+                                A) Single linkage
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Complete linkage looks at the farthest pair. Does a trail of in-between points change the farthest distance?">
+                                B) Complete linkage
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Ward looks at how much the total variance grows. Would a few bridge points make two big groups cheap to merge?">
+                                C) Ward linkage
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> You want to cluster products using cosine distance on purchase vectors. Which call works?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Ward is built on variance. Which distance is variance defined for?">
+                                A) <code>AgglomerativeClustering(n_clusters=5, metric="cosine", linkage="ward")</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="That parameter name was removed. What is it called now?">
+                                B) <code>AgglomerativeClustering(n_clusters=5, affinity="cosine", linkage="average")</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The parameter is metric, and average linkage works with any distance. Ward would raise a ValueError, and affinity no longer exists.">
+                                C) <code>AgglomerativeClustering(n_clusters=5, metric="cosine", linkage="average")</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> In a dendrogram, the top three merges happen at heights 95, 88 and 73, and every merge below them is under 31. How many clusters does the tree suggest?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Each of the top merges joins two clusters into one. How many clusters exist just before the merge at 73?">
+                                A) 3
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Cutting anywhere in the gap between 31 and 73 undoes the three top merges. Undoing three merges of a single tree leaves four clusters.">
+                                B) 4
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Count the merges you undo when you cut inside the big gap, and add one.">
+                                C) 6
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> When is K-Means a better choice than agglomerative clustering?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Which method accepts a metric parameter?">
+                                A) When you need a correlation or cosine distance
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Which method draws a dendrogram?">
+                                B) When you want to see groupings at every level before choosing
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Agglomerative clustering needs all pairwise distances, so memory and time grow at least with the square of the number of rows. K-Means (or MiniBatchKMeans) scales to millions of rows and also predicts for new ones.">
+                                C) When you have hundreds of thousands of rows and need to assign new ones later
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>SciPy or scikit-learn: which should I use?</summary>
+                    <p>Both run the same algorithm. SciPy's <code>linkage</code> gives you the full linkage matrix, dendrograms, <code>fcluster</code>, <code>cophenet</code> and more metrics, so it is best for exploring the tree. scikit-learn's <code>AgglomerativeClustering</code> fits into pipelines and the estimator API, and supports <code>connectivity</code> constraints. A common workflow: explore with SciPy, then put the chosen setting into scikit-learn.</p>
+                </details>
+                <details>
+                    <summary>Do I need to scale features first?</summary>
+                    <p>Yes, for exactly the same reason as with K-Means: the distances are computed from your columns, so a column in dollars would drown out a column of counts. The project did not scale because all its columns are the same kind of 0/1 purchase flag, and correlation distance standardizes each row anyway.</p>
+                </details>
+                <details>
+                    <summary>Is the result random? Do I need random_state?</summary>
+                    <p>No. Given the same data, agglomerative clustering always makes the same merges, so there is no <code>random_state</code> parameter. The only source of variation is exact ties between distances, which are rare with real-valued data.</p>
+                </details>
+                <details>
+                    <summary>What are connectivity constraints?</summary>
+                    <p>An optional graph that says which points are allowed to merge directly, for example only neighboring pixels in an image or neighboring stores on a map. Pass it as <code>connectivity=</code>, often built with <code>sklearn.neighbors.kneighbors_graph</code>. It makes clusters spatially connected and speeds the algorithm up on large data.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Cluster the <em>customers</em> by what they buy rather than how they shop: build the customer × product matrix (the transpose of the project's), take a random sample of 1,500 customers to keep it fast, and cluster with average linkage and correlation distance (or cosine). Cut into a handful of groups and describe each by its most-bought product families from the project. Then cross-tabulate your purchase-based customer groups with the behavior segments from Lesson 8.2 (<code>customer_segments.csv</code>). Do "what they buy" and "how they shop" describe the same people?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Draw (on paper) the dendrogram of five things you own, merged by how similar they are, and mark where you would cut it for two different purposes. Then write two sentences on why correlation distance found the product families when Euclidean distance would have mostly measured popularity.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Agglomerative clustering starts with every point alone and merges the two closest clusters, <em>n</em> − 1 times, recording each merge height</li>
+                        <li>The dendrogram shows every level of grouping; a horizontal cut gives flat clusters, and a large vertical gap suggests a natural number of clusters</li>
+                        <li>Linkage defines distance between groups: single (closest pair, chains), complete (farthest pair, compact), average (mean of pairs, any metric), Ward (variance increase, Euclidean only)</li>
+                        <li>Unlike K-Means it accepts any distance, has no random start, and needs no <em>k</em> in advance; it has no <code>predict</code> and costs O(<em>n</em>²) memory</li>
+                        <li>Use <code>metric=</code> (not the removed <code>affinity=</code>), and <code>n_clusters=None</code> with <code>distance_threshold</code></li>
+                        <li>Validate clusters with something they never saw: on Pinecrest customers, Ward and K-Means agreed closely; on products, purchase families matched the activities</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You traced a linkage matrix merge by merge and drew its dendrogram</li>
+                        <li>You compared four linkages and saw single linkage chain on two different datasets</li>
+                        <li>You confirmed the five customer segments with a second, unrelated algorithm</li>
+                        <li>You built a product family tree from purchases alone and showed it recovers each product's activity</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="clustering_dbscan.html"><strong>Lesson 8.4: Density-Based Clustering</strong></a> you will meet algorithms that define a cluster as a dense region separated by sparse space. DBSCAN, OPTICS and HDBSCAN find clusters of any shape, including the moons that defeated K-Means, and they label points in sparse regions as noise instead of forcing them into a cluster.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>product_families.csv</code>; it is a nice input for the recommendation lesson (11.2).</li>
+                    <li>Rerun the linkage comparison with <code>make_moons(noise=0.12)</code>. At what noise level does single linkage stop separating the moons?</li>
+                    <li>Write one sentence each: when would you pick K-Means, Ward and average linkage with a custom distance?</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You now have two clustering families in your toolkit, and you used one to check the other: that cross-checking habit is what makes unsupervised results trustworthy. You also discovered something real about Pinecrest's customers, that people buy by activity rather than by catalog category, using nothing but who bought what. Not every tree will be this clean, and when one is not, you now know how to read why.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="clustering_kmeans_optimization.html" class="prev-lesson">← Previous: Choosing k and Customer Segments</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="clustering_dbscan.html" class="next-lesson">Next: Density-Based Clustering →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Hierarchical clustering produces a full tree (dendrogram) of nested clusters, so you don't have to pick <em>k</em> in advance.</li>
-                <li>The linkage method (single, complete, average, Ward) defines how cluster distance is measured and strongly shapes the result.</li>
-                <li>You choose the number of clusters by cutting the dendrogram at a chosen height or distance threshold.</li>
-                <li>Agglomerative clustering is memory- and compute-heavy (roughly O(n²)), so it suits small-to-medium datasets rather than huge ones.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now build a cluster hierarchy, visualize it as a dendrogram, and cut it into groups — plus reason about which
-        linkage method and distance metric suit your data.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>When should I use hierarchical clustering instead of K-means?</summary>
-            <p>When you don't know the number of clusters ahead of time, want to explore nested structure, or have a smaller dataset
-            where the dendrogram gives valuable insight. K-means is faster and scales better, but forces you to fix <em>k</em> up front.</p>
-        </details>
-        <details>
-            <summary>What's the difference between single, complete, and Ward linkage?</summary>
-            <p>Single linkage uses the closest pair of points (tends to produce long "chained" clusters), complete uses the farthest
-            pair (compact, similar-sized clusters), and Ward minimizes within-cluster variance — often the best general-purpose
-            default for Euclidean data.</p>
-        </details>
-        <details>
-            <summary>How do I decide where to cut the dendrogram?</summary>
-            <p>Look for the largest vertical gap between successive merges — cutting across that gap separates well-defined clusters.
-            You can also cut at a distance threshold or set <code>n_clusters</code> directly.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>With a tree-based view of clustering in hand, you're ready to compare it against centroid methods like K-means and
-        density-based methods that find clusters of arbitrary shape.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Run <code>AgglomerativeClustering</code> with Ward, complete, and single linkage on the same data and compare the dendrograms.</li>
-            <li>Cluster the same dataset with two different distance metrics and note how the groups change.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Reading a dendrogram is like reading a family tree of your data — once it clicks, you'll see structure others miss.
-            You've added a genuinely different lens to your clustering toolkit.</p>
-        </div>
-    </section>
-
-    <!-- Navigation at the bottom -->
-    <nav class="lesson-nav" aria-label="Lesson navigation">
-        <a href="ml_kmeans_applications.html" class="prev-lesson" aria-label="Previous lesson">Previous: K-means Applications</a>
-        <a href="index.html" class="home-link" aria-label="Course home">Course Home</a>
-        <a href="ml_dbscan_clustering.html" class="next-lesson" aria-label="Next lesson">Next: DBSCAN Clustering</a>
-    </nav>
-    
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1106,8 +832,10 @@ print("** K-means++ initialization is random")</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>

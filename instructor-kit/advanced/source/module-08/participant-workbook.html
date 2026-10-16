@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 8</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 8: CNNs and Sequence Models</h1>
+    <p class="sub">Your workbook for Session 8: a warm-up on Lessons 10.1 and 10.2, the key ideas of Lessons 10.3 and 10.4, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>10.3–10.4</b></span>
+      <span class="chip">Session <b>8</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Explain a convolution and pooling, predict shapes and parameter counts, and trace a dummy batch through a CNN.</li>
+  <li>Train a CNN and a dense baseline with the same loop and seed, and read per-class results, not just the average.</li>
+  <li>Turn a time series into windows split by time, beat the naive forecasts, and report errors in real units.</li>
+  <li>Explain the hidden state, the LSTM's gates and attention as a lookup, and judge a sequence model against simpler ones.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Five questions on Lessons 10.1 and 10.2</div>
+<p>Answer from memory, then check with the class.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">What does this print? (Lesson 10.2)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> torch
+print(torch.tensor(np.zeros(<span class="s">3</span>)).dtype, torch.tensor(np.zeros(<span class="s">3</span>), dtype=torch.float32).dtype)</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">Put the four lines of the batch loop in order: loss.backward(), optimizer.step(), optimizer.zero_grad(), loss = loss_fn(model(xb), yb). (10.2)</div><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Your binary model ends with nn.Linear(32, 1) and trains with BCEWithLogitsLoss. Where does the sigmoid go? (10.2)</div><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">A model with dropout gives a different score for the same customer on every call, inside with torch.no_grad(). Why? (10.2)</div><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">On the churn table the PyTorch network scored test AUC 0.846 and gradient boosting 0.850. What was the verdict, and what kind of data should change it? (10.1, 10.2)</div><div class="write"></div></div>
+</div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">10.3</span><h3>Convolutional Neural Networks</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain what a convolution filter and a pooling layer compute, and why sharing one small filter across the whole image suits pictures</li>
+  <li>Predict the output shape and the parameter count of nn.Conv2d and nn.MaxPool2d layers</li>
+  <li>Build a CNN as an nn.Module and train it on Fashion-MNIST with a validation set and a fixed seed</li>
+  <li>Compare it with a dense-network baseline using test accuracy, per-class accuracy and a confusion matrix</li>
+  <li>Save trained weights with state_dict and reload them safely with weights_only=True</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>A convolution</b> slides a small filter over the image; each filter makes one feature map (one output channel). Deep-learning libraries do not flip the kernel; nobody minds.</li>
+  <li><b>Local connectivity and weight sharing:</b> each output looks at a small window, and the same filter is used everywhere, so a pattern learned once is found anywhere, for very few weights.</li>
+  <li><b>Shapes:</b> batches are (batch, channels, height, width); per side out = (n + 2p - k) / s + 1, rounded down; <code class="inline">padding=1</code> with a 3 × 3 kernel keeps the size.</li>
+  <li><b>Parameters:</b> a conv layer has out × (in × k × k) + out; max pooling has none and halves height and width.</li>
+  <li><b>Trace a dummy batch</b> through the layers to size the first <code class="inline">nn.Linear</code>.</li>
+  <li><b>Logits for <code class="inline">CrossEntropyLoss</code></b>; <code class="inline">model.train()</code> / <code class="inline">model.eval()</code> switch dropout and batch norm; evaluate under <code class="inline">torch.no_grad()</code>.</li>
+  <li><b>A fair comparison:</b> same images, same order, same loop; only the architecture changes. Dense 0.840, CNN 0.864, improved CNN 0.892 on the test set.</li>
+  <li><b>Report the weakest classes:</b> shirts, T-shirts, pullovers and coats look alike at 28 × 28.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: a color CNN, layer by layer</div>
+<p>Lesson 10.5 will work with 64 × 64 color images. Trace one through a small two-block CNN and count where the parameters live.</p>
+<pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+
+net = nn.Sequential(
+    nn.Conv2d(<span class="s">3</span>, <span class="s">8</span>, kernel_size=<span class="s">3</span>, padding=<span class="s">1</span>), nn.ReLU(), nn.MaxPool2d(<span class="s">2</span>),
+    nn.Conv2d(<span class="s">8</span>, <span class="s">16</span>, kernel_size=<span class="s">3</span>, padding=<span class="s">1</span>), nn.ReLU(), nn.MaxPool2d(<span class="s">2</span>),
+    nn.Flatten(), nn.Linear(<span class="s">16</span> * <span class="s">16</span> * <span class="s">16</span>, <span class="s">10</span>),
+)
+x = torch.zeros(<span class="s">1</span>, <span class="s">3</span>, <span class="s">64</span>, <span class="s">64</span>)                       <span class="c"># one 64 x 64 color image</span>
+<span class="k">for</span> layer <span class="k">in</span> net:
+    x = layer(x)
+    n = sum(p.numel() <span class="k">for</span> p <span class="k">in</span> layer.parameters())
+    print(<span class="s">f"{layer.__class__.__name__:10s} {str(tuple(x.shape)):18s} {n:6,d} parameters"</span>)</pre>
+<pre class="out">Conv2d     (1, 8, 64, 64)        224 parameters
+ReLU       (1, 8, 64, 64)          0 parameters
+MaxPool2d  (1, 8, 32, 32)          0 parameters
+Conv2d     (1, 16, 32, 32)     1,168 parameters
+ReLU       (1, 16, 32, 32)         0 parameters
+MaxPool2d  (1, 16, 16, 16)         0 parameters
+Flatten    (1, 4096)               0 parameters
+Linear     (1, 10)            40,970 parameters</pre><p>Three channels in, so each first-layer filter has 3 × 3 × 3 weights: 8 × 27 + 8 = 224. Each pooling halves the side: 64 → 32 → 16. The convolutions together use under 1,400 parameters; the single dense layer at the end uses 40,970, because it has one weight per position of every feature map. That is where to save parameters, and why big CNNs end with global pooling.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-08/l10_3-cnn/edge_features_starter.py</code>. Build features from two hand-made edge filters and race logistic regression on them against the lesson's CNN at 1,000, 5,000 and 20,000 images. Predict the winner at each size first.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">shift_test_starter.py</code> in the same folder. Load the lesson's two trained models and move every test image a few pixels. Does the CNN really not care where the sneaker is?</li>
+  <li>Done when your numbers match the "Expected when done" lines.</li>
+  <li>Finished early? <code class="inline">debug_cnn.py</code>: two shape errors and two silent bugs.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (Pooling halves height and width.)</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+print(nn.MaxPool2d(<span class="s">2</span>)(torch.zeros(<span class="s">5</span>, <span class="s">8</span>, <span class="s">28</span>, <span class="s">28</span>)).shape)</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (Four 5 × 5 filters on one channel.)</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> nn.Conv2d(<span class="s">1</span>, <span class="s">4</span>, kernel_size=<span class="s">5</span>).parameters()))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A better clothing classifier</b> (lesson page, "Project: A Better Clothing Classifier"). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: three sets. Check: <code class="inline">20000 5000 10000</code></li>
+  <li>☐ Step 2: <code class="inline">FashionCNN</code> traced. Check: 421,834 parameters; features (2, 64, 7, 7); logits (2, 10)</li>
+  <li>☐ Step 3: four epochs, best kept (validation about 0.903)</li>
+  <li>☐ Step 4: test once (about 0.892) and the four hardest classes</li>
+  <li>☐ Step 5: <code class="inline">fashion_cnn.pt</code> reloads with <code class="inline">weights_only=True</code>, identical predictions</li>
+  <li>☐ Step 6: twelve predictions plotted; summary printed</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1" data-kind="short"><div class="qn">Q1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+conv = nn.Conv2d(<span class="s">3</span>, <span class="s">16</span>, kernel_size=<span class="s">3</span>, stride=<span class="s">2</span>, padding=<span class="s">1</span>)
+print(tuple(conv(torch.zeros(<span class="s">8</span>, <span class="s">3</span>, <span class="s">32</span>, <span class="s">32</span>)).shape))</pre><div class="write"></div></div>
+<div class="q" data-sc="2"><div class="qn">Q2</div><div class="qt">How many parameters does <code class="inline">nn.Conv2d(3, 8, kernel_size=3)</code> have?</div><div class="opts"><div class="opt">A) 224</div><div class="opt">B) 216</div><div class="opt">C) 72</div><div class="opt">D) 80</div></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">Why does the lesson use <code class="inline">padding=1</code> with every 3 × 3 kernel?</div><div class="opts"><div class="opt">A) It halves the height and width</div><div class="opt">B) It adds a border of learnable weights</div><div class="opt">C) It keeps the height and width unchanged: (n + 2 - 3) / 1 + 1 = n</div><div class="opt">D) Grayscale images require it</div></div></div>
+<div class="q" data-sc="4" data-kind="short"><div class="qn">Q4</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">import</span> torch.nn.functional <span class="k">as</span> F
+x = torch.arange(<span class="s">16.0</span>).reshape(<span class="s">1</span>, <span class="s">1</span>, <span class="s">4</span>, <span class="s">4</span>)
+print(F.max_pool2d(x, <span class="s">2</span>).squeeze())</pre><div class="write"></div></div>
+<div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">In the shift lab, the lesson's CNN loses about 12 points of test accuracy when every image moves 2 pixels to the right. Convolutions share weights across positions, so why does it lose anything?</div><div class="opts"><div class="opt">A) The model has no max pooling</div><div class="opt">B) The shifted images were scaled differently</div><div class="opt">C) Each convolution uses different weights at different positions</div><div class="opt">D) The <code class="inline">Flatten</code> + <code class="inline">Linear</code> head reads WHERE each feature map lit up, so positions still matter</div></div></div>
+<div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">This model fails. What should the first argument of its nn.Linear be?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+model = nn.Sequential(
+    nn.Conv2d(<span class="s">1</span>, <span class="s">64</span>, kernel_size=<span class="s">3</span>, padding=<span class="s">1</span>), nn.ReLU(), nn.MaxPool2d(<span class="s">2</span>),
+    nn.MaxPool2d(<span class="s">2</span>), nn.Flatten(), nn.Linear(<span class="s">64</span> * <span class="s">14</span> * <span class="s">14</span>, <span class="s">10</span>),
+)
+model(torch.zeros(<span class="s">64</span>, <span class="s">1</span>, <span class="s">28</span>, <span class="s">28</span>))</pre><div class="opts"><div class="opt">A) 12544 (64 × 14 × 14)</div><div class="opt">B) 3136 (64 × 7 × 7)</div><div class="opt">C) 1568 (32 × 7 × 7)</div><div class="opt">D) 64 (one number per filter)</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the stencil-and-flashlight picture in your own words, then write the shape of a batch at every stage of your FashionCNN, from (64, 1, 28, 28) to (64, 10), without looking. Which classes did your model confuse most, and would a person confuse them too?</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">10.4</span><h3>Sequence Models</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Measure naive and seasonal-naive forecasts and a gradient-boosting model on lag features, and use them as the yardsticks any sequence model must beat</li>
+  <li>Turn a time series into sliding windows with a time-based train/test split, and explain why a random split leaks</li>
+  <li>Explain how a recurrent cell carries a hidden state through a sequence, and why LSTMs and GRUs add gates</li>
+  <li>Build, train and evaluate an LSTM forecaster in PyTorch, reporting the error in dollars</li>
+  <li>Describe attention as a soft lookup, compute it by hand, and say when a transformer is (and is not) worth it</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>Order matters:</b> split by time (train 2023 and 2024, test 2025), never at random.</li>
+  <li><b>Naive forecasts are the yardsticks:</b> yesterday ($1,350 MAE) and the same day last week ($1,072).</li>
+  <li><b>Windows:</b> a window of recent days predicts the next day; neighbors overlap, which is why random splits leak. Shape (batch, time steps, features) with <code class="inline">batch_first=True</code>.</li>
+  <li><b>A recurrent cell</b> updates a hidden state with the same weights at every step; plain RNNs forget because gradients vanish. LSTMs and GRUs add gates.</li>
+  <li><b>Scale, then undo:</b> log1p and standardize with the training years; report the error in dollars.</li>
+  <li><b>The LSTM</b> (28 days + weekday) beat seasonal naive: $702; with tomorrow's promotion and closed flags, $515.</li>
+  <li><b>Attention is a soft lookup:</b> queries score keys, a softmax makes weights, the output averages the values. Transformers stack learned attention.</li>
+  <li><b>Honesty:</b> default boosting on lag features with the same information scored $616: the information fed in mattered more than the architecture.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: a notebook that forgets</div>
+<p>A recurrent cell with one input weight, one memory weight and a one-number hidden state. One busy day, then four quiet ones: how long does the notebook remember?</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+
+w_x, w_h, b = <span class="s">1.0</span>, <span class="s">0.5</span>, <span class="s">0.0</span>                         <span class="c"># one input weight, one memory weight</span>
+h = <span class="s">0.0</span>
+<span class="k">for</span> t, x <span class="k">in</span> enumerate([<span class="s">2.0</span>, <span class="s">0.0</span>, <span class="s">0.0</span>, <span class="s">0.0</span>, <span class="s">0.0</span>]):   <span class="c"># one big day, then four quiet ones</span>
+    h = np.tanh(w_x * x + w_h * h + b)
+    print(<span class="s">f"step {t}: input {x:.1f}  hidden state {h:.3f}"</span>)</pre>
+<pre class="out">step 0: input 2.0  hidden state 0.964
+step 1: input 0.0  hidden state 0.448
+step 2: input 0.0  hidden state 0.220
+step 3: input 0.0  hidden state 0.110
+step 4: input 0.0  hidden state 0.055</pre><p>With a memory weight of 0.5 the impression halves every day. Change the memory weight:</p>
+<pre class="code"><span class="k">for</span> w_h <span class="k">in</span> [<span class="s">0.5</span>, <span class="s">0.9</span>, <span class="s">1.5</span>]:
+    h = <span class="s">0.0</span>
+    <span class="k">for</span> x <span class="k">in</span> [<span class="s">2.0</span>, <span class="s">0.0</span>, <span class="s">0.0</span>, <span class="s">0.0</span>, <span class="s">0.0</span>]:
+        h = np.tanh(<span class="s">1.0</span> * x + w_h * h)
+    print(<span class="s">f"memory weight {w_h}: hidden state after four quiet days {h:.3f}"</span>)</pre>
+<pre class="out">memory weight 0.5: hidden state after four quiet days 0.055
+memory weight 0.9: hidden state after four quiet days 0.395
+memory weight 1.5: hidden state after four quiet days 0.861</pre><p>A small memory weight forgets fast; a larger one keeps the busy day in mind for longer. Training chooses such weights. Over 28 steps, the gradient that teaches them is multiplied 28 times by factors like these, which is why plain RNNs struggle with the distant past and LSTMs add a cell state updated by adding and scaling.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-08/l10_4-sequences/transactions_gru_starter.py</code>. Forecast tomorrow's number of transactions with a GRU: naive yardsticks first, windows, then with and without the calendar.</li>
+  <li><b>Lab B:</b> <code class="inline">attention_lookup_starter.py</code>. Change what attention's keys describe and how far back it looks, and score ordinary and special days separately.</li>
+  <li>Done when your numbers match the "Expected when done" lines (GRU numbers may differ in the last digit).</li>
+  <li>Finished early? <code class="inline">debug_sequence.py</code>: one loud bug, three silent ones.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (Windows of 3 from 6 values.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+series = np.arange(<span class="s">6</span>)
+X = np.stack([series[i:i + <span class="s">3</span>] <span class="k">for</span> i <span class="k">in</span> range(len(series) - <span class="s">3</span>)])
+print(X.shape, series[<span class="s">3</span>:])</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (Four gates' worth of weights and two bias vectors.)</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> nn.LSTM(input_size=<span class="s">2</span>, hidden_size=<span class="s">4</span>).parameters()))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A calendar-aware forecaster</b> (lesson page, "Project: A Calendar-Aware Forecaster"). In class: Steps 1 to 3. At home: Steps 4 to 7.</p>
+<ul class="tick">
+  <li>☐ Step 1: calendar (1096, 9): 54 promotion days, 6 closed days</li>
+  <li>☐ Step 2: windows (4272, 28, 10); 1,460 test windows</li>
+  <li>☐ Step 3: calendar-aware LSTM (MAE about $515)</li>
+  <li>☐ Step 4: errors per store and on special days</li>
+  <li>☐ Step 5: gradient boosting on lags with the same information (about $616) and with the event type (about $569)</li>
+  <li>☐ Step 6: the holiday-season chart for Boise</li>
+  <li>☐ Step 7: <code class="inline">sales_lstm.pt</code> reloads; the six-line summary</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+out, h = nn.GRU(<span class="s">5</span>, <span class="s">8</span>, batch_first=<span class="k">True</span>)(torch.zeros(<span class="s">4</span>, <span class="s">10</span>, <span class="s">5</span>))
+print(tuple(out.shape), tuple(h.shape))</pre><div class="write"></div></div>
+<div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">A store has 100 days of sales. How many training examples do windows of 7 days (each predicting the next day) give?</div><div class="opts"><div class="opt">A) 100</div><div class="opt">B) 94</div><div class="opt">C) 93</div><div class="opt">D) 7</div></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">For Pinecrest's daily store sales, which forecast is the seasonal naive one?</div><div class="opts"><div class="opt">A) Tomorrow = the same weekday last week</div><div class="opt">B) Tomorrow = today</div><div class="opt">C) Tomorrow = the average of the training years</div><div class="opt">D) Tomorrow = the same date last year</div></div></div>
+<div class="q" data-sc="10" data-kind="short"><div class="qn">Q10</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+keys = np.array([[<span class="s">1</span>, <span class="s">0</span>], [<span class="s">0</span>, <span class="s">1</span>], [<span class="s">1</span>, <span class="s">0</span>]])
+values = np.array([<span class="s">10.0</span>, <span class="s">50.0</span>, <span class="s">30.0</span>])
+query = np.array([<span class="s">1</span>, <span class="s">0</span>])
+w = np.exp(<span class="s">5</span> * (keys @ query))
+w = w / w.sum()
+print(w.round(<span class="s">3</span>), round(w @ values, <span class="s">1</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">Your LSTM predicts standardized log sales. What must happen before you compute the MAE you report?</div><div class="opts"><div class="opt">A) Round the predictions to whole numbers</div><div class="opt">B) Nothing: targets and predictions are on the same scale, so the MAE is fair</div><div class="opt">C) Multiply the predictions by sd</div><div class="opt">D) Undo the standardization, then the log (expm1), and compare in dollars</div></div></div>
+<div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">You create <code class="inline">nn.LSTM(8, 32)</code> and forget <code class="inline">batch_first=True</code>, while your windows are (batch, 28, 8). What happens?</div><div class="opts"><div class="opt">A) A RuntimeError about the input size</div><div class="opt">B) It runs and trains on nonsense: PyTorch reads (batch, time) as (time, batch)</div><div class="opt">C) PyTorch notices and transposes the input</div><div class="opt">D) The output becomes (28, 64, 32), so the linear head fails</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the store manager's notebook and the binder in your own words: what does the hidden state hold, and what does attention do differently? Then write your project's MAE numbers and one sentence a store manager would understand about what the best model gets right and where it still struggles.</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<p>Three questions, no notes.</p>
+<div class="q"><div class="qn">E1</div><div class="qt">A batch (64, 1, 28, 28) goes through <code class="inline">nn.Conv2d(1, 16, kernel_size=3, padding=1)</code> and then <code class="inline">nn.MaxPool2d(2)</code>. What is the shape after each?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">Why must a time series be split by time and not at random?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">With the same information, the calendar-aware LSTM forecast daily sales with MAE $515 and default gradient boosting on lag features $616 ($569 given the event type). What do you tell the store managers?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish the 10.3 project (Steps 4 to 6) and the 10.4 project (Steps 4 to 7)</li>
+  <li>☐ Lesson 10.3 Exercises 1 to 3; Lesson 10.4 Exercises 1 to 3 (Exercise 4 of each is a stretch)</li>
+  <li>☐ Both Quick Quizzes and both journal entries</li>
+  <li>☐ Finish <code class="inline">shift_test_starter.py</code> and <code class="inline">attention_lookup_starter.py</code></li>
+  <li>☐ Retrain the calendar LSTM with <code class="inline">torch.manual_seed(7)</code>: how big is the wobble?</li>
+  <li>☐ AT HOME: EuroSAT into <code class="inline">data/eurosat/</code> and the ResNet-18 and MobileNetV3-small weights cached (the command is on the bring-list slide)</li>
+  <li>☐ Bring to Session 9: a plugged-in laptop, <code class="inline">pinecrest-ml</code> with <code class="inline">data/</code> and <code class="inline">labs/</code>, <code class="inline">sales_lstm.pt</code> and <code class="inline">fashion_cnn.pt</code> with my project notebooks, <code class="inline">training.py</code>, this workbook and my journal</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>convolution</td><td>Sliding a small filter over an image; each position gives one number of a feature map</td></tr>
+<tr><td>filter (kernel)</td><td>The small grid of learned weights, usually 3 × 3, spanning all input channels</td></tr>
+<tr><td>feature map / channel</td><td>The output of one filter; a conv layer outputs one channel per filter</td></tr>
+<tr><td>padding / stride</td><td>Zeros around the border (keeps the size) / the step between positions (2 halves it)</td></tr>
+<tr><td>max pooling</td><td>Keeps the largest value of each small block; no weights; halves height and width</td></tr>
+<tr><td>weight sharing</td><td>One filter reused at every position: patterns found anywhere, few weights</td></tr>
+<tr><td>batch normalization</td><td>Rescales activations batch by batch; stores statistics used in eval mode</td></tr>
+<tr><td>seasonal naive</td><td>Forecast = the value one season ago (same weekday last week)</td></tr>
+<tr><td>window</td><td>A run of recent time steps used as one input; the next step is its target</td></tr>
+<tr><td>hidden state</td><td>The vector a recurrent cell carries from step to step: its notebook</td></tr>
+<tr><td>LSTM / GRU</td><td>Recurrent cells with gates that decide what to keep, write and reveal</td></tr>
+<tr><td>vanishing gradient</td><td>Gradients shrinking over many steps, so the distant past is hard to learn</td></tr>
+<tr><td>attention</td><td>Weights from matching a query with keys (softmax), used to average values</td></tr>
+<tr><td>transformer</td><td>A model built from stacked learned attention layers plus positional information</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 8 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

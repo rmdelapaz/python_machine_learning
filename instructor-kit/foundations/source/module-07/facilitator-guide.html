@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facilitator Guide: Session 7</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">contains answers &amp; timing · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Facilitator Guide</div>
+    <h1>Session 7: Nearest Neighbors and Naive Bayes</h1>
+    <p class="sub">How to teach the seventh session of Machine Learning Foundations: k-nearest neighbors (distance as similarity, why scaling decides everything, the k dial, lookalikes as explanations, the curse of dimensionality) and Naive Bayes (Bayes' rule from counts, bag of words, smoothing, the variants, and a model that ranks well while its probabilities are too confident).</p>
+    <div class="meta-row">
+      <span class="chip"><b>2</b> lessons</span>
+      <span class="chip"><b>3 hrs</b> session</span>
+      <span class="chip">Lessons <b>4.1–4.2</b></span>
+      <span class="chip">Session <b>7</b> of 11</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>How to Use This Guide</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Same rhythm for both lessons: frame → live demo → guided lab → start the project. Exercises, the quiz and the journal are homework.</li>
+  <li>The two lessons are opposites worth contrasting out loud: kNN has no weights and lives on distances (scaling is everything, more columns hurt); Naive Bayes counts and multiplies (no scaling, thrives on thousands of word columns, but double-counts duplicates).</li>
+  <li>Every code block below was run to produce the output printed under it; plotting lines are left out. Show the decision maps (4.1) and the bell-curve and calibration charts (4.2) from <code class="inline">classification_knn.html</code> and <code class="inline">classification_naive_bayes.html</code>.</li>
+  <li>Labs live in <code class="inline">labs/module-07/</code>. Starters are handouts; solutions are yours.</li>
+</ul>
+<div class="note warn"><div class="t">The #1 risk of Session 7: kNN's lookalikes and Naive Bayes' probabilities taken at face value</div>
+<p>Both models produce something that looks like an explanation or a confidence: "these 15 customers" and "99% sure". Learners leave trusting both. Protect two moments: the noise-columns step (4.1 Step 10: lookalikes are only as good as the distance) and the overconfidence check (4.2 Step 10: above 90% sure, 61% churned).</p>
+</div>
+
+  <div class="sec"><h2>Before the Session</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ <b>Run the kit check:</b> <code class="inline">python3 labs/check_labs.py module-07</code>. Expect <code class="inline">8 passed, 0 failed</code> (<code class="inline">debug_knn.py</code> is not run), about a minute.</li>
+  <li>☐ <b>Copy the starters</b> (<code class="inline">labs/module-07/l4_1-knn/*_starter.py</code>, <code class="inline">debug_knn.py</code>, <code class="inline">labs/module-07/l4_2-naive-bayes/*_starter.py</code>) to the shared folder; keep the solutions.</li>
+  <li>☐ <b>Downloads:</b> none; <code class="inline">data/reviews.csv</code> and <code class="inline">data/products_ml.csv</code> are in the data folder.</li>
+  <li>☐ <b>Projector:</b> notebooks <code class="inline">lesson_4_1</code> and <code class="inline">lesson_4_2</code>; lesson tabs scrolled to the decision maps, the bell curves and the calibration chart. The 4.1 CV loop takes about 10 seconds: start it, then talk.</li>
+  <li>☐ <b>Board:</b> the comps picture with two questions (what counts as similar? how many comps?); Bayes' rule <code class="inline">P(class | clue) = P(clue | class) × P(class) / P(clue)</code>.</li>
+  <li>☐ <b>Checkpoint 1 feedback:</b> read a few checkpoint reports; pick the two most common rubric gaps for the warm-up.</li>
+</ul>
+<div class="blk warn"><div class="h">Known environment traps</div>
+<table class="timing">
+<thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td><code class="inline">ValueError: Expected n_neighbors &lt;= n_samples_fit, ...</code></td><td>k larger than the rows (a tiny subset, a small fold)</td><td>Keep k well below the smallest training fold.</td></tr>
+<tr><td><code class="inline">ValueError: Input X contains NaN.</code></td><td><code class="inline">email_opens_90d</code> has gaps; kNN cannot measure a distance to a gap</td><td><code class="inline">SimpleImputer</code> in the pipeline.</td></tr>
+<tr><td><code class="inline">ValueError: Negative values in data passed to MultinomialNB (input X).</code></td><td>A scaler in front of a count model</td><td>No scaler for Multinomial/Complement/Bernoulli NB; GaussianNB for continuous features.</td></tr>
+<tr><td><code class="inline">TypeError: Sparse data was passed for X, but dense data is required.</code></td><td>CountVectorizer output into GaussianNB</td><td>Use MultinomialNB for text.</td></tr>
+<tr><td>kNN predictions take a few seconds</td><td>Every prediction searches all stored rows</td><td>Expected: kNN trains instantly and predicts slowly.</td></tr>
+</tbody>
+</table>
+</div>
+
+  <div class="sec"><h2>Session 7 Agenda (3 hours)</h2><span class="rule"></span></div>
+  <table class="timing">
+    <thead><tr><th>Clock</th><th>Minutes</th><th>Segment</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="t">0:00</td><td class="t">10</td><td>Warm-up</td><td>Five retrieval questions on Lessons 3.1 and 3.2; two minutes of Checkpoint 1 feedback.</td></tr>
+      <tr><td class="t">0:10</td><td class="t">10</td><td><b>4.1</b> Frame and mental model</td><td>The real-estate agent's comps: what counts as similar, and how many comps.</td></tr>
+      <tr><td class="t">0:20</td><td class="t">30</td><td><b>4.1</b> Live demo</td><td>A distance by hand, scaling decides everything, vote shares and lookalikes, the k dial, the curse of dimensionality.</td></tr>
+      <tr><td class="t">0:50</td><td class="t">20</td><td><b>4.1</b> Guided lab</td><td><code class="inline">labs/module-07/l4_1-knn/fraud_neighbors_starter.py</code> (everyone), then <code class="inline">labs/module-07/l4_1-knn/lookalike_days_starter.py</code> in pairs.</td></tr>
+      <tr><td class="t">1:10</td><td class="t">15</td><td><b>4.1</b> Start the lesson project</td><td>Lookalike churn scoring, Steps 1 to 3.</td></tr>
+      <tr><td class="t">1:25</td><td class="t">10</td><td>Break</td><td>Leave the comps and the k dial on the board.</td></tr>
+      <tr><td class="t">1:35</td><td class="t">10</td><td><b>4.2</b> Frame and mental model</td><td>The seasoned store manager: a prior, clues that multiply the odds, and the naive habit.</td></tr>
+      <tr><td class="t">1:45</td><td class="t">30</td><td><b>4.2</b> Live demo</td><td>Bayes' rule from counts, bag of words, MultinomialNB, the words it counts, smoothing, the variants, GaussianNB and overconfidence.</td></tr>
+      <tr><td class="t">2:15</td><td class="t">20</td><td><b>4.2</b> Guided lab</td><td><code class="inline">labs/module-07/l4_2-naive-bayes/fraud_flags_bayes_starter.py</code> (everyone), then <code class="inline">labs/module-07/l4_2-naive-bayes/review_category_starter.py</code> in pairs.</td></tr>
+      <tr><td class="t">2:35</td><td class="t">15</td><td><b>4.2</b> Start the lesson project</td><td>Review triage, Steps 1 to 3.</td></tr>
+      <tr><td class="t">2:50</td><td class="t">10</td><td>Wrap-up</td><td>Exit ticket (3 questions), homework, bring list for Session 8.</td></tr>
+      <tr><td class="t"><b>Total</b></td><td class="t"><b>180</b></td><td></td><td>Ends at 3:00.</td></tr>
+    </tbody>
+  </table>
+<p><b>In the room.</b> The pages estimate 95 + 95 minutes; the room has 150 for both. Each lesson gets its mental model, the live demo, one guided lab and the first project steps.</p>
+<p><b>Goes home (2 to 3 hours).</b> Lookalike scoring Steps 4 to 6 and review triage Steps 4 to 6; Exercises 1 to 3 of both lessons; both Quick Quizzes and journal entries; unfinished lab TODOs; optional <code class="inline">debug_knn.py</code>.</p>
+<p><b>Protect, in this order:</b> 4.1 Steps 2 to 4 (scaling decides everything) and Step 10 (noise); 4.2 Steps 2 and 8 (Bayes from counts, smoothing) and Step 10 (overconfidence). <b>Cut first:</b> 4.1 Step 9 (say the one sentence), 4.2 Steps 3, 4 and 9, then Lab B of each lesson.</p>
+
+  <div class="sec"><h2>Opening Segment</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">0:00</span><h3>Warm-up: Linear Models and Regularization</h3><span class="dur">10 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Timing</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">6m</td><td>Five retrieval questions on Lessons 3.1 and 3.2</td></tr>
+<tr><td class="t">4m</td><td>Reveal; two minutes on the two most common Checkpoint 1 gaps in the reports you read (likely: preprocessing fitted before the split, and a threshold chosen on the test set), answering one or two of the checkpoint questions learners were asked to bring</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Questions and answers</div>
+<ul class="tick">
+  <li><b>W1.</b> A log-target demand model gives <code class="inline">holiday_week</code> a coefficient of 0.405. In words? <b>Answer:</b> A holiday week sells about exp(0.405) − 1 ≈ 50% more, for every product. <i>Percent effects come back today as likelihood ratios that multiply.</i></li>
+  <li><b>W2.</b> A logistic regression flag has coefficient 0.69. What does this print, and what does it mean? (code on the slide) <b>Answer:</b> <code class="inline">1.99</code> <i>The odds ratio: the flag about doubles the odds. Naive Bayes today also multiplies odds, one clue at a time.</i></li>
+  <li><b>W3.</b> Degree 15 has training MSE 0.016 and test MSE 0.187 (noise floor 0.09). Which problem, and which dial helps? <b>Answer:</b> High variance (overfitting); a penalty such as Ridge's alpha, fewer features or more data. <i>Today's dial is k: k = 1 is the degree-15 model of nearest neighbors.</i></li>
+  <li><b>W4.</b> Temperature in °F and °C: Ridge gives [-0.607, -0.607], Lasso [-1.164, 0]. What does Lasso's zero mean? <b>Answer:</b> Only that the column was redundant given its twin, not that it has no effect. <i>Naive Bayes has the opposite problem with twins: it counts both.</i></li>
+  <li><b>W5.</b> Why must features be scaled before Ridge or Lasso? <b>Answer:</b> The penalty charges for weight size, and a feature's units decide how big its weight must be. <i>For kNN scaling is even more basic: it defines what "similar" means.</i></li>
+</ul>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Lesson Plans</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">4.1</span><h3>k-Nearest Neighbors</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Explain how k-nearest neighbors classifies a row, and compute Euclidean and Manhattan distances by hand</li>
+  <li>Show why unscaled features wreck distances, and fix it with a scaler inside a pipeline</li>
+  <li>Choose <code class="inline">k</code> with cross-validation and connect small and large <code class="inline">k</code> to variance and bias</li>
+  <li>Recognize the curse of dimensionality and why irrelevant features hurt kNN more than a linear model</li>
+  <li>Use <code class="inline">kneighbors</code> to show the lookalike customers behind a prediction</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: the real-estate agent's comps; distance and k</td></tr>
+<tr><td class="t">30m</td><td>Live demo: Steps 1 to 10</td></tr>
+<tr><td class="t">20m</td><td>Guided lab: <code class="inline">fraud_neighbors_starter.py</code> (everyone), then <code class="inline">lookalike_days_starter.py</code> in pairs</td></tr>
+<tr><td class="t">15m</td><td>Start the lesson project: Steps 1 to 3</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"Ask an experienced real-estate agent what a house will sell for. No formula: they pull up the comps, the five or six recently sold homes most like this one, and average their prices. That is kNN. Two questions decide whether the estimate is any good: what counts as similar (is one extra bedroom a bigger difference than ten years of age?) and how many comps (one is a gamble; fifty drag in houses that are not alike)."</p>
+<p>Write the two dials on the board: <b>distance</b> (which columns, what scale) and <b>k</b> (variance at 1, bias at 500). "Nothing is learned in advance: fit stores the table, predict does the work. A lazy learner."</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook <code class="inline">lesson_4_1</code>.</p>
+<ol class="steps">
+  <li><b>The churn split again (1m).</b> "Ten numeric features from Lesson 1.1, the canonical split."
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+features = [<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"days_since_last_order"</span>,
+            <span class="s">"returns_12m"</span>, <span class="s">"return_rate"</span>, <span class="s">"support_tickets_12m"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>]
+X = customers[features]
+y = customers[<span class="s">"churned"</span>]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=<span class="s">0.25</span>, stratify=y, random_state=<span class="s">42</span>)
+print(X_train.shape, X_test.shape)</pre>
+<pre class="out">(4500, 10) (1500, 10)</pre></li>
+  <li><b>A distance by hand (3m).</b> "Subtract, square, add, square root. Then ask where the distance comes from."
+<pre class="code">a, b = X_train.iloc[<span class="s">0</span>], X_train.iloc[<span class="s">1</span>]
+diff = a - b
+parts = pd.DataFrame({<span class="s">"customer A"</span>: a, <span class="s">"customer B"</span>: b, <span class="s">"squared diff"</span>: diff ** <span class="s">2</span>})
+parts[<span class="s">"share of total"</span>] = parts[<span class="s">"squared diff"</span>] / parts[<span class="s">"squared diff"</span>].sum()
+print(parts.round(<span class="s">3</span>).iloc[[<span class="s">0</span>, <span class="s">1</span>, <span class="s">2</span>, <span class="s">3</span>, <span class="s">9</span>]])
+print(<span class="s">f"Euclidean distance: {np.sqrt((diff ** 2).sum()):.2f}"</span>)</pre>
+<pre class="out">                 customer A  customer B  squared diff  share of total
+tenure_months          1.00       44.00      1849.000           0.026
+orders_12m             2.00       10.00        64.000           0.001
+spend_12m            630.30      578.82      2650.190           0.037
+avg_order_value      315.15       57.88     66187.853           0.935
+app_user               0.00        1.00         1.000           0.000
+Euclidean distance: 266.00</pre>
+94% from average order value. A brand-new customer with 2 orders and a 44-month app user with 10 count as close, because they spend about the same per order.</li>
+  <li><b>Scaled, every column has a say (2m).</b> "After StandardScaler one standard deviation counts the same in every column."
+<pre class="code"><span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+
+scaler = StandardScaler().set_output(transform=<span class="s">"pandas"</span>).fit(X_train)
+a_s, b_s = scaler.transform(X_train.iloc[[<span class="s">0</span>, <span class="s">1</span>]]).to_numpy()
+share = pd.Series((a_s - b_s) ** <span class="s">2</span>, index=features)
+print((share / share.sum()).round(<span class="s">3</span>).sort_values(ascending=<span class="k">False</span>).head(<span class="s">4</span>))
+print(<span class="s">f"Euclidean distance (scaled): {np.sqrt(((a_s - b_s) ** 2).sum()):.2f}"</span>)</pre>
+<pre class="out">avg_order_value    0.306
+orders_12m         0.301
+app_user           0.205
+tenure_months      0.097
+dtype: float64
+Euclidean distance (scaled): 4.52</pre></li>
+  <li><b>Does it matter for predictions? (3m).</b> "Predict the AUC gap."
+<pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> roc_auc_score
+<span class="k">from</span> sklearn.neighbors <span class="k">import</span> KNeighborsClassifier
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+
+<span class="k">for</span> name, model <span class="k">in</span> [(<span class="s">"unscaled"</span>, KNeighborsClassifier(n_neighbors=<span class="s">15</span>)),
+                    (<span class="s">"scaled"</span>, make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=<span class="s">15</span>)))]:
+    model.fit(X_train, y_train)
+    auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, <span class="s">1</span>])
+    print(<span class="s">f"{name:9s} accuracy {model.score(X_test, y_test):.3f}   ROC AUC {auc:.3f}"</span>)</pre>
+<pre class="out">unscaled  accuracy 0.851   ROC AUC 0.774
+scaled    accuracy 0.858   ROC AUC 0.836</pre>
+0.774 against 0.836, same algorithm, same k. Accuracy barely moves: Lesson 1.4 again.</li>
+  <li><b>Probabilities are vote shares (2m).</b> "With 15 neighbors there are only 16 possible probabilities."
+<pre class="code">knn = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=<span class="s">15</span>)).fit(X_train, y_train)
+proba = knn.predict_proba(X_test)[:, <span class="s">1</span>]
+print(<span class="s">"first five churn probabilities:"</span>, proba[:<span class="s">5</span>].round(<span class="s">3</span>))
+print(<span class="s">"as counts out of 15:"</span>, (proba[:<span class="s">5</span>] * <span class="s">15</span>).round().astype(int))
+print(<span class="s">"distinct probability values:"</span>, np.unique(proba).size)</pre>
+<pre class="out">first five churn probabilities: [0.133 0.467 0.133 0.067 0.133]
+as counts out of 15: [2 7 2 1 2]
+distinct probability values: 15</pre></li>
+  <li><b>Ask for the lookalikes (4m).</b> "kneighbors lives on the classifier, so transform the customer with the pipeline's scaler first."
+<pre class="code">riskiest = int(np.argmax(proba))
+customer = X_test.iloc[[riskiest]]
+distances, positions = knn[-<span class="s">1</span>].kneighbors(knn[:-<span class="s">1</span>].transform(customer))
+lookalikes = X_train.iloc[positions[<span class="s">0</span>]].assign(churned=y_train.iloc[positions[<span class="s">0</span>]].to_numpy(),
+                                              distance=distances[<span class="s">0</span>].round(<span class="s">2</span>))
+print(customer[[<span class="s">"tenure_months"</span>, <span class="s">"days_since_last_order"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>]])
+print(lookalikes[[<span class="s">"days_since_last_order"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>, <span class="s">"churned"</span>, <span class="s">"distance"</span>]].head(<span class="s">4</span>))
+print(<span class="s">f"lookalikes who churned: {lookalikes['churned'].sum()} of 15 -&gt; probability {proba[riskiest]:.3f}"</span>)</pre>
+<pre class="out">      tenure_months  days_since_last_order  discount_share  app_user
+4050             65                    364           0.432         0
+      days_since_last_order  discount_share  app_user  churned  distance
+4799                    364           0.231         0        1      1.70
+4997                    220           0.484         0        1      2.00
+2361                    254           0.558         0        1      2.09
+2385                    364           0.110         0        1      2.10
+lookalikes who churned: 14 of 15 -&gt; probability 0.933</pre>
+14 of 15 churned: a long gap and no app. "These 15 customers looked like her" is an explanation a retention agent understands. Privacy caveat: in a real system summarize, do not print other customers.</li>
+  <li><b>The k dial (4m).</b> "Watch training and test AUC."
+<pre class="code"><span class="k">for</span> k <span class="k">in</span> [<span class="s">1</span>, <span class="s">5</span>, <span class="s">15</span>, <span class="s">51</span>, <span class="s">151</span>, <span class="s">501</span>]:
+    m = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=k)).fit(X_train, y_train)
+    train_auc = roc_auc_score(y_train, m.predict_proba(X_train)[:, <span class="s">1</span>])
+    test_auc = roc_auc_score(y_test, m.predict_proba(X_test)[:, <span class="s">1</span>])
+    print(<span class="s">f"k={k:3d}   train AUC {train_auc:.3f}   test AUC {test_auc:.3f}"</span>)</pre>
+<pre class="out">k=  1   train AUC 1.000   test AUC 0.645
+k=  5   train AUC 0.932   test AUC 0.789
+k= 15   train AUC 0.893   test AUC 0.836
+k= 51   train AUC 0.865   test AUC 0.842
+k=151   train AUC 0.848   test AUC 0.837
+k=501   train AUC 0.833   test AUC 0.823</pre>
+k = 1: training AUC 1.000 because every customer is its own nearest neighbor. Show the lesson's three decision maps (k = 1, 25, 301): islands, the 150-day cliff, broad strokes.</li>
+  <li><b>Choose k by cross-validation (4m).</b> "Training rows only, as with alpha."
+<pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> StratifiedKFold, cross_val_score
+
+cv = StratifiedKFold(n_splits=<span class="s">5</span>, shuffle=<span class="k">True</span>, random_state=<span class="s">42</span>)
+<span class="k">for</span> k <span class="k">in</span> [<span class="s">5</span>, <span class="s">15</span>, <span class="s">25</span>, <span class="s">51</span>, <span class="s">101</span>, <span class="s">151</span>]:
+    scores = cross_val_score(make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=k)),
+                             X_train, y_train, cv=cv, scoring=<span class="s">"roc_auc"</span>)
+    print(<span class="s">f"k={k:3d}   CV AUC {scores.mean():.3f} ± {scores.std():.3f}"</span>)</pre>
+<pre class="out">k=  5   CV AUC 0.778 ± 0.012
+k= 15   CV AUC 0.826 ± 0.016
+k= 25   CV AUC 0.834 ± 0.023
+k= 51   CV AUC 0.839 ± 0.018
+k=101   CV AUC 0.838 ± 0.021
+k=151   CV AUC 0.835 ± 0.021</pre>
+A flat plateau from 25 to 151: choose a range, not a magic number. Tuned kNN beats logistic regression's 0.823 on these columns, because it can follow the 150-day cliff.</li>
+  <li><b>The curse of dimensionality (3m).</b> "Random points: nearest against farthest distance."
+<pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> pairwise_distances
+
+rng = np.random.default_rng(<span class="s">42</span>)
+<span class="k">for</span> n_dims <span class="k">in</span> [<span class="s">2</span>, <span class="s">10</span>, <span class="s">100</span>, <span class="s">1000</span>]:
+    points = rng.uniform(size=(<span class="s">1000</span>, n_dims))
+    d = pairwise_distances(points[:<span class="s">1</span>], points[<span class="s">1</span>:])[<span class="s">0</span>]
+    print(<span class="s">f"{n_dims:4d} dimensions: nearest / farthest distance = {d.min() / d.max():.3f}"</span>)</pre>
+<pre class="out">   2 dimensions: nearest / farthest distance = 0.010
+  10 dimensions: nearest / farthest distance = 0.317
+ 100 dimensions: nearest / farthest distance = 0.715
+1000 dimensions: nearest / farthest distance = 0.890</pre>
+In 1,000 dimensions the nearest point is only 10% closer than the farthest: "nearest" stops meaning "similar".</li>
+  <li><b>Noise hurts kNN, not the weighted model (4m).</b> "Add useless columns to both."
+<pre class="code"><span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+
+<span class="k">for</span> n_noise <span class="k">in</span> [<span class="s">0</span>, <span class="s">5</span>, <span class="s">20</span>, <span class="s">50</span>]:
+    noise = pd.DataFrame(rng.normal(size=(len(X), n_noise)), index=X.index).add_prefix(<span class="s">"noise_"</span>)
+    X_noisy = pd.concat([X, noise], axis=<span class="s">1</span>)
+    Xn_train, Xn_test = X_noisy.loc[X_train.index], X_noisy.loc[X_test.index]
+    aucs = []
+    <span class="k">for</span> clf <span class="k">in</span> [KNeighborsClassifier(n_neighbors=<span class="s">51</span>), LogisticRegression()]:
+        m = make_pipeline(StandardScaler(), clf).fit(Xn_train, y_train)
+        aucs.append(roc_auc_score(y_test, m.predict_proba(Xn_test)[:, <span class="s">1</span>]))
+    print(<span class="s">f"{n_noise:2d} noise columns   kNN AUC {aucs[0]:.3f}   logistic AUC {aucs[1]:.3f}"</span>)</pre>
+<pre class="out"> 0 noise columns   kNN AUC 0.842   logistic AUC 0.823
+ 5 noise columns   kNN AUC 0.823   logistic AUC 0.824
+20 noise columns   kNN AUC 0.790   logistic AUC 0.820
+50 noise columns   kNN AUC 0.755   logistic AUC 0.816</pre>
+Logistic regression gives noise near-zero weights; kNN cannot. "For kNN, feature selection is part of the model": the project tests a lean set for that reason.</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>No scaler, or a scaler fitted outside the pipeline.</b> Symptom: AUC near 0.77, neighbors that share only an order value. Coach: "Which column decides the distance? Print the shares."</li>
+  <li><b>k chosen by training AUC, or k = 5 left at the default.</b> Symptoms: "k = 1 is perfect"; a ranking full of ties. Coach: "On which rows? How many distinct probabilities can k = 5 give?"</li>
+  <li><b>Lookalikes searched with an unscaled row, or too many columns</b> (<code class="inline">kneighbors</code>). Symptom: lookalikes that look nothing like the customer. Coach: "Did the customer go through the same scaler as the stored rows?" (<code class="inline">debug_knn.py</code> has exactly this bug.)</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (12m, everyone):</b> <code class="inline">labs/module-07/l4_1-knn/fraud_neighbors_starter.py</code>; reference <code class="inline">labs/module-07/l4_1-knn/fraud_neighbors_solution.py</code>. kNN on fraud, where dollars, days and 0/1 flags meet in one distance.</li>
+  <li><b>Expected, Lab A:</b> account age makes 99.7% of the first two payments' unscaled distance; unscaled kNN AUC 0.659, AP 0.056; scaled AUC 0.812, AP 0.397; logistic regression AUC 0.848, AP 0.444; CV AP 0.362, 0.448, 0.468 for k = 5, 51, 201; k = 5 gives 6 distinct probabilities (14,588 test payments at 0) and test AP 0.329; k = 201 gives 43 and test AP 0.419.</li>
+  <li><b>Debrief Lab A:</b> "Scaling multiplied AP by seven. Tuned kNN still trails logistic regression on fraud: nine columns, some weak, every one with an equal vote."</li>
+  <li><b>Lab B (8m, pairs):</b> <code class="inline">labs/module-07/l4_1-knn/lookalike_days_starter.py</code>; reference <code class="inline">labs/module-07/l4_1-knn/lookalike_days_solution.py</code>. KNeighborsRegressor forecasts Boise's 2025 days from lookalike days in 2023 and 2024.</li>
+  <li><b>Expected, Lab B:</b> weekday mean $1,669; raw dow and day-of-year unscaled $1,889, scaled $1,327; cyclical calendar plus events: k = 1 $1,389, k = 5 $1,244, k = 15 $1,256, always under-forecasting ($+517 to $+1,016); Boise grew $6,831 → $7,821 → $8,342 a day; trained on 2024 only, k = 5: $1,202 (+$458).</li>
+  <li><b>Debrief Lab B:</b> "An average of past days can never forecast a level it has never seen. kNN cannot extrapolate a trend; a linear model can (Session 6)."</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-07/l4_1-knn/debug_knn.py</code>: two loud bugs (<code class="inline">ValueError: Expected n_neighbors &lt;= n_samples_fit, but n_neighbors = 51, n_samples_fit = 40, n_samples = 3</code>; <code class="inline">ValueError: Input X contains NaN.</code>) and two silent ones (no scaler: CV AUC 0.787; <code class="inline">kneighbors</code> on an unscaled row: 39 of 51 lookalikes with a median of 364 days). Fixed: CV AUC 0.854, 3 of 51.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The lesson project is <b>lookalike churn scoring</b>: a shortlist where every name comes with the lookalikes that justify it. In the room, Steps 1 to 3.</p>
+<ul class="tick">
+  <li>Step 1: <code class="inline">4500 1500 test churn rate 0.165</code>. Step 2: baseline AUC 0.500, logistic regression 0.823.</li>
+  <li>Step 3: features and k by CV: the lean six with k = 51 and distance weights wins (CV AUC 0.8552).</li>
+  <li><b>Goes home:</b> Step 4 (test AUC 0.855; 31 churners in the top 50), Step 5 (a reason per customer from a summary of lookalikes) and Step 6 (<code class="inline">lookalike_shortlist.csv</code>).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<ul class="tick">
+  <li>Why is the k = 1 training AUC exactly 1.000? <b>Answer:</b> every training customer is its own nearest neighbor.</li>
+  <li>What does <code class="inline">predict_proba</code> return for kNN with k = 15? <b>Answer:</b> the share of the 15 neighbors in each class.</li>
+  <li>Name two things kNN needs that logistic regression does not. <b>Answer:</b> scaled features (distance is the model) and the stored training rows at prediction time.</li>
+</ul>
+<p>Workbook self-check, items Q1 to Q6.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q1</b> <span data-sc="1"><code class="inline">[[0.333 0.667]]</code></span>; <b>Q2</b> <span data-sc="2">A) Variance falls and bias rises: predictions drift toward the overall churn rate</span>; <b>Q3</b> <span data-sc="3">C) Account age runs up to 7,030 days, so it alone decided who the neighbors were; the flags that signal fraud had no say</span>; <b>Q4</b> <span data-sc="4">B) kNN gives every scaled column an equal say in the distance; logistic regression learns near-zero weights for useless columns</span>; <b>Q5</b> <span data-sc="5"><code class="inline">[[5.]]</code></span>; <b>Q6</b> <span data-sc="6">D) The scaler and every training customer, because each prediction searches them</span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> do TODO 1 of Lab A together; keep the two dials on the board and ask which one each step touches. <b>Stretch:</b> the lesson's Exercise 4 (backward elimination by hand) and the Bonus Challenge (feature weights before the distance).</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">4.2</span><h3>Naive Bayes</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Compute a posterior probability by hand with Bayes' rule, starting from counts in a table</li>
+  <li>Explain the "naive" independence assumption and show what it costs when features repeat each other</li>
+  <li>Turn review text into word counts with <code class="inline">CountVectorizer</code> and classify it with <code class="inline">MultinomialNB</code> inside a pipeline</li>
+  <li>Explain what the smoothing parameter <code class="inline">alpha</code> prevents, and choose between the Multinomial, Bernoulli, Complement and Gaussian variants</li>
+  <li>Tell a model that ranks well apart from one whose probabilities you can take at face value</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: the seasoned store manager; prior, clues, posterior; the naive habit</td></tr>
+<tr><td class="t">30m</td><td>Live demo: Steps 1 to 10</td></tr>
+<tr><td class="t">20m</td><td>Guided lab: <code class="inline">fraud_flags_bayes_starter.py</code> (everyone), then <code class="inline">review_category_starter.py</code> in pairs</td></tr>
+<tr><td class="t">15m</td><td>Start the lesson project: Steps 1 to 3</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"A store manager has read every comment card for years. Before reading a new one, they have a hunch: three cards in four are happy. That is the prior. Then they read clue by clue. 'Returned' nudges them strongly toward unhappy; 'love' nudges them back. Each clue multiplies the odds. At the end the hunch has become a judgment: the posterior. The manager has one habit: they weigh each word on its own, as if words did not influence each other. That is the naive part. Often wrong, still surprisingly good."</p>
+<p>Write Bayes' rule and, under it, the odds form: <b>posterior odds = prior odds × likelihood ratio × likelihood ratio × ...</b></p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook <code class="inline">lesson_4_2</code>.</p>
+<ol class="steps">
+  <li><b>Reviews, a clean yes or no (2m).</b> "Drop the mixed 3-star reviews; split as always."
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+
+reviews = pd.read_csv(<span class="s">"data/reviews.csv"</span>)
+print(reviews.shape)
+print(reviews[<span class="s">"rating"</span>].value_counts().sort_index().to_dict())
+
+labeled = reviews[reviews[<span class="s">"rating"</span>] != <span class="s">3</span>].copy()
+labeled[<span class="s">"positive"</span>] = (labeled[<span class="s">"rating"</span>] &gt;= <span class="s">4</span>).astype(int)
+train, test = train_test_split(labeled, test_size=<span class="s">0.25</span>, stratify=labeled[<span class="s">"positive"</span>], random_state=<span class="s">42</span>)
+X_train, y_train = train[<span class="s">"text"</span>], train[<span class="s">"positive"</span>]
+X_test, y_test = test[<span class="s">"text"</span>], test[<span class="s">"positive"</span>]
+print(len(labeled), <span class="s">"labeled reviews,"</span>, <span class="s">f"{labeled['positive'].mean():.1%} positive"</span>)
+print(len(train), <span class="s">"train,"</span>, len(test), <span class="s">"test"</span>)</pre>
+<pre class="out">(4000, 8)
+{1: 230, 2: 558, 3: 905, 4: 1093, 5: 1214}
+3095 labeled reviews, 74.5% positive
+2321 train, 774 test</pre></li>
+  <li><b>Bayes' rule from counts (4m).</b> "Prior, likelihood, posterior, for one word."
+<pre class="code">has_word = X_train.str.contains(<span class="s">r"\breturned\b"</span>, case=<span class="k">False</span>)
+is_neg = y_train == <span class="s">0</span>
+p_neg = is_neg.mean()
+p_word_given_neg = has_word[is_neg].mean()
+p_word_given_pos = has_word[~is_neg].mean()
+p_word = has_word.mean()
+posterior = p_word_given_neg * p_neg / p_word
+print(<span class="s">f"prior P(negative)          {p_neg:.3f}"</span>)
+print(<span class="s">f"P(word | negative)         {p_word_given_neg:.4f}"</span>)
+print(<span class="s">f"P(word | positive)         {p_word_given_pos:.4f}"</span>)
+print(<span class="s">f"posterior P(negative|word) {posterior:.3f}"</span>)
+print(<span class="s">f"check by direct counting   {is_neg[has_word].mean():.3f}"</span>)</pre>
+<pre class="out">prior P(negative)          0.255
+P(word | negative)         0.0406
+P(word | positive)         0.0029
+posterior P(negative|word) 0.828
+check by direct counting   0.828</pre>
+The likelihood ratio (about 14) lifts 0.25 to 0.83. With one clue, Bayes' rule equals counting. With 20 words no combination repeats: that is why we need the naive assumption.</li>
+  <li><b>A bag of words (2m).</b> "CountVectorizer: one column per word, word order thrown away."
+<pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+
+demo = [<span class="s">"The tent leaked. Returned it."</span>, <span class="s">"Great tent, great price."</span>]
+demo_vec = CountVectorizer()
+demo_counts = demo_vec.fit_transform(demo)
+print(demo_vec.get_feature_names_out())
+print(demo_counts.toarray())
+print(type(demo_counts).__name__)</pre>
+<pre class="out">['great' 'it' 'leaked' 'price' 'returned' 'tent' 'the']
+[[0 1 1 0 1 1 1]
+ [2 0 0 1 0 1 0]]
+csr_matrix</pre></li>
+  <li><b>Sparse on purpose (1m).</b> "333 words, about 18 per review."
+<pre class="code">vec = CountVectorizer()
+counts_train = vec.fit_transform(X_train)
+print(counts_train.shape)
+print(<span class="s">f"non-zero cells: {counts_train.nnz:,} of {counts_train.shape[0] * counts_train.shape[1]:,}"</span>)</pre>
+<pre class="out">(2321, 333)
+non-zero cells: 40,981 of 772,893</pre></li>
+  <li><b>MultinomialNB against the baseline (3m).</b> "Vectorizer and model in one pipeline, so the vocabulary is learned from training reviews only."
+<pre class="code"><span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.naive_bayes <span class="k">import</span> MultinomialNB
+<span class="k">from</span> sklearn.dummy <span class="k">import</span> DummyClassifier
+
+baseline = DummyClassifier(strategy=<span class="s">"most_frequent"</span>).fit(X_train, y_train)
+nb = make_pipeline(CountVectorizer(), MultinomialNB())
+nb.fit(X_train, y_train)
+print(<span class="s">f"baseline accuracy    {baseline.score(X_test, y_test):.3f}"</span>)
+print(<span class="s">f"Naive Bayes accuracy {nb.score(X_test, y_test):.3f}"</span>)
+
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> classification_report, roc_auc_score
+
+pred = nb.predict(X_test)
+print(classification_report(y_test, pred, target_names=[<span class="s">"negative"</span>, <span class="s">"positive"</span>], digits=<span class="s">3</span>))
+print(<span class="s">f"ROC AUC {roc_auc_score(y_test, nb.predict_proba(X_test)[:, 1]):.3f}"</span>)</pre>
+<pre class="out">baseline accuracy    0.745
+Naive Bayes accuracy 0.857
+              precision    recall  f1-score   support
+
+    negative      0.692     0.787     0.736       197
+    positive      0.924     0.880     0.902       577
+
+    accuracy                          0.857       774
+   macro avg      0.808     0.834     0.819       774
+weighted avg      0.865     0.857     0.859       774
+
+ROC AUC 0.921</pre>
+Recall 0.787 for negative reviews, AUC 0.92: a strong ranking for a triage list.</li>
+  <li><b>What it counted (3m).</b> "feature_log_prob_ row 1 minus row 0: each word's nudge."
+<pre class="code">vocab = nb.named_steps[<span class="s">"countvectorizer"</span>].get_feature_names_out()
+mnb = nb.named_steps[<span class="s">"multinomialnb"</span>]
+print(mnb.classes_, mnb.class_count_)
+log_ratio = pd.Series(mnb.feature_log_prob_[<span class="s">1</span>] - mnb.feature_log_prob_[<span class="s">0</span>], index=vocab).sort_values()
+print(<span class="s">"most negative:"</span>, log_ratio.head(<span class="s">5</span>).round(<span class="s">2</span>).to_dict())
+print(<span class="s">"most positive:"</span>, log_ratio.tail(<span class="s">5</span>).round(<span class="s">2</span>).to_dict())</pre>
+<pre class="out">[0 1] [ 591. 1730.]
+most negative: {'save': -3.4, 'your': -3.4, 'very': -3.29, 'disappointed': -3.21, 'regret': -3.2}
+most positive: {'stars': 3.43, 'from': 3.43, 'regrets': 3.46, 'no': 3.46, 'love': 3.58}</pre>
+"save" and "your" from "save your money"; "no" is POSITIVE because of "no regrets". The model knows counts, not meaning.</li>
+  <li><b>Try your own reviews (3m).</b> "Predict before running."
+<pre class="code">new_reviews = [
+    <span class="s">"Leaked on the first night and the zipper broke. Returned it."</span>,
+    <span class="s">"Light, warm and packs down small. Would buy again."</span>,
+    <span class="s">"Not bad at all for the price."</span>,
+]
+<span class="k">for</span> text, p <span class="k">in</span> zip(new_reviews, nb.predict_proba(new_reviews)[:, <span class="s">1</span>]):
+    print(<span class="s">f"P(positive) = {p:.3f}  {text}"</span>)</pre>
+<pre class="out">P(positive) = 0.063  Leaked on the first night and the zipper broke. Returned it.
+P(positive) = 0.302  Light, warm and packs down small. Would buy again.
+P(positive) = 0.745  Not bad at all for the price.</pre>
+"Would buy again" reads negative word by word ("would not buy again" is common). Bag-of-words cannot see negation.</li>
+  <li><b>Smoothing: never say never (4m).</b> "'love' never appears in a negative review."
+<pre class="code">love = counts_train[:, vec.vocabulary_[<span class="s">"love"</span>]].toarray().ravel()
+print(<span class="s">"'love' in negative reviews:"</span>, love[y_train.to_numpy() == <span class="s">0</span>].sum())
+print(<span class="s">"'love' in positive reviews:"</span>, love[y_train.to_numpy() == <span class="s">1</span>].sum())
+tricky = [<span class="s">"Leaked at the seams, fell apart after three trips and I returned it. Love the color though."</span>]
+<span class="k">for</span> alpha <span class="k">in</span> [<span class="s">1e-10</span>, <span class="s">1.0</span>]:
+    model = make_pipeline(CountVectorizer(), MultinomialNB(alpha=alpha)).fit(X_train, y_train)
+    print(<span class="s">f"alpha={alpha:g}  P(negative), P(positive) = {model.predict_proba(tricky).round(3)[0]}"</span>)</pre>
+<pre class="out">'love' in negative reviews: 0
+'love' in positive reviews: 106
+alpha=1e-10  P(negative), P(positive) = [0. 1.]
+alpha=1  P(negative), P(positive) = [0.973 0.027]</pre>
+Without smoothing one word vetoes all the evidence. Write the formula: (count + alpha) / (total + alpha × vocabulary).</li>
+  <li><b>Four flavors (2m).</b> "Counts, presence, complement."
+<pre class="code"><span class="k">from</span> sklearn.naive_bayes <span class="k">import</span> BernoulliNB, ComplementNB
+
+variants = {
+    <span class="s">"MultinomialNB"</span>: make_pipeline(CountVectorizer(), MultinomialNB()),
+    <span class="s">"ComplementNB"</span>: make_pipeline(CountVectorizer(), ComplementNB()),
+    <span class="s">"BernoulliNB"</span>: make_pipeline(CountVectorizer(binary=<span class="k">True</span>), BernoulliNB()),
+}
+<span class="k">for</span> name, model <span class="k">in</span> variants.items():
+    model.fit(X_train, y_train)
+    auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, <span class="s">1</span>])
+    print(<span class="s">f"{name:14s} accuracy {model.score(X_test, y_test):.3f}  AUC {auc:.3f}"</span>)</pre>
+<pre class="out">MultinomialNB  accuracy 0.857  AUC 0.921
+ComplementNB   accuracy 0.835  AUC 0.921
+BernoulliNB    accuracy 0.859  AUC 0.923</pre>
+All within a couple of points on short reviews; try two or three.</li>
+  <li><b>GaussianNB, and the cost of being naive (6m).</b> "A bell curve per feature per class on churn."
+<pre class="code"><span class="k">from</span> sklearn.naive_bayes <span class="k">import</span> GaussianNB
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+features = [<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"days_since_last_order"</span>,
+            <span class="s">"returns_12m"</span>, <span class="s">"return_rate"</span>, <span class="s">"support_tickets_12m"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>]
+Xc_train, Xc_test, yc_train, yc_test = train_test_split(
+    customers[features], customers[<span class="s">"churned"</span>], test_size=<span class="s">0.25</span>, stratify=customers[<span class="s">"churned"</span>], random_state=<span class="s">42</span>
+)
+gnb = GaussianNB().fit(Xc_train, yc_train)
+print(<span class="s">"priors:"</span>, gnb.class_prior_.round(<span class="s">3</span>))
+learned = pd.DataFrame({<span class="s">"mean_stayed"</span>: gnb.theta_[<span class="s">0</span>], <span class="s">"mean_churned"</span>: gnb.theta_[<span class="s">1</span>],
+                        <span class="s">"sd_stayed"</span>: gnb.var_[<span class="s">0</span>] ** <span class="s">0.5</span>, <span class="s">"sd_churned"</span>: gnb.var_[<span class="s">1</span>] ** <span class="s">0.5</span>}, index=features)
+print(learned.loc[[<span class="s">"days_since_last_order"</span>, <span class="s">"discount_share"</span>, <span class="s">"tenure_months"</span>]].round(<span class="s">2</span>))
+
+<span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+
+logreg = make_pipeline(StandardScaler(), LogisticRegression()).fit(Xc_train, yc_train)
+<span class="k">for</span> name, model <span class="k">in</span> [(<span class="s">"GaussianNB"</span>, gnb), (<span class="s">"logistic regression"</span>, logreg)]:
+    auc = roc_auc_score(yc_test, model.predict_proba(Xc_test)[:, <span class="s">1</span>])
+    print(<span class="s">f"{name:20s} accuracy {model.score(Xc_test, yc_test):.3f}  AUC {auc:.3f}"</span>)
+
+independent = [f <span class="k">for</span> f <span class="k">in</span> features <span class="k">if</span> f <span class="k">not</span> <span class="k">in</span> (<span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"returns_12m"</span>, <span class="s">"return_rate"</span>)]
+gnb_lean = GaussianNB().fit(Xc_train[independent], yc_train)
+auc = roc_auc_score(yc_test, gnb_lean.predict_proba(Xc_test[independent])[:, <span class="s">1</span>])
+print(<span class="s">f"GaussianNB, {len(independent)} features: accuracy {gnb_lean.score(Xc_test[independent], yc_test):.3f}  AUC {auc:.3f}"</span>)
+
+p_gnb = gnb.predict_proba(Xc_test)[:, <span class="s">1</span>]
+confident = p_gnb &gt; <span class="s">0.9</span>
+print(<span class="s">f"GaussianNB says above 90% for {confident.sum()} customers; {yc_test[confident].mean():.1%} of them churned"</span>)</pre>
+<pre class="out">priors: [0.835 0.165]
+                       mean_stayed  mean_churned  sd_stayed  sd_churned
+days_since_last_order        68.98        156.94      71.21      117.90
+discount_share                0.19          0.29       0.17        0.21
+tenure_months                42.26         37.53      29.45       35.24
+GaussianNB           accuracy 0.815  AUC 0.778
+logistic regression  accuracy 0.848  AUC 0.823
+GaussianNB, 6 features: accuracy 0.845  AUC 0.813
+GaussianNB says above 90% for 102 customers; 60.8% of them churned</pre>
+Churners averaged 157 days since their last order against 69; show the bell-curve chart on the page. Fewer columns, better model: duplicated evidence was counted twice. And above 90% sure, only 61% churned: rank with it, recalibrate before quoting it.</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>The wrong variant for the input.</b> Raw text into the model (<code class="inline">could not convert string to float</code>), a scaler in front of MultinomialNB (<code class="inline">Negative values</code>), word counts into GaussianNB (<code class="inline">Sparse data</code>). Coach: "What does this variant expect: counts, flags or measurements?"</li>
+  <li><b>alpha = 0 or tiny.</b> One word vetoes the rest. Coach: "What is P(word | class) for a word never seen in that class?"</li>
+  <li><b>Probabilities quoted as facts, or stop words removed by habit.</b> Coach: "Above 90% sure: how many really churned?" and "Is 'not' a stop word?"</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (12m, everyone):</b> <code class="inline">labs/module-07/l4_2-naive-bayes/fraud_flags_bayes_starter.py</code>; reference <code class="inline">labs/module-07/l4_2-naive-bayes/fraud_flags_bayes_solution.py</code>. Bayes' rule on fraud warning signs, the naive product checked against direct counts, BernoulliNB on nine flags.</li>
+  <li><b>Expected, Lab A:</b> prior 0.0088; country mismatch 0.137 against 0.0121, posterior 0.091 by both routes; likelihood ratios from 11.3 (country mismatch) to 1.9 (new account); night + new device: naive 0.280 against counted 0.425 (193 payments); big amount + gift card: naive 0.185 against 0.508 (59); BernoulliNB AUC 0.810, AP 0.439 (21 payments above 0.9, all fraud); logistic regression AUC 0.810, AP 0.435 (8 above 0.9).</li>
+  <li><b>Debrief Lab A:</b> "Here the naive answer is too LOW: among frauds these flags come together (night on a new device), so treating them as independent misses that they reinforce each other. Independence can fail in either direction. Nine 0/1 flags, and Naive Bayes ranks as well as logistic regression."</li>
+  <li><b>Lab B (8m, pairs):</b> <code class="inline">labs/module-07/l4_2-naive-bayes/review_category_starter.py</code>; reference <code class="inline">labs/module-07/l4_2-naive-bayes/review_category_solution.py</code>. Ten classes: which product category is a review about?</li>
+  <li><b>Expected, Lab B:</b> baseline 0.237; MultinomialNB 0.586, ComplementNB 0.592, logistic regression 0.605; CV accuracy 0.579 to 0.583 for alpha 0.1 to 3; Tents' telling words start with canopy, camp, tent; most frequent mix-ups Camp Kitchen → Accessories (20), Apparel ↔ Paddling (20, 19); lowest recall Packs 0.39.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The lesson project is <b>review triage for customer care</b>. In the room, Steps 1 to 3.</p>
+<ul class="tick">
+  <li>Step 1: <code class="inline">2321 774 905 ['R02194', 'R02522', 'R03559']</code>. Step 2: word pairs help: CV AUC 0.899 → 0.912. Step 3: alpha 0.3 (0.9123), barely different from the others.</li>
+  <li><b>Goes home:</b> Step 4 (test accuracy 0.868, AUC 0.934, negative recall 0.843), Step 5 (rank the 905 three-star reviews; 457 read as negative) and Step 6 (60 possible star/text mismatches; two CSV files).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<ul class="tick">
+  <li>Prior 0.25, likelihood ratio 3: posterior? <b>Answer:</b> odds 1/3 × 3 = 1, so 0.5.</li>
+  <li>Why does MultinomialNB refuse scaled data? <b>Answer:</b> it models counts; scaling makes negative numbers.</li>
+  <li>AUC 0.81 but above 0.9 only 61% churned: use it how? <b>Answer:</b> for ranking; recalibrate before quoting probabilities.</li>
+</ul>
+<p>Workbook self-check, items Q7 to Q12.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q7</b> <span data-sc="7">D) About 0.71</span>; <b>Q8</b> <span data-sc="8"><code class="inline">[[1 2]
+ [1 0]]</code></span>; <b>Q9</b> <span data-sc="9">A) "love" never appeared in a negative training review, so with almost no smoothing its probability in that class is about 0, and one zero factor vetoes everything else</span>; <b>Q10</b> <span data-sc="10">C) GaussianNB, unscaled: it models continuous measurements with a bell curve per class</span>; <b>Q11</b> <span data-sc="11">B) The dropped columns repeat information already present, and Naive Bayes counts each one as a new, independent clue</span>; <b>Q12</b> <span data-sc="12"><code class="inline">True False</code></span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> do Lab A's TODO 1 on the projector with the odds form of Bayes' rule on the board. <b>Stretch:</b> the lesson's Exercise 4 (GaussianNB by hand) and the Bonus Challenge (<code class="inline">CalibratedClassifierCV</code> and the Brier score).</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Closing</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Exit ticket (3 questions, no notes, 4 minutes)</div>
+<ol class="steps">
+  <li>Why does kNN need scaled features, and why does MultinomialNB refuse them? <b>Answer:</b> kNN's distance adds raw differences, so units decide similarity; MultinomialNB models counts, and scaling creates negative values.</li>
+  <li>k = 1 gives training AUC 1.000 and test AUC 0.645. Name the problem and the fix. <b>Answer:</b> high variance (each customer is its own neighbor); choose a larger k by cross-validation.</li>
+  <li>Prior P(negative) = 0.25; a word appears in 8% of negative and 2% of positive reviews. Posterior? <b>Answer:</b> odds 1/3 × 4 = 4/3, so P ≈ 0.57.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Homework (about 2 to 3 hours)</div>
+<ul class="tick">
+  <li><b>Finish both lesson projects.</b> 4.1 Steps 4 to 6 (test AUC 0.855, a reason for every name, <code class="inline">lookalike_shortlist.csv</code>); 4.2 Steps 4 to 6 (accuracy 0.868, AUC 0.934; 3-star ranking; mismatches; <code class="inline">triage_three_star.csv</code>, <code class="inline">rating_mismatches.csv</code>).</li>
+  <li><b>Lesson exercises.</b> 4.1: Exercises 1 to 3 (distances by hand, Manhattan or Euclidean, kNN for regression); 4.2: Exercises 1 to 3 (Bayes for "regret", how small can the training set be, fool the model). Exercise 4 of each is a stretch.</li>
+  <li><b>Both Quick Quizzes and both journal entries.</b></li>
+  <li><b>Before the Next Lesson:</b> 4.1: MinMaxScaler instead of StandardScaler; predict, then check, a duplicated recency column. 4.2: read five mismatches; predict BernoulliNB on long manuals.</li>
+  <li><b>Labs not finished in class;</b> optional <code class="inline">debug_knn.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Bring list for Session 8</div>
+<ul class="tick">
+  <li>A laptop on which <code class="inline">check_environment.py</code> ends with READY (nothing new to install).</li>
+  <li>The <code class="inline">pinecrest-ml</code> folder with <code class="inline">data/</code> and <code class="inline">labs/</code>; Session 8's starters are in <code class="inline">labs/module-08/</code>.</li>
+  <li>Your 4.1 project notebook and <code class="inline">lookalike_shortlist.csv</code> (Session 8 compares support vector machines and trees with today's models on churn) and your 4.2 notebook (the review split returns in Lesson 11.1).</li>
+  <li>The workbook and the journal. No downloads.</li>
+</ul>
+</div>
+
+  <div class="sec"><h2>If You Run Long or Short</h2><span class="rule"></span></div>
+<div class="blk warn"><div class="h">Running long: what to protect and what to cut first</div>
+<ul class="tick">
+  <li><b>Protect:</b> 4.1 Steps 2 to 4 and 10; 4.2 Steps 2, 8 and 10.</li>
+  <li><b>Cut first (saves 6m):</b> 4.1 Step 9 (one sentence) and 4.2 Steps 3 and 4 (show the page).</li>
+  <li><b>Cut second (saves 4m):</b> 4.2 Step 9 (variants: show the table).</li>
+  <li><b>Cut third (saves 8m per lesson):</b> Lab B moves to homework.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Running short: what to add</div>
+<ul class="tick">
+  <li>4.1 Exercise 3 live: kNN regression for snowshoes against the weather.</li>
+  <li>4.2 Exercise 2 live: Naive Bayes against logistic regression as the training set grows.</li>
+  <li>Run <code class="inline">debug_knn.py</code> together.</li>
+</ul>
+</div>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 7 · Facilitator Guide · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

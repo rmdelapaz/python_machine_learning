@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 7</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 7: Neural Networks and PyTorch</h1>
+    <p class="sub">Your workbook for Session 7: a warm-up on Lessons 9.2 and 9.3, the key ideas of Lessons 10.1 and 10.2, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>10.1–10.2</b></span>
+      <span class="chip">Session <b>7</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Build a neural network by hand: a forward pass with shapes that line up, a loss, gradient descent and backpropagation, checked numerically.</li>
+  <li>Let PyTorch's autograd compute the same gradients, and know the two lines every autograd loop needs.</li>
+  <li>Write the standard PyTorch workflow: float32 tensors, an <code class="inline">nn.Module</code>, a loss and an optimizer, mini-batches, a validation set with early stopping, a saved <code class="inline">state_dict</code>.</li>
+  <li>Judge a network honestly against logistic regression and gradient boosting, and say when a network is (and is not) worth it.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Five questions on Lessons 9.2 and 9.3</div>
+<p>Answer from memory, then check with the class.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">What does this print? (Lesson 9.2)</div><pre class="code"><span class="k">from</span> sklearn.datasets <span class="k">import</span> make_classification
+<span class="k">from</span> sklearn.discriminant_analysis <span class="k">import</span> LinearDiscriminantAnalysis
+X, y = make_classification(n_samples=<span class="s">300</span>, n_features=<span class="s">6</span>, n_informative=<span class="s">4</span>, n_classes=<span class="s">3</span>, random_state=<span class="s">42</span>)
+print(LinearDiscriminantAnalysis().fit(X, y).transform(X).shape)</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">PCA and LDA both flatten data onto a few directions. What is the one big difference in how they choose them? (9.2)</div><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">A colleague fits LDA on all 200 rows of 500 random features, then cross-validates a classifier on the LDA output and gets 0.99. What happened? (9.2)</div><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">On a t-SNE map of customers, one island is twice the size of the others and far away from them. What may you conclude from the size and the gap? (9.3)</div><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Next month 200 new customers arrive and you want to place them on this month's 2-D map. t-SNE or UMAP, and why? (9.3)</div><div class="write"></div></div>
+</div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">10.1</span><h3>Neural Networks from Scratch</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Describe a neuron as a weighted sum plus a bias passed through an activation, and compute one by hand</li>
+  <li>Write the forward pass of a one-hidden-layer network with matrix shapes that line up</li>
+  <li>Explain cross-entropy loss, gradient descent and the learning rate, and implement backpropagation for a small network</li>
+  <li>Check hand-written gradients numerically, and reproduce them with PyTorch's autograd</li>
+  <li>Judge a network honestly against a baseline, logistic regression and gradient boosting on tabular data</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>A neuron</b> is activation(x · w + b). With a sigmoid it is logistic regression.</li>
+  <li><b>A layer is a matrix multiplication:</b> (n, inputs) @ (inputs, units) → (n, units). Inner dimensions match and disappear. Write the shapes next to the code.</li>
+  <li><b>Activations bend the boundary.</b> Without them, any number of layers collapses into one straight line. ReLU (slope 1 where active) is the hidden-layer default; the sigmoid sits at the output.</li>
+  <li><b>Binary cross-entropy</b> measures how wrong the probabilities are; <b>0.693</b> is the coin-flip value. A loss stuck there has learned nothing.</li>
+  <li><b>Gradient descent:</b> parameter -= learning rate × gradient. Too small crawls; too large bounces or explodes. Always look at the loss curve.</li>
+  <li><b>Backpropagation</b> gets every gradient in one backward sweep (the output error is p - y). A numeric nudge checks it; each gradient has its parameter's shape.</li>
+  <li><b>Autograd:</b> <code class="inline">requires_grad=True</code>, <code class="inline">loss.backward()</code>, read <code class="inline">.grad</code>. Update under <code class="inline">torch.no_grad()</code> and reset <code class="inline">.grad</code> every step: gradients add up.</li>
+  <li><b>Honesty:</b> on the churn table a network beats logistic regression (AUC 0.856 vs 0.823) but not gradient boosting (0.858).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: XOR with two hidden units</div>
+<p>A neural network can do what no straight line can. XOR is the classic case: the output is 1 when exactly one input is 1. Here are two ReLU units with hand-set weights and an output unit, no training at all.</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+
+<span class="c"># Two hidden ReLU units with hand-set weights, then an output unit: XOR, which no straight line can do</span>
+W1 = np.array([[<span class="s">1.0</span>, <span class="s">1.0</span>],
+               [<span class="s">1.0</span>, <span class="s">1.0</span>]])           <span class="c"># (2 inputs, 2 hidden units)</span>
+b1 = np.array([<span class="s">0.0</span>, -<span class="s">1.0</span>])
+W2 = np.array([[<span class="s">1.0</span>], [-<span class="s">2.0</span>]])      <span class="c"># (2 hidden units, 1 output)</span>
+X = np.array([[<span class="s">0</span>, <span class="s">0</span>], [<span class="s">0</span>, <span class="s">1</span>], [<span class="s">1</span>, <span class="s">0</span>], [<span class="s">1</span>, <span class="s">1</span>]], dtype=float)
+
+hidden = np.maximum(<span class="s">0</span>, X @ W1 + b1)
+print(hidden)
+print((hidden @ W2).ravel())</pre>
+<pre class="out">[[0. 0.]
+ [1. 0.]
+ [1. 0.]
+ [2. 1.]]
+[0. 1. 1. 0.]</pre><p>The first hidden unit computes x1 + x2; the second computes x1 + x2 - 1, cut at zero, so it is only on for (1, 1). The output takes the first and subtracts twice the second: 0, 1, 1, 0. That is XOR. Each hidden unit drew a line; the output combined them.</p>
+<pre class="code"><span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+y = np.array([<span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>])
+straight = LogisticRegression().fit(X, y)
+print(<span class="s">"logistic regression predicts:"</span>, straight.predict(X), <span class="s">" accuracy"</span>, straight.score(X, y))</pre>
+<pre class="out">logistic regression predicts: [0 0 0 0]  accuracy 0.5</pre><p>Logistic regression, with one straight line, can do no better than chance on these four points (here it predicts 0 everywhere: accuracy 0.5). Training a network means finding weights like the ones above automatically, by gradient descent.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-07/l10_1-neural-networks/circles_network_starter.py</code>. One class inside a ring of the other. Write <code class="inline">forward</code> and <code class="inline">bce_loss</code>, check a gradient by nudging, write the training loop, then find the smallest number of hidden units that can enclose a ring. Predict that number before TODO 5.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">churn_neuron_starter.py</code> in the same folder. Train ONE neuron by hand on churn and compare it with <code class="inline">LogisticRegression</code>. One types, one predicts; swap at TODO 3.</li>
+  <li>Done when your numbers match the "Expected when done" lines the starter prints.</li>
+  <li>Finished early? <code class="inline">debug_backprop.py</code>: one bug that stops the script, two that do not.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (A (5, 3) matrix times a (3, 2) matrix.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+X = np.ones((<span class="s">5</span>, <span class="s">3</span>))
+W = np.full((<span class="s">3</span>, <span class="s">2</span>), <span class="s">2.0</span>)
+print((X @ W).shape, (X @ W)[<span class="s">0</span>])</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (The slope of (2w)² is 8w.)</div><pre class="code"><span class="k">import</span> torch
+w = torch.tensor(<span class="s">1.5</span>, requires_grad=<span class="k">True</span>)
+loss = (<span class="s">2</span> * w) ** <span class="s">2</span>
+loss.backward()
+print(w.grad)</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A churn network from scratch</b> (lesson page, "Project: A Churn Network from Scratch"). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: split and scale. Check: <code class="inline">(4500, 10) (1500, 10) churn rate 0.165</code></li>
+  <li>☐ Step 2: yardsticks. Check: baseline AUC 0.500, logistic regression 0.823</li>
+  <li>☐ Step 3: train 10 → 16 → 1 (193 parameters); loss 0.2994 at epoch 1,000</li>
+  <li>☐ Step 4: network test AUC (about 0.856)</li>
+  <li>☐ Step 5: gradient boosting with defaults (about 0.858)</li>
+  <li>☐ Step 6: <code class="inline">churn_net.npz</code> reloads to identical predictions; summary printed</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">A hidden layer takes 10 inputs and has 16 units. How many parameters (weights and biases) does it have?</div><div class="opts"><div class="opt">A) 160</div><div class="opt">B) 176</div><div class="opt">C) 26</div><div class="opt">D) 170</div></div></div>
+<div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+x = np.array([<span class="s">1.0</span>, <span class="s">2.0</span>])
+w = np.array([<span class="s">0.5</span>, -<span class="s">1.0</span>])
+z = x @ w + <span class="s">1.0</span>
+print(z, max(<span class="s">0.0</span>, z), round(<span class="s">1</span> / (<span class="s">1</span> + np.exp(-z)), <span class="s">3</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">After 2,000 epochs your network's training loss is still <code class="inline">0.6931</code> and its test accuracy is 0.500. Which bug is the most likely?</div><div class="opts"><div class="opt">A) The learning rate is far too large</div><div class="opt">B) The test set is too small</div><div class="opt">C) Every weight was initialized to zero</div><div class="opt">D) The network has too many hidden units</div></div></div>
+<div class="q" data-sc="4" data-kind="short"><div class="qn">Q4</div><div class="qt">What does this print?</div><pre class="code">w = <span class="s">0.0</span>
+<span class="k">for</span> step <span class="k">in</span> range(<span class="s">2</span>):
+    w = w - <span class="s">0.25</span> * <span class="s">2</span> * (w - <span class="s">1</span>)        <span class="c"># gradient descent on (w - 1) ** 2</span>
+print(w)</pre><div class="write"></div></div>
+<div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">Why is ReLU the default activation for hidden layers rather than the sigmoid?</div><div class="opts"><div class="opt">A) Its slope is 1 wherever it is active, so gradients pass back through many layers undiminished</div><div class="opt">B) It outputs probabilities between 0 and 1</div><div class="opt">C) It keeps the network linear, which trains faster</div><div class="opt">D) It has no weights of its own, unlike the sigmoid</div></div></div>
+<div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">import</span> torch
+w = torch.tensor([<span class="s">1.0</span>, <span class="s">2.0</span>], requires_grad=<span class="k">True</span>)
+out = (w * <span class="s">3</span>).sum()
+out.numpy()</pre><div class="opts"><div class="opt">A) It prints <code class="inline">9.0</code></div><div class="opt">B) It prints <code class="inline">[3. 6.]</code></div><div class="opt">C) <code class="inline">TypeError</code>: a sum cannot be converted to NumPy</div><div class="opt">D) <code class="inline">RuntimeError</code>: Can't call numpy() on Tensor that requires grad</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the training loop (forward, loss, backward, update) to someone who has never seen code, using the panel of junior analysts. Then write one sentence on why your churn network beat logistic regression, and one on why you would still ship gradient boosting.</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">10.2</span><h3>PyTorch Fundamentals</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Create and reshape tensors, convert between NumPy and PyTorch, and get the float32 dtype right</li>
+  <li>Define a network with nn.Linear, nn.Sequential and your own nn.Module subclass</li>
+  <li>Choose the loss function that matches the task, and train with an optimizer, a Dataset and a DataLoader</li>
+  <li>Write the standard training loop with model.train(), model.eval(), torch.no_grad(), a validation set and early stopping</li>
+  <li>Save and reload a trained model with state_dict, and judge it honestly against gradient boosting</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>Tensors</b> have a shape, a dtype and a device. Models use float32; NumPy, pandas and scikit-learn give float64: convert with <code class="inline">dtype=torch.float32</code>.</li>
+  <li><b><code class="inline">nn.Module</code>:</b> layers in <code class="inline">__init__</code>, wiring in <code class="inline">forward</code>; call <code class="inline">model(x)</code>. <code class="inline">nn.Linear(10, 16)</code> stores a (16, 10) weight.</li>
+  <li><b>Logits out, sigmoid in the loss:</b> <code class="inline">BCEWithLogitsLoss</code> (targets float, shape (n, 1)); <code class="inline">CrossEntropyLoss</code> for k classes (integer targets, shape (n,)); <code class="inline">MSELoss</code> for numbers.</li>
+  <li><b>The loop:</b> <code class="inline">optimizer.zero_grad()</code> → <code class="inline">loss = loss_fn(model(xb), yb)</code> → <code class="inline">loss.backward()</code> → <code class="inline">optimizer.step()</code>, over mini-batches from a shuffled <code class="inline">DataLoader</code>.</li>
+  <li><b>Modes are not gradients:</b> <code class="inline">model.train()</code>/<code class="inline">model.eval()</code> switch dropout and batch norm; <code class="inline">torch.no_grad()</code> switches off tracking. Prediction code uses both.</li>
+  <li><b>Early stopping</b> keeps a <code class="inline">copy.deepcopy</code> of the best <code class="inline">state_dict</code> by validation loss and rolls back. The validation score is then optimistic; the test set is scored once.</li>
+  <li><b>Save</b> <code class="inline">state_dict</code> plus the settings and the fitted preprocessing; load with <code class="inline">weights_only=True</code>.</li>
+  <li><b>Honesty again:</b> network 0.846, gradient boosting 0.850 on churn: a tie, and boosting needed none of the choices.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: the smallest training loop</div>
+<p>The smallest possible PyTorch training loop: one <code class="inline">nn.Linear(1, 1)</code> rediscovering the rule y = 3x + 2 from 50 points. Every line of the professional loop is here.</p>
+<pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+
+torch.manual_seed(<span class="s">42</span>)
+x = torch.linspace(<span class="s">0</span>, <span class="s">1</span>, <span class="s">50</span>).unsqueeze(<span class="s">1</span>)            <span class="c"># (50, 1): one feature, as a column</span>
+y = <span class="s">3</span> * x + <span class="s">2</span>                                         <span class="c"># the rule to rediscover</span>
+model = nn.Linear(<span class="s">1</span>, <span class="s">1</span>)
+optimizer = torch.optim.SGD(model.parameters(), lr=<span class="s">0.5</span>)
+loss_fn = nn.MSELoss()
+<span class="k">for</span> step <span class="k">in</span> range(<span class="s">1</span>, <span class="s">301</span>):
+    optimizer.zero_grad()
+    loss = loss_fn(model(x), y)
+    loss.backward()
+    optimizer.step()
+    <span class="k">if</span> step <span class="k">in</span> (<span class="s">1</span>, <span class="s">10</span>, <span class="s">100</span>, <span class="s">300</span>):
+        print(<span class="s">f"step {step:3d}  loss {loss.item():.2e}"</span>)
+print(<span class="s">f"weight {model.weight.item():.3f}  bias {model.bias.item():.3f}"</span>)</pre>
+<pre class="out">step   1  loss 5.67e+00
+step  10  loss 3.83e-02
+step 100  loss 1.11e-07
+step 300  loss 2.25e-13
+weight 3.000  bias 2.000</pre><p>The loss collapses toward zero, and the layer's one weight and one bias become 3.000 and 2.000. <code class="inline">zero_grad</code> → forward and loss → <code class="inline">backward</code> → <code class="inline">step</code>: the same four lines train the churn model, the fraud model, and next week's image and sequence models. Only the model, the data and the loss change.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-07/l10_2-pytorch/fraud_mlp_starter.py</code>. The whole PyTorch workflow on card fraud: float32 tensors, a <code class="inline">FraudNet</code> module, mini-batches, early stopping, one look at the test set, and an honest comparison with logistic regression and gradient boosting.</li>
+  <li>Done when your numbers match the "Expected when done" lines (training numbers may differ in the last digit on your laptop).</li>
+  <li>Finished early? <code class="inline">debug_training_loop.py</code>: two loud bugs and three silent ones.</li>
+  <li>At home: <code class="inline">batch_size_starter.py</code>: why ten epochs with one giant batch learn almost nothing.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (Integers and floats, PyTorch's defaults.)</div><pre class="code"><span class="k">import</span> torch
+print(torch.tensor([<span class="s">1</span>, <span class="s">2</span>, <span class="s">3</span>]).dtype, torch.tensor([<span class="s">1.0</span>, <span class="s">2.0</span>]).dtype)</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (Weights plus biases, two layers.)</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+net = nn.Sequential(nn.Linear(<span class="s">3</span>, <span class="s">5</span>), nn.ReLU(), nn.Linear(<span class="s">5</span>, <span class="s">2</span>))
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> net.parameters()))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A PyTorch churn model</b> (lesson page, "Project: A PyTorch Churn Model"). In class: Steps 1 to 4. At home: Steps 5 and 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: three-way split without the leak. Check: <code class="inline">3600 900 1500</code></li>
+  <li>☐ Step 2: preprocessing fitted on the fitting rows. Check: 40 columns</li>
+  <li>☐ Step 3: <code class="inline">ChurnMLP</code> with dropout. Check: 1,345 parameters</li>
+  <li>☐ Step 4: early stopping (best epoch about 17)</li>
+  <li>☐ Step 5: one test, four models (network about 0.846, boosting about 0.850)</li>
+  <li>☐ Step 6: <code class="inline">churn_mlp.pt</code> (settings + weights) and <code class="inline">churn_preprocess.joblib</code> rebuild a working model</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+layer = nn.Linear(<span class="s">4</span>, <span class="s">3</span>)
+print(layer.weight.shape, sum(p.numel() <span class="k">for</span> p <span class="k">in</span> layer.parameters()))</pre><div class="write"></div></div>
+<div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+logits = torch.zeros(<span class="s">8</span>, <span class="s">1</span>)
+targets = torch.ones(<span class="s">8</span>)
+nn.BCEWithLogitsLoss()(logits, targets)</pre><div class="opts"><div class="opt">A) <code class="inline">ValueError</code>: Target size (torch.Size([8])) must be the same as input size (torch.Size([8, 1]))</div><div class="opt">B) It returns a loss of about 0.6931</div><div class="opt">C) <code class="inline">RuntimeError</code>: expected integer (Long) targets</div><div class="opt">D) It returns a loss of 0.0</div></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">Which statement about <code class="inline">model.eval()</code> and <code class="inline">torch.no_grad()</code> is true?</div><div class="opts"><div class="opt">A) They are two names for the same switch</div><div class="opt">B) <code class="inline">torch.no_grad()</code> switches dropout off; <code class="inline">model.eval()</code> stops gradient tracking</div><div class="opt">C) <code class="inline">model.eval()</code> changes how layers such as dropout behave; <code class="inline">torch.no_grad()</code> stops gradient tracking; prediction code uses both</div><div class="opt">D) <code class="inline">model.eval()</code> is only needed when the model runs on a GPU</div></div></div>
+<div class="q" data-sc="10" data-kind="short"><div class="qn">Q10</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch.utils.data <span class="k">import</span> TensorDataset, DataLoader
+data = TensorDataset(torch.zeros(<span class="s">1000</span>, <span class="s">5</span>), torch.zeros(<span class="s">1000</span>, <span class="s">1</span>))
+loader = DataLoader(data, batch_size=<span class="s">64</span>, shuffle=<span class="k">True</span>)
+sizes = [len(xb) <span class="k">for</span> xb, yb <span class="k">in</span> loader]
+print(len(loader), sizes[-<span class="s">1</span>])</pre><div class="write"></div></div>
+<div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">In the lesson's early-stopping function, why does the best state go through <code class="inline">copy.deepcopy(model.state_dict())</code>?</div><div class="opts"><div class="opt">A) <code class="inline">torch.save</code> cannot save a state_dict that was not copied</div><div class="opt">B) <code class="inline">state_dict()</code> returns references to the live tensors, which later epochs would keep changing</div><div class="opt">C) <code class="inline">deepcopy</code> switches the model to evaluation mode</div><div class="opt">D) It converts the weights to float64 so nothing is lost</div></div></div>
+<div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">You predict <code class="inline">loyalty_tier</code> (Basic, Silver, Gold) with <code class="inline">nn.CrossEntropyLoss</code>. What must the targets be?</div><div class="opts"><div class="opt">A) float32 values 0.0 to 2.0, shape (n, 1)</div><div class="opt">B) the strings Basic, Silver and Gold</div><div class="opt">C) float32 values 0.0 or 1.0, shape (n, 1)</div><div class="opt">D) integer class indices 0, 1, 2 (<code class="inline">torch.long</code>), shape (n,)</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>For each line of the training loop (zero_grad, forward, loss, backward, step), write which part of your Lesson 10.1 code it replaces. Then write the recommendation you would give Pinecrest about the churn model, with the two test AUCs that support it.</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<p>Three questions, no notes. Write your answers, hand them in or keep them: they tell you and your instructor what to revisit.</p>
+<div class="q"><div class="qn">E1</div><div class="qt">Write the four steps of the training loop and the PyTorch line for each.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">Your churn model returns logits. How do you get a churn probability for a report, and why is there no sigmoid inside the model?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">On churn the network's test AUC is 0.846 and gradient boosting's 0.850. Which do you recommend, and why?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish the 10.1 project (Steps 4 to 6) and the 10.2 project (Steps 5 and 6)</li>
+  <li>☐ Lesson 10.1 Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Lesson 10.2 Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Both Quick Quizzes on the lesson pages</li>
+  <li>☐ Both journal entries</li>
+  <li>☐ Finish <code class="inline">churn_neuron_starter.py</code>; do <code class="inline">batch_size_starter.py</code></li>
+  <li>☐ Save <code class="inline">train_one_epoch</code>, <code class="inline">evaluate</code> and <code class="inline">fit</code> in <code class="inline">training.py</code></li>
+  <li>☐ Fashion-MNIST in my <code class="inline">data/</code> folder (about 30 MB, downloaded at home)</li>
+  <li>☐ Bring to Session 8: a charged, plugged-in laptop, <code class="inline">pinecrest-ml</code> with <code class="inline">data/</code> and <code class="inline">labs/</code>, <code class="inline">training.py</code>, this workbook and my journal</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>neuron (unit)</td><td>activation(x · w + b): a weighted sum plus a bias, through an activation</td></tr>
+<tr><td>activation</td><td>The nonlinear function after the weighted sum: ReLU, sigmoid, tanh</td></tr>
+<tr><td>hidden layer</td><td>A layer between input and output; its width is the number of units</td></tr>
+<tr><td>forward pass</td><td>Computing the outputs from the inputs</td></tr>
+<tr><td>loss</td><td>One number for how wrong the model is; binary cross-entropy for yes/no targets</td></tr>
+<tr><td>gradient</td><td>The slopes of the loss with respect to every parameter</td></tr>
+<tr><td>learning rate</td><td>The step size of gradient descent</td></tr>
+<tr><td>backpropagation</td><td>Computing every gradient in one backward sweep with the chain rule</td></tr>
+<tr><td>autograd</td><td>PyTorch's automatic gradients: <code class="inline">requires_grad</code>, <code class="inline">backward()</code>, <code class="inline">.grad</code></td></tr>
+<tr><td>epoch / batch</td><td>One pass over the training data / the rows used for one update step</td></tr>
+<tr><td>tensor</td><td>PyTorch's array: shape, dtype, device; can track gradients</td></tr>
+<tr><td>logit</td><td>A raw score before the sigmoid or softmax</td></tr>
+<tr><td>optimizer</td><td>The object that updates the parameters: <code class="inline">SGD</code>, <code class="inline">Adam</code></td></tr>
+<tr><td>early stopping</td><td>Stop when the validation loss stops improving; restore the best weights</td></tr>
+<tr><td>state_dict</td><td>A dictionary of a model's named weight tensors: what you save and load</td></tr>
+<tr><td>dropout</td><td>Randomly zeroing hidden units while training (switched off by <code class="inline">eval()</code>)</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 7 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

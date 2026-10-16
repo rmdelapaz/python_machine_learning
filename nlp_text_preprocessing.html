@@ -3,504 +3,1086 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about Text Preprocessing for NLP in this comprehensive Python Machine Learning course lesson.">
-    <title>Text Preprocessing - Python Machine Learning</title>
+    <meta name="description" content="Turn Pinecrest Outfitters product reviews into features with cleaning, tokenizing and TF-IDF, then classify sentiment with logistic regression and avoid the stop-word trap. Python Machine Learning Lesson 11.1.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Text Classification - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#applications">Applications</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#applications">Applications</a></li>
-            <li aria-current="page">Text Preprocessing</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>📝 Text Preprocessing: Preparing Text for NLP</h1>
+        <div class="container">
+            <header>
+                <h1>💬 Lesson 11.1: Text Classification</h1>
+                <p class="lead">Teach a model to read 4,000 Pinecrest product reviews: turn free text into numbers, train a sentiment classifier that beats the baseline by a wide margin, and learn why throwing away the word "not" quietly breaks it.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Clean raw text by lowercasing and removing URLs, emails, punctuation, and special characters</li>
-                <li>Tokenize text at both the word and sentence level</li>
-                <li>Remove stop words and explain the trade-offs of doing so</li>
-                <li>Apply stemming versus lemmatization and choose the right one for a task</li>
-                <li>Build a reusable end-to-end preprocessing pipeline for a downstream NLP task</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Build a text-cleaning pipeline that turns raw documents into normalized tokens ready for vectorization.</p>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Clean and tokenize text with Python's <code>re</code> module, and explain what scikit-learn's vectorizers do to a sentence</li>
+                        <li>Build bag-of-words and TF-IDF feature matrices, and read the sparse matrix and vocabulary they produce</li>
+                        <li>Train a leak-free sentiment classifier with a <code>Pipeline</code> of <code>TfidfVectorizer</code> and <code>LogisticRegression</code>, and compare it with a baseline</li>
+                        <li>Explain the stop-word trap, and use bigrams so that "not waterproof" and "not bad" become features of their own</li>
+                        <li>Describe what word embeddings add over TF-IDF, and when the simpler model is the right choice</li>
+                    </ul>
+                </div>
+
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 95 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="pipelines_composite.html">Lesson 2.2: Pipelines</a> and <a href="regression_linear_logistic.html">Lesson 3.1: Linear and Logistic Regression</a>; <a href="evaluation_metrics.html">Lesson 1.4: Metrics for Classification and Regression</a> for precision and recall</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A review-triage model that flags unhappy customers for Pinecrest's care team, including the mixed 3-star reviews</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/reviews.csv</code></li>
+                </ul>
+            </header>
+
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Words Are Not Numbers (Yet)</a></li>
+                        <li><a href="#data" class="toc-link">The Review Data and a Baseline</a></li>
+                        <li><a href="#clean" class="toc-link">Cleaning and Tokenizing</a></li>
+                        <li><a href="#bow" class="toc-link">Bag of Words</a></li>
+                        <li><a href="#tfidf" class="toc-link">TF-IDF: Weighting Words</a></li>
+                        <li><a href="#model" class="toc-link">A Sentiment Classifier</a></li>
+                        <li><a href="#not-trap" class="toc-link">The Stop-Word Trap and Bigrams</a></li>
+                        <li><a href="#embeddings" class="toc-link">Beyond Bags of Words: Embeddings</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: Review Triage</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Words Are Not Numbers (Yet)</h2>
+
+                <p>Pinecrest Outfitters collects a few hundred product reviews every month. Somewhere in that stream are customers whose tent leaked on the first night or whose boots fell apart, and the care team wants to reach them quickly. Nobody has time to read every review. A model that reads them first and raises a flag on the unhappy ones would let the team spend its time on replies instead of searching.</p>
+
+                <p>Every model you have trained so far does arithmetic on columns of numbers. A review is a string of words of any length. The whole craft of classic text classification is one step: <strong>turn each document into a fixed-length row of numbers</strong> that keeps enough of the meaning. Once you have that, the rest is the scikit-learn workflow you already know.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Tally Sheet</h4>
+                    <p>Imagine handing each review to a clerk with a long tally sheet that lists every word Pinecrest's customers have ever used. The clerk reads the review and makes one tick next to each word every time it appears. The clerk does not care about grammar or word order, only about which words show up and how often. That tally sheet is a <strong>bag of words</strong>: the review has been poured into a bag and shaken, and only the word counts survive.</p>
+                    <p>It sounds too crude to work, yet a tally of "love", "leaked", "returned" and "highly recommend" says a lot about how a customer feels. Where it fails is just as instructive: "not bad" and "bad" leave almost the same ticks. By the end of the lesson you will know how to keep the "not".</p>
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>Text is everywhere in a business: reviews, support tickets, chat logs, survey comments, product descriptions. Large language models get the headlines, but a TF-IDF model with logistic regression trains in under a second, explains itself word by word and is often within a few points of far bigger models on short, focused text. It is the baseline every text project should start with, and for many it is the model that ships.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="data" class="lesson-section">
+                <h2>📂 The Review Data and a Baseline</h2>
+
+                <p>Load the reviews and look at the star ratings.</p>
+
+                <pre><code class="language-python">import pandas as pd
+import sklearn
+
+print(sklearn.__version__)
+
+reviews = pd.read_csv("data/reviews.csv")
+print(reviews.shape)
+print(reviews["rating"].value_counts().sort_index())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>1.9.1
+(4000, 8)
+rating
+1     230
+2     558
+3     905
+4    1093
+5    1214
+Name: count, dtype: int64</code></pre>
+                </div>
+
+                <p>Each row is one review with a date, a product, a 1-to-5 star rating, a short title and the text. Read a few before modeling anything: there is no better way to learn what the model will be up against.</p>
+
+                <pre><code class="language-python">for _, row in reviews.sample(4, random_state=42).iterrows():
+    print(row["rating"], "|", row["text"])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>3 | really happy with this. it the zipper failed after a week. it arrived quickly. however it is not waterproof at all.
+5 | Love it. This is my second one. It arrived quickly. It still looks new after a season of use.
+5 | Exactly what I needed. This trekking poles is easy to set up.
+5 | Highly recommend. It shipped fast and well packed. It is lighter than my old one. It is fairly priced for the quality.</code></pre>
+                </div>
+
+                <p>Already you can see the challenges. The first review is all lowercase, has a slip ("it the zipper") and opens with "really happy with this" before complaining about a broken zipper and rain getting in: a 3-star review in every sense. Others have small grammar slips ("This trekking poles is"). Real reviews look like this, and so do these.</p>
+
+                <h3>Framing the Task</h3>
+                <p>Turn the stars into a yes-or-no target: 4 or 5 stars is <strong>positive</strong>, 1 or 2 is <strong>negative</strong>. Three-star reviews are genuinely mixed, so leave them out of training (the project comes back to them). Then split, stratified, exactly as in every classification lesson so far, and measure the do-nothing baseline.</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import train_test_split
+from sklearn.dummy import DummyClassifier
+
+labeled = reviews[reviews["rating"] != 3].copy()
+labeled["positive"] = (labeled["rating"] &gt;= 4).astype(int)
+print(len(labeled), f"reviews, positive share {labeled['positive'].mean():.3f}")
+
+X_train, X_test, y_train, y_test = train_test_split(
+    labeled["text"], labeled["positive"], test_size=0.25, stratify=labeled["positive"], random_state=42
+)
+print(X_train.shape, X_test.shape)
+
+baseline = DummyClassifier(strategy="most_frequent").fit(X_train, y_train)
+print(f"baseline accuracy: {baseline.score(X_test, y_test):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>3095 reviews, positive share 0.745
+(2321,) (774,)
+baseline accuracy: 0.745</code></pre>
+                </div>
+
+                <p>Notice that <code>X_train</code> is a <strong>Series of strings</strong>, one review per row, not a table of columns. Text vectorizers expect exactly that: an iterable of documents. Saying "positive" for everything is right 74.5% of the time; that is the number to beat.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="clean" class="lesson-section">
+                <h2>🧹 Cleaning and Tokenizing</h2>
+
+                <p><strong>Tokenizing</strong> means cutting text into units, called <strong>tokens</strong>, that you will count: usually words. <strong>Cleaning</strong> means making the same word look the same every time, so that "Waterproof", "waterproof" and "waterproof!" end up on one line of the tally sheet. Python's built-in <code>re</code> module (regular expressions) is all you need for both.</p>
+
+                <pre><code class="language-python">import re
+
+sample = "Really happy with this!! It is NOT waterproof at all... 2-person tent, 10/10."
+
+lowered = sample.lower()
+print(lowered)
+print(re.findall(r"[a-z]+", lowered))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>really happy with this!! it is not waterproof at all... 2-person tent, 10/10.
+['really', 'happy', 'with', 'this', 'it', 'is', 'not', 'waterproof', 'at', 'all', 'person', 'tent']</code></pre>
+                </div>
+
+                <p>The pattern <code>[a-z]+</code> means "one or more letters in a row", so <code>re.findall</code> returns every run of letters and skips punctuation and digits. Wrapped in a function, that is a complete cleaner:</p>
+
+                <pre><code class="language-python">def clean(text):
+    text = text.lower()
+    text = re.sub(r"[^a-z\s]", " ", text)      # anything that is not a letter or whitespace becomes a space
+    return re.sub(r"\s+", " ", text).strip()    # squeeze runs of spaces into one
+
+print(clean(sample))
+print(clean("Waterproof!   WATERPROOF... waterproof"))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>really happy with this it is not waterproof at all person tent
+waterproof waterproof waterproof</code></pre>
+                </div>
+
+                <p>Every choice in a cleaner throws something away. Dropping digits loses "10/10", which is a strong positive signal; dropping "!!" loses enthusiasm. There is no universally right cleaner, only one that fits your task, and you should test it the same way you test any other preprocessing step: by its effect on a validation score.</p>
+
+                <h3>What scikit-learn Does for You</h3>
+                <p>You rarely need to call a cleaner yourself. scikit-learn's text vectorizers lowercase and tokenize on their own. You can ask a vectorizer to show you exactly what it does to a sentence with <code>build_analyzer()</code>:</p>
+
+                <pre><code class="language-python">from sklearn.feature_extraction.text import CountVectorizer
+
+analyzer = CountVectorizer().build_analyzer()
+print(analyzer(sample))
+print(analyzer("I think a tent is a tent"))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>['really', 'happy', 'with', 'this', 'it', 'is', 'not', 'waterproof', 'at', 'all', 'person', 'tent', '10', '10']
+['think', 'tent', 'is', 'tent']</code></pre>
+                </div>
+
+                <p>The default token pattern, <code>r"(?u)\b\w\w+\b"</code>, keeps runs of <em>two or more</em> word characters. So it keeps digits ("10") and the parts of "2-person" ("person"), but silently drops one-letter words like "I" and "a". For sentiment that is harmless. If single letters matter in your text (sizes like "M" and "L", for example), pass your own <code>token_pattern</code>, or your own function as <code>preprocessor=</code> or <code>tokenizer=</code>.</p>
+
+                <h3>Typos, Stems and Lemmas</h3>
+                <p>Customers misspell things. Count a few common typos in the reviews:</p>
+
+                <pre><code class="language-python">for typo, right in [("waterprof", "waterproof"), ("reccomend", "recommend"), ("qaulity", "quality")]:
+    n_typo = reviews["text"].str.contains(typo).sum()
+    n_right = reviews["text"].str.contains(right).sum()
+    print(f"{typo:10s} {n_typo:3d}   {right:10s} {n_right:4d}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>waterprof    9   waterproof  203
+reccomend   11   recommend   217
+qaulity     15   quality     389</code></pre>
+                </div>
+
+                <p>To a bag of words, "qaulity" and "quality" are unrelated tokens. With a few typos among hundreds of correct spellings, that costs little. Exercise 3 shows a neat fix: count <em>character</em> sequences instead of words, so a typo still shares most of its pieces with the correct spelling.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Stemming and Lemmatization, Honestly</h4>
+                    <p>Many tutorials reduce words to a root: <strong>stemming</strong> chops endings by rule ("leaked", "leaking" become "leak"), and <strong>lemmatization</strong> looks words up in a dictionary ("was" becomes "be"). Both need a language library such as NLTK or spaCy, which this course does not install. For sentiment classification with TF-IDF they usually change accuracy by a point or less, because the model learns "leaked" and "leaking" separately anyway. They matter more for search and for very small datasets. If you ever need them, add the library and pass its function as the vectorizer's <code>tokenizer=</code>, then check that the validation score really improves.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="bow" class="lesson-section">
+                <h2>🎒 Bag of Words</h2>
+
+                <p><code>CountVectorizer</code> is the clerk with the tally sheet. <code>fit</code> learns the <strong>vocabulary</strong> (every token it saw, one column each); <code>transform</code> fills in the counts. Try it on three tiny "reviews" so you can see every number:</p>
+
+                <pre><code class="language-python">toy = ["The tent is warm", "The tent is not warm", "Not bad, warm and light"]
+
+counter = CountVectorizer()
+counts = counter.fit_transform(toy)
+
+print(counter.get_feature_names_out())
+print(pd.DataFrame(counts.toarray(), columns=counter.get_feature_names_out()))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>['and' 'bad' 'is' 'light' 'not' 'tent' 'the' 'warm']
+   and  bad  is  light  not  tent  the  warm
+0    0    0   1      0    0     1    1     1
+1    0    0   1      0    1     1    1     1
+2    1    1   0      1    1     0    0     1</code></pre>
+                </div>
+
+                <p>Each document is now a row of eight numbers, one per vocabulary word, sorted alphabetically. Look at the first two rows: "The tent is warm" and "The tent is not warm" differ by a single 1 in the <code>not</code> column. The meaning flipped; the numbers barely moved. Keep that in mind.</p>
+
+                <h3>Sparse Matrices</h3>
+                <p>Now fit the vectorizer on the real training reviews. Fit on <code>X_train</code> only: the vocabulary is learned from data, just like a scaler's mean, so it must not see the test set.</p>
+
+                <pre><code class="language-python">bow = CountVectorizer().fit(X_train)
+X_train_counts = bow.transform(X_train)
+
+n_rows, n_cols = X_train_counts.shape
+print(type(X_train_counts).__name__, X_train_counts.shape)
+print(f"stored values: {X_train_counts.nnz:,} of {n_rows * n_cols:,} cells ({X_train_counts.nnz / (n_rows * n_cols):.1%})")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>csr_matrix (2321, 333)
+stored values: 40,981 of 772,893 cells (5.3%)</code></pre>
+                </div>
+
+                <p>The vocabulary has 333 words (these reviews use a small, repetitive vocabulary; real reviews often reach tens of thousands). Each review uses only a handful of them, so almost every cell is zero. scikit-learn returns a <strong>sparse matrix</strong> (here a SciPy <code>csr_matrix</code>) that stores only the non-zero values and their positions. With 50,000 documents and 100,000 words a dense table would need 40 GB; the sparse one fits in a few megabytes. Linear models and Naive Bayes work on sparse input directly. Avoid <code>.toarray()</code> on anything bigger than a toy.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="tfidf" class="lesson-section">
+                <h2>⚖️ TF-IDF: Weighting Words</h2>
+
+                <p>Raw counts treat every word as equally informative. But "the" and "it" appear in almost every review and say nothing about sentiment, while "leaked" appears in a few and says a lot. <strong>TF-IDF</strong> (term frequency times inverse document frequency) fixes this by giving each word a weight:</p>
+
+                <ul>
+                    <li><strong>Term frequency (TF)</strong>: how often the word appears in <em>this</em> document (the count).</li>
+                    <li><strong>Inverse document frequency (IDF)</strong>: how rare the word is across <em>all</em> training documents. Common words get a small IDF, rare words a large one.</li>
+                </ul>
+
+                <p>scikit-learn's default IDF for a word that appears in <em>df</em> of <em>n</em> documents is</p>
+                <p class="text-center"><code>idf = ln((1 + n) / (1 + df)) + 1</code></p>
+                <p>Each document's row of TF times IDF values is then scaled to length 1 (L2 normalization), so a long review and a short one are compared on the mix of words they use, not on how much they wrote.</p>
+
+                <pre><code class="language-python">import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+tfidf_toy = TfidfVectorizer()
+weights = tfidf_toy.fit_transform(toy)
+vocab = tfidf_toy.get_feature_names_out()
+
+print(pd.Series(tfidf_toy.idf_, index=vocab).round(3))
+print(pd.DataFrame(weights.toarray(), columns=vocab).round(2))
+print("idf of 'tent' by hand:", round(np.log((1 + 3) / (1 + 2)) + 1, 3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>and      1.693
+bad      1.693
+is       1.288
+light    1.693
+not      1.288
+tent     1.288
+the      1.288
+warm     1.000
+dtype: float64
+   and  bad    is  light   not  tent   the  warm
+0  0.0  0.0  0.53    0.0  0.00  0.53  0.53  0.41
+1  0.0  0.0  0.47    0.0  0.47  0.47  0.47  0.36
+2  0.5  0.5  0.00    0.5  0.38  0.00  0.00  0.30
+idf of 'tent' by hand: 1.288</code></pre>
+                </div>
+
+                <p>"warm" is in all three documents, so it gets the smallest IDF (exactly 1). "tent", "is", "the" and "not" appear in two, and "and", "bad" and "light" in only one, so they weigh the most. In the third document, "warm" ends up with the smallest weight even though it appears once like every other word: it is the least distinctive. The hand calculation for "tent" (2 of 3 documents) matches the vectorizer's 1.288.</p>
+
+                <div class="card card-success">
+                    <h4>✅ TF-IDF Is a Transformer Like Any Other</h4>
+                    <p><code>fit</code> learns the vocabulary and one IDF per word from the training documents; <code>transform</code> applies them to any document. It slots into a <code>Pipeline</code> exactly like <code>StandardScaler</code> did in Lesson 2.2, and the same rule applies: fit on training data only.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="model" class="lesson-section">
+                <h2>🚀 A Sentiment Classifier</h2>
+
+                <p>Here is the whole model: a vectorizer that turns text into a sparse TF-IDF matrix, followed by logistic regression, which gives every word a weight. Wrapping both in a pipeline means the vocabulary and the IDF values are learned inside <code>fit</code>, from the training reviews only, and cross-validation later cannot leak.</p>
+
+                <div class="mermaid">
+graph TD
+    A["Raw review text"] --> B["Lowercase and tokenize"]
+    B --> C["Vocabulary and IDF: fit on train"]
+    C --> D["Sparse TF-IDF matrix"]
+    D --> E["Logistic regression"]
+    E --> F["P(positive) per review"]
+                </div>
+
+                <pre><code class="language-python">from sklearn.pipeline import make_pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, classification_report
+
+sentiment = make_pipeline(TfidfVectorizer(), LogisticRegression())
+sentiment.fit(X_train, y_train)
+pred = sentiment.predict(X_test)
+
+print(f"TF-IDF + logistic regression accuracy: {accuracy_score(y_test, pred):.3f}")
+print(classification_report(y_test, pred, target_names=["negative", "positive"], digits=3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>TF-IDF + logistic regression accuracy: 0.877
+              precision    recall  f1-score   support
+
+    negative      0.823     0.660     0.732       197
+    positive      0.891     0.951     0.920       577
+
+    accuracy                          0.877       774
+   macro avg      0.857     0.806     0.826       774
+weighted avg      0.874     0.877     0.873       774</code></pre>
+                </div>
+
+                <p>0.877 against the baseline's 0.745, with a model that trained in a fraction of a second. For the care team, the <code>negative</code> row is the one to read: its <strong>recall</strong> says what share of the unhappy customers the model catches, and its <strong>precision</strong> says how many of the flagged reviews really are unhappy. Catching about two-thirds of negative reviews is a start; the project tunes the threshold to catch more.</p>
+
+                <h3>👀 What Did It Learn?</h3>
+                <p>Every column of the TF-IDF matrix is a word, so every coefficient of the logistic regression belongs to a word. That makes this model unusually easy to inspect.</p>
+
+                <pre><code class="language-python">import matplotlib.pyplot as plt
+
+vectorizer = sentiment.named_steps["tfidfvectorizer"]
+classifier = sentiment.named_steps["logisticregression"]
+word_weights = pd.Series(classifier.coef_[0], index=vectorizer.get_feature_names_out()).sort_values()
+
+top = pd.concat([word_weights.head(10), word_weights.tail(10)])
+print(top.round(2))
+
+fig, ax = plt.subplots(figsize=(9, 5.5), layout="constrained")
+negative, positive = top[top &lt; 0], top[top &gt; 0]
+ax.barh(negative.index, negative.to_numpy(), color="#c0392b", label="pulls toward negative")
+ax.barh(positive.index, positive.to_numpy(), color="#667eea", label="pulls toward positive")
+ax.axvline(0, color="black", linewidth=0.8)
+ax.set_xlabel("Logistic regression coefficient")
+ax.set_title("The 20 words with the strongest pull in the sentiment model")
+ax.legend(loc="upper left")
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>not            -4.75
+regret         -3.16
+returned       -2.35
+very           -2.19
+save           -2.07
+your           -2.07
+disappointed   -2.01
+do             -1.83
+too            -1.81
+again          -1.69
+had             1.66
+problem         1.66
+bad             1.97
+exactly         2.16
+needed          2.16
+great           2.20
+all             2.27
+highly          2.29
+really          2.37
+love            2.60
+dtype: float64</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/nlp_text_preprocessing_word_weights.png" alt="Horizontal bar chart of the 20 strongest word coefficients. Negative words in red include not, regret, returned, disappointed and again; positive words in blue include love, really, highly, great and needed, and also bad and problem. The word not has by far the largest negative weight, about minus 4.8." width="990" height="605" loading="lazy">
+                    <figcaption>"not" is by far the most negative word, while "bad" and "problem" land on the positive side: single words lose the phrases they came from.</figcaption>
+                </figure>
+
+                <p>Most of the list reads sensibly: complaints ("regret", "returned", "disappointed", "save your money") on the negative side and praise ("love", "highly", "great", "exactly what I needed") on the positive side. The strongest negative word by far is <strong>"not"</strong>, because most uses are "not waterproof", "would not buy" and "not happy".</p>
+                <p>Now look at the surprises. <strong>"bad"</strong> and <strong>"problem"</strong> pull toward <em>positive</em>. In these reviews they appear mostly in "Not bad at all" and "Never had a problem with it": praise phrased with negative words. A bag of single words cannot see the phrase, so it files the word under whichever class it shows up in most. Reading coefficients like this is one of the best bug detectors in text classification.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Coefficients Describe the Model, Not the Customers</h4>
+                    <p>A large coefficient means "this word helps this model separate the classes in this data". It does not mean the word causes dissatisfaction, and correlated words share credit unpredictably (Lesson 7.1). Read the chart as a sanity check and a source of hypotheses, not as findings about why customers are unhappy.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="not-trap" class="lesson-section">
+                <h2>🪤 The Stop-Word Trap and Bigrams</h2>
+
+                <p><strong>Stop words</strong> are very common words ("the", "is", "and") that many tutorials remove before modeling, to shrink the vocabulary and cut noise. scikit-learn ships a built-in English list. Before you use it, look at what is on it:</p>
+
+                <pre><code class="language-python">from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+
+print(len(ENGLISH_STOP_WORDS), "stop words")
+print([w for w in ["not", "no", "never", "nor", "cannot", "very", "but"] if w in ENGLISH_STOP_WORDS])
+
+stopped = make_pipeline(TfidfVectorizer(stop_words="english"), LogisticRegression()).fit(X_train, y_train)
+print(f"accuracy with stop words removed: {stopped.score(X_test, y_test):.3f}")
+print(f"accuracy with all words kept   : {sentiment.score(X_test, y_test):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>318 stop words
+['not', 'no', 'never', 'nor', 'cannot', 'very', 'but']
+accuracy with stop words removed: 0.864
+accuracy with all words kept   : 0.877</code></pre>
+                </div>
+
+                <p>The list contains "not", "no", "never" and "cannot": the words that carry negation, which for sentiment are among the most important words there are. Removing them costs more than a point of accuracy. Watch what happens to individual sentences:</p>
+
+                <pre><code class="language-python">probes = ["It is not waterproof at all.", "Not bad at all.", "Would not buy again.", "It is waterproof."]
+for text in probes:
+    p_all = sentiment.predict_proba([text])[0, 1]
+    p_stop = stopped.predict_proba([text])[0, 1]
+    print(f"{text:30s} P(positive) all words {p_all:.2f}   stop words removed {p_stop:.2f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>It is not waterproof at all.   P(positive) all words 0.56   stop words removed 0.41
+Not bad at all.                P(positive) all words 0.85   stop words removed 0.94
+Would not buy again.           P(positive) all words 0.21   stop words removed 0.51
+It is waterproof.              P(positive) all words 0.59   stop words removed 0.41</code></pre>
+                </div>
+
+                <p>With the stop words removed, "Would not buy again." shrinks to the single word "buy", and the model's 0.21 becomes a coin flip at 0.51. "Not bad at all." becomes "bad", which this model happens to rate as positive for the reason you just saw. And look at "It is not waterproof at all.": the model that keeps every word still gives it 0.56, slightly <em>positive</em>, because "all" (from all those "not bad at all" reviews) outweighs the "not". Both unigram models are guessing from loose words.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Never Use a Stop-Word List Unread</h4>
+                    <p>Generic stop-word lists were designed for search engines, where "not" rarely changes which documents match. For sentiment, intent or anything where negation matters, removing them silently damages the model. TF-IDF already down-weights words that appear everywhere, so with TF-IDF you seldom need a stop-word list at all. If you want one, write a short custom list and check the validation score.</p>
+                </div>
+
+                <h3>Bigrams: Keeping a Little Word Order</h3>
+                <p>An <strong>n-gram</strong> is a run of <em>n</em> consecutive tokens. With <code>ngram_range=(1, 2)</code> the vectorizer counts single words (unigrams) <em>and</em> pairs (bigrams), so "not waterproof" and "not bad" become columns of their own. <code>min_df=2</code> drops any term that appears in fewer than two training reviews, which keeps one-off pairs and typos from bloating the vocabulary.</p>
+
+                <pre><code class="language-python">bigram = make_pipeline(TfidfVectorizer(ngram_range=(1, 2), min_df=2), LogisticRegression())
+bigram.fit(X_train, y_train)
+print(f"unigrams + bigrams accuracy: {bigram.score(X_test, y_test):.3f}")
+print("vocabulary size:", len(bigram.named_steps["tfidfvectorizer"].vocabulary_))
+
+bi_weights = pd.Series(bigram.named_steps["logisticregression"].coef_[0],
+                       index=bigram.named_steps["tfidfvectorizer"].get_feature_names_out())
+print("unigram model, 'waterproof':", round(word_weights["waterproof"], 2))
+print(bi_weights[["waterproof", "not waterproof", "bad", "not bad"]].round(2))
+
+for text in probes:
+    print(f"{text:30s} P(positive) {bigram.predict_proba([text])[0, 1]:.2f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>unigrams + bigrams accuracy: 0.877
+vocabulary size: 1538
+unigram model, 'waterproof': -1.08
+waterproof       -0.46
+not waterproof   -1.04
+bad               0.74
+not bad           1.46
+dtype: float64
+It is not waterproof at all.   P(positive) 0.47
+Not bad at all.                P(positive) 0.94
+Would not buy again.           P(positive) 0.11
+It is waterproof.              P(positive) 0.73</code></pre>
+                </div>
+
+                <p>Accuracy is the same, but look at what the model now knows. In the unigram model, "waterproof" had a weight of -1.08, because the word appears most often in "not waterproof" complaints. With bigrams, the pair "not waterproof" (-1.04) takes most of the blame and "waterproof" alone drops to -0.46. "not bad" gets its own clearly positive weight (1.46), "It is waterproof." now reads as positive (0.73) and "Would not buy again." as clearly negative (0.11).</p>
+                <p>One probe is still stuck near the middle: "It is not waterproof at all." at 0.47. The phrase "at all" shows up both in praise ("not bad at all") and in complaints ("not waterproof at all"), and two-word windows cannot connect "not waterproof" with "at all" well enough to be sure. Accuracy is a blunt summary; probing with sentences tells you whether the model is right for the right reasons.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Why Only Pairs?</h4>
+                    <p>Each extra <em>n</em> multiplies the vocabulary while each n-gram gets rarer, so most trigrams appear only once or twice and teach the model little. Bigrams catch the most common local patterns (negation, "highly recommend", "would buy"). Longer-range meaning ("I expected it to be warm. It was not.") needs models that read the whole sequence, which is what the next section is about.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="embeddings" class="lesson-section">
+                <h2>🧠 Beyond Bags of Words: Embeddings</h2>
+
+                <p>A bag of words has two blind spots. First, every word is its own unrelated column: "warm", "toasty" and "cozy" share nothing, so the model must see each one in training to learn it. Second, word order beyond the n-gram window is lost. <strong>Embeddings</strong> address both.</p>
+
+                <p>A <strong>word embedding</strong> represents each word as a dense vector of a few hundred numbers, learned from billions of sentences so that words used in similar contexts end up close together. "toasty" lands near "warm" even if your reviews never used it. Early methods (word2vec, GloVe) gave one vector per word. Modern <strong>transformer</strong> models, the family behind large language models and introduced in Lesson 10.4, produce <em>contextual</em> embeddings: the vector for "light" differs in "light rain" and "light pack", and a whole review can be turned into one vector that a classifier like logistic regression then uses as its features. That is transfer learning (Lesson 10.5) for text.</p>
+
+                <div class="card card-info">
+                    <h4>💡 When Is TF-IDF Enough?</h4>
+                    <p>Embeddings help most when labeled data is scarce, when synonyms and paraphrases matter, or when meaning depends on context across a sentence. They cost more: a pretrained model of hundreds of megabytes, slower predictions, and features you cannot read word by word. On short, focused text like these reviews, TF-IDF with bigrams and logistic regression is a strong baseline that is hard to beat by much. The professional habit is the one you already have: build the simple model first, measure it, and adopt a bigger one only if it wins on your validation data by enough to pay for itself.</p>
+                </div>
+
+                <p>This course's environment does not include a pretrained language model, so there is no embedding code to run here. If you want to try one, the open-source <code>sentence-transformers</code> library turns a list of sentences into an array of vectors in one call; feed that array to <code>LogisticRegression</code> in place of the TF-IDF matrix and compare the scores on the same split.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Text brings a few new ways to go wrong. Most come from forgetting that a vectorizer is a fitted transformer with its own vocabulary.</p>
+
+                <h3>1. Passing a DataFrame Instead of a Column of Text</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">frame_model = make_pipeline(TfidfVectorizer(), LogisticRegression())
+frame_model.fit(labeled[["text"]], labeled["positive"])</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Found input variables with inconsistent numbers of samples: [1, 3095]</code></pre>
+                </div>
+                <p><strong>What it means:</strong> a vectorizer iterates over its input expecting one document per item. Iterating over a DataFrame yields its <em>column names</em>, so the vectorizer saw one "document" (the word "text") while there are 3,095 labels. <strong>Fix:</strong> pass a Series with single brackets, <code>labeled["text"]</code>. (This is the opposite of numeric features, where <code>X</code> must be 2-D.) To combine text with other columns, use a <code>ColumnTransformer</code> with the column name as a string: <code>("text", TfidfVectorizer(), "text")</code>.</p>
+
+                <h3>2. Fitting a New Vectorizer on the Test Set</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">train_vec = TfidfVectorizer().fit(X_train)
+clf = LogisticRegression().fit(train_vec.transform(X_train), y_train)
+
+test_matrix = TfidfVectorizer().fit_transform(X_test)
+clf.predict(test_matrix)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: X has 331 features, but LogisticRegression is expecting 333 features as input.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the second vectorizer built its own vocabulary from the test reviews, with fewer words in a different order, so column 57 no longer means the same word. You were lucky that the sizes differ; if they happened to match, you would get confident nonsense instead of an error. <strong>Fix:</strong> <code>transform</code> the test text with the vectorizer fitted on the training text, or simply use a pipeline, which does that for you.</p>
+
+                <h3>3. Missing Text</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">new_reviews = pd.Series(["Love it, so warm.", None, "Leaked on day one."])
+sentiment.predict(new_reviews)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: np.nan is an invalid document, expected byte or unicode string.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> a review with no text arrives as a missing value, and the vectorizer refuses to guess. <strong>Fix:</strong> decide what an empty review means for your task, then either drop those rows or fill them with an empty string, <code>new_reviews.fillna("")</code>. An empty document becomes a row of zeros, and the model falls back on its intercept.</p>
+
+                <h3>4. Fitting the Vectorizer Before Splitting</h3>
+
+                <pre><code class="language-python">leaky_vec = TfidfVectorizer().fit(labeled["text"])     # all 3,095 reviews, test set included
+honest_vec = TfidfVectorizer().fit(X_train)
+
+print("vocabulary from all reviews :", len(leaky_vec.vocabulary_))
+print("vocabulary from train only  :", len(honest_vec.vocabulary_))
+print("idf of 'leaked', all vs train:", round(leaky_vec.idf_[leaky_vec.vocabulary_["leaked"]], 3),
+      round(honest_vec.idf_[honest_vec.vocabulary_["leaked"]], 3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>vocabulary from all reviews : 334
+vocabulary from train only  : 333
+idf of 'leaked', all vs train: 4.17 4.145</code></pre>
+                </div>
+                <p><strong>What happened:</strong> vectorizing the whole dataset first lets the test reviews add words to the vocabulary and shift every IDF. Here the effect is small, because the vocabulary is small and repetitive. With real text, test-only words (product names, new slang) end up in the features, and your test score describes a model that knew the future. <strong>Fix:</strong> split first, then fit the vectorizer on the training text, ideally inside a pipeline.</p>
+
+                <h3>5. Removing Stop Words by Default</h3>
+                <p>No error, a quietly worse model: the built-in English list removes "not", "no" and "never". You saw it cost 1.3 points of accuracy and turn "Would not buy again." into a coin flip. <strong>Fix:</strong> keep all words with TF-IDF, or use a short custom list you have read, and compare on validation data.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: Review Triage</h2>
+
+                <p>Pinecrest's care team wants a daily list of reviews to follow up: the ones most likely written by an unhappy customer. They would rather check a few false alarms than miss real complaints, and they want the mixed 3-star reviews screened too. You will build the model, choose a flagging threshold <em>without touching the test set</em>, grade the result honestly, read the mistakes, and produce the list. Work in a new notebook called <code>lesson_11_1_project</code>. Allow about 45 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load, label and split <span class="step-time">(5 min)</span></h3>
+                    <p>Keep the whole rows in the split, so that the review IDs and titles stay attached to their text.</p>
+                    <pre><code class="language-python">import pandas as pd
+from sklearn.model_selection import train_test_split
+
+reviews = pd.read_csv("data/reviews.csv")
+labeled = reviews[reviews["rating"] != 3].copy()
+labeled["positive"] = (labeled["rating"] &gt;= 4).astype(int)
+middle = reviews[reviews["rating"] == 3].copy()
+
+train, test = train_test_split(labeled, test_size=0.25, stratify=labeled["positive"], random_state=42)
+print(len(train), "train,", len(test), "test,", len(middle), "three-star reviews held aside")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>2321 train, 774 test, 905 three-star reviews held aside</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Build the model and the "negative" probability <span class="step-time">(5 min)</span></h3>
+                    <p>Use the bigram pipeline. The care team cares about the negative class, so define the score you will rank by as <code>P(negative) = 1 - P(positive)</code>.</p>
+                    <pre><code class="language-python">from sklearn.pipeline import make_pipeline
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+
+triage = make_pipeline(TfidfVectorizer(ngram_range=(1, 2), min_df=2), LogisticRegression())
+triage.fit(train["text"], train["positive"])
+
+test = test.assign(p_negative=1 - triage.predict_proba(test["text"])[:, 1])
+print(f"test accuracy at the default 0.5 cut-off: {triage.score(test['text'], test['positive']):.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>test accuracy at the default 0.5 cut-off: 0.877</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Choose the threshold on training data <span class="step-time">(10 min)</span></h3>
+                    <p>The team's target: catch at least 85% of negative reviews. Choosing the cut-off by looking at the test set would leak, so use <code>cross_val_predict</code> to get honest out-of-fold probabilities for the training reviews, and pick the highest threshold that reaches 85% recall there.</p>
+                    <pre><code class="language-python">import numpy as np
+from sklearn.model_selection import cross_val_predict, StratifiedKFold
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+oof = cross_val_predict(triage, train["text"], train["positive"], cv=cv, method="predict_proba")[:, 1]
+oof_negative = 1 - oof
+is_negative = train["positive"].to_numpy() == 0
+
+for threshold in [0.5, 0.4, 0.3, 0.2]:
+    flagged = oof_negative &gt;= threshold
+    recall = (flagged &amp; is_negative).sum() / is_negative.sum()
+    precision = (flagged &amp; is_negative).sum() / flagged.sum()
+    print(f"threshold {threshold:.1f}: recall {recall:.3f}  precision {precision:.3f}  flagged {flagged.mean():.1%}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>threshold 0.5: recall 0.570  precision 0.828  flagged 17.5%
+threshold 0.4: recall 0.756  precision 0.786  flagged 24.5%
+threshold 0.3: recall 0.851  precision 0.709  flagged 30.5%
+threshold 0.2: recall 0.926  precision 0.585  flagged 40.3%</code></pre>
+                    </div>
+                    <p>Lowering the threshold catches more unhappy customers at the cost of more false alarms. A threshold of 0.3 is the highest one that clears 85% recall on the training folds, so that is the choice; now it is fixed, and the test set can grade it.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Grade the threshold on the test set <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">from sklearn.metrics import recall_score, precision_score
+
+threshold = 0.3
+test["flag"] = (test["p_negative"] &gt;= threshold).astype(int)
+truth_negative = (test["positive"] == 0).astype(int)
+
+print(f"negative reviews in test : {truth_negative.sum()}")
+print(f"flagged                  : {test['flag'].sum()}")
+print(f"recall (caught)          : {recall_score(truth_negative, test['flag']):.3f}")
+print(f"precision (real among flagged): {precision_score(truth_negative, test['flag']):.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>negative reviews in test : 197
+flagged                  : 242
+recall (caught)          : 0.858
+precision (real among flagged): 0.698</code></pre>
+                    </div>
+                    <p>The test recall (0.858) lands close to what cross-validation promised (0.851), which is the sign of a threshold chosen honestly. About seven flags in ten are real complaints: a reasonable trade for a team that would rather not miss anyone. At the default 0.5 cut-off the model caught only about two-thirds of them.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Read the worst mistakes <span class="step-time">(10 min)</span></h3>
+                    <p>Sort the test reviews the model got most confidently wrong and read them, with their titles.</p>
+                    <pre><code class="language-python">pd.set_option("display.width", 150)
+pd.set_option("display.max_colwidth", 70)
+
+wrong = test[(test["p_negative"] &gt;= 0.5) != (test["positive"] == 0)]
+worst = wrong.assign(confidence=(wrong["p_negative"] - 0.5).abs()).nlargest(5, "confidence")
+print(len(wrong), "misclassified at 0.5")
+print(worst[["rating", "title", "text", "p_negative"]].round(2).to_string(index=False))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>95 misclassified at 0.5
+ rating        title                                                                                          text  p_negative
+      2   Fell short                                                                          It is built to last.        0.05
+      2   Fell short         Used it mostly on weekend trips. It shed rain all night. It goes together in minutes.        0.08
+      2  Returned it Got it during the spring sale. It showed up two days early. Although it is worth every penny.        0.09
+      2 Not worth it                                                It arrived late. Although it is a great value.        0.12
+      4 Poor quality                                    Save your money. The kayak paddle shipped the wrong color.        0.87</code></pre>
+                    </div>
+                    <p>Read them with their titles. The first four are 2-star reviews whose <em>text</em> is mild or even positive ("It is built to last."); the complaint lives only in the title ("Fell short", "Returned it", "Not worth it"), which the model never saw. The last one is the opposite: "Poor quality" and "Save your money" with 4 stars. Title, text and model agree, and the <em>stars</em> are the odd one out: some customers click the wrong rating. So part of the model's "error" is information it was not given, and part is noise in the labels. That is why 100% accuracy is impossible here, and why it should make you suspicious if you ever see it. The bonus challenge puts the title to work.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Screen the 3-star reviews and save the list <span class="step-time">(10 min)</span></h3>
+                    <p>The model never trained on 3-star reviews, but it can still score them. Flag those above the same threshold, combine them with the flagged test reviews, and save the follow-up list (IDs, product and score, no star rating needed).</p>
+                    <pre><code class="language-python">middle["p_negative"] = 1 - triage.predict_proba(middle["text"])[:, 1]
+middle["flag"] = (middle["p_negative"] &gt;= threshold).astype(int)
+print(f"3-star reviews flagged: {middle['flag'].sum()} of {len(middle)}")
+print(middle.nlargest(3, "p_negative")[["title", "text", "p_negative"]].round(2).to_string(index=False))
+
+follow_up = (pd.concat([test[test["flag"] == 1], middle[middle["flag"] == 1]])
+             .sort_values("p_negative", ascending=False)[["review_id", "product_id", "category", "p_negative"]])
+follow_up.round(3).to_csv("review_follow_up.csv", index=False)
+
+print(f"""Review triage
+Threshold (chosen by CV)  : {threshold}
+Test recall / precision   : {recall_score(truth_negative, test['flag']):.3f} / {precision_score(truth_negative, test['flag']):.3f}
+Follow-up list            : {len(follow_up)} reviews saved to review_follow_up.csv
+Most flagged category     : {follow_up['category'].value_counts().index[0]}""")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>3-star reviews flagged: 456 of 905
+             title                                                                                                                                                      text  p_negative
+    Mixed feelings       This one is far too expensive for the quality. This one feels flimsy and cheap. It let water in within an hour. Although it was frustrating to use.        0.87
+Fine for the price This is my second one. It took three weeks to arrive. It fell apart after three trips. It runs a full size large. However it weighs a ton for what it is.        0.85
+    Mixed feelings           My partner has the same one. This spray skirt shipped the wrong color. It is way too tight in the shoulders. However it is not worth the money.        0.82
+Review triage
+Threshold (chosen by CV)  : 0.3
+Test recall / precision   : 0.858 / 0.698
+Follow-up list            : 698 reviews saved to review_follow_up.csv
+Most flagged category     : Apparel</code></pre>
+                    </div>
+                    <p>Half of the 3-star reviews contain enough complaint to be worth a reply. The top three read as clear complaints despite their middle rating, which is exactly what a triage list is for. If 698 replies are too many for the team, sort by <code>p_negative</code> and work from the top, or raise the threshold and accept a lower recall: that is a business decision, and the cross-validated table from Step 3 is what you show the team to make it.</p>
+                </div>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Use Flags to Help, Not to Judge</h4>
+                    <p>A triage model decides who gets a reply sooner, which is a low-stakes, helpful use. Keep it that way: do not use review scores to rate individual customers or staff, and keep personal details out of the training text. Reviewers wrote to the shop, not to a model; store only what the follow-up needs.</p>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Your split has 2,321 training and 774 test reviews, with 905 three-star reviews held aside</li>
+                        <li>The vectorizer lives inside the pipeline, so it was fitted on training text only</li>
+                        <li>The threshold was chosen from cross-validated training probabilities, not from the test set</li>
+                        <li>You reported test recall and precision for the negative class, not only accuracy</li>
+                        <li>You read the worst mistakes and can name two reasons a "wrong" prediction happens</li>
+                        <li><code>review_follow_up.csv</code> holds review IDs, products and scores for the flagged reviews</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>Try each one before opening the solution. These continue in the project notebook, so <code>train</code>, <code>test</code> and <code>triage</code> already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: The Busiest Terms</h3>
+                    <p>Fit a <code>CountVectorizer(ngram_range=(1, 2), min_df=2)</code> on <code>train["text"]</code>. Print the vocabulary size and the eight terms with the highest total count across all training reviews. Which of them carry sentiment, and which are just the glue of English?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Sum the sparse matrix down its rows with <code>.sum(axis=0)</code>, turn the result into a flat array with <code>np.asarray(...).ravel()</code>, and put it in a Series indexed by <code>get_feature_names_out()</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.feature_extraction.text import CountVectorizer
+
+term_counter = CountVectorizer(ngram_range=(1, 2), min_df=2).fit(train["text"])
+totals = np.asarray(term_counter.transform(train["text"]).sum(axis=0)).ravel()
+term_totals = pd.Series(totals, index=term_counter.get_feature_names_out())
+
+print("vocabulary size:", len(term_totals))
+print(term_totals.nlargest(8))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>vocabulary size: 1538
+it          4309
+the         2135
+is          1950
+this        1882
+one         1129
+it is       1042
+to           967
+this one     818
+dtype: int64</code></pre>
+                        </div>
+                        <p>The most frequent terms are function words and the template of review-speak ("it is", "the"). They carry almost no sentiment, which is exactly why TF-IDF gives them a low weight instead of you deleting them by hand.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Naive Bayes on Word Counts</h3>
+                    <p>Naive Bayes (Lesson 4.2) is the other classic text classifier. Build <code>make_pipeline(CountVectorizer(), MultinomialNB())</code>, fit it on the training text and compare its test accuracy with the TF-IDF logistic regression from Step 2.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>MultinomialNB</code> lives in <code>sklearn.naive_bayes</code>. It expects counts, which is why it pairs with <code>CountVectorizer</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.naive_bayes import MultinomialNB
+
+nb = make_pipeline(CountVectorizer(), MultinomialNB()).fit(train["text"], train["positive"])
+print(f"CountVectorizer + MultinomialNB : {nb.score(test['text'], test['positive']):.3f}")
+print(f"TF-IDF bigrams + logistic reg.  : {triage.score(test['text'], test['positive']):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>CountVectorizer + MultinomialNB : 0.857
+TF-IDF bigrams + logistic reg.  : 0.877</code></pre>
+                        </div>
+                        <p>Naive Bayes is two points behind but still far above the baseline, and it trains even faster. It assumes each word contributes independently, which breaks down for negation ("not" plus "bad"), and it does not get the benefit of IDF weighting or regularization. It remains a great first model when you have very little labeled text.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Character n-grams for Typos</h3>
+                    <p>Build a vectorizer with <code>analyzer="char_wb", ngram_range=(2, 5), min_df=2</code>: it counts runs of 2 to 5 characters inside word boundaries. Fit it on the training text and compute the cosine similarity between "not waterproof" and "not waterprof" under this vectorizer and under a word-level <code>TfidfVectorizer</code>. Then train a logistic regression on the character features and report its test accuracy.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>cosine_similarity</code> is in <code>sklearn.metrics.pairwise</code>; give it the two transformed rows. Under the word vectorizer, "waterprof" is not in the vocabulary at all.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.metrics.pairwise import cosine_similarity
+
+pair = ["not waterproof", "not waterprof"]
+char_vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 5), min_df=2).fit(train["text"])
+word_vec = TfidfVectorizer().fit(train["text"])
+
+print(f"char n-gram similarity: {cosine_similarity(char_vec.transform(pair))[0, 1]:.3f}")
+print(f"word similarity       : {cosine_similarity(word_vec.transform(pair))[0, 1]:.3f}")
+
+char_model = make_pipeline(TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 5), min_df=2), LogisticRegression())
+char_model.fit(train["text"], train["positive"])
+print(f"char n-gram accuracy  : {char_model.score(test['text'], test['positive']):.3f}  ({len(char_vec.vocabulary_):,} features)")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>char n-gram similarity: 0.694
+word similarity       : 0.200
+char n-gram accuracy  : 0.866  (3,679 features)</code></pre>
+                        </div>
+                        <p>Character n-grams see that the typo shares most of its pieces with the correct word. The word vectorizer only shares "not", because "waterprof" is not in its vocabulary. On this data the overall accuracy is slightly lower (typos are rare and the vocabulary is clean), but on messy text such as chat messages or product searches character n-grams are often the better choice.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Tune the Text Pipeline (Stretch)</h3>
+                    <p>Use <code>GridSearchCV</code> on the training reviews only to tune the vectorizer and the model together: <code>ngram_range</code> of <code>(1, 1)</code> or <code>(1, 2)</code>, <code>min_df</code> of 1 or 2, and the logistic regression's <code>C</code> in <code>[1, 10]</code>, with 5-fold stratified CV and accuracy as the score. Report the best parameters, the best CV score and the test accuracy of the refitted best model.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Parameter names in a pipeline are <code>step__param</code>: <code>tfidfvectorizer__ngram_range</code>, <code>logisticregression__C</code>. Reuse the <code>cv</code> object from Step 3.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.model_selection import GridSearchCV
+
+grid = GridSearchCV(
+    make_pipeline(TfidfVectorizer(), LogisticRegression()),
+    {"tfidfvectorizer__ngram_range": [(1, 1), (1, 2)],
+     "tfidfvectorizer__min_df": [1, 2],
+     "logisticregression__C": [1, 10]},
+    cv=cv, scoring="accuracy", n_jobs=-1,
+)
+grid.fit(train["text"], train["positive"])
+print(grid.best_params_)
+print(f"best CV accuracy : {grid.best_score_:.3f}")
+print(f"test accuracy    : {grid.score(test['text'], test['positive']):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>{'logisticregression__C': 10, 'tfidfvectorizer__min_df': 1, 'tfidfvectorizer__ngram_range': (1, 2)}
+best CV accuracy : 0.892
+test accuracy    : 0.881</code></pre>
+                        </div>
+                        <p>Because the vectorizer is inside the pipeline, every CV fold builds its vocabulary from its own training part: the search cannot leak. The gains from tuning are small here, which is typical for TF-IDF models: the representation matters more than the knobs.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_vec = CountVectorizer()
+quiz_vec.fit(["warm tent", "light tent"])
+print(quiz_vec.transform(["warm warm jacket"]).toarray())</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The vocabulary was learned during fit. Can transform add a new column for a word it has never seen?">
+                                A) <code>[[2 0 0 1]]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="fit learned three words in alphabetical order: light, tent, warm. transform counts only those, so warm gets 2 and jacket, which is not in the vocabulary, is ignored.">
+                                B) <code>[[0 0 2]]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="CountVectorizer counts every occurrence. How many times does warm appear in the new document?">
+                                C) <code>[[0 0 1]]</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> Why did <code>stop_words="english"</code> make the sentiment model worse?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="The built-in list includes negation words such as not, no and never. For sentiment those words are among the most informative, so removing them turns 'would not buy again' into just 'buy'.">
+                                A) The list removes negation words such as "not", which carry a lot of sentiment
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A smaller vocabulary is usually the point of removing stop words. What kind of words were on the list?">
+                                B) The vocabulary became too small for logistic regression to train
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Stop-word removal happens inside the vectorizer during both fit and transform. Look at which specific words disappeared.">
+                                C) Stop words were removed from the training text but not from the test text
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> A word appears in every training document. With scikit-learn's default TF-IDF settings, what is its IDF?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="With smoothing, ln((1 + n) / (1 + n)) is 0, but scikit-learn adds 1 to every IDF.">
+                                A) 0, so the word disappears from the features
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Common words get the smallest IDF, not the largest. What does the formula give when df equals n?">
+                                B) The largest IDF in the vocabulary
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="ln((1 + n) / (1 + n)) + 1 = 1, the smallest possible IDF. The word keeps a small weight instead of vanishing, which you saw with warm in the toy example.">
+                                C) 1, the smallest possible value
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> In the unigram model, "waterproof" had a negative coefficient. What is the best explanation?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="A bag of single words cannot see that waterproof was preceded by not. In these reviews the word appears mostly in complaints like 'not waterproof at all', so the model learned it as a negative signal. Bigrams give the pair its own column.">
+                                A) The word appears mostly inside "not waterproof", and single words cannot see the "not" in front
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Coefficients describe what helps the model separate classes in this data, not what customers think. Where does the word usually appear?">
+                                B) Customers dislike waterproof products
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A coefficient this strong and consistent is not random. Think about which phrases the word appears in.">
+                                C) It is random noise from the train/test split
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> You want to pick the flagging threshold that reaches 85% recall. Which approach keeps the test score honest?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="If you choose the threshold using the test labels, what has the test set become?">
+                                A) Try thresholds on the test set and keep the one with 85% recall
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="In-sample probabilities are overconfident, because the model has already seen those labels. What gives honest probabilities for training rows?">
+                                B) Use the model's probabilities on the training reviews it was fitted on
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="cross_val_predict gives each training review a probability from a model that did not see it, so the threshold is chosen on honest numbers, and the untouched test set can then grade it.">
+                                C) Use <code>cross_val_predict</code> probabilities on the training reviews, then grade the chosen threshold once on the test set
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Should I use a large language model instead?</summary>
+                    <p>For some tasks, yes: very little labeled data, subtle language, or many categories you cannot label by hand. A general-purpose language model can classify text with no training at all if you describe the categories. But it is slower, costs money per call, can change when the provider updates it, and is harder to audit. Build the TF-IDF baseline first. If a bigger model wins clearly on the same held-out reviews, you have a business case; if it wins by a point, you probably do not.</p>
+                </details>
+                <details>
+                    <summary>Why did I not need to scale anything?</summary>
+                    <p>TF-IDF rows are already scaled to length 1, so every document lives on the same scale, and all features are non-negative weights of similar size. Adding <code>StandardScaler</code> would also destroy sparsity (subtracting a mean turns zeros into non-zeros). Use <code>StandardScaler(with_mean=False)</code> if you combine TF-IDF with numeric columns of very different scale.</p>
+                </details>
+                <details>
+                    <summary>How do I combine text with other columns, such as the product category?</summary>
+                    <p>Use a <code>ColumnTransformer</code> (Lesson 2.1) on the DataFrame: <code>("text", TfidfVectorizer(), "text")</code> for the text column (a string, not a list, so the vectorizer receives a Series) and <code>("cat", OneHotEncoder(handle_unknown="ignore"), ["category"])</code> for the rest. The output stays sparse and feeds a logistic regression directly.</p>
+                </details>
+                <details>
+                    <summary>Does this work for languages other than English?</summary>
+                    <p>The vectorizers work for any language that separates words with spaces; the default token pattern handles accented letters. Languages written without spaces (Chinese, Japanese, Thai) need a word segmenter, or character n-grams, which work surprisingly well without one. Stop-word lists and stemmers are language-specific, which is one more reason to rely on TF-IDF weighting instead.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Step 5 showed that the title often says what the text does not. Train the same bigram pipeline three ways on the same split: on the title alone, on the text alone, and on the two joined (<code>train["title"] + ". " + train["text"]</code>). Compare the test accuracies. Then think hard about the winner: is the title a fair feature (would you have it when a new review arrives?), and why might a model on short headlines do so well? As a second step, predict the full 1-to-5 rating as a five-class problem and find which neighboring ratings the model confuses most.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain the tally sheet in your own words, then write down one sentence that a bag of words gets wrong and one change (bigrams, character n-grams, embeddings) that would fix it. Finally, describe one kind of text at your work or in your life that a model like today's could help sort, and what a false alarm and a miss would each cost there.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Classic text classification turns each document into a fixed-length row of numbers, then uses an ordinary model</li>
+                        <li>Tokenizing cuts text into units; vectorizers lowercase and tokenize for you (inspect with <code>build_analyzer()</code>)</li>
+                        <li>A bag of words counts tokens and ignores order; the result is a sparse matrix, mostly zeros</li>
+                        <li>TF-IDF down-weights words that appear everywhere and up-weights distinctive ones; fit it on training text only, inside a pipeline</li>
+                        <li>TF-IDF + logistic regression reached 0.877 accuracy against a 0.745 baseline, and its coefficients can be read word by word</li>
+                        <li>Generic stop-word lists remove "not", "no" and "never": never use one unread for sentiment</li>
+                        <li>Bigrams give "not waterproof" and "not bad" their own columns; character n-grams tolerate typos</li>
+                        <li>Embeddings place similar words and sentences near each other; they help with scarce labels and paraphrase, at a real cost</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You wrote a regex cleaner and read exactly what a vectorizer does to a sentence</li>
+                        <li>You computed a TF-IDF weight by hand and matched scikit-learn</li>
+                        <li>You trained a sentiment classifier that beats the baseline by 13 points</li>
+                        <li>You caught a silent preprocessing bug (stop words) by probing the model with sentences</li>
+                        <li>You chose a decision threshold without touching the test set and built a review triage list</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="applications_recommendation_systems.html"><strong>Lesson 11.2: Recommendation Systems</strong></a> you will switch from what customers write to what they buy. You will build popularity, item-similarity and matrix-factorization recommenders from Pinecrest's purchase history, and measure which one would have predicted each customer's next purchase.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook and <code>review_follow_up.csv</code>.</li>
+                    <li>Write five sentences of your own (sarcasm, a typo, a double negative) and run them through the bigram model. Which ones fool it?</li>
+                    <li>Look at <code>data/products_ml.csv</code> and <code>data/interactions.csv</code> with <code>.head()</code> and <code>.shape</code>; Lesson 11.2 starts from them.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You just taught a computer to read, at least well enough to sort hundreds of reviews in a blink, and you did it with tools you already knew: a transformer, a linear model and a pipeline. You also did the thing that separates careful practitioners from fast ones: you did not trust a single accuracy number, you asked the model what it thought of "not waterproof". Keep asking those questions; they are how good models get built.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="deep_learning_transfer.html" class="prev-lesson">← Previous: Transfer Learning</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="applications_recommendation_systems.html" class="next-lesson">Next: Recommendation Systems →</a>
+            </nav>
         </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>Text preprocessing is the foundation of Natural Language Processing, transforming raw text into a format suitable for machine learning algorithms. From cleaning and tokenization to stemming and lemmatization, these techniques are essential for extracting meaningful insights from textual data.</p>
-        </div>
-
-        <h2>Text Preprocessing Pipeline Overview</h2>
-        
-        <div class="mermaid">
-        flowchart TD
-            A[Raw Text] --> B[Text Cleaning]
-            B --> B1[Remove HTML/XML]
-            B --> B2[Handle Special Characters]
-            B --> B3[Remove URLs/Emails]
-            
-            B --> C[Tokenization]
-            C --> C1[Word Tokenization]
-            C --> C2[Sentence Tokenization]
-            
-            C --> D[Normalization]
-            D --> D1[Lowercase Conversion]
-            D --> D2[Expand Contractions]
-            D --> D3[Remove Accents]
-            
-            D --> E[Stop Words Removal]
-            E --> F{Choose Method}
-            
-            F --> G[Stemming]
-            G --> G1[Porter Stemmer]
-            G --> G2[Lancaster Stemmer]
-            
-            F --> H[Lemmatization]
-            H --> H1[With POS Tags]
-            H --> H2[Dictionary Based]
-            
-            G --> I[Processed Text]
-            H --> I
-            I --> J[Ready for ML]
-            
-            style A fill:#f9f,stroke:#333,stroke-width:4px
-            style J fill:#9f9,stroke:#333,stroke-width:4px
-        </div>
-
-        <h2>Getting Started with NLTK</h2>
-        
-        <pre class="language-python"><code>import nltk
-import re
-import string
-from nltk.tokenize import word_tokenize, sent_tokenize
-from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer, WordNetLemmatizer
-from nltk.tag import pos_tag
-
-# Download required NLTK data
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('wordnet')
-nltk.download('averaged_perceptron_tagger')
-
-# Sample text for demonstration
-sample_text = """
-Hello World! This is a sample text for NLP preprocessing.
-We'll clean, tokenize, and normalize this text.
-Visit https://example.com for more info or email us at info@example.com
-"""
-
-print("Original Text:")
-print(sample_text)</code></pre>
-
-        <h2>Text Cleaning</h2>
-        
-        <pre class="language-python"><code>def clean_text(text):
-    """Basic text cleaning operations"""
-    
-    # Remove URLs
-    text = re.sub(r'https?://\S+|www\.\S+', '', text)
-    
-    # Remove email addresses
-    text = re.sub(r'\S+@\S+', '', text)
-    
-    # Remove HTML tags
-    text = re.sub(r'<.*?>', '', text)
-    
-    # Remove extra whitespace
-    text = ' '.join(text.split())
-    
-    return text
-
-# Apply cleaning
-cleaned_text = clean_text(sample_text)
-print("Cleaned Text:")
-print(cleaned_text)</code></pre>
-
-        <h2>Tokenization</h2>
-        
-        <div class="mermaid">
-        graph TD
-            A[Text: Hello World] --> B{Tokenization Type}
-            B -->|Word| C[Hello, World]
-            B -->|Sentence| D[Hello World.]
-            B -->|Character| E[H,e,l,l,o, ,W,o,r,l,d]
-            B -->|N-gram| F[Hello World, World]
-        </div>
-
-        <pre class="language-python"><code># Word tokenization
-word_tokens = word_tokenize(cleaned_text)
-print("Word Tokens:")
-print(word_tokens)
-
-# Sentence tokenization
-sentences = sent_tokenize(cleaned_text)
-print("\nSentences:")
-for i, sent in enumerate(sentences, 1):
-    print(f"{i}. {sent}")
-
-# Custom tokenization with regex
-import re
-custom_tokens = re.findall(r'\w+', cleaned_text.lower())
-print("\nCustom Tokens (alphanumeric only):")
-print(custom_tokens)</code></pre>
-
-        <h2>Stop Words Removal</h2>
-        
-        <pre class="language-python"><code># Get English stop words
-stop_words = set(stopwords.words('english'))
-print(f"Number of stop words: {len(stop_words)}")
-print(f"Sample stop words: {list(stop_words)[:10]}")
-
-# Remove stop words
-filtered_tokens = [token for token in word_tokens 
-                   if token.lower() not in stop_words]
-
-print("\nBefore stop word removal:", len(word_tokens), "tokens")
-print("After stop word removal:", len(filtered_tokens), "tokens")
-print("Filtered tokens:", filtered_tokens)</code></pre>
-
-        <h2>Stemming vs Lemmatization</h2>
-        
-        <div class="mermaid">
-        graph LR
-            A[running] --> B{Method}
-            B -->|Stemming| C[run]
-            B -->|Lemmatization| D[run]
-            
-            E[better] --> F{Method}
-            F -->|Stemming| G[better]
-            F -->|Lemmatization| H[good]
-            
-            I[universities] --> J{Method}
-            J -->|Stemming| K[univers]
-            J -->|Lemmatization| L[university]
-            
-            style C fill:#ffcccc
-            style D fill:#ccffcc
-            style G fill:#ffcccc
-            style H fill:#ccffcc
-            style K fill:#ffcccc
-            style L fill:#ccffcc
-        </div>
-
-        <pre class="language-python"><code># Initialize stemmer and lemmatizer
-stemmer = PorterStemmer()
-lemmatizer = WordNetLemmatizer()
-
-# Example words
-test_words = ['running', 'runs', 'ran', 'better', 'good', 
-              'universities', 'universal', 'universe']
-
-print("Word -> Stem -> Lemma")
-print("-" * 40)
-for word in test_words:
-    stem = stemmer.stem(word)
-    lemma = lemmatizer.lemmatize(word)
-    print(f"{word:15} -> {stem:15} -> {lemma:15}")
-
-# Apply to our text
-stemmed_tokens = [stemmer.stem(token) for token in filtered_tokens]
-lemmatized_tokens = [lemmatizer.lemmatize(token) for token in filtered_tokens]
-
-print("\nOriginal:", filtered_tokens[:5])
-print("Stemmed:", stemmed_tokens[:5])
-print("Lemmatized:", lemmatized_tokens[:5])</code></pre>
-
-        <h2>Complete Preprocessing Pipeline</h2>
-        
-        <pre class="language-python"><code>class TextPreprocessor:
-    """Complete text preprocessing pipeline"""
-    
-    def __init__(self):
-        self.stemmer = PorterStemmer()
-        self.lemmatizer = WordNetLemmatizer()
-        self.stop_words = set(stopwords.words('english'))
-    
-    def preprocess(self, text, method='lemmatize'):
-        """
-        Complete preprocessing pipeline
-        method: 'stem' or 'lemmatize'
-        """
-        # 1. Clean text
-        text = self.clean(text)
-        
-        # 2. Tokenize
-        tokens = word_tokenize(text.lower())
-        
-        # 3. Remove punctuation
-        tokens = [token for token in tokens if token.isalnum()]
-        
-        # 4. Remove stop words
-        tokens = [token for token in tokens 
-                 if token not in self.stop_words]
-        
-        # 5. Apply stemming or lemmatization
-        if method == 'stem':
-            tokens = [self.stemmer.stem(token) for token in tokens]
-        else:
-            # Get POS tags for better lemmatization
-            pos_tags = pos_tag(tokens)
-            tokens = [self.lemmatizer.lemmatize(token, 
-                     self.get_wordnet_pos(pos)) 
-                     for token, pos in pos_tags]
-        
-        return tokens
-    
-    def clean(self, text):
-        """Clean text"""
-        # Remove URLs
-        text = re.sub(r'https?://\S+|www\.\S+', '', text)
-        # Remove emails
-        text = re.sub(r'\S+@\S+', '', text)
-        # Remove HTML
-        text = re.sub(r'<.*?>', '', text)
-        # Remove special characters
-        text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
-        # Remove extra spaces
-        text = ' '.join(text.split())
-        return text
-    
-    def get_wordnet_pos(self, treebank_tag):
-        """Convert treebank POS tag to wordnet POS tag"""
-        if treebank_tag.startswith('J'):
-            return 'a'  # adjective
-        elif treebank_tag.startswith('V'):
-            return 'v'  # verb
-        elif treebank_tag.startswith('N'):
-            return 'n'  # noun
-        elif treebank_tag.startswith('R'):
-            return 'r'  # adverb
-        else:
-            return 'n'  # default to noun
-
-# Use the pipeline
-preprocessor = TextPreprocessor()
-
-# Test text
-test_text = """
-The quick brown foxes were jumping over the lazy dogs.
-They ran quickly through the beautiful forest.
-"""
-
-# Process with both methods
-stemmed = preprocessor.preprocess(test_text, method='stem')
-lemmatized = preprocessor.preprocess(test_text, method='lemmatize')
-
-print("Original:", test_text)
-print("\nStemmed:", ' '.join(stemmed))
-print("\nLemmatized:", ' '.join(lemmatized))</code></pre>
-
-        <h2>Task-Specific Preprocessing</h2>
-        
-        <div class="mermaid">
-        graph LR
-            A[Text Data] --> B{Task Type}
-            
-            B -->|Classification| C[Aggressive Cleaning]
-            C --> C1[Remove All Punctuation]
-            C --> C2[Stemming OK]
-            
-            B -->|NER| D[Preserve Structure]
-            D --> D1[Keep Capitalization]
-            D --> D2[Keep Punctuation]
-            
-            B -->|Sentiment| E[Balanced Approach]
-            E --> E1[Keep Emoticons 😊]
-            E --> E2[Preserve Intensifiers]
-            
-            B -->|Topic Modeling| F[Focus on Content]
-            F --> F1[Remove Stop Words]
-            F --> F2[Lemmatization Preferred]
-        </div>
-
-        <h2>Advanced Techniques</h2>
-        
-        <pre class="language-python"><code># Handling contractions
-contractions = {
-    "won't": "will not",
-    "can't": "cannot",
-    "n't": " not",
-    "'re": " are",
-    "'ve": " have",
-    "'ll": " will",
-    "'d": " would",
-    "'m": " am"
-}
-
-def expand_contractions(text):
-    """Expand contractions in text"""
-    for contraction, expansion in contractions.items():
-        text = text.replace(contraction, expansion)
-    return text
-
-# N-gram generation
-from nltk.util import ngrams
-
-def generate_ngrams(tokens, n):
-    """Generate n-grams from tokens"""
-    n_grams = list(ngrams(tokens, n))
-    return [' '.join(gram) for gram in n_grams]
-
-tokens = word_tokenize("Machine learning is amazing")
-bigrams = generate_ngrams(tokens, 2)
-trigrams = generate_ngrams(tokens, 3)
-
-print("Bigrams:", bigrams)
-print("Trigrams:", trigrams)</code></pre>
-
-        <h2>Best Practices</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 Key Guidelines</h3>
-            <ul>
-                <li><strong>Understand your data:</strong> Check language, encoding, and format</li>
-                <li><strong>Task-specific approach:</strong> Different tasks need different preprocessing</li>
-                <li><strong>Preserve information:</strong> Don't over-clean, keep what's relevant</li>
-                <li><strong>Consistency:</strong> Same preprocessing for train and test data</li>
-                <li><strong>Document steps:</strong> Keep track of preprocessing decisions</li>
-                <li><strong>Validate results:</strong> Check output at each step</li>
-            </ul>
-        </div>
-
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Build a Custom Preprocessor</h3>
-            <p>Create a preprocessor for social media text that handles:</p>
-            <ul>
-                <li>Hashtags and mentions</li>
-                <li>Emoticons and emojis</li>
-                <li>Slang and abbreviations</li>
-            </ul>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: Compare Preprocessing Methods</h3>
-            <p>Test different preprocessing combinations and measure their impact on:</p>
-            <ul>
-                <li>Text classification accuracy</li>
-                <li>Processing speed</li>
-                <li>Vocabulary size</li>
-            </ul>
-        </div>
-
-        <h2>Summary</h2>
-        
-        <div class="summary-box">
-            <h3>✅ You've Learned</h3>
-            <ul>
-                <li>How to clean text data (remove URLs, emails, special characters)</li>
-                <li>Different tokenization methods (word, sentence, custom)</li>
-                <li>Stop words removal and its impact</li>
-                <li>Difference between stemming and lemmatization</li>
-                <li>Building complete preprocessing pipelines</li>
-                <li>Task-specific preprocessing strategies</li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Stemming is fast but crude; lemmatization is accurate but slower.
-            For a text project you actually care about, which trade-off would you choose, and what about the task drives that decision?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Raw text must be normalized — cleaned and tokenized — before any model can use it.</li>
-                <li>Stop-word removal cuts noise, but it can discard meaning for tasks where words like "not" matter.</li>
-                <li>Stemming chops word endings with heuristics; lemmatization maps words to real dictionary base forms using context.</li>
-                <li>Preprocessing choices should be driven by the downstream task, never applied blindly.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now turn messy, real-world text into clean, consistent tokens that are ready for feature extraction — the essential
-        first step of every NLP project.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>Should I always remove stop words?</summary>
-            <p>No. For tasks like topic modeling, removing them helps. But for sentiment analysis or anything where negation and
-            function words carry meaning, removing them can hurt performance.</p>
-        </details>
-        <details>
-            <summary>Stemming or lemmatization — which should I use?</summary>
-            <p>Use lemmatization when you want accurate, readable base forms and can afford the extra compute. Use stemming when speed
-            matters and rough matching (e.g., for search indexing) is good enough.</p>
-        </details>
-        <details>
-            <summary>Should I lowercase everything?</summary>
-            <p>Usually yes, but case can carry signal — "US" versus "us", or named entities. Consider whether the task benefits from
-            preserving case before you flatten it.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Next you'll turn these cleaned tokens into numbers — bag-of-words, TF-IDF, and word embeddings — the representations that
-        let models actually learn from text.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Clean a paragraph of your own text with your pipeline and inspect the output tokens.</li>
-            <li>Compare stemming versus lemmatization on the same handful of words and note the differences.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Clean text is the quiet foundation of every great NLP model. Master this step and everything downstream — from
-            sentiment to search to chatbots — gets easier. You're building the groundwork well.</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="applications_recommendation_systems.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="mlops_intro.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -508,24 +1090,10 @@ print("Trigrams:", trigrams)</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
     <script src="js/course-enhancements.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-        mermaid.initialize({ 
-            startOnLoad: true,
-            theme: 'default',
-            themeVariables: {
-                primaryColor: '#f0f0f0',
-                primaryTextColor: '#333',
-                primaryBorderColor: '#667eea',
-                lineColor: '#667eea',
-                secondaryColor: '#e0e7ff',
-                tertiaryColor: '#fff'
-            }
-        });
-    </script>
 </body>
 </html>

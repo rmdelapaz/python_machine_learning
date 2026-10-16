@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Key: Session 9</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">answers &amp; solutions · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Answer Key</div>
+    <h1>Session 9: Random Forests and Gradient Boosting</h1>
+    <p class="sub">Answers and reasoning for every Session 9 item: the warm-up, both self-checks, the predict-then-run items, the lab reference outputs, the debug handouts, the lesson pages' own quizzes and the exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Session <b>9</b></span>
+      <span class="chip"><b>12</b> self-check items</span>
+      <span class="chip">Confidential</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<p>Session 8 retrieval; the guide has what to say after each.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">Lesson 4.3: you raise a linear SVM's C from 0.01 to 100 on overlapping data. Street width and number of support vectors?</div><div class="opts"><div class="opt correct">Narrower street, fewer support vectors (the lesson: 4.06 wide with 42 support vectors, then 0.75 with 7).</div></div><div class="why"><b>Why:</b> C is the price of a violation.</div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">An RBF SVM with gamma=1000 scores 1.000 on training data and 0.650 on test data. What happened, and what would have warned you without the test set?</div><div class="opts"><div class="opt correct">Each point's influence shrank to a tiny bubble: it memorized the training set. Cross-validation would have shown it, and so would the support-vector count (nearly every point).</div></div><div class="why"><b>Why:</b> Today's boosting has the same trap with a new dial: the number of trees.</div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">A tree node holds 40 stayers and 10 churners. Gini impurity? Predict, then check.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+p = np.array([<span class="s">40</span>, <span class="s">10</span>]) / <span class="s">50</span>
+print(round(float(<span class="s">1</span> - np.sum(p ** <span class="s">2</span>)), <span class="s">2</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">0.32</code></div></div><div class="why"><b>Why:</b> 1 - (0.64 + 0.04) = 0.32. A customer landing there gets churn probability 0.2.</div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Why does an SVM need StandardScaler while a decision tree does not?</div><div class="opts"><div class="opt correct">The SVM's kernel and margin are distances, so units matter. A tree only asks "above this threshold?", and rescaling moves the threshold, not the customers.</div></div><div class="why"><b>Why:</b> Same for today's forests and boosted trees: no scaling.</div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Homework check: a bootstrap sample of 4,500 rows drawn with replacement from 4,500. What share of the distinct customers does it contain?</div><div class="opts"><div class="opt correct">About 63%. Lesson 5.2's first block shows 62.9% (2,830 customers); theory 63.2%.</div></div><div class="why"><b>Why:</b> Collect the written predictions: most people guess 100% or 50%. Today opens with exactly this.</div></div>
+
+  <div class="sec"><h2>5.2 · Bagging and Random Forests: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="1" data-kind="short"><div class="qn">Q1</div><div class="qt">What does this print? (The share of distinct rows in a bootstrap sample of n rows from n.)</div><pre class="code">n = <span class="s">1000</span>
+print(round(<span class="s">1</span> - (<span class="s">1</span> - <span class="s">1</span> / n) ** n, <span class="s">3</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">0.632</code></div></div><div class="why"><b>Why:</b> Each row is missed on one draw with probability 1 - 1/n, on all n draws with (1 - 1/n)^n, which approaches 1/e = 0.368. So about 63.2% of the distinct rows are in the sample and 36.8% are out-of-bag.</div></div>
+  <div class="q" data-sc="2"><div class="qn">Q2</div><div class="qt">Which change makes the trees of a random forest LESS correlated with each other?</div><div class="opts"><div class="opt">A) Raising <code class="inline">n_estimators</code></div><div class="opt">B) Setting <code class="inline">max_features=None</code></div><div class="opt correct">C) Lowering <code class="inline">max_features</code></div><div class="opt">D) Raising <code class="inline">min_samples_leaf</code> to 500</div></div><div class="why"><b>Why:</b> With fewer candidate features per split, trees are often denied the best feature and must find other splits, so their errors overlap less (the ρσ² term shrinks). Lab B measures it: correlation 0.357 at max_features=1 against 0.535 at 10.<br><b>A</b> is wrong: More trees make the average more precise; each tree is just as alike as before.<br><b>B</b> is wrong: That turns the forest back into bagging: the MOST correlated trees.<br><b>D</b> is wrong: Huge leaves make every tree simple and similar.</div></div>
+  <div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">For one training customer, which trees produce the out-of-bag prediction?</div><div class="opts"><div class="opt correct">A) Only the trees whose bootstrap sample did not include that customer</div><div class="opt">B) All trees in the forest</div><div class="opt">C) Trees refitted on a held-out fold</div><div class="opt">D) The trees that predicted that customer correctly</div></div><div class="why"><b>Why:</b> About 37% of the trees never saw a given customer; their average is an unseen-data prediction, made without holding anything out. That is why the OOB AUC (0.866) matches 5-fold CV (0.868) at a fifth of the cost.<br><b>B</b> is wrong: Trees that trained on the customer memorized them: that is the 1.000 training AUC.<br><b>C</b> is wrong: No refitting happens: one fit gives the OOB score.<br><b>D</b> is wrong: That would be cheating with the answer.</div></div>
+  <div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">from</span> sklearn.ensemble <span class="k">import</span> RandomForestClassifier
+RandomForestClassifier(bootstrap=<span class="k">False</span>, oob_score=<span class="k">True</span>).fit([[<span class="s">0</span>], [<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">3</span>]], [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">1</span>])</pre><div class="opts"><div class="opt">A) It fits, and oob_score_ is 1.0</div><div class="opt">B) It fits, and oob_score_ is missing</div><div class="opt">C) A warning that too few trees were used</div><div class="opt correct">D) <code class="inline">ValueError: Out of bag estimation only available if bootstrap=True</code></div></div><div class="why"><b>Why:</b> Without bootstrap sampling every tree sees every row, so no row is ever out of the bag. Keep bootstrap=True (the default) or use cross-validation.<br><b>A</b> is wrong: It does not fit at all.<br><b>B</b> is wrong: scikit-learn refuses the combination at fit time.<br><b>C</b> is wrong: That warning is for too FEW trees with bootstrap on (Lesson 5.2, Common Mistake 3).</div></div>
+  <div class="q" data-sc="5" data-kind="short"><div class="qn">Q5</div><div class="qt">What does this print? (The variance of an average of n models with correlation 0.3.)</div><pre class="code">rho, var = <span class="s">0.3</span>, <span class="s">1.0</span>
+print([round(rho * var + (<span class="s">1</span> - rho) * var / n, <span class="s">3</span>) <span class="k">for</span> n <span class="k">in</span> (<span class="s">1</span>, <span class="s">10</span>, <span class="s">100</span>)])</pre><div class="opts"><div class="opt correct"><code class="inline">[1.0, 0.37, 0.307]</code></div></div><div class="why"><b>Why:</b> ρσ² + (1 - ρ)σ²/n: the second term shrinks with n, the first (0.3) stays. More trees cannot remove the error the trees share; less alike trees (smaller ρ) can.</div></div>
+  <div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">A column of pure random noise gets an impurity importance (MDI) of 0.065 in a forest, but a permutation importance of 0.005 on the test set. Best conclusion?</div><div class="opts"><div class="opt">A) The column carries real signal that permutation importance missed</div><div class="opt correct">B) MDI was inflated: a many-valued column wins chance splits on the training data</div><div class="opt">C) The column has a small causal effect on churn</div><div class="opt">D) The forest needs more trees</div></div><div class="why"><b>Why:</b> MDI is computed from training-data splits and rewards columns with many distinct values. Shuffling the column on unseen data hardly hurts, so the splits did not generalize. Lab A shows the mirror image on fraud: the 0/1 column device_new is underrated by MDI (0.081) and ranks second by permutation (0.122).<br><b>A</b> is wrong: Pure noise has no signal by construction.<br><b>C</b> is wrong: Neither importance measures causes.<br><b>D</b> is wrong: More trees average the noise splits; they do not stop them.</div></div>
+
+  <div class="sec"><h2>5.2 · Bagging and Random Forests: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+votes = np.array([[<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>],      <span class="c"># tree 1's churn votes for three customers</span>
+                  [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>],      <span class="c"># tree 2</span>
+                  [<span class="s">0</span>, <span class="s">0</span>, <span class="s">1</span>],      <span class="c"># tree 3</span>
+                  [<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>]])     <span class="c"># tree 4</span>
+print(votes.mean(axis=<span class="s">0</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">[0.75 0.25 0.75]</code></div></div><div class="why"><b>Why:</b> Each column is one customer; the mean of the four 0/1 votes is the share of trees voting churn. A forest averages probabilities the same way.</div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it.</div><pre class="code">rho, var = <span class="s">0.5</span>, <span class="s">1.0</span>
+<span class="k">for</span> n <span class="k">in</span> [<span class="s">1</span>, <span class="s">10</span>, <span class="s">1000</span>]:
+    print(n, round(rho * var + (<span class="s">1</span> - rho) * var / n, <span class="s">3</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">1 1.0
+10 0.55
+1000 0.5</code></div></div><div class="why"><b>Why:</b> With n = 1 the variance is σ² = 1. More models shrink only the second term; with correlation 0.5 the average never gets below 0.5.</div></div>
+
+  <div class="sec"><h2>5.3 · Gradient Boosting: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print? (Current predictions 20 and 20, truths 26 and 14, learning rate 0.1, a tree that fits the residuals perfectly.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+pred = np.array([<span class="s">20.0</span>, <span class="s">20.0</span>])
+truth = np.array([<span class="s">26.0</span>, <span class="s">14.0</span>])
+print(pred + <span class="s">0.1</span> * (truth - pred))</pre><div class="opts"><div class="opt correct"><code class="inline">[20.6 19.4]</code></div></div><div class="why"><b>Why:</b> Residuals +6 and -6, scaled by 0.1: each prediction moves a tenth of the way, to 20.6 and 19.4. The next tree aims at the remaining +5.4 and -5.4: a gentle putt.</div></div>
+  <div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">Bagging and boosting both combine trees. Which statement is right?</div><div class="opts"><div class="opt correct">A) Bagging averages independent deep trees and mainly reduces variance; boosting adds small trees in sequence, each fixing what is still wrong, and mainly reduces bias</div><div class="opt">B) Both grow deep trees on bootstrap samples; boosting just uses more of them</div><div class="opt">C) Boosting averages the trees; bagging adds them</div><div class="opt">D) Bagging needs early stopping; boosting never overfits</div></div><div class="why"><b>Why:</b> A forest's trees never talk to each other; averaging cancels their quirks. Boosting's trees each aim at the remaining errors, so the model grows more detailed with every tree, which is why it needs early stopping and a forest does not.<br><b>B</b> is wrong: Boosting's trees are small and trained on the residuals, not on bootstrap samples.<br><b>C</b> is wrong: Backwards.<br><b>D</b> is wrong: Backwards: more trees never make a forest overfit; boosting overfits if it runs unchecked.</div></div>
+  <div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">You fit <code class="inline">HistGradientBoostingClassifier()</code> with all defaults on the 4,500 training customers. How many trees does it build?</div><div class="opts"><div class="opt">A) It stops at the best number of trees on an internal validation set</div><div class="opt">B) 2,000</div><div class="opt correct">C) 100: early_stopping="auto" is off below 10,000 rows, so it builds max_iter=100</div><div class="opt">D) As many as there are features</div></div><div class="why"><b>Why:</b> "auto" turns early stopping on only above 10,000 rows. On churn the validation loss is best at 27 trees, so the default 100 are already past it. On the 35,000 fraud payments (Lab B), "auto" is on and the default stops at 46.<br><b>A</b> is wrong: Only above 10,000 rows, or with early_stopping=True.<br><b>B</b> is wrong: max_iter defaults to 100.<br><b>D</b> is wrong: The number of trees has nothing to do with the number of features.</div></div>
+  <div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.ensemble <span class="k">import</span> HistGradientBoostingClassifier
+X = pd.DataFrame({<span class="s">"tenure"</span>: [<span class="s">3</span>, <span class="s">40</span>, <span class="s">5</span>, <span class="s">60</span>], <span class="s">"store"</span>: [<span class="s">"Bend"</span>, <span class="s">"Boise"</span>, <span class="s">"Bend"</span>, <span class="s">"Online"</span>]})
+HistGradientBoostingClassifier().fit(X, [<span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>])</pre><div class="opts"><div class="opt">A) It fits, treating store as categorical</div><div class="opt correct">B) <code class="inline">ValueError: could not convert string to float: 'Bend'</code></div><div class="opt">C) It fits, one-hot encoding store automatically</div><div class="opt">D) A warning, then store is dropped</div></div><div class="why"><b>Why:</b> HistGradientBoosting treats a column as categorical only if its dtype is <code class="inline">category</code>. Text is treated as a number, and 'Bend' is not one. Fix: <code class="inline">X[cols] = X[cols].astype("category")</code> before splitting.<br><b>A</b> is wrong: Only the category dtype is detected (categorical_features="from_dtype").<br><b>C</b> is wrong: No library one-hot encodes for you.<br><b>D</b> is wrong: Nothing is dropped silently.</div></div>
+  <div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">You early-stop an XGBClassifier. What goes into eval_set?</div><div class="opts"><div class="opt">A) The test set, so it stops where it will be graded</div><div class="opt">B) The training rows it is fitted on</div><div class="opt">C) Nothing: XGBoost holds out its own validation set</div><div class="opt correct">D) A validation set split off from the training rows</div></div><div class="why"><b>Why:</b> Stopping on the test set makes the test score partly a training score (the lesson's peeking model reports 0.872; Lab B's 0.867 / AP 0.510). XGBoost and LightGBM do not hold out data for you; HistGradientBoosting does (validation_fraction).<br><b>A</b> is wrong: That is peeking: the number of trees is chosen to suit the test set.<br><b>B</b> is wrong: The training loss falls forever: it would never stop.<br><b>C</b> is wrong: That is HistGradientBoosting's early_stopping=True, not XGBoost's.</div></div>
+  <div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">You forecast weekly units sold (counts, never negative) with HistGradientBoostingRegressor and get 45 negative forecasts. What is the best first fix?</div><div class="opts"><div class="opt">A) Clip the forecasts at zero and move on</div><div class="opt correct">B) Use loss="poisson", which predicts on a log scale</div><div class="opt">C) Scale the target with StandardScaler</div><div class="opt">D) Add more trees</div></div><div class="why"><b>Why:</b> Poisson loss suits counts: every forecast is positive and effects become multiplicative (a promotion adds 30%, for socks and tents alike). In the lesson project it also lowered MAE from 8.16 to 8.05. Choosing the loss to match the target is often worth more than tuning.<br><b>A</b> is wrong: Clipping hides the symptom; the model is still additive in the wrong way.<br><b>C</b> is wrong: Scaling the target does not stop negative predictions.<br><b>D</b> is wrong: More trees fit the same wrong loss harder.</div></div>
+
+  <div class="sec"><h2>5.3 · Gradient Boosting: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+pred, truth = np.array([<span class="s">10.0</span>]), np.array([<span class="s">14.0</span>])
+<span class="k">for</span> step <span class="k">in</span> range(<span class="s">3</span>):
+    pred = pred + <span class="s">0.5</span> * (truth - pred)
+    print(pred)</pre><div class="opts"><div class="opt correct"><code class="inline">[12.]
+[13.]
+[13.5]</code></div></div><div class="why"><b>Why:</b> Each step closes half of the remaining gap of 4: 10 → 12 → 13 → 13.5. A gentle learning rate never overshoots.</div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+rate = <span class="s">0.2</span>
+start = np.log(rate / (<span class="s">1</span> - rate))
+print(round(float(start), <span class="s">3</span>), round(float(<span class="s">1</span> / (<span class="s">1</span> + np.exp(-start))), <span class="s">3</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">-1.386 0.2</code></div></div><div class="why"><b>Why:</b> log(0.2 / 0.8) = log(0.25) = -1.386; the sigmoid turns it back into 0.2. A boosted classifier starts there and adds trees on this scale.</div></div>
+
+  <div class="sec"><h2>Lab Reference Solutions</h2><span class="rule"></span></div>
+<div class="blk lab"><div class="h">Lab 5.2-A: labs/module-09/l5_2-random-forests/fraud_forest_starter.py → fraud_forest_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">(35000, 9) frauds in training: 307; a random 100 test payments hold 0.9
+min_samples_leaf= 1  OOB average precision 0.489   OOB ROC AUC 0.829
+min_samples_leaf= 3  OOB average precision 0.511   OOB ROC AUC 0.848
+min_samples_leaf= 5  OOB average precision 0.513   OOB ROC AUC 0.863
+min_samples_leaf=10  OOB average precision 0.503   OOB ROC AUC 0.861
+logistic regression  test AUC 0.848   AP 0.444   frauds in top 100: 53
+one unlimited tree   test AUC 0.684   AP 0.129   frauds in top 100: 41
+random forest        test AUC 0.842   AP 0.479   frauds in top 100: 57
+
+distinct scores: one tree 2 | forest 10197
+                           impurity (MDI)  permutation (AP drop)
+velocity_24h                        0.288                  0.202
+amount                              0.176                  0.058
+account_age_days                    0.161                  0.057
+hour                                0.123                  0.103
+card_attempts                       0.091                  0.050
+device_new                          0.081                  0.122
+billing_shipping_mismatch           0.037                  0.029
+items                               0.024                  0.010
+country_mismatch                    0.018                  0.018
+
+distinct values: amount 27674 | account_age_days 3351 | device_new 2</pre><p>Reading it: tuned out-of-bag by average precision, leaf 5 is best (0.513), with no CV loop. On the test set the forest's AUC (0.842) is slightly BELOW logistic regression's (0.848), yet its AP (0.479 vs 0.444) and its top 100 (57 vs 53) are better: for a review queue only the top of the ranking matters, and AUC grades all 15,000 payments. The single unlimited tree gives only two distinct scores, so its "top 100" is an arbitrary slice of ties. Importances: MDI underrates the 0/1 column <code class="inline">device_new</code> (it can only split one way) and overrates the many-valued <code class="inline">amount</code> and <code class="inline">account_age_days</code>; permutation importance on unseen data ranks <code class="inline">device_new</code> second, consistent with the night-and-new-device interaction from Session 8.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 5.2-B: labs/module-09/l5_2-random-forests/decorrelate_starter.py → decorrelate_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">per-tree predictions: (200, 1500)
+forest test AUC 0.865; same as averaging the trees yourself: 0.865
+ max_features  one_tree_auc  tree_correlation  oob_auc  test_auc
+            1         0.709             0.357    0.862     0.854
+            2         0.732             0.423    0.866     0.864
+            3         0.740             0.469    0.865     0.865
+            5         0.747             0.512    0.866     0.861
+           10         0.747             0.535    0.862     0.856
+
+test AUC with the first k trees: {1: 0.755, 5: 0.843, 10: 0.85, 25: 0.861, 50: 0.864, 100: 0.866, 200: 0.865}
+
+top 50: 41 real churners; average spread of the trees' votes 0.284
+all test customers: average spread 0.178
+the five most divided of the top 50:
+      p_churn  spread  churned
+654     0.713   0.349        1
+1016    0.689   0.342        0
+168     0.696   0.328        1
+734     0.679   0.326        1
+1377    0.682   0.325        1</pre><p>Reading it: as max_features rises, each tree gets better (0.709 → 0.747) AND more alike (correlation 0.357 → 0.535): the two terms of the variance formula pulling in opposite directions, and the forest is best in between (2 or 3, the default "sqrt" of 10 is 3). The differences are a few thousandths, which is why forests are forgiving. The first-k curve rises fast and flattens by about 50 trees. The top 50 holds 41 churners, and the trees disagree more about those customers than about the average one: the panel's spread is a rough confidence signal.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-09/l5_2-random-forests/debug_forest.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">TypeError: BaggingClassifier.__init__() got an unexpected keyword argument 'base_estimator'</code> → <code class="inline">estimator=</code>.</li>
+  <li><code class="inline">ValueError: Out of bag estimation only available if bootstrap=True</code> → remove <code class="inline">bootstrap=False</code>.</li>
+  <li>No error: <code class="inline">honest</code> is the TRAINING AUC (0.979), printed as "OOB" → <code class="inline">roc_auc_score(y_train, forest.oob_decision_function_[:, 1])</code> = 0.866.</li>
+  <li>No error: no <code class="inline">random_state</code> on the forest → every run prints slightly different numbers; add <code class="inline">random_state=42</code>.</li>
+</ol>
+</div>
+<div class="blk lab"><div class="h">Lab 5.3-A: labs/module-09/l5_3-gradient-boosting/boosting_by_hand_starter.py → boosting_by_hand_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">3600 rows to fit, 900 to validate, 1500 locked away for the test
+churn rate 0.165 -&gt; starting log-odds -1.619 -&gt; starting probability 0.165
+log loss of predicting 0.165 for everyone: 0.4488
+  1 trees  fit loss 0.4375  validation loss 0.4375  validation AUC 0.850
+ 10 trees  fit loss 0.3737  validation loss 0.3699  validation AUC 0.866
+ 30 trees  fit loss 0.3247  validation loss 0.3217  validation AUC 0.882
+100 trees  fit loss 0.2791  validation loss 0.2954  validation AUC 0.886
+300 trees  fit loss 0.2373  validation loss 0.2898  validation AUC 0.883
+best number of trees on validation: 275 (loss 0.2892)
+
+hand-made boosting, 275 trees: test AUC 0.870, test log loss 0.3082
+HistGradientBoosting, 165 trees: test AUC 0.866, test log loss 0.3091
+
+learning rate 1.0: best 72 trees, validation loss 0.2901 (0.3: 275 trees, 0.2892); after 300 trees 0.3072 vs 0.2898</pre><p>Reading it: the hand loop is exactly the lesson's sentence, "each tree is fitted to y − p on the log-odds scale". Validation loss falls quickly and flattens; the best point (275 trees at rate 0.3) is chosen without the test set, and the test score (0.870) is in line with the library's (0.866). The library needs fewer trees because each of its leaves takes a Newton step (it divides by p(1 − p)), a bigger and smarter step than the raw residual. The stretch is the lesson's learning-rate lesson again: full-strength steps find their best sooner and then overfit.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 5.3-B: labs/module-09/l5_3-gradient-boosting/fraud_boosters_starter.py → fraud_boosters_solution.py</div>
+<p>The solution prints (XGBoost and LightGBM may vary in the last digit):</p>
+<pre class="out">fit 28000 rows (246 frauds), validation 7000 (61), test 15000 (131)
+HGB, defaults          test AUC 0.841   AP 0.415   frauds in top 100:  55   trees 46
+treated as categorical: ['category']
+HGB, gentle            test AUC 0.857   AP 0.475   frauds in top 100:  57   trees 121
+XGBoost                test AUC 0.862   AP 0.503   frauds in top 100:  61   best iteration 268
+LightGBM               test AUC 0.861   AP 0.492   frauds in top 100:  59   best iteration 99
+XGBoost, peeking       test AUC 0.867   AP 0.510   frauds in top 100:  60   best iteration 111 (chosen ON the test set)</pre><p>Reading it: with 35,000 rows the default HistGradientBoosting early-stops by itself after 46 trees and still overfits the 307 training frauds (AP 0.415); gentler, smaller trees fix that (0.475). XGBoost and LightGBM, early-stopped on average precision (the right yardstick for a rare class: log loss is dominated by the 99% legitimate payments), are best (AP about 0.50, 59 to 61 frauds in the top 100). The peeking model looks marginally better, but its stopping point was chosen on the test set, so its number cannot be trusted. Fraud thread: 53 (logistic regression) → 57 (forest) → 61 (XGBoost).</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-09/l5_3-gradient-boosting/debug_boosting.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">ValueError: could not convert string to float: 'Bend'</code> → <code class="inline">X[categorical] = X[categorical].astype("category")</code> before the split.</li>
+  <li><code class="inline">TypeError: XGBClassifier.fit() got an unexpected keyword argument 'early_stopping_rounds'</code> → <code class="inline">early_stopping_rounds=50</code> in the constructor.</li>
+  <li>No error: <code class="inline">eval_set=[(X_test, y_test)]</code> → <code class="inline">eval_set=[(X_val, y_val)]</code>. Fixed: HGB 0.862; XGBoost 0.864 at 218 trees (peeking: 0.866 at 167).</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>The Lesson Pages' Own Quick Quizzes</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Lesson 5.2 · Bagging and Random Forests</div>
+<ol class="steps">
+  <li><b>B</b> About 6,300: 1 − (1 − 1/n)^n ≈ 63.2%.</li>
+  <li><b>A</b> Lowering max_features: trees are denied the best feature more often and disagree more.</li>
+  <li><b>C</b> Only the trees whose bootstrap sample did not include that customer.</li>
+  <li><b>C</b> About the same AUC, with ten times the fitting time: the curve has plateaued.</li>
+  <li><b>A</b> The column is useless; MDI inflated it through chance splits on training data.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Lesson 5.3 · Gradient Boosting</div>
+<ol class="steps">
+  <li><b>B</b> What the current model still gets wrong: the residuals, or more generally the negative gradient of the loss.</li>
+  <li><b>C</b> <code class="inline">[12. 8.]</code>: residuals ±4, scaled by 0.5.</li>
+  <li><b>A</b> Many more trees before it stops, and a similar or slightly better validation score.</li>
+  <li><b>C</b> A validation set split off from the training data.</li>
+  <li><b>A</b> It accepts missing values and treats category-dtype columns as categorical, with no one-hot encoding.</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<ol class="steps">
+  <li>A forest and a boosted model are both made of trees. In two sentences: how are their trees different, and which kind of error does each mainly fix? <b>Answer:</b> A forest grows many deep, independent trees on bootstrap samples and averages them: it mainly reduces variance. Boosting grows small trees one after another, each fitted to what the model still gets wrong: it mainly reduces bias (and needs early stopping).</li>
+  <li>Why is a forest's out-of-bag score free, and when should you not trust it? <b>Answer:</b> Each tree never saw about 37% of the training rows, so averaging only those trees gives an unseen-data prediction for every row from one fit. Do not trust it when preprocessing learned from the target, when rows are not independent (time or groups), or with too few trees.</li>
+  <li>A colleague early-stops XGBoost with eval_set=[(X_test, y_test)] and reports AUC 0.867. What is wrong, and what do you tell them? <b>Answer:</b> The number of trees was chosen by watching the test set, so the test score is partly a training score. Early-stop on a validation set split off the training rows (or HistGradientBoosting's built-in early stopping) and touch the test set once.</li>
+</ol>
+
+  <div class="sec"><h2>Common Wrong Answers and What They Reveal</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li><b>Q1 written as 0.5 or 1.0.</b> Thinks a sample of n contains all or half the rows. Run the lesson's first block once more.</li>
+  <li><b>Q2 A (more trees).</b> Confuses the two terms of the formula: n shrinks the second term only.</li>
+  <li><b>Q6 A.</b> Trusts MDI. Show the noise column's two bars side by side.</li>
+  <li><b>Q8 B or D.</b> The panel and the golfer have merged. Redraw both.</li>
+  <li><b>Q9 A.</b> Assumes early stopping is always on; it is "auto" (above 10,000 rows).</li>
+  <li><b>Q11 A.</b> The most dangerous one: they will report inflated numbers in their final project. Spend a minute on it at the start of Session 10.</li>
+  <li><b>Exit ticket 2: "OOB is always trustworthy".</b> Revisit the target-encoding caveat before Lesson 6.1.</li>
+</ul>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 9 · Answer Key · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

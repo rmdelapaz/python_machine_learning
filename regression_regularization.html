@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="See why models underfit and overfit, add polynomial and interaction features, and tame them with Ridge, Lasso and Elastic Net on Pinecrest Outfitters weekly demand. Python Machine Learning Lesson 3.2.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Regularization and the Bias-Variance Trade-off - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
+</head>
+<body>
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
+    </nav>
+
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>🎛️ Lesson 3.2: Regularization and the Bias-Variance Trade-off</h1>
+                <p class="lead">Give a linear model the flexibility to capture real patterns, then add the one dial that stops it from memorizing noise.</p>
+
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain underfitting and overfitting in terms of bias and variance, and recognize each from training and test errors</li>
+                        <li>Add polynomial and interaction features with <code>PolynomialFeatures</code> and predict how many columns they create</li>
+                        <li>Fit <code>Ridge</code>, <code>Lasso</code> and <code>ElasticNet</code> in a pipeline with scaling, and describe how their penalties differ</li>
+                        <li>Choose the penalty strength <code>alpha</code> by cross-validation on the training data only, with <code>RidgeCV</code> and <code>LassoCV</code></li>
+                        <li>Build a regularized demand forecast with interactions and judge it against baselines on a later year</li>
+                    </ul>
+                </div>
+
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 100 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="regression_linear_logistic.html">Lesson 3.1: Linear and Logistic Regression</a> (also uses cross-validation from <a href="evaluation_cross_validation.html">Lesson 1.3</a> and pipelines from <a href="pipelines_composite.html">Lesson 2.2</a>)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A weekly demand forecast with season-by-category interactions, regularized by cross-validation and tested on 2025</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/weekly_demand.csv</code>, plus a small made-up curve for the bias-variance experiments</li>
+                </ul>
+            </header>
+
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Too Simple, Too Flexible</a></li>
+                        <li><a href="#polynomial" class="toc-link">Polynomial Features</a></li>
+                        <li><a href="#bias-variance" class="toc-link">Bias and Variance, Measured</a></li>
+                        <li><a href="#ridge" class="toc-link">Ridge: A Penalty on Big Weights</a></li>
+                        <li><a href="#pilot" class="toc-link">Overfitting Real Demand Data</a></li>
+                        <li><a href="#lasso" class="toc-link">Lasso and Elastic Net</a></li>
+                        <li><a href="#choosing-alpha" class="toc-link">Choosing alpha by Cross-Validation</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: The Interaction Forecast</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Too Simple, Too Flexible</h2>
+
+                <p>In Lesson 3.1 a linear model learned one weight per feature and added them up. That is a strong assumption: a promotion adds the same lift to snowshoes in December as to tents in July. Pinecrest's demand does not work that way. Snow gear sells in winter, tents in summer, and the season effect depends on the category. A model that cannot express that is <strong>too simple</strong>, and no amount of data will fix it.</p>
+
+                <p>The obvious cure is to give the model more flexibility: curved terms, and products of features such as "Snow category <em>and</em> December". But flexibility has a price. A model with hundreds of weights can bend to fit the random ups and downs of the particular weeks it saw, and then those bends are wrong for every new week. That model is <strong>too flexible</strong>. This lesson is about finding the useful middle, and about <strong>regularization</strong>, the tool that lets you add flexibility without paying the full price.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: Three Students and a Practice Exam</h4>
+                    <p>Three students prepare for a forecasting exam with last year's practice questions. The first learns one rule ("demand is about 25 units") and applies it everywhere: consistent, but always a bit wrong. That is <strong>high bias</strong>. The second memorizes every practice answer, including the typos in the answer key: perfect on the practice exam, lost on the real one, and a different set of practice questions would have produced a completely different student. That is <strong>high variance</strong>. The third learns the real patterns and deliberately ignores details that seem too specific to trust. Regularization is how you turn a memorizer into that third student: you let the model learn many things, but you charge it for every strong opinion.</p>
+                </div>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>Every model in the rest of the course has a flexibility dial: the depth of a tree, the number of neighbors in k-nearest neighbors (next lesson), the number of boosting rounds, the size of a neural network. The vocabulary you build here (bias, variance, validation, a penalty strength chosen by cross-validation) is how you reason about all of them. And Ridge regression itself is one of the most reliable models you will ever use: fast, stable and hard to break.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="polynomial" class="lesson-section">
+                <h2>📐 Polynomial Features</h2>
+
+                <p>A linear model can only add up its columns. To let it draw a curve, you give it new columns that are powers and products of the old ones. scikit-learn's <code>PolynomialFeatures</code> is a transformer that does exactly that.</p>
+
+                <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.preprocessing import PolynomialFeatures
+
+tiny = pd.DataFrame({"a": [1, 2, 3], "b": [10, 20, 30]})
+poly = PolynomialFeatures(degree=2, include_bias=False).set_output(transform="pandas")
+print(poly.fit_transform(tiny))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>     a     b  a^2   a b    b^2
+0  1.0  10.0  1.0  10.0  100.0
+1  2.0  20.0  4.0  40.0  400.0
+2  3.0  30.0  9.0  90.0  900.0</code></pre>
+                </div>
+
+                <p>Degree 2 adds every square (<code>a^2</code>, <code>b^2</code>) and every product of two columns (<code>a b</code>, an <strong>interaction</strong>). The model is still linear in its weights, which is why it is still called linear regression, but it can now draw a parabola in <code>a</code>, and it can let the effect of <code>a</code> depend on <code>b</code>. <code>include_bias=False</code> drops a column of ones, because the model's intercept already plays that role.</p>
+
+                <p>To see flexibility at work without real-world mess, use a made-up curve where you know the truth. The block below creates a smooth wave, then draws small noisy samples from it. Seeds are fixed (<code>default_rng(42)</code>) so your numbers match this page.</p>
+
+                <pre><code class="language-python">rng = np.random.default_rng(42)
+
+
+def true_curve(x):
+    return np.sin(2 * np.pi * x)
+
+
+def make_sample(n=25):
+    """n points with x between 0 and 1 and noise with standard deviation 0.3."""
+    x = rng.uniform(0, 1, n)
+    return x.reshape(-1, 1), true_curve(x) + rng.normal(0, 0.3, n)
+
+
+X_small, y_small = make_sample()       # 25 points to learn from
+X_new, y_new = make_sample(500)        # 500 fresh points to test on
+print(X_small.shape, X_new.shape)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(25, 1) (500, 1)</code></pre>
+                </div>
+
+                <p>Now fit polynomials of degree 1, 4 and 15. Each model is a small pipeline: make the powers, scale them (powers of a number between 0 and 1 have wildly different ranges), then fit. The noise has a standard deviation of 0.3, so even a perfect model has a mean squared error of about 0.3² = 0.09 on new points.</p>
+
+                <pre><code class="language-python">from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+
+def poly_model(degree, regressor=None):
+    if regressor is None:
+        regressor = LinearRegression()
+    return make_pipeline(PolynomialFeatures(degree, include_bias=False), StandardScaler(), regressor)
+
+
+for degree in [1, 4, 15]:
+    m = poly_model(degree).fit(X_small, y_small)
+    train_mse = mean_squared_error(y_small, m.predict(X_small))
+    test_mse = mean_squared_error(y_new, m.predict(X_new))
+    print(f"degree {degree:2d}   train MSE {train_mse:.3f}   test MSE {test_mse:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>degree  1   train MSE 0.331   test MSE 0.283
+degree  4   train MSE 0.025   test MSE 0.133
+degree 15   train MSE 0.016   test MSE 0.187</code></pre>
+                </div>
+
+                <p>Read the two columns together. Degree 1 is a straight line through a wave: poor on the training points and poor on new ones. That is <strong>underfitting</strong>. Degree 15 has the lowest training error of the three, even below the 0.09 noise floor, yet its test error is worse than degree 4's: it learned the noise. That is <strong>overfitting</strong>. Degree 4 has the best test error, about 0.13 against a floor of 0.09.</p>
+
+                <div class="card card-success">
+                    <h4>✅ The Diagnostic You Will Use Forever</h4>
+                    <p>High training error and high test error: the model is too simple (add features or flexibility). Low training error and much higher test error: the model is too flexible for the data (simplify, regularize, or get more data). Training error alone tells you almost nothing about which situation you are in.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="bias-variance" class="lesson-section">
+                <h2>🎯 Bias and Variance, Measured</h2>
+
+                <p>One sample can be lucky or unlucky. The real definitions of bias and variance are about what happens <em>across</em> samples: if Pinecrest could rerun last year a hundred times, each with different random noise, how much would the fitted model change? With a made-up curve you can do exactly that. Fit each degree on 20 different samples of 25 points and draw all 20 fitted curves.</p>
+
+                <pre><code class="language-python">import matplotlib.pyplot as plt
+
+samples = [make_sample() for _ in range(100)]   # 100 different training sets of 25 points
+x_grid = np.linspace(0, 1, 200).reshape(-1, 1)
+
+fig, axes = plt.subplots(1, 3, figsize=(10, 3.6), sharey=True, layout="constrained")
+for ax, degree in zip(axes, [1, 4, 15]):
+    for X_s, y_s in samples[:20]:
+        ax.plot(x_grid, poly_model(degree).fit(X_s, y_s).predict(x_grid), color="#667eea", alpha=0.35, linewidth=1)
+    ax.plot(x_grid, true_curve(x_grid), color="black", linewidth=2, label="true curve")
+    ax.set_title(f"degree {degree}")
+    ax.set_ylim(-2.5, 2.5)
+    ax.set_xlabel("x")
+axes[0].set_ylabel("prediction")
+axes[0].plot([], [], color="#667eea", label="fit on one sample")
+axes[0].legend(loc="lower left", fontsize=8)
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/regression_regularization_twenty_fits.png" alt="Three panels, each with twenty blue fitted curves and the black true sine wave. Degree 1: twenty nearly identical straight lines that all miss the wave. Degree 4: twenty curves that hug the wave closely. Degree 15: twenty curves that follow the wave in the middle but swing wildly up and down, especially near the edges." width="1100" height="396" loading="lazy">
+                    <figcaption>Degree 1 is consistently wrong (bias). Degree 15 is right on average but different every time (variance). Degree 4 is both close and consistent.</figcaption>
+                </figure>
+
+                <p>The picture makes the two words concrete:</p>
+                <ul>
+                    <li><strong>Bias</strong> is how far the <em>average</em> fitted curve is from the truth. The straight lines agree with each other and are all wrong in the same way.</li>
+                    <li><strong>Variance</strong> is how much the fitted curves <em>disagree with each other</em>. The degree-15 curves are a different shape for every sample, so whichever one you happen to get is unreliable.</li>
+                </ul>
+
+                <p>For squared error there is a neat identity. The expected error on a new point splits into three parts:</p>
+                <p class="text-center"><strong>expected test error = bias² + variance + noise</strong></p>
+                <p>Noise is the part no model can remove (0.09 here). Measure the other two from the 100 samples, on points away from the edges:</p>
+
+                <pre><code class="language-python">x_eval = np.linspace(0.05, 0.95, 50).reshape(-1, 1)
+
+
+def bias_variance(make_model):
+    """Fit a fresh model on each of the 100 samples; return (bias squared, variance) on x_eval."""
+    preds = np.array([make_model().fit(X_s, y_s).predict(x_eval) for X_s, y_s in samples])
+    bias_sq = ((preds.mean(axis=0) - true_curve(x_eval.ravel())) ** 2).mean()
+    variance = preds.var(axis=0).mean()
+    return bias_sq, variance
+
+
+rows = []
+for degree in [1, 2, 3, 4, 6, 8, 10, 15]:
+    bias_sq, variance = bias_variance(lambda: poly_model(degree))
+    rows.append({"degree": degree, "bias^2": bias_sq, "variance": variance,
+                 "expected MSE": bias_sq + variance + 0.09})
+bv = pd.DataFrame(rows).set_index("degree")
+print(bv.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>        bias^2  variance  expected MSE
+degree
+1        0.155     0.026         0.271
+2        0.150     0.049         0.289
+3        0.004     0.015         0.108
+4        0.003     0.024         0.117
+6        0.000     0.117         0.207
+8        0.055     4.050         4.194
+10       0.147    10.552        10.789
+15       6.780   307.451       314.321</code></pre>
+                </div>
+
+                <pre><code class="language-python">fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.plot(bv.index, bv["bias^2"], marker="o", label="bias squared")
+ax.plot(bv.index, bv["variance"], marker="o", label="variance")
+ax.plot(bv.index, bv["expected MSE"], marker="o", color="black", label="expected test MSE")
+ax.axhline(0.09, color="gray", linestyle="--", linewidth=1, label="noise floor (0.09)")
+ax.set_yscale("log")
+ax.set_xlabel("polynomial degree (model flexibility)")
+ax.set_ylabel("error (log scale)")
+ax.set_title("More flexibility trades bias for variance")
+ax.legend()
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/regression_regularization_tradeoff.png" alt="Line chart on a log scale against polynomial degree. Bias squared falls from about 0.15 at degree 1 to almost zero between degrees 3 and 6, then creeps up again. Variance rises from about 0.02 to about 300 at degree 15. Expected test error is lowest at degrees 3 and 4, just above the dashed noise floor at 0.09, and climbs steeply after degree 6." width="990" height="440" loading="lazy">
+                    <figcaption>The classic U: test error is lowest where the falling bias curve and the rising variance curve balance.</figcaption>
+                </figure>
+
+                <p>This is the <strong>bias-variance trade-off</strong>. More flexibility removes bias but adds variance; the best model sits at the bottom of the U. Notice how lopsided the right side is: a little too much flexibility with only 25 points is catastrophic, because variance explodes. (Bias creeps back up at high degrees too: a few fits are so wild that even the average of 100 curves is dragged off the truth. With 25 points, those models are not just noisy, they are numerically unstable.)</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ You Cannot Compute This on Real Data</h4>
+                    <p>This experiment needed the true curve and 100 independent training sets. In real work you have one dataset and no truth, so you estimate the bottom of the U with a validation set or cross-validation instead. That is exactly what the rest of this lesson does.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="ridge" class="lesson-section">
+                <h2>🧲 Ridge: A Penalty on Big Weights</h2>
+
+                <p>Look at what an overfitting polynomial does to its weights. To swing through every noisy point it needs huge positive and negative weights that nearly cancel out. Ridge regression attacks exactly that. Ordinary least squares picks the weights that minimize the squared errors. Ridge minimizes the squared errors <em>plus a charge for large weights</em>:</p>
+
+                <p class="text-center"><strong>Ridge loss = sum of squared errors + alpha × (w₁² + w₂² + ... + wₚ²)</strong></p>
+
+                <p>The <strong>penalty strength</strong> <code>alpha</code> is the dial. At <code>alpha=0</code> Ridge is plain linear regression. As <code>alpha</code> grows, every weight is pulled toward zero (but never exactly to zero), so the model can only make a weight large if it reduces the error enough to pay for it. Think of a rubber band attached to each weight, pulling it back to zero; the data has to pull harder than the band. The intercept is not penalized.</p>
+
+                <pre><code class="language-python">from sklearn.linear_model import Ridge
+
+for name, regressor in [("least squares", LinearRegression()), ("ridge alpha=0.1", Ridge(alpha=0.1))]:
+    m = poly_model(15, regressor).fit(X_small, y_small)
+    weights = m[-1].coef_
+    test_mse = mean_squared_error(y_new, m.predict(X_new))
+    print(f"{name:16s} largest |weight| {np.abs(weights).max():9.1f}   test MSE {test_mse:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>least squares    largest |weight|    1044.5   test MSE 0.187
+ridge alpha=0.1  largest |weight|       1.4   test MSE 0.132</code></pre>
+                </div>
+
+                <p>Same 15-degree features, same 25 points. The penalty shrinks the largest weight from about a thousand to about 1, and the test error drops to the level of the degree-4 model. Ridge did not remove any features; it made the model <em>use them gently</em>. Now sweep <code>alpha</code> with the bias-variance experiment:</p>
+
+                <pre><code class="language-python">for alpha in [0.0001, 0.01, 0.1, 1, 10]:
+    bias_sq, variance = bias_variance(lambda: poly_model(15, Ridge(alpha=alpha)))
+    print(f"alpha {alpha:&lt;7} bias^2 {bias_sq:.3f}   variance {variance:.3f}   expected MSE {bias_sq + variance + 0.09:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>alpha 0.0001  bias^2 0.001   variance 0.579   expected MSE 0.669
+alpha 0.01    bias^2 0.005   variance 0.147   expected MSE 0.242
+alpha 0.1     bias^2 0.021   variance 0.061   expected MSE 0.172
+alpha 1       bias^2 0.064   variance 0.078   expected MSE 0.232
+alpha 10      bias^2 0.118   variance 0.037   expected MSE 0.244</code></pre>
+                </div>
+
+                <p>The same U appears, now with <code>alpha</code> as the dial instead of the degree. A tiny <code>alpha</code> leaves the degree-15 model nearly as wild as before; a large one flattens it toward a line (bias climbs). Around <code>alpha=0.1</code> the degree-15 model's expected error is 0.17, against 314 with no penalty at all (the table above): not quite the hand-picked degree 4, but in the same league, and you never had to choose a degree. That is the practical promise of regularization: you can give a model generous features and let one continuous dial control how much of that flexibility it may use.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Penalties Need Scaled Features</h4>
+                    <p>The penalty adds up squared weights, so it only treats features fairly if they are on the same scale. A feature measured in dollars gets a small weight and is barely penalized; the same feature measured in thousands of dollars needs a weight a thousand times larger and is penalized heavily. Always put a <code>StandardScaler</code> (or a <code>ColumnTransformer</code> that scales the numeric columns) in front of <code>Ridge</code>, <code>Lasso</code> and <code>ElasticNet</code>, inside the pipeline. Mistake 2 below shows what happens otherwise.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="pilot" class="lesson-section">
+                <h2>📦 Overfitting Real Demand Data</h2>
+
+                <p>Back to Pinecrest. The weekly demand table has 24 products in 4 stores over 104 weeks. Train on 2024, test on 2025, the time-respecting split you have used since Lesson 1.2. Add a <code>month</code> column so the model can learn seasons.</p>
+
+                <pre><code class="language-python">demand = pd.read_csv("data/weekly_demand.csv")
+demand["month"] = pd.to_datetime(demand["week_start"]).dt.month
+
+train = demand[demand["year"] == 2024]
+test = demand[demand["year"] == 2025]
+print(train.shape, test.shape)
+print(demand.groupby(["category", "month"])["units_sold"].mean().unstack().loc[["Snow", "Tents", "Apparel"], [1, 4, 7, 10, 12]].round(1))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(5088, 16) (4896, 16)
+month       1     4     7     10    12
+category
+Snow      32.6   2.7   0.3  10.1  41.5
+Tents      5.1  16.9  32.4  10.2   9.2
+Apparel   26.3  19.3  15.6  27.7  41.7</code></pre>
+                </div>
+
+                <p>The season effect depends on the category: Snow is huge in December and dead in July, Tents are the reverse, Apparel leans to winter. A plain linear model with one weight for "July" and one for "Snow" cannot express "Snow in July". Interactions can. The preprocessing below keeps one weight per product, and builds all pairwise products of the numeric features, the category, the store and the month.</p>
+
+                <pre><code class="language-python">from sklearn.compose import ColumnTransformer, TransformedTargetRegressor
+from sklearn.preprocessing import OneHotEncoder
+
+numeric = ["price", "discount_pct", "promo", "holiday_week", "avg_high_temp_f"]
+grouping = ["category", "store", "month"]
+columns = numeric + grouping + ["product_id"]
+
+interactions = make_pipeline(
+    ColumnTransformer([
+        ("num", StandardScaler(), numeric),
+        ("cat", OneHotEncoder(sparse_output=False, handle_unknown="ignore"), grouping),
+    ]),
+    PolynomialFeatures(degree=2, interaction_only=True, include_bias=False),
+)
+features = ColumnTransformer([
+    ("product", OneHotEncoder(sparse_output=False, handle_unknown="ignore"), ["product_id"]),
+    ("inter", interactions, numeric + grouping),
+])
+
+print(features.fit(train[columns]).transform(train[columns].head()).shape)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(5, 489)</code></pre>
+                </div>
+
+                <p>489 columns: 24 product columns, 30 scaled or one-hot columns, and 435 products of pairs (<code>interaction_only=True</code> skips squares, which would only duplicate the 0/1 columns). About 108 of those products are always zero, such as "Bend and Boise at the same time", because <code>PolynomialFeatures</code> multiplies blindly. They are harmless, but they are a reminder that this transformer explodes the column count: Exercise 1 counts how fast.</p>
+
+                <p>Units sold are skewed (a few weeks sell hundreds), so the models learn <code>log1p(units)</code> and convert back with <code>expm1</code>. <code>TransformedTargetRegressor</code> does that wrapping for you, so <code>predict</code> still returns units. Now the experiment: imagine Pinecrest's analysts prototyping on a pilot sample of 400 rows (product-store-weeks), about as many rows as there are useful columns.</p>
+
+                <pre><code class="language-python">from sklearn.metrics import mean_absolute_error
+
+
+def demand_model(regressor):
+    return TransformedTargetRegressor(make_pipeline(features, regressor), func=np.log1p, inverse_func=np.expm1)
+
+
+pilot = train.sample(400, random_state=42)
+for name, regressor in [("least squares", LinearRegression()), ("ridge alpha=1", Ridge(alpha=1)),
+                        ("ridge alpha=10", Ridge(alpha=10)), ("ridge alpha=100", Ridge(alpha=100))]:
+    m = demand_model(regressor).fit(pilot[columns], pilot["units_sold"])
+    pred = m.predict(test[columns])
+    print(f"{name:16s} train MAE {mean_absolute_error(pilot['units_sold'], m.predict(pilot[columns])):5.2f}"
+          f"   test MAE {mean_absolute_error(test['units_sold'], pred):6.2f}   largest forecast {pred.max():8.0f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>least squares    train MAE  3.43   test MAE  42.17   largest forecast    15297
+ridge alpha=1    train MAE  4.16   test MAE  11.97   largest forecast      315
+ridge alpha=10   train MAE  5.58   test MAE  10.00   largest forecast      181
+ridge alpha=100  train MAE  9.03   test MAE  12.43   largest forecast      135</code></pre>
+                </div>
+
+                <p>Plain least squares fits the pilot weeks closely (MAE about 3 units) and then forecasts one 2025 week at more than fifteen thousand units for a product that never sold more than a few hundred: classic variance. Ridge with <code>alpha=10</code> gives up some training fit and cuts the test error by about three quarters. Too much penalty (<code>alpha=100</code>) starts to underfit again. The U, on real data.</p>
+
+                <div class="card card-info">
+                    <h4>💡 More Data Is Also a Regularizer</h4>
+                    <p>With the full 2024 year (5,088 rows) the same 489 columns are far less dangerous, and least squares behaves almost as well as Ridge. Regularization matters most when columns are many relative to rows: small datasets, many interactions, one-hot columns with rare categories. The project uses the full year and lets cross-validation decide how much penalty is still worth it.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="lasso" class="lesson-section">
+                <h2>✂️ Lasso and Elastic Net</h2>
+
+                <p><strong>Lasso</strong> changes one thing: it charges the absolute size of each weight instead of its square.</p>
+                <p class="text-center"><strong>Lasso loss = (1 / 2n) × sum of squared errors + alpha × (|w₁| + |w₂| + ... + |wₚ|)</strong></p>
+                <p>That small change has a big effect. Under a squared penalty, a tiny weight costs almost nothing, so Ridge keeps every feature a little. Under an absolute penalty, even a tiny weight costs a full alpha per unit, so Lasso prefers to set weak features to <strong>exactly zero</strong>. Lasso both shrinks and <em>selects</em>. (scikit-learn scales Lasso's error term by the number of rows, so its <code>alpha</code> values are much smaller than Ridge's: do not compare them directly.)</p>
+
+                <pre><code class="language-python">import warnings
+from sklearn.linear_model import Lasso
+
+for alpha in [0.003, 0.01, 0.03]:
+    m = demand_model(Lasso(alpha=alpha, max_iter=20_000)).fit(pilot[columns], pilot["units_sold"])
+    kept = (m.regressor_[-1].coef_ != 0).sum()
+    print(f"lasso alpha={alpha:&lt;6} weights kept {kept:3d} of 489   test MAE {mean_absolute_error(test['units_sold'], m.predict(test[columns])):5.2f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>lasso alpha=0.003  weights kept 120 of 489   test MAE  9.57
+lasso alpha=0.01   weights kept  52 of 489   test MAE  9.92
+lasso alpha=0.03   weights kept  19 of 489   test MAE 11.98</code></pre>
+                </div>
+
+                <p>With <code>alpha=0.003</code> Lasso keeps about a quarter of the columns and beats every Ridge model on this pilot. Raise <code>alpha</code> and it keeps fewer and fewer, until it underfits. A model with 50 weights instead of 489 is also easier to explain and cheaper to run, which is sometimes worth a little accuracy.</p>
+
+                <p>A rough guide to the three penalized models (whichever you pick, choose its <code>alpha</code> by cross-validation, as shown below):</p>
+
+                <div class="mermaid">
+graph TD
+    A["Many features for the rows"] --> B{"Only a few matter?"}
+    B -->|"yes"| C["Lasso"]
+    B -->|"no"| D{"Correlated groups?"}
+    D -->|"yes"| E["Elastic Net"]
+    D -->|"no"| F["Ridge"]
+                </div>
+
+                <h3>👯 When Features Are Twins</h3>
+                <p>Lasso has a weakness. When two features carry the same information, it tends to keep one and drop the other, somewhat arbitrarily. Ridge splits the weight between them. To see it, give a Snow-only model the temperature twice, once in Fahrenheit and once in Celsius (a perfectly correlated copy, the kind that sneaks in when tables are joined):</p>
+
+                <pre><code class="language-python">from sklearn.linear_model import ElasticNet
+
+snow = train[train["category"] == "Snow"]
+twins = snow[["avg_high_temp_f"]].assign(avg_high_temp_c=(snow["avg_high_temp_f"] - 32) * 5 / 9)
+y_snow = np.log1p(snow["units_sold"])
+
+for name, regressor in [("ridge", Ridge(alpha=1)), ("lasso", Lasso(alpha=0.05)),
+                        ("elastic net", ElasticNet(alpha=0.05, l1_ratio=0.5))]:
+    m = make_pipeline(StandardScaler(), regressor).fit(twins, y_snow)
+    print(f"{name:12s} weights (F, C): {m[-1].coef_.round(3)}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>ridge        weights (F, C): [-0.607 -0.607]
+lasso        weights (F, C): [-1.164 -0.   ]
+elastic net  weights (F, C): [-0.589 -0.586]</code></pre>
+                </div>
+
+                <p>Ridge shares the effect equally; Lasso puts all of it on one twin and zero on the other; <strong>Elastic Net</strong>, which charges a mix of both penalties, shares it again while still able to zero out useless features. Its <code>l1_ratio</code> sets the mix: 1 is pure Lasso, values near 0 approach Ridge. Lasso's choice of twin depends on details such as column order, so <strong>never read "Lasso dropped it" as "it does not matter"</strong>. It may simply have a twin.</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Model</th><th>Penalty</th><th>Zeros out features?</th><th>With correlated twins</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>Ridge</code></td><td>alpha × sum of w²</td><td>No, shrinks all</td><td>Shares the weight</td></tr>
+                            <tr><td><code>Lasso</code></td><td>alpha × sum of |w|</td><td>Yes</td><td>Picks one, arbitrarily</td></tr>
+                            <tr><td><code>ElasticNet</code></td><td>a mix, set by <code>l1_ratio</code></td><td>Yes, fewer</td><td>Shares the weight</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card card-info">
+                    <h4>💡 You Have Already Met Regularization</h4>
+                    <p><code>LogisticRegression</code> is regularized by default: its <code>C</code> parameter is an <em>inverse</em> penalty strength (small <code>C</code> means a strong penalty) with an L2 (Ridge-style) penalty unless you choose otherwise. That is one more reason scaling mattered for it in Lesson 1.1.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="choosing-alpha" class="lesson-section">
+                <h2>🎚️ Choosing alpha by Cross-Validation</h2>
+
+                <p>So far you picked <code>alpha</code> by looking at the test MAE. That was fine for a demonstration and is wrong for real work: choosing the dial by the test score turns the test set into training data, and the final number becomes optimistic. The honest way is the one from Lesson 1.3: try each candidate with cross-validation on the training rows only, keep the winner, and look at the test set once.</p>
+
+                <p>scikit-learn has built-in versions that do this search efficiently: <code>RidgeCV</code>, <code>LassoCV</code> and <code>ElasticNetCV</code>. They behave like the plain models but choose their own <code>alpha</code> inside <code>fit</code>, and report it as <code>alpha_</code>.</p>
+
+                <pre><code class="language-python">from sklearn.linear_model import LassoCV, RidgeCV
+from sklearn.model_selection import KFold
+
+cv = KFold(n_splits=5, shuffle=True, random_state=42)
+searches = {
+    "RidgeCV": RidgeCV(alphas=np.logspace(-1, 3, 9), cv=cv),
+    "LassoCV": LassoCV(alphas=np.logspace(-3.5, -1, 11), cv=cv, max_iter=20_000),
+}
+for name, regressor in searches.items():
+    m = demand_model(regressor).fit(pilot[columns], pilot["units_sold"])
+    chosen = m.regressor_[-1]
+    mae = mean_absolute_error(test["units_sold"], m.predict(test[columns]))
+    print(f"{name:8s} chose alpha={chosen.alpha_:.4f}   weights kept {(chosen.coef_ != 0).sum():3d}   test MAE {mae:.2f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>RidgeCV  chose alpha=3.1623   weights kept 377   test MAE 10.35
+LassoCV  chose alpha=0.0056   weights kept  83   test MAE 9.50</code></pre>
+                </div>
+
+                <p>Without ever touching the 2025 rows, cross-validation found penalty strengths close to the best ones you saw by peeking. <code>np.logspace(-1, 3, 9)</code> means nine values from 10⁻¹ to 10³, evenly spaced on a log scale; penalties work on a multiplicative scale, so search them that way.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ A Note on Folds for Weekly Data</h4>
+                    <p>A shuffled <code>KFold</code> puts neighboring weeks of the same product in different folds, so the cross-validation score is a little optimistic and may favor slightly too little penalty. It is still a fair way to <em>rank</em> alphas, and the 2025 test set, which the model never sees, gives the honest final number. For forecasting where the newest weeks matter most, <code>TimeSeriesSplit</code> (Lesson 1.3) is the stricter choice.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Regularized models rarely crash. Most of their mistakes are silent, which makes them worth learning by name.</p>
+
+                <h3>1. Copying an Old Tutorial's <code>normalize=True</code></h3>
+
+                <pre data-raises="TypeError"><code class="language-python">Ridge(alpha=1.0, normalize=True)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>TypeError: Ridge.__init__() got an unexpected keyword argument 'normalize'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> older versions of scikit-learn let linear models scale their own inputs; that option was removed. The same goes for <code>LassoCV(n_alphas=50)</code> in older code, which now raises a similar <code>TypeError</code> (pass <code>alphas=50</code> or a list instead). <strong>Fix:</strong> put a <code>StandardScaler</code> in a pipeline in front of the model, as everywhere in this lesson.</p>
+
+                <h3>2. Penalizing Unscaled Features</h3>
+
+                <p>Fit the same Ridge model on Snow weeks twice, once with the price in dollars and once in thousands of dollars, without a scaler:</p>
+
+                <pre><code class="language-python">snow_X = snow[["price", "avg_high_temp_f"]]
+snow_X_thousands = snow_X.assign(price=snow_X["price"] / 1000)
+
+for name, X_try in [("price in $", snow_X), ("price in $1000s", snow_X_thousands)]:
+    m = Ridge(alpha=100).fit(X_try, y_snow)
+    print(f"{name:16s} R2 on training rows {m.score(X_try, y_snow):.3f}   weights {m.coef_.round(4)}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>price in $       R2 on training rows 0.770   weights [-0.0038 -0.0728]
+price in $1000s  R2 on training rows 0.752   weights [-0.0395 -0.0714]</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the information is identical, yet the second model fits worse, because rescaling a column changed how hard the penalty pushes on it. In dollars the price weight is -0.0038, so in thousands of dollars the same effect needs a weight of -3.8. The penalty refuses to pay for a weight that large and shrinks it to -0.04: about 99% of the price effect is lost. Results that change when you change units are a red flag. <strong>Fix:</strong> scale inside the pipeline (<code>make_pipeline(StandardScaler(), Ridge(...))</code>); then the units no longer matter.</p>
+
+                <h3>3. Lasso That Has Not Converged</h3>
+
+                <pre><code class="language-python">with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    Lasso(alpha=0.0001, max_iter=50).fit(features.transform(pilot[columns]), np.log1p(pilot["units_sold"]))
+
+print(caught[0].category.__name__)
+print(str(caught[0].message).split(".")[0])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>ConvergenceWarning
+Objective did not converge</code></pre>
+                </div>
+                <p><strong>What it means:</strong> Lasso finds its weights step by step (coordinate descent) and ran out of steps before settling, so the weights are half-finished. It happens with very small <code>alpha</code>, many correlated columns, or unscaled data. <strong>Fix:</strong> scale the features, raise <code>max_iter</code> (this lesson uses 20,000), and ask whether such a tiny <code>alpha</code> is sensible; at <code>alpha=0</code> you should use <code>LinearRegression</code>, and scikit-learn warns you if you do not.</p>
+
+                <h3>4. Choosing alpha with the Test Set</h3>
+
+                <pre><code class="language-python">peeked = {}
+for alpha in [1, 3, 10, 30, 100]:
+    m = demand_model(Ridge(alpha=alpha)).fit(pilot[columns], pilot["units_sold"])
+    peeked[alpha] = mean_absolute_error(test["units_sold"], m.predict(test[columns]))
+best = min(peeked, key=peeked.get)
+print(f"'best' alpha {best}, test MAE {peeked[best]:.2f}  (this number is now optimistic)")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>'best' alpha 10, test MAE 10.00  (this number is now optimistic)</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the loop chose <code>alpha</code> by its test score, so the test set helped train the model. With five candidates the optimism is small; with a grid of hundreds of settings across several models it can be large, and the forecast will disappoint in production. <strong>Fix:</strong> choose with cross-validation on the training rows (<code>RidgeCV</code>, <code>LassoCV</code>, or the general tools in Lesson 6.2) and touch the test set once.</p>
+
+                <h3>5. Scaling After the Polynomial Step, or Not at All</h3>
+                <p>In <code>poly_model</code> the order is <code>PolynomialFeatures</code>, then <code>StandardScaler</code>, then the model. If you skip the scaler, <code>x^15</code> for x between 0 and 1 is a column of tiny numbers that needs an enormous weight, and the penalty crushes it while leaving <code>x</code> alone: the regularization is uneven for no good reason. With raw features in the hundreds (prices, temperatures), the squares and cubes reach millions and least squares becomes numerically fragile too. <strong>Fix:</strong> scale the inputs first when they are on very different scales, and always scale what goes into the penalized model.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: The Interaction Forecast</h2>
+
+                <p>Pinecrest's planners need weekly unit forecasts for 2025, per product and store, to place orders. Your job: start from honest baselines, add season-by-category interactions, let cross-validation choose the Ridge penalty on 2024 data only, and report the 2025 error once. Start a fresh notebook, <code>lesson_3_2_project</code>. Allow about 45 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load, split by time and measure two baselines <span class="step-time">(10 min)</span></h3>
+                    <p>A forecast has to beat simple rules a planner could use without any model: the overall average, and each product's 2024 average.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.metrics import mean_absolute_error
+
+demand = pd.read_csv("data/weekly_demand.csv")
+demand["month"] = pd.to_datetime(demand["week_start"]).dt.month
+train = demand[demand["year"] == 2024]
+test = demand[demand["year"] == 2025]
+
+results = {}
+results["overall mean"] = mean_absolute_error(test["units_sold"], np.full(len(test), train["units_sold"].mean()))
+product_means = train.groupby("product_id")["units_sold"].mean()
+results["product mean"] = mean_absolute_error(test["units_sold"], test["product_id"].map(product_means))
+for name, mae in results.items():
+    print(f"{name:14s} MAE {mae:.2f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>overall mean   MAE 17.13
+product mean   MAE 13.42</code></pre>
+                    </div>
+                    <p>Knowing which product it is cuts the error by about a fifth. Any model has to beat 13.42 units per week to be worth building.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: A main-effects Ridge model <span class="step-time">(10 min)</span></h3>
+                    <p>One weight per numeric feature, per product, per store and per month, and no interactions. Ridge with a mild penalty, on the log of units.</p>
+                    <pre><code class="language-python">from sklearn.compose import ColumnTransformer, TransformedTargetRegressor
+from sklearn.linear_model import Ridge, RidgeCV
+from sklearn.model_selection import KFold
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder, PolynomialFeatures, StandardScaler
+
+numeric = ["price", "discount_pct", "promo", "holiday_week", "avg_high_temp_f"]
+grouping = ["category", "store", "month"]
+columns = numeric + grouping + ["product_id"]
+
+
+def log_target(pipeline):
+    return TransformedTargetRegressor(pipeline, func=np.log1p, inverse_func=np.expm1)
+
+
+main_effects = ColumnTransformer([
+    ("num", StandardScaler(), numeric),
+    ("cat", OneHotEncoder(sparse_output=False, handle_unknown="ignore"), ["product_id", "store", "month"]),
+])
+main_model = log_target(make_pipeline(main_effects, Ridge(alpha=1))).fit(train[columns], train["units_sold"])
+results["ridge, main effects"] = mean_absolute_error(test["units_sold"], main_model.predict(test[columns]))
+print(f"ridge, main effects  MAE {results['ridge, main effects']:.2f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>ridge, main effects  MAE 10.62</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Add the interactions <span class="step-time">(5 min)</span></h3>
+                    <p>Reuse the interaction design from the lesson: product columns plus all pairwise products of the numeric features, category, store and month.</p>
+                    <pre><code class="language-python">interactions = make_pipeline(
+    ColumnTransformer([
+        ("num", StandardScaler(), numeric),
+        ("cat", OneHotEncoder(sparse_output=False, handle_unknown="ignore"), grouping),
+    ]),
+    PolynomialFeatures(degree=2, interaction_only=True, include_bias=False),
+)
+features = ColumnTransformer([
+    ("product", OneHotEncoder(sparse_output=False, handle_unknown="ignore"), ["product_id"]),
+    ("inter", interactions, numeric + grouping),
+])
+print(features.fit_transform(train[columns]).shape)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(5088, 489)</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Let cross-validation choose alpha <span class="step-time">(10 min)</span></h3>
+                    <p><code>RidgeCV</code> tries each candidate with 5-fold cross-validation inside the 2024 rows. Ask it to score by mean absolute error (on the log scale it trains on), since MAE is the planners' metric.</p>
+                    <pre><code class="language-python">cv = KFold(n_splits=5, shuffle=True, random_state=42)
+ridge_cv = RidgeCV(alphas=[0.1, 1, 10, 100], cv=cv, scoring="neg_mean_absolute_error")
+forecaster = log_target(make_pipeline(features, ridge_cv)).fit(train[columns], train["units_sold"])
+
+chosen = forecaster.regressor_[-1]
+print("chosen alpha:", chosen.alpha_)
+print(f"cross-validated MAE (log units): {-chosen.best_score_:.4f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>chosen alpha: 1.0
+cross-validated MAE (log units): 0.3283</code></pre>
+                    </div>
+                    <p>With about five thousand rows the best penalty is mild: the data can support 489 columns. Notice that you did not need the 2025 rows to decide that.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Test once on 2025 <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">from sklearn.metrics import r2_score
+
+pred_2025 = forecaster.predict(test[columns])
+results["ridge + interactions"] = mean_absolute_error(test["units_sold"], pred_2025)
+print(pd.Series(results).round(2).to_string())
+print(f"R2 on 2025: {r2_score(test['units_sold'], pred_2025):.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>overall mean            17.13
+product mean            13.42
+ridge, main effects     10.62
+ridge + interactions     7.92
+R2 on 2025: 0.754</code></pre>
+                    </div>
+                    <p>The interactions are the big win: from about 10.6 to about 7.9 units of error per week, less than half the overall-mean baseline. For comparison, a gradient-boosted tree model (Lesson 5.3) with default settings scores about 8.2 on this same split. Trees discover interactions by themselves; a linear model needs you to supply them, and then regularization keeps it stable.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Read the biggest interactions and save the forecast <span class="step-time">(5 min)</span></h3>
+                    <p>Pair each weight with its column name, keep the interaction terms (their names contain a space), and look at the largest. Then save the forecasts for the planners.</p>
+                    <pre><code class="language-python">names = forecaster.regressor_[0].get_feature_names_out()
+weights = pd.Series(chosen.coef_, index=names)
+inter_weights = weights[weights.index.str.contains(" ")]
+inter_weights.index = inter_weights.index.str.replace("inter__", "").str.replace("num__", "").str.replace("cat__", "")
+print(inter_weights.sort_values().iloc[[0, 1, 2, -3, -2, -1]].round(2))
+
+forecast = test[["week_start", "store", "product_id", "units_sold"]].assign(forecast=pred_2025.round(1))
+forecast.to_csv("demand_forecast_2025.csv", index=False)
+print(len(forecast), "rows saved to demand_forecast_2025.csv")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>category_Snow month_5           -0.86
+avg_high_temp_f category_Snow   -0.84
+category_Snow month_8           -0.73
+category_Snow month_1            0.65
+category_Snow month_11           0.83
+category_Snow month_12           0.91
+dtype: float64
+4896 rows saved to demand_forecast_2025.csv</code></pre>
+                    </div>
+                    <p>The weights are on the log scale and describe the <em>model</em>, not proven causes, but they make sense. All six of the strongest involve Snow: pushed down in May and August and in warm weather, pushed up from November to January. These are exactly the "Snow in July" effects the main-effects model could not express. (Try <code>inter_weights[inter_weights.index.str.contains("Tents")]</code> to see Tents move the other way.)</p>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Training uses only 2024 rows and the test set is 2025, untouched until Step 5</li>
+                        <li>You know both baselines (17.13 and 13.42) and your model beats them</li>
+                        <li>All scaling and encoding happen inside the pipeline, and the target is modeled as <code>log1p(units)</code></li>
+                        <li><code>alpha</code> was chosen by <code>RidgeCV</code> with 5-fold cross-validation, not by the test score</li>
+                        <li>Your results table shows the interaction model clearly ahead of the main-effects model</li>
+                        <li><code>demand_forecast_2025.csv</code> holds one forecast per product, store and week (4,896 rows)</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>Try each one before opening the solution. They continue in the project notebook, so <code>train</code>, <code>test</code>, <code>features</code>, <code>columns</code>, <code>cv</code> and <code>log_target</code> already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Count the Columns</h3>
+                    <p>Without running anything, guess how many columns <code>PolynomialFeatures(degree=d, include_bias=False)</code> makes from 5 and from 30 input columns, for <code>d</code> = 2 and 3. Then check with <code>n_output_features_</code> after fitting on a small array of zeros.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>np.zeros((2, n))</code> is enough to fit on: the count depends only on the number of columns.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.preprocessing import PolynomialFeatures
+
+for n_cols in [5, 30]:
+    for degree in [2, 3]:
+        pf = PolynomialFeatures(degree=degree, include_bias=False).fit(np.zeros((2, n_cols)))
+        print(f"{n_cols:2d} columns, degree {degree}: {pf.n_output_features_:5d} features")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code> 5 columns, degree 2:    20 features
+ 5 columns, degree 3:    55 features
+30 columns, degree 2:   495 features
+30 columns, degree 3:  5455 features</code></pre>
+                        </div>
+                        <p>The count grows roughly like the number of columns raised to the degree. Thirty columns at degree 3 already gives more features than the 5,088 training rows: a recipe for variance unless you regularize hard. This is why the project crossed only a chosen group of columns.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Draw the Validation Curve</h3>
+                    <p>Use <code>validation_curve</code> from <code>sklearn.model_selection</code> on the 400-row pilot sample (<code>train.sample(400, random_state=42)</code>) to score <code>Ridge</code> alphas <code>[0.1, 1, 10, 100, 1000]</code> with the project's <code>cv</code> and <code>scoring="neg_mean_absolute_error"</code>. Print the mean training and validation MAE (on log units) for each alpha. Where is the bottom of the U?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Build the model as <code>make_pipeline(features, Ridge())</code> and fit it on <code>np.log1p(...)</code> directly. The parameter name for the penalty inside a pipeline is <code>ridge__alpha</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.model_selection import validation_curve
+
+pilot = train.sample(400, random_state=42)
+alphas = [0.1, 1, 10, 100, 1000]
+train_scores, val_scores = validation_curve(
+    make_pipeline(features, Ridge()), pilot[columns], np.log1p(pilot["units_sold"]),
+    param_name="ridge__alpha", param_range=alphas, cv=cv, scoring="neg_mean_absolute_error",
+)
+for alpha, tr, va in zip(alphas, -train_scores.mean(axis=1), -val_scores.mean(axis=1)):
+    print(f"alpha {alpha:&lt;6} train MAE {tr:.3f}   validation MAE {va:.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>alpha 0.1    train MAE 0.119   validation MAE 0.721
+alpha 1      train MAE 0.168   validation MAE 0.488
+alpha 10     train MAE 0.266   validation MAE 0.425
+alpha 100    train MAE 0.439   validation MAE 0.517
+alpha 1000   train MAE 0.612   validation MAE 0.634</code></pre>
+                        </div>
+                        <p>Training error rises steadily with the penalty (less freedom to fit), while validation error falls and then rises again: the bias-variance U, found without a test set. Lesson 6.1 draws these curves with <code>ValidationCurveDisplay</code>.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: How Sparse Can the Forecast Be?</h3>
+                    <p>Replace <code>RidgeCV</code> in the project with <code>LassoCV(alphas=np.logspace(-4, -1, 10), cv=cv, max_iter=20_000)</code>, trained on the full 2024 data. How many of the 489 weights does it keep, which <code>alpha</code> does it choose, and what is its 2025 MAE?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>The fitted Lasso is <code>model.regressor_[-1]</code>. Count <code>coef_ != 0</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.linear_model import LassoCV
+
+lasso_model = log_target(make_pipeline(features, LassoCV(alphas=np.logspace(-4, -1, 10), cv=cv, max_iter=20_000)))
+lasso_model.fit(train[columns], train["units_sold"])
+lasso = lasso_model.regressor_[-1]
+print(f"alpha {lasso.alpha_:.5f}, weights kept {(lasso.coef_ != 0).sum()} of {lasso.coef_.size}")
+print(f"2025 MAE {mean_absolute_error(test['units_sold'], lasso_model.predict(test[columns])):.2f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>alpha 0.00022, weights kept 251 of 489
+2025 MAE 7.91</code></pre>
+                        </div>
+                        <p>With a full year of data, cross-validation picks a small penalty and Lasso keeps about half the columns (the 108 always-zero products such as "Bend and Boise" are among the dropped ones). Accuracy is the same as Ridge's to two decimals. Sparsity is a strong tool when data is scarce or when a short list of features is itself the goal; it is not automatically better.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: More Data or More Penalty? (Stretch)</h3>
+                    <p>Train the interaction model on random samples of 400, 1,000 and 2,500 rows of 2024 and on all 5,088, once with <code>LinearRegression()</code> and once with <code>Ridge(alpha=10)</code>. Print the 2025 MAE for each. How does the gap between the two change as the data grows?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Use <code>train.sample(n, random_state=42)</code> for the samples and <code>log_target(make_pipeline(features, regressor))</code> for the model. The full-data least-squares fit takes a few seconds.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.linear_model import LinearRegression
+
+for n in [400, 1000, 2500, len(train)]:
+    rows = train.sample(n, random_state=42) if n &lt; len(train) else train
+    maes = []
+    for regressor in [LinearRegression(), Ridge(alpha=10)]:
+        m = log_target(make_pipeline(features, regressor)).fit(rows[columns], rows["units_sold"])
+        maes.append(mean_absolute_error(test["units_sold"], m.predict(test[columns])))
+    print(f"{n:5d} rows   least squares {maes[0]:7.2f}   ridge {maes[1]:6.2f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>  400 rows   least squares   42.17   ridge  10.00
+ 1000 rows   least squares    9.68   ridge   8.86
+ 2500 rows   least squares    8.16   ridge   8.23
+ 5088 rows   least squares    7.92   ridge   8.00</code></pre>
+                        </div>
+                        <p>With little data the penalty is the difference between a usable forecast and a broken one. As rows accumulate, variance shrinks on its own and the two models converge; with the full year, <code>alpha=10</code> is even slightly too strong (cross-validation chose 1). The right amount of regularization depends on how much data you have, which is why you choose it by cross-validation every time instead of reusing a number.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> A model has training MAE 2.1 and test MAE 14.8. A simpler model has training MAE 9.0 and test MAE 9.6. What is the best description of the first model?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="High bias shows up as poor performance on the training data too. Is that the case here?">
+                                A) High bias: it is too simple to capture the pattern
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="A very low training error with a much higher test error means the model fitted noise in the training rows. More regularization, fewer features or more data would help.">
+                                B) High variance: it fits the training rows but does not generalize
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Training error is not the goal. Which model would you trust on next year's data?">
+                                C) The better model, because its training error is lower
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> How many columns does this produce?</p>
+                        <pre><code class="language-python">quiz_poly = PolynomialFeatures(degree=2, include_bias=False).fit(np.zeros((1, 3)))
+print(quiz_poly.n_output_features_)</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Count the originals and the squares, then remember the products of two different columns.">
+                                A) 6
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="include_bias=False removes the column of ones. Count again without it.">
+                                B) 10
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="3 originals (a, b, c), 3 squares and 3 products of pairs (ab, ac, bc): 9. With include_bias=True there would be a 10th column of ones.">
+                                C) 9
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> What happens to a Ridge model's weights as <code>alpha</code> grows very large?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="The squared penalty pulls every weight toward zero but never exactly to zero, so the predictions approach the intercept: a flat, high-bias model.">
+                                A) They all shrink toward zero, and predictions approach a constant
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="That describes the absolute-value penalty. What does a squared penalty charge for a very small weight?">
+                                B) Most become exactly zero and a few large ones remain
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The penalty is added to the loss. Does charging more for big weights make them bigger?">
+                                C) They grow, so the model can fit the training data more closely
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> Your table has <code>sqft</code> and <code>sqm</code>, the same floor area in two units. You fit a scaled Lasso and <code>sqm</code> gets a weight of exactly 0. What should you conclude?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Lasso's zero says the model did not need this column. Did it need the information it contains?">
+                                A) Floor area has no effect on the target
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="With perfectly correlated twins, Lasso tends to keep one and zero the other, somewhat arbitrarily. The zero means the column was redundant, not that floor area does not matter.">
+                                B) Nothing about floor area: Lasso kept its twin <code>sqft</code> instead
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The data was scaled, so units no longer affect the penalty. What makes these two columns special?">
+                                C) The model needs more scaling before <code>sqm</code> can be used
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> Which way of choosing <code>alpha</code> gives an honest final test score?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="If the test set picks the setting, is it still unseen data?">
+                                A) Fit each alpha on the training set and keep the one with the best test score
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="On training data, less penalty always fits better. Which alpha would always win?">
+                                B) Keep the alpha with the best training score, then check the test set
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Cross-validation inside the training rows estimates how each alpha generalizes, so the test set stays unseen until the single final check.">
+                                C) Use <code>RidgeCV</code> with cross-validation on the training set, then score the test set once
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Should I ever use plain <code>LinearRegression</code> again?</summary>
+                    <p>Yes, when you have many more rows than columns and want the textbook estimates (for example, to report coefficients with confidence intervals in a statistics package). For prediction, <code>Ridge</code> with an alpha chosen by cross-validation is rarely worse and often better, so many practitioners use it as their default linear regressor.</p>
+                </details>
+                <details>
+                    <summary>Why does the penalty skip the intercept?</summary>
+                    <p>The intercept only sets the overall level of the predictions (the average units sold). Shrinking it toward zero would just bias every forecast downward without making the model any simpler, so scikit-learn leaves it unpenalized.</p>
+                </details>
+                <details>
+                    <summary>Is it a problem that the regularized model's coefficients are "biased"?</summary>
+                    <p>For prediction, no: you accept a little bias in exchange for a large drop in variance, and the test error says whether the trade was good. For interpretation, be careful. Shrunken weights understate effect sizes, and as the twins example showed, Lasso's choices among correlated features are not evidence about causes. Module 7 covers trustworthy ways to explain a model.</p>
+                </details>
+                <details>
+                    <summary>Does regularization exist for classifiers and other models?</summary>
+                    <p>Everywhere. <code>LogisticRegression</code> has <code>C</code> and <code>l1_ratio</code> (0, the default, is Ridge-style; 1 is Lasso-style; values in between give Elastic Net, with the <code>saga</code> solver). Older code sets <code>penalty="l1"</code> instead; that parameter is deprecated. Support vector machines (Lesson 4.3) have <code>C</code>; trees limit depth and leaf size; gradient boosting uses a learning rate and L2 terms; neural networks use weight decay and dropout. The idea is always the same: limit flexibility and tune the limit by validation.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>The project scored all 2025 weeks with a model trained once on 2024. Planners actually re-forecast every month with the newest data. Write a loop that, for each month of 2025, trains the interaction model on everything before that month, forecasts that month, and records the MAE (use <code>RidgeCV</code> each time). Does the error shrink as more history accumulates? This "rolling-origin" evaluation is how forecasting teams test models before trusting them.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Describe the three students and the practice exam in your own words, then match each to a model you trained today (degree 1, degree 15 and a Ridge model, or least squares and Ridge on the 400-row pilot). Finally, write one sentence a Pinecrest planner would understand that explains why the forecaster's <code>alpha</code> was chosen by cross-validation and not by the 2025 results.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Underfitting (high bias) shows as high training and test error; overfitting (high variance) as low training error and much higher test error</li>
+                        <li>Expected test error = bias² + variance + noise; more flexibility trades bias for variance, and the best model sits at the bottom of the U</li>
+                        <li><code>PolynomialFeatures</code> adds powers and interactions, and the column count explodes with the degree</li>
+                        <li><code>Ridge</code> charges for squared weights and shrinks them all; <code>Lasso</code> charges for absolute weights and sets many to exactly zero; <code>ElasticNet</code> mixes the two</li>
+                        <li>Penalties need scaled features: put a scaler inside the pipeline</li>
+                        <li>Choose <code>alpha</code> by cross-validation on the training data (<code>RidgeCV</code>, <code>LassoCV</code>), searched on a log scale; touch the test set once</li>
+                        <li>Regularization matters most when columns are many relative to rows; more data is also a regularizer</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You measured bias and variance directly, by refitting models on 100 samples from a known curve</li>
+                        <li>You watched least squares forecast more than fifteen thousand units from a small pilot, and fixed it with one parameter</li>
+                        <li>You saw Lasso select features, and why its choices among twins cannot be trusted as explanations</li>
+                        <li>You built an interaction forecast that cut the per-product baseline's error by about 40% on a year it never saw</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="classification_knn.html"><strong>Lesson 4.1: k-Nearest Neighbors</strong></a> you will meet a model with no weights at all: it predicts by finding the most similar past customers. Its flexibility dial is the number of neighbors, and you will see the same bias-variance U again, along with why distances make scaling even more important than it was for Ridge.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook and <code>demand_forecast_2025.csv</code>; look at which product and store has the largest errors and guess why.</li>
+                    <li>Rerun Step 4 with <code>alphas=np.logspace(-2, 3, 11)</code>. Does the choice change much?</li>
+                    <li>In one sentence each, define bias and variance without using the words "underfit" or "overfit".</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>Bias and variance are among the most important ideas in all of machine learning, and you did not just read about them: you measured them, drew them, and controlled them with a dial. If the formulas still feel slippery, hold on to the picture of the twenty curves: the stiff lines that all miss, the wild ones that never agree, and the ones in between that you can trust. Every model you meet from here on is a new way to place yourself somewhere on that picture.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="regression_linear_logistic.html" class="prev-lesson">← Previous: Linear and Logistic Regression</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="classification_knn.html" class="next-lesson">Next: k-Nearest Neighbors →</a>
+            </nav>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
+        <div class="footer-links">
+            <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+            <a href="https://rays-home.netlify.app/contact">Contact</a>
+            <a href="#" id="print-button">Print Page</a>
+        </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
+    </footer>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
+</body>
+</html>

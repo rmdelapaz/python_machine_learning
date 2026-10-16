@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 2</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 2: Splits, Leakage and Cross-Validation</h1>
+    <p class="sub">Your workbook for Session 2: a warm-up from Session 1, the key ideas of Lessons 1.2 and 1.3, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>1.2–1.3</b></span>
+      <span class="chip">Session <b>2</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Measure how much one test score wobbles, and stop trusting differences smaller than the wobble.</li>
+  <li>Give train, validation and test data one job each, and open the test set once.</li>
+  <li>Split by time or by group when rows are related, and beat the strongest free baseline, not the weakest.</li>
+  <li>Catch a leak with a single-feature audit and the question "known at prediction time?".</li>
+  <li>Cross-validate a pipeline on shuffled, stratified folds, compare models fold by fold, and choose folds that match the question.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-up: Retrieval from Session 1</h2><span class="rule"></span></div>
+<p>Five quick questions on Lessons 0.1 and 1.1. Write your answer first, then compare with a neighbor.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">On the churn table, what does always predicting "stays" score? And "never fraud" on the payments?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">Which column of <code class="inline">customers_churn.csv</code> must never be a feature, and why?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt"><code class="inline">train_test_split(X, y, ...)</code> returns four things. In which order?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Why is the scaler fitted on the training rows only, and then used to transform both sets?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Homework: what did <code class="inline">DummyClassifier(strategy="constant", constant=1)</code> score on the 1.1 test set?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">1.2</span><h3>Splits, Baselines and Leakage</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Measure how much a test score moves from one random split to another, and explain why stratifying helps</li>
+  <li>Make a train / validation / test split and use each part for its one job</li>
+  <li>Split by time and by group when rows are related, and show how much a careless random split flatters a model</li>
+  <li>Pick a baseline that fits the problem (most frequent class, mean, yesterday, same day last week)</li>
+  <li>Detect target leakage and train-test contamination, and remove them</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The dress rehearsal rule.</b> Evaluate the model under the same conditions it will face in real use. Every way of breaking the rule makes the score look better, which is why nobody notices.</li>
+  <li><b>One split is one sample.</b> Over 30 seeds the same model scored 0.836 to 0.866 (standard deviation about 0.007). Differences smaller than the wobble mean nothing.</li>
+  <li><b>Stratify classification splits on the target</b> (<code class="inline">stratify=y</code>), so the class share and with it the baseline stay fixed. Never stratify on a feature or a number.</li>
+  <li><b>Train fits, validation chooses, test grades once.</b> Call <code class="inline">train_test_split</code> twice for 60/20/20 (<code class="inline">test_size=0.20</code>, then <code class="inline">0.25</code> of the rest). After the one look at the test set, no more choices.</li>
+  <li><b>Time-ordered data needs a time split</b> (train on the past, test on the future): on daily sales a random split claimed $613 a day, the truth was $854.</li>
+  <li><b>Related rows need a group split</b> when the model will meet new groups: <code class="inline">GroupShuffleSplit(..., groups=...)</code>. New products: 17.84 units off instead of 10.23.</li>
+  <li><b>Beat the strongest free baseline:</b> most frequent class, the mean, yesterday, the same day last week ($1,072 for daily sales).</li>
+  <li><b>Leakage:</b> target leakage (recorded after the outcome), train-test contamination (a step fitted before the split), time leakage (the future helps), group leakage. Catch it with a single-feature audit and "known at prediction time?".</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: the same customer on both sides?</div>
+<p>Pinecrest's recommendation team wants to know how well a model will do for customers it has never seen. <code class="inline">interactions.csv</code> has one row per customer and product, so most customers have many rows. Does a random split give the model strangers to predict?</p>
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split, GroupShuffleSplit
+inter = pd.read_csv(<span class="s">"data/interactions.csv"</span>)
+print(inter.shape, inter[<span class="s">"customer_id"</span>].nunique(), <span class="s">"customers"</span>)
+row_train, row_test = train_test_split(inter, test_size=<span class="s">0.25</span>, random_state=<span class="s">42</span>)
+shared = set(row_train[<span class="s">"customer_id"</span>]) &amp; set(row_test[<span class="s">"customer_id"</span>])
+print(<span class="s">f"random rows: {row_test['customer_id'].nunique()} test customers, {len(shared)} also in training"</span>)</pre>
+<pre class="out">(32178, 5) 3000 customers
+random rows: 2649 test customers, 2641 also in training</pre><p>Almost every test customer (2,641 of 2,649) also has rows in training. A model graded this way is graded on customers it already knows: an easier exam than "new customers". Now split by customer instead.</p>
+<pre class="code">gss = GroupShuffleSplit(n_splits=<span class="s">1</span>, test_size=<span class="s">0.25</span>, random_state=<span class="s">42</span>)
+train_idx, test_idx = next(gss.split(inter, groups=inter[<span class="s">"customer_id"</span>]))
+g_train, g_test = inter.iloc[train_idx], inter.iloc[test_idx]
+shared = set(g_train[<span class="s">"customer_id"</span>]) &amp; set(g_test[<span class="s">"customer_id"</span>])
+print(<span class="s">f"group split: {len(g_test):,} test rows, {g_test['customer_id'].nunique()} test customers, "</span>
+      <span class="s">f"{len(shared)} also in training"</span>)</pre>
+<pre class="out">group split: 7,999 test rows, 750 test customers, 0 also in training</pre><p>A quarter of the customers (750) and all their rows go to the test side; none of them appears in training. Which split is right depends on the question: "recommend more products to our existing customers" is a row (or time) split; "how well will this work for new sign-ups?" is a group split. Choosing the split is choosing the question.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li>Open <code class="inline">labs/module-02/l1_2-splits-and-leakage/demand_forecast_starter.py</code>. Run it once as it is: it prints the table's size and five TODO reminders.</li>
+  <li>TODO 1 (together): the time split, 2024 for training and 2025 for testing. Predict first: how many weeks on each side?</li>
+  <li>TODO 2 and 3 (pairs): a random split of the same size, and the same forest graded both ways. Write your prediction in the comment before you run TODO 3.</li>
+  <li>TODO 4 and 5: three free baselines (training mean, each product's 2024 average, the same week last year) and one sorted table: does the forest beat the strongest?</li>
+  <li>Done when your numbers match the "Expected when done" lines the starter prints.</li>
+  <li>Finished early? <code class="inline">fraud_validation_starter.py</code> (a validation set chooses a fraud model) or <code class="inline">debug_leaky_split.py</code> (two loud bugs, two silent ones).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (An integer test_size.)</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+a, b = train_test_split(list(range(<span class="s">20</span>)), test_size=<span class="s">5</span>, random_state=<span class="s">0</span>)
+print(len(a), len(b))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (16 zeros and 4 ones, stratified.)</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+y = [<span class="s">0</span>] * <span class="s">16</span> + [<span class="s">1</span>] * <span class="s">4</span>
+y_tr, y_te = train_test_split(y, test_size=<span class="s">0.25</span>, stratify=y, random_state=<span class="s">0</span>)
+print(len(y_te), sum(y_te))</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>An honest churn evaluation</b> (lesson page, "Project: An Honest Churn Evaluation"). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: three parts. Check: <code class="inline">3600 1200 1200</code>; from now on <code class="inline">test</code> is sealed</li>
+  <li>☐ Step 2: the leak audit on training and validation rows. Check: <code class="inline">suspects: ['has_reason']</code></li>
+  <li>☐ Step 3: drop the leak; baseline validation accuracy 0.835</li>
+  <li>☐ Step 4: choose on validation (logistic regression 0.850, tree 0.864, forest 0.870)</li>
+  <li>☐ Step 5: open the test set once: forest 0.866, baseline 0.835</li>
+  <li>☐ Step 6: <code class="inline">evaluation_report.txt</code> built from my variables</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">Pinecrest wants to predict how a product it has <b>never sold</b> will sell, from <code class="inline">weekly_demand.csv</code>. Which evaluation matches how the model will be used?</div><div class="opts"><div class="opt">A) A random 75/25 split of the rows with <code class="inline">stratify=demand["units_sold"]</code></div><div class="opt">B) A time split: 2024 for training, 2025 for testing</div><div class="opt">C) A group split, <code class="inline">GroupShuffleSplit(..., groups=demand["product_id"])</code>, so that no test product appears in training</div><div class="opt">D) Cross-validate on all the rows, then confirm on the same rows</div></div></div>
+<div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+rows = list(range(<span class="s">1000</span>))
+rest, test = train_test_split(rows, test_size=<span class="s">0.20</span>, random_state=<span class="s">42</span>)
+train, val = train_test_split(rest, test_size=<span class="s">0.25</span>, random_state=<span class="s">42</span>)
+print(len(train), len(val), len(test))</pre><div class="write"></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">You forecast tomorrow's sales for each store. Which candidate feature leaks the future?</div><div class="opts"><div class="opt">A) Yesterday's sales, <code class="inline">shift(1)</code> within each store</div><div class="opt">B) A 7-day average built with <code class="inline">rolling(7, center=True)</code></div><div class="opt">C) Sales on the same day last week, <code class="inline">shift(7)</code></div><div class="opt">D) The day of the week</div></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+<span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+X, y = customers[[<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>]], customers[<span class="s">"churned"</span>]
+X_train, y_train, X_test, y_test = train_test_split(X, y, test_size=<span class="s">0.25</span>, random_state=<span class="s">42</span>)
+LogisticRegression().fit(X_train, y_train)</pre><div class="opts"><div class="opt">A) It fits a model on 4,500 customers</div><div class="opt">B) <code class="inline">KeyError</code>: <code class="inline">'churned'</code></div><div class="opt">C) <code class="inline">NotFittedError</code>: the model was never fitted</div><div class="opt">D) <code class="inline">ValueError</code>: <code class="inline">y</code> should be one-dimensional; the second result is the 1,500 test rows of <code class="inline">X</code></div></div></div>
+<div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">Depths 3 and 4 tie on validation (0.864). You refit depth 3 on training plus validation rows and it scores 0.858 on the test set. What now?</div><div class="opts"><div class="opt">A) Report 0.858 and keep depth 3: the test set has spoken once</div><div class="opt">B) Report 0.864: it is the best number you measured</div><div class="opt">C) Try depth 4 on the test set too and report the better of the two</div><div class="opt">D) Report the average of 0.864 and 0.858</div></div></div>
+<div class="q" data-sc="6" data-kind="short"><div class="qn">Q6</div><div class="qt">What does this print? (The "yesterday" forecast's mean absolute error.)</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+sales = pd.Series([<span class="s">100</span>, <span class="s">120</span>, <span class="s">90</span>, <span class="s">130</span>])
+yesterday = sales.shift(<span class="s">1</span>)
+print((sales - yesterday).abs().mean())</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the dress rehearsal rule in your own words. Then take the problem you framed in Lesson 0.1's journal entry: should it be split at random, by time or by group; which baseline would you compare with; and which column in your data would be most tempted to leak?</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">1.3</span><h3>Cross-Validation</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain why one train/validation split gives a noisy score, and how k-fold cross-validation averages that noise away</li>
+  <li>Run <code class="inline">cross_val_score</code> and <code class="inline">cross_validate</code> with a stratified, shuffled splitter, and report a mean with its spread</li>
+  <li>Keep preprocessing inside the folds by cross-validating a <code class="inline">make_pipeline</code> instead of pre-scaled data</li>
+  <li>Compare two models fold by fold on identical folds, and get out-of-fold predictions with <code class="inline">cross_val_predict</code></li>
+  <li>Choose <code class="inline">TimeSeriesSplit</code> or <code class="inline">GroupKFold</code> when rows are related by time or by group</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>One exam or five quizzes.</b> K-fold cross-validation trains k times, validates every training row exactly once, and gives k scores: report the mean plus or minus the spread.</li>
+  <li><b>It scores a recipe, not a model.</b> <code class="inline">cross_val_score</code> fits fresh copies and throws them away; afterward fit the chosen recipe once on all the training rows.</li>
+  <li><b>Build the splitter yourself:</b> <code class="inline">StratifiedKFold(5, shuffle=True, random_state=42)</code> for classification, <code class="inline">KFold(5, shuffle=True, random_state=42)</code> for regression. <code class="inline">cv=5</code> does not shuffle.</li>
+  <li><b>Preprocessing goes inside the folds:</b> cross-validate <code class="inline">make_pipeline(StandardScaler(), LogisticRegression())</code>, never pre-scaled data. Selecting features outside the folds turned pure noise into 0.825 accuracy.</li>
+  <li><code class="inline">cross_validate</code> gives several metrics and, with <code class="inline">return_train_score=True</code>, the training score: a big train-validation gap means overfitting.</li>
+  <li><b>Compare on identical folds and look at paired differences.</b> A lead smaller than the fold-to-fold spread is a tie (12 of 15 folds, +0.004: a tie). Then prefer the simpler model.</li>
+  <li><code class="inline">cross_val_predict</code> gives every training row an honest out-of-fold prediction, for charts and thresholds.</li>
+  <li><b>Match the folds to the question: what will be new to the model?</b> New customers: shuffled stratified folds. Next period: time-ordered folds. A new product or store: <code class="inline">GroupKFold</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: recency alone, five quizzes</div>
+<p>How much does recency alone tell you about churn, honestly? Cross-validate a two-level tree on ONE feature against the know-nothing baseline, with training scores next to the validation scores.</p>
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split, StratifiedKFold, cross_validate
+<span class="k">from</span> sklearn.tree <span class="k">import</span> DecisionTreeClassifier
+<span class="k">from</span> sklearn.dummy <span class="k">import</span> DummyClassifier
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+X_train, X_test, y_train, y_test = train_test_split(
+    customers[[<span class="s">"days_since_last_order"</span>]], customers[<span class="s">"churned"</span>],
+    test_size=<span class="s">0.25</span>, stratify=customers[<span class="s">"churned"</span>], random_state=<span class="s">42</span>)
+cv = StratifiedKFold(n_splits=<span class="s">5</span>, shuffle=<span class="k">True</span>, random_state=<span class="s">42</span>)
+<span class="k">for</span> name, model <span class="k">in</span> [(<span class="s">"baseline"</span>, DummyClassifier(strategy=<span class="s">"prior"</span>)),
+                    (<span class="s">"recency tree"</span>, DecisionTreeClassifier(max_depth=<span class="s">2</span>, random_state=<span class="s">42</span>))]:
+    r = cross_validate(model, X_train, y_train, cv=cv, scoring=<span class="s">"roc_auc"</span>, return_train_score=<span class="k">True</span>)
+    print(<span class="s">f"{name:12s} AUC {r['test_score'].mean():.3f} +/- {r['test_score'].std():.3f}"</span>
+          <span class="s">f"  (train {r['train_score'].mean():.3f})"</span>)</pre>
+<pre class="out">baseline     AUC 0.500 +/- 0.000  (train 0.500)
+recency tree AUC 0.703 +/- 0.023  (train 0.709)</pre><p>Ranking AUC 0.703 against 0.500 for the baseline: recency alone carries real signal. Train and validation are close (0.709 vs 0.703), so the small tree is not memorizing. Now look inside the five rounds: cross-validation fits five different models.</p>
+<pre class="code"><span class="k">for</span> fold, (tr, va) <span class="k">in</span> enumerate(cv.split(X_train, y_train), start=<span class="s">1</span>):
+    tree = DecisionTreeClassifier(max_depth=<span class="s">2</span>, random_state=<span class="s">42</span>).fit(X_train.iloc[tr], y_train.iloc[tr])
+    print(<span class="s">f"fold {fold}: first question 'days_since_last_order &lt;= {tree.tree_.threshold[0]:.1f}?'"</span>)</pre>
+<pre class="out">fold 1: first question 'days_since_last_order &lt;= 172.5?'
+fold 2: first question 'days_since_last_order &lt;= 172.5?'
+fold 3: first question 'days_since_last_order &lt;= 164.5?'
+fold 4: first question 'days_since_last_order &lt;= 172.0?'
+fold 5: first question 'days_since_last_order &lt;= 158.5?'</pre><p>Five fold models, five slightly different first questions, all near 160 to 170 days (the churn risk jumps for customers who have not ordered in about five months). That is why cross-validation scores a <b>recipe</b> ("a depth-2 tree on recency"), not one model: afterward you fit the recipe once on all the training rows.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li>Open <code class="inline">labs/module-02/l1_3-cross-validation/fraud_folds_starter.py</code>. June's payments are locked away; everything happens on January to May.</li>
+  <li>TODO 1 (together): frauds in each validation fold for unshuffled <code class="inline">KFold</code> and for <code class="inline">StratifiedKFold</code>. Predict which one gives equal counts.</li>
+  <li>TODO 2 and 3 (pairs): cross-validate a baseline, a logistic-regression pipeline and a tree with training scores; then compare two of them fold by fold.</li>
+  <li>TODO 4 and 5: next-month folds built by hand, then June, once.</li>
+  <li>Done when your numbers match the "Expected when done" lines.</li>
+  <li>Finished early? <code class="inline">regularization_check_starter.py</code>: Session 1 said C=0.01 beat C=1.0 on one split. Do 15 paired folds agree? Then <code class="inline">debug_cross_validation.py</code>.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (8 zeros and 4 ones, four stratified folds: ones per validation fold.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> StratifiedKFold
+y = np.array([<span class="s">0</span>] * <span class="s">8</span> + [<span class="s">1</span>] * <span class="s">4</span>)
+cv = StratifiedKFold(n_splits=<span class="s">4</span>, shuffle=<span class="k">True</span>, random_state=<span class="s">42</span>)
+print([int(y[val].sum()) <span class="k">for</span> _, val <span class="k">in</span> cv.split(np.zeros((<span class="s">12</span>, <span class="s">1</span>)), y)])</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (Ten rows in time order, three time-ordered folds.)</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> TimeSeriesSplit
+<span class="k">for</span> train, val <span class="k">in</span> TimeSeriesSplit(n_splits=<span class="s">3</span>).split(np.zeros((<span class="s">10</span>, <span class="s">1</span>))):
+    print(len(train), val.tolist())</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A fair model bake-off</b> (lesson page, "Project: A Fair Model Bake-Off"). In class: Steps 1 to 3. At home: Steps 4 to 6. Keep this notebook for Session 3.</p>
+<ul class="tick">
+  <li>☐ Step 1: the standard split. Check: <code class="inline">4500 1500</code></li>
+  <li>☐ Step 2: four candidates; the scaler inside the logistic-regression pipeline</li>
+  <li>☐ Step 3: 15 identical folds, two metrics. Check: random forest on top, ROC AUC 0.867 ± 0.018; baseline 0.500</li>
+  <li>☐ Step 4: the lead fold by fold (15 of 15, mean +0.033)</li>
+  <li>☐ Step 5: the test set once (forest 0.865)</li>
+  <li>☐ Step 6: <code class="inline">cv_leaderboard.csv</code> and a two-line recommendation</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> RepeatedStratifiedKFold
+rcv = RepeatedStratifiedKFold(n_splits=<span class="s">4</span>, n_repeats=<span class="s">2</span>, random_state=<span class="s">42</span>)
+print(rcv.get_n_splits())</pre><div class="write"></div></div>
+<div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> KFold
+cv = KFold(n_splits=<span class="s">5</span>, random_state=<span class="s">42</span>)</pre><div class="opts"><div class="opt">A) It makes five shuffled folds with seed 42</div><div class="opt">B) <code class="inline">ValueError</code>: setting a <code class="inline">random_state</code> has no effect since <code class="inline">shuffle</code> is False</div><div class="opt">C) It makes five unshuffled folds and silently ignores the seed</div><div class="opt">D) <code class="inline">TypeError</code>: <code class="inline">KFold</code> has no <code class="inline">random_state</code> argument</div></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">A colleague fills the gaps in <code class="inline">email_opens_90d</code> with the median of all 4,500 training rows, then runs <code class="inline">cross_val_score</code> on the filled table. What is wrong?</div><div class="opts"><div class="opt">A) Nothing: the test set was never used</div><div class="opt">B) <code class="inline">cross_val_score</code> cannot handle a column that once had gaps</div><div class="opt">C) The median should come from all 6,000 rows to be more accurate</div><div class="opt">D) Each validation fold helped compute the median that filled it: put the filling step inside a pipeline so it is refitted on the training folds of every round</div></div></div>
+<div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt"><code class="inline">interactions.csv</code> has many rows per customer. You want to know how well a model will predict ratings for customers it has never seen. Which splitter?</div><div class="opts"><div class="opt">A) <code class="inline">StratifiedKFold(5, shuffle=True, random_state=42)</code> on the rating</div><div class="opt">B) <code class="inline">TimeSeriesSplit(n_splits=5)</code> on the rows in file order</div><div class="opt">C) <code class="inline">GroupKFold(n_splits=5)</code> with <code class="inline">groups=customer_id</code></div><div class="opt">D) <code class="inline">KFold(5)</code> without shuffling</div></div></div>
+<div class="q" data-sc="11" data-kind="short"><div class="qn">Q11</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.dummy <span class="k">import</span> DummyRegressor
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> KFold, cross_val_score
+X = [[<span class="s">0</span>]] * <span class="s">6</span>
+y = [<span class="s">1</span>, <span class="s">2</span>, <span class="s">3</span>, <span class="s">4</span>, <span class="s">5</span>, <span class="s">6</span>]
+print(cross_val_score(DummyRegressor(), X, y, cv=KFold(<span class="s">3</span>), scoring=<span class="s">"neg_mean_absolute_error"</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">On 15 paired folds the forest beats the depth-4 tree in all 15 (CV AUC 0.867 +/- 0.018). Fitted on all training rows, it then scores 0.865 on the test set. What do you conclude?</div><div class="opts"><div class="opt">A) The estimate held: report 0.865 and keep the forest</div><div class="opt">B) The forest got worse on the test set; switch to the tree</div><div class="opt">C) Cross-validation was optimistic; rerun it with the test rows included</div><div class="opt">D) Report 0.867, because it is based on more folds</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain "one exam or five quizzes" to a colleague who has never heard of cross-validation. Then write the question you would ask before choosing a splitter ("what will be new to the model?") and answer it for a project you care about: shuffled folds, time-ordered folds or group folds?</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<p>Three questions, no notes. Write your answers, hand them in or keep them: they tell you and your instructor what to revisit.</p>
+<div class="q"><div class="qn">E1</div><div class="qt">Name the three parts of a three-way split and the one job of each. Which part is opened only once?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">A sales forecast scores MAE $613 on a random split and $854 when trained on 2023 and 2024 and tested on 2025. Which number do you report, and why is the other one lower?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">Why do you cross-validate <code class="inline">make_pipeline(StandardScaler(), LogisticRegression())</code> instead of scaling <code class="inline">X_train</code> first and cross-validating the model?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish the honest churn evaluation (Steps 4 to 6) and the fair bake-off (Steps 4 to 6)</li>
+  <li>☐ Lesson 1.2 Hands-on Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Lesson 1.3 Hands-on Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Both Quick Quizzes on the lesson pages</li>
+  <li>☐ Both journal entries in <code class="inline">journal.md</code></li>
+  <li>☐ 1.2 "Before the Next Lesson": leak hunt in <code class="inline">data/README.md</code>; rerun the 1.2 project with <code class="inline">random_state=7</code></li>
+  <li>☐ 1.3 "Before the Next Lesson": rerun the bake-off with <code class="inline">scoring=["accuracy", "roc_auc", "f1"]</code> and note the baseline's F1; one dataset of my own with related rows</li>
+  <li>☐ Optional: <code class="inline">fraud_validation_starter.py</code>, <code class="inline">regularization_check_starter.py</code>, the two <code class="inline">debug_*.py</code> handouts</li>
+  <li>☐ Bring to Session 3: a READY laptop, <code class="inline">pinecrest-ml</code> with <code class="inline">data/</code> and <code class="inline">labs/</code>, my 1.3 bake-off notebook and <code class="inline">cv_leaderboard.csv</code>, this workbook and my journal</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>wobble (split noise)</td><td>How much a score moves when only the random split changes</td></tr>
+<tr><td>stratify</td><td>Keep the class share the same in every part of a split (<code class="inline">stratify=y</code>)</td></tr>
+<tr><td>validation set</td><td>Data used to compare candidates and choose one; it may influence your choices</td></tr>
+<tr><td>test set</td><td>Data locked away until the choice is made, then used once to report the result</td></tr>
+<tr><td>time split</td><td>Train on earlier rows, test on later ones, as in real use</td></tr>
+<tr><td>group split</td><td>Every row of the same entity (product, customer, store) on one side</td></tr>
+<tr><td>naive / seasonal naive</td><td>Forecast baselines: tomorrow = today; next Saturday = last Saturday</td></tr>
+<tr><td>MAE</td><td>Mean absolute error: the average size of a miss, in the target's units</td></tr>
+<tr><td>data leakage</td><td>Information during training or testing that the model will not have in real use</td></tr>
+<tr><td>target leakage</td><td>A feature recorded after, or because of, the outcome (<code class="inline">cancellation_reason</code>)</td></tr>
+<tr><td>train-test contamination</td><td>Test or validation rows influence training, e.g. a scaler fitted before the split</td></tr>
+<tr><td>k-fold cross-validation</td><td>Train k times, each time validating on a different fold; report mean and spread</td></tr>
+<tr><td>fold</td><td>One of the k equal parts the training rows are cut into</td></tr>
+<tr><td>pipeline</td><td>Steps chained into one estimator (<code class="inline">make_pipeline</code>), refitted together in every fold</td></tr>
+<tr><td>out-of-fold prediction</td><td>A prediction for a row from the fold model that did not train on it (<code class="inline">cross_val_predict</code>)</td></tr>
+<tr><td>ROC AUC</td><td>How well a model ranks positives above negatives: 0.5 random, 1.0 perfect (Lesson 1.4)</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 2 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -3,1363 +3,1104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about Recommendation Systems in this comprehensive Python Machine Learning course lesson.">
+    <meta name="description" content="Build and fairly evaluate product recommenders (popularity, item-based collaborative filtering, matrix factorization with SVD and content-based similarity) on Pinecrest Outfitters purchase data. Python Machine Learning Lesson 11.2.">
+    <meta name="author" content="Ray de la Paz">
     <title>Recommendation Systems - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#applications">Applications</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#applications">Applications</a></li>
-            <li aria-current="page">Recommendation Systems: Personalized Content Discovery</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>🎯 Recommendation Systems: Personalized Content Discovery</h1>
+        <div class="container">
+            <header>
+                <h1>🛒 Lesson 11.2: Recommendation Systems</h1>
+                <p class="lead">Turn 32,000 purchases into "picked for you" suggestions, and prove with an honest test that they beat simply showing everyone the best sellers.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Explain the core recommendation paradigms: collaborative filtering, content-based, and hybrid approaches</li>
-                <li>Build user-based and item-based collaborative filtering from a user–item interaction matrix</li>
-                <li>Apply matrix factorization to uncover latent factors and handle sparse data</li>
-                <li>Construct content-based recommendations from item features and similarity measures</li>
-                <li>Evaluate recommenders with ranking metrics such as precision@k, recall@k, and RMSE</li>
-                <li>Recognize and mitigate the cold-start problem</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Build a movie or product recommender that combines collaborative and content-based signals, then evaluate its top-N recommendations.</p>
-        </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>Recommendation systems are algorithms that suggest relevant items to users based on their preferences, behavior, and similarities with other users or items. From Netflix movie suggestions to Amazon product recommendations and Spotify playlists, these systems power personalized experiences across digital platforms. This lesson covers collaborative filtering (user-based and item-based), content-based filtering, matrix factorization techniques (SVD, NMF), hybrid approaches, and modern deep learning methods for building effective recommendation systems.</p>
-        </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Build a sparse customer-by-product matrix from purchase records with SciPy</li>
+                        <li>Evaluate a recommender with a leave-last-out split and hit rate at 10, against random and best-seller baselines</li>
+                        <li>Implement item-based collaborative filtering with cosine similarity, and matrix factorization with <code>TruncatedSVD</code></li>
+                        <li>Use product attributes for content-based recommendations, and explain how they rescue a brand-new product</li>
+                        <li>Judge a recommender on more than accuracy: catalog coverage and popularity bias</li>
+                    </ul>
+                </div>
 
-        </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 110 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="nlp_text_preprocessing.html">Lesson 11.1: Text Classification</a>; cosine similarity from <a href="classification_knn.html">Lesson 4.1: k-Nearest Neighbors</a>; <a href="dimensionality_pca.html">Lesson 9.1: Principal Component Analysis</a> helps with the SVD section</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A "Picked for You" list of five products for every Pinecrest customer, with the model chosen on a validation item and scored once on an untouched test item</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/interactions.csv</code> and <code>data/products_ml.csv</code></li>
+                </ul>
+            </header>
 
-        <h2>Fundamentals of Recommendation Systems</h2>
-        
-        <pre class="language-python"><code>import numpy as np
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">The Clerk Who Remembers</a></li>
+                        <li><a href="#data" class="toc-link">Purchases as a Matrix</a></li>
+                        <li><a href="#evaluate" class="toc-link">An Honest Test: Leave the Last One Out</a></li>
+                        <li><a href="#popularity" class="toc-link">Baselines: Random and Best Sellers</a></li>
+                        <li><a href="#item-knn" class="toc-link">Item-Based Collaborative Filtering</a></li>
+                        <li><a href="#svd" class="toc-link">Matrix Factorization with SVD</a></li>
+                        <li><a href="#content" class="toc-link">Content-Based Recommendations and Cold Start</a></li>
+                        <li><a href="#beyond" class="toc-link">Beyond Hit Rate: Coverage and Responsibility</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: Picked for You</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 The Clerk Who Remembers</h2>
+
+                <p>Pinecrest Outfitters sends a monthly email with a row of products. Today every customer gets the same row: the best sellers. The marketing team wants a personal row instead, a "Picked for You" strip that shows each customer the five products they are most likely to buy next. That is a <strong>recommendation system</strong>, one of the most common pieces of machine learning in everyday life.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Clerk Who Remembers</h4>
+                    <p>Picture a long-serving clerk at the Bend store. She has watched thousands of customers shop. When a regular buys a climbing harness, she does not reach for the best-selling socks; she says, "People who buy that harness usually come back for a chalk bag." She has no rule book. She has noticed which products tend to end up with the same customers. That is <strong>collaborative filtering</strong>: recommendations learned from the behavior of many customers together.</p>
+                    <p>A new clerk on day one cannot do that. The best she can do is point at the best sellers (a <strong>popularity</strong> recommender) or read the product labels: "you bought a paddle, here are other paddling items" (a <strong>content-based</strong> recommender). This lesson builds all three and measures which one helps customers most.</p>
+                </div>
+
+                <p>Recommendation looks different from the classification and regression you have done so far. There is no single target column. Instead there is a large, mostly empty grid of customers by products, and the job is to <em>rank</em> the empty cells: of the products a customer has not bought, which are they most likely to buy next? The tools, though, are ones you already know: cosine similarity from k-nearest neighbors, a matrix decomposition that is a close cousin of PCA, and the discipline of holding out data you never train on.</p>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>A recommender is easy to build and easy to fool yourself with. Almost any method produces lists that <em>look</em> sensible. The skill this lesson teaches is the evaluation: hide something real, ask the model to find it, and compare with a baseline that knows nothing about the customer. Without that, "personalized" is just a word on a slide.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="data" class="lesson-section">
+                <h2>📂 Purchases as a Matrix</h2>
+
+                <p>Two files hold the data. <code>interactions.csv</code> has one row per customer and product the customer bought, and <code>products_ml.csv</code> describes the 200 products.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from scipy import sparse
-from scipy.sparse.linalg import svds
+
+interactions = pd.read_csv("data/interactions.csv")
+products = pd.read_csv("data/products_ml.csv")
+
+print(interactions.shape, products.shape)
+print(interactions.head())
+print(products[["product_id", "name", "primary_activity"]].head(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(32178, 5) (200, 8)
+  customer_id product_id  purchases  rating last_purchase_date
+0     C100001   APL-3021          2     5.0         2024-03-20
+1     C100001   KIT-3003          2     5.0         2024-08-27
+2     C100001   KIT-3013          1     NaN         2024-09-23
+3     C100001   APL-3019          3     4.0         2024-10-17
+4     C100001   TNT-3016          2     NaN         2024-11-22
+  product_id                                    name primary_activity
+0   FTW-3001  Larkspur Ridge Timberline Hiking Boots           hiking
+1   FTW-3002   Larkspur Ridge Basecamp Trail Runners          running
+2   FTW-3003    Larkspur Ridge Meadow Approach Shoes         climbing</code></pre>
+                </div>
+
+                <p>Each interaction row says that a customer bought a product (<code>purchases</code> times, most recently on <code>last_purchase_date</code>), sometimes with a star rating. Data about what people <em>did</em> is called <strong>implicit feedback</strong>; star ratings, where people <em>tell</em> you what they think, are <strong>explicit feedback</strong>. Here most rows have no rating, which is typical: people buy far more often than they review. This lesson works with the purchases.</p>
+
+                <pre><code class="language-python">n_customers = interactions["customer_id"].nunique()
+n_products = interactions["product_id"].nunique()
+density = len(interactions) / (n_customers * n_products)
+
+print(f"{n_customers:,} customers x {n_products} products: {density:.1%} of the cells are filled")
+print(f"rows with a star rating: {interactions['rating'].notna().mean():.1%}")
+print(interactions.groupby("customer_id").size().describe().round(1))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>3,000 customers x 200 products: 5.4% of the cells are filled
+rows with a star rating: 37.9%
+count    3000.0
+mean       10.7
+std         6.8
+min         3.0
+25%         6.0
+50%         9.0
+75%        13.0
+max        45.0
+dtype: float64</code></pre>
+                </div>
+
+                <p>A typical customer has bought 9 of the 200 products, so about 95% of the grid is empty. The empty cells are not "dislikes": a customer who never bought a tent here may love tents and simply bought one elsewhere. That uncertainty is why recommenders rank the empty cells instead of predicting a firm yes or no for each one.</p>
+
+                <h3>📈 The Long Tail</h3>
+                <p>Before modeling, look at how purchases spread over products. In almost every shop a few products sell to a large share of customers and most sell to a few.</p>
+
+                <pre><code class="language-python">import matplotlib.pyplot as plt
+
+buyers = interactions.groupby("product_id").size().sort_values(ascending=False)
+names = products.set_index("product_id")["name"]
+
+print(pd.DataFrame({"name": names[buyers.index[:3]], "buyers": buyers.head(3)}))
+print(f"fewest buyers: {buyers.min()}, median: {buyers.median():.0f}")
+print(f"top 20 products (10% of the catalog) = {buyers.head(20).sum() / buyers.sum():.1%} of all purchases")
+
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.bar(range(len(buyers)), buyers.to_numpy(), width=1.0, color="#667eea", label="customers who bought the product")
+ax.set_xlabel("Products, from most to least bought")
+ax.set_ylabel("Number of customers")
+ax.set_title("A few products sell to many customers; most sell to a hundred or so")
+ax.legend()
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>                                               name  buyers
+product_id
+ACC-3014    Larkspur Ridge Lookout Sunscreen SPF 50     992
+ACC-3009        Juniper Vane Tempo Sunscreen SPF 50     941
+ACC-3018           Cedar Notch Tundra First-Aid Kit     633
+fewest buyers: 19, median: 120
+top 20 products (10% of the catalog) = 29.9% of all purchases</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/applications_recommendation_systems_long_tail.png" alt="Bar chart of the number of customers who bought each of the 200 products, sorted from most to least. The first two products were bought by more than 900 customers each, the bars fall below 400 within the first twenty products, and most products were bought by 50 to 200 customers." width="990" height="440" loading="lazy">
+                    <figcaption>The long tail: two accessories reach almost a third of all customers each, while the typical product sells to about 120.</figcaption>
+                </figure>
+
+                <p>Keep this shape in mind. A best-seller list shows the left end of this chart to everyone. A good personal recommender should reach further into the tail, because that is where a customer's particular interests live.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="evaluate" class="lesson-section">
+                <h2>✂️ An Honest Test: Leave the Last One Out</h2>
+
+                <p>How do you test a recommender without sending any emails? Use the past. For each customer, hide their <strong>most recent</strong> purchase, train on everything else, and ask the model for a top-10 list. If the hidden product is in the list, that customer counts as a <strong>hit</strong>. The share of customers with a hit is the <strong>hit rate at 10</strong>, written HR@10.</p>
+
+                <div class="mermaid">
+graph TD
+    A["All purchases"] --> B["Sort each customer by date"]
+    B --> C["Latest purchase: test item"]
+    B --> D["Earlier purchases: training"]
+    D --> E["Build matrix, fit model"]
+    E --> F["Score products not yet bought"]
+    F --> G["Top 10 list per customer"]
+    C --> H["Hit if test item is in the list"]
+    G --> H
+                </div>
+
+                <p>Hiding the <em>latest</em> purchase rather than a random one matters. It mimics the real job (predict what comes next from what came before), and it keeps the future out of the training data: the same rule as splitting by time in <a href="evaluation_train_test_split.html">Lesson 1.2</a>. Purchases on the same date are ordered by product ID, so the split is repeatable.</p>
+
+                <pre><code class="language-python">interactions = interactions.sort_values(["customer_id", "last_purchase_date", "product_id"])
+test = interactions.groupby("customer_id").tail(1)
+train = interactions.drop(test.index)
+
+print(f"{len(train):,} training rows, {len(test):,} test rows (one per customer)")
+print(test[["customer_id", "product_id", "last_purchase_date"]].head(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>29,178 training rows, 3,000 test rows (one per customer)
+   customer_id product_id last_purchase_date
+11     C100001   ACC-3019         2025-11-15
+31     C100002   APL-3021         2025-12-16
+43     C100004   ACC-3020         2025-12-31</code></pre>
+                </div>
+
+                <h3>🧮 The Customer-by-Product Matrix</h3>
+                <p>Most of the grid is empty, so store it as a <strong>sparse matrix</strong>: SciPy keeps only the filled cells and their positions. Each customer gets a row number and each product a column number, and the matrix is built from the <em>training</em> rows only.</p>
+
+                <pre><code class="language-python">from scipy.sparse import csr_matrix
+
+customer_ids = np.sort(interactions["customer_id"].unique())
+product_ids = products["product_id"].to_numpy()
+row_of = pd.Series(np.arange(len(customer_ids)), index=customer_ids)
+col_of = pd.Series(np.arange(len(product_ids)), index=product_ids)
+
+R = csr_matrix(
+    (np.ones(len(train)), (row_of[train["customer_id"]].to_numpy(), col_of[train["product_id"]].to_numpy())),
+    shape=(len(customer_ids), len(product_ids)),
+)
+print(R.shape, f"{R.nnz:,} stored ones")
+print(f"dense would need {R.shape[0] * R.shape[1] * 8 / 1e6:.1f} MB, "
+      f"sparse needs {(R.data.nbytes + R.indices.nbytes + R.indptr.nbytes) / 1e6:.2f} MB")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(3000, 200) 29,178 stored ones
+dense would need 4.8 MB, sparse needs 0.36 MB</code></pre>
+                </div>
+
+                <p>Each cell is 1 if the customer bought the product (in training) and empty otherwise. We store 1 rather than the purchase count; Exercise 2 tests whether the counts add anything. At 200 products the memory saving is small, but a shop with a million customers and 50,000 products could never hold the dense version.</p>
+
+                <h3>🎯 The Scoring Helpers</h3>
+                <p>Every recommender below produces a <strong>score matrix</strong> with the same shape as <code>R</code>: one number per customer and product, higher meaning "recommend sooner". Two helpers turn any score matrix into top-k lists and a hit rate. Products a customer already bought are set to minus infinity first, so they can never be recommended (Mistake 2 shows what happens if you forget).</p>
+
+                <pre><code class="language-python">owned = R.toarray() &gt; 0
+test_col = col_of[test.set_index("customer_id").loc[customer_ids, "product_id"]].to_numpy()
+
+def top_k(scores, k=10):
+    scores = np.array(scores, dtype=float)      # a copy, so the caller's matrix is untouched
+    scores[owned] = -np.inf                     # never recommend what they already have
+    return np.argsort(-scores, axis=1)[:, :k]   # column numbers of the k highest scores
+
+def hit_rate(scores, k=10):
+    return (top_k(scores, k) == test_col[:, None]).any(axis=1).mean()
+
+print(owned.shape, test_col[:5])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(3000, 200) [196  46 197  98 107]</code></pre>
+                </div>
+
+                <p><code>test_col</code> holds, for each customer in row order, the column number of their hidden product. <code>top_k(...) == test_col[:, None]</code> compares each customer's ten recommendations with their own hidden column, and <code>.any(axis=1)</code> asks "was it anywhere in the ten?" The mean of those yes-or-no answers is the hit rate.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="popularity" class="lesson-section">
+                <h2>🎯 Baselines: Random and Best Sellers</h2>
+
+                <p>First, the floor. A random list of 10 from the roughly 190 products a customer has not bought should hit about 10 / 190, roughly 5% of the time. Then the real baseline: recommend the training set's best sellers that the customer does not own yet.</p>
+
+                <pre><code class="language-python">rng = np.random.default_rng(42)
+random_scores = rng.random(R.shape)
+
+popularity = np.asarray(R.sum(axis=0)).ravel()          # buyers per product, training rows only
+popularity_scores = np.tile(popularity, (R.shape[0], 1))
+
+print(f"random      HR@10 = {hit_rate(random_scores):.3f}")
+print(f"popularity  HR@10 = {hit_rate(popularity_scores):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>random      HR@10 = 0.047
+popularity  HR@10 = 0.209</code></pre>
+                </div>
+
+                <p>The best-seller list hits for about one customer in five, four times better than random. That is a strong baseline, and it is what many shops actually use. A personal recommender has to beat 0.209 to earn its extra complexity. The random generator is seeded (<code>default_rng(42)</code>) for the same reason as every <code>random_state=42</code> in this course: so your numbers match the page.</p>
+
+                <div class="card card-success">
+                    <h4>✅ Same Habit, New Problem</h4>
+                    <p>In Lesson 1.1 the baseline was a <code>DummyClassifier</code>. Here it is the best-seller list. The habit is identical: before believing a clever model, measure what knowing nothing about the individual already achieves.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="item-knn" class="lesson-section">
+                <h2>🤝 Item-Based Collaborative Filtering</h2>
+
+                <p>Now teach the computer the clerk's trick. Describe each product by its column of <code>R</code>: the list of customers who bought it. Two products are similar if mostly the same customers bought them. The measure is <strong>cosine similarity</strong>, which you met with k-nearest neighbors. For two 0/1 columns <em>a</em> and <em>b</em> it is</p>
+
+                <p class="text-center"><code>cos(a, b) = shared buyers / √(buyers of a × buyers of b)</code></p>
+
+                <p>It is 0 when no customer bought both and 1 when exactly the same customers bought both. Dividing by the sizes stops best sellers from looking similar to everything just because they are everywhere.</p>
+
+                <pre><code class="language-python">from sklearn.metrics.pairwise import cosine_similarity
+
+item_sim = cosine_similarity(R.T)        # R.T is products x customers, so this is products x products
+np.fill_diagonal(item_sim, 0)            # a product is not its own neighbor
+print(item_sim.shape)
+
+harness = col_of["CLM-3001"]
+print("Neighbors of:", names.iloc[harness])
+nearest = np.argsort(-item_sim[harness])[:5]
+print(products.iloc[nearest][["name", "primary_activity"]].assign(similarity=item_sim[harness, nearest].round(3)))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(200, 200)
+Neighbors of: Juniper Vane Headwater Climbing Harness
+                                       name primary_activity  similarity
+121    Juniper Vane Summit Climbing Harness         climbing       0.282
+113  Pinecrest Timberline Locking Carabiner         climbing       0.268
+125         Cedar Notch Wayfinder Chalk Bag         climbing       0.267
+124                Pinecrest Tempo 60m Rope         climbing       0.254
+109          Pinecrest Backcountry 60m Rope         climbing       0.247</code></pre>
+                </div>
+
+                <p>Nobody told the computer that harnesses, carabiners, chalk bags and ropes belong together. It worked that out from who bought what. The similarities are modest (about 0.25: only some harness buyers also bought a rope), which is normal for shopping data and plenty for ranking.</p>
+
+                <p>To score a product for a customer, add up its similarity to everything the customer already owns. In matrix form that is a single multiplication, <code>R @ item_sim</code>: row <em>u</em> of the result is the sum of the similarity rows of the products customer <em>u</em> bought.</p>
+
+                <pre><code class="language-python">knn_scores = R @ item_sim
+print(type(knn_scores).__name__, knn_scores.shape)
+print(f"item-kNN    HR@10 = {hit_rate(knn_scores):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>ndarray (3000, 200)
+item-kNN    HR@10 = 0.308</code></pre>
+                </div>
+
+                <p>0.308 against the best sellers' 0.209: the personal list finds the customer's next purchase about 50% more often. That is the core result of this lesson, and it took two lines of linear algebra. A sparse matrix times a dense array gives a plain NumPy array, which is why the result prints as <code>ndarray</code>.</p>
+
+                <h3>👀 One Customer's List</h3>
+                <p>Numbers convince; a single example builds intuition. Here is what the model saw for one customer, what it suggested, and what the customer really bought next.</p>
+
+                <pre><code class="language-python">def show_customer(customer, scores, n=5):
+    r = row_of[customer]
+    print("Bought before:")
+    for name in names.iloc[np.flatnonzero(owned[r])]:
+        print("  ", name)
+    print("Recommended:")
+    for name in names.iloc[top_k(scores, n)[r]]:
+        print("  ", name)
+    print("Really bought next:", names.iloc[test_col[r]])
+
+show_customer("C100027", knn_scores)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>Bought before:
+   Wrenfield Trailhead Approach Shoes
+   Pinecrest Wayfinder Approach Shoes
+   Tallgrass Talus Chalk Bag
+Recommended:
+   Juniper Vane Summit Climbing Harness
+   Juniper Vane Tundra Climbing Pants
+   Wrenfield Meadow Climbing Pants
+   Pinecrest Bouldery Locking Carabiner
+   Cedar Notch Cairn Climbing Harness
+Really bought next: Cedar Notch Cairn Climbing Harness</code></pre>
+                </div>
+
+                <p>Three climbing purchases in, the model offers more climbing gear, and the second harness on its list is the one the customer bought. (<code>top_k</code> ranks all 3,000 customers and we keep one row; at this size that takes a blink.)</p>
+
+                <div class="card card-info">
+                    <h4>💡 Item-Based or User-Based?</h4>
+                    <p>You could flip the idea: find customers similar to this one and recommend what <em>they</em> bought (user-based collaborative filtering). Item-based is usually preferred in shops: there are far fewer products than customers, product similarities change slowly so they can be computed once a night, and "because you bought X" is an explanation customers understand.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="svd" class="lesson-section">
+                <h2>🧩 Matrix Factorization with SVD</h2>
+
+                <p>Item-kNN compares products one pair at a time. <strong>Matrix factorization</strong> looks for a few hidden themes that explain the whole grid at once. The idea: maybe customers do not have 200 independent preferences, but a handful of tastes (say, "into climbing", "into paddling"), and each product appeals to those tastes in different amounts. Then the big matrix can be approximated by two thin ones:</p>
+
+                <p class="text-center"><code>R (3000 × 200) ≈ customer factors (3000 × k) @ product factors (k × 200)</code></p>
+
+                <p>The score for a customer and product is the dot product of the customer's k taste numbers with the product's k numbers: high when the customer's tastes match what the product appeals to. <code>TruncatedSVD</code> finds the best such approximation for a chosen k. It is the same mathematics as PCA from Lesson 9.1, without centering the data first, which is what lets it work directly on a sparse matrix.</p>
+
+                <pre><code class="language-python">from sklearn.decomposition import TruncatedSVD
+
+svd = TruncatedSVD(n_components=5, random_state=42)
+customer_factors = svd.fit_transform(R)      # 3000 x 5
+product_factors = svd.components_            # 5 x 200
+svd_scores = customer_factors @ product_factors
+
+print(customer_factors.shape, product_factors.shape)
+print(f"share of variance captured: {svd.explained_variance_ratio_.sum():.1%}")
+print(f"SVD k=5     HR@10 = {hit_rate(svd_scores):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(3000, 5) (5, 200)
+share of variance captured: 17.1%
+SVD k=5     HR@10 = 0.311</code></pre>
+                </div>
+
+                <p>Five numbers per customer and five per product match item-kNN's hit rate. The approximation captures only 17% of the variance of the 0/1 grid, and that is fine: the goal is not to reproduce every purchase (much of it is noise) but to capture the patterns that predict the <em>next</em> one.</p>
+
+                <h3>🔍 What Did the Factors Learn?</h3>
+                <p>The factors have no names; the algorithm only found directions. You can label them by looking at the products that score highest on each one. The <code>primary_activity</code> column was never shown to the model, so it is a fair check.</p>
+
+                <pre><code class="language-python">activity = products["primary_activity"]
+for f in range(5):
+    top_products = np.argsort(-product_factors[f])[:10]
+    print(f"factor {f}:", activity.iloc[top_products].value_counts().to_dict())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>factor 0: {'general': 8, 'hiking': 2}
+factor 1: {'paddling': 4, 'general': 3, 'running': 3}
+factor 2: {'hiking': 7, 'general': 3}
+factor 3: {'climbing': 10}
+factor 4: {'running': 8, 'general': 1, 'camping': 1}</code></pre>
+                </div>
+
+                <p>Factor 0 is mostly "general" products such as sunscreen and first-aid kits: it is essentially popularity, the things almost everyone buys. Factors 2, 3 and 4 line up cleanly with hiking, climbing and running. Factor 1 is a mixture of paddling, general and running products: SVD factors must be at right angles to each other, so not every one comes out as a single clean theme. Still, the model rediscovered customer tastes from purchases alone. That is also a caution: a factor is a pattern in the data, and naming it is <em>your</em> interpretation, to be checked as we just did.</p>
+
+                <h3>🎚️ How Many Factors?</h3>
+                <p>More factors fit the training grid more closely. Do they recommend better?</p>
+
+                <pre><code class="language-python">ks = [2, 3, 4, 5, 6, 8, 10, 20, 40]
+svd_hr = []
+for k in ks:
+    model = TruncatedSVD(n_components=k, random_state=42)
+    factors = model.fit_transform(R)
+    svd_hr.append(hit_rate(factors @ model.components_))
+print({k: round(float(hr), 3) for k, hr in zip(ks, svd_hr)})
+
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.plot(ks, svd_hr, marker="o", color="#667eea", label="SVD, k factors")
+ax.axhline(hit_rate(knn_scores), color="black", linestyle="--", linewidth=1, label="item-kNN")
+ax.axhline(hit_rate(popularity_scores), color="gray", linestyle=":", linewidth=1.5, label="best sellers")
+ax.set_xscale("log")
+ax.set_xticks(ks, [str(k) for k in ks])
+ax.minorticks_off()
+ax.set_xlabel("Number of factors k (log scale)")
+ax.set_ylabel("Hit rate at 10")
+ax.set_title("A few factors generalize best; many factors memorize")
+ax.legend()
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>{2: 0.22, 3: 0.263, 4: 0.282, 5: 0.311, 6: 0.3, 8: 0.274, 10: 0.258, 20: 0.227, 40: 0.19}</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/applications_recommendation_systems_svd_k.png" alt="Line chart of hit rate at 10 against the number of SVD factors on a log scale. The hit rate rises from 0.22 at 2 factors to a peak of 0.311 at 5 factors, level with the item-kNN line at 0.308, then falls steadily to 0.19 at 40 factors, below the best-seller line at 0.209." width="990" height="440" loading="lazy">
+                    <figcaption>The hit rate peaks at 5 factors and then falls: with 40 factors the model fits each customer's history so closely that it does worse than the best-seller list.</figcaption>
+                </figure>
+
+                <p>This is the bias-variance trade-off from Lesson 3.2 in a new costume. Too few factors cannot represent the different tastes (underfitting); too many start to reproduce each customer's exact past basket, which says little about the next purchase (overfitting). Here the best k is 5. This sweep reads the test purchases to show the shape of the curve; in a real project you would choose k on a separate validation purchase, which is exactly what this lesson's project does.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ We Just Peeked</h4>
+                    <p>Choosing k by its <em>test</em> hit rate uses the test set for tuning, the same mistake as tuning a classifier on the test set. The chart is fine for learning what k does. For a number you would report, choose k on a separate validation item and score the test item once at the end. The project does exactly that.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="content" class="lesson-section">
+                <h2>🏷️ Content-Based Recommendations and Cold Start</h2>
+
+                <p>Collaborative methods need purchase history. A product launched yesterday has none: its column in <code>R</code> is all zeros, so its cosine similarity to every other product is 0 and SVD gives it no factors. It will never be recommended. This is the <strong>cold-start problem</strong>, and it also hits brand-new customers.</p>
+
+                <p>Content-based recommenders avoid it by describing products by their attributes instead of their buyers. Here each product gets a one-hot vector of its <code>primary_activity</code> and <code>category</code>, and similarity is cosine similarity between those vectors. The scoring step is unchanged.</p>
+
+                <pre><code class="language-python">from sklearn.preprocessing import OneHotEncoder
+
+encoder = OneHotEncoder(sparse_output=False)
+attributes = encoder.fit_transform(products[["primary_activity", "category"]])
+content_sim = cosine_similarity(attributes)
+np.fill_diagonal(content_sim, 0)
+content_scores = R @ content_sim
+
+print(attributes.shape)
+print(f"content     HR@10 = {hit_rate(content_scores):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(200, 16)
+content     HR@10 = 0.192</code></pre>
+                </div>
+
+                <p>0.192: below the best-seller list. Two coarse labels cannot tell a best-selling chalk bag from a rarely bought one, and they cannot see that hikers also buy sunscreen. Collaborative signals are much richer, <em>when they exist</em>. Now pretend a paddling product has just launched and has no buyers yet:</p>
+
+                <pre><code class="language-python">new_product = col_of["PDL-3018"]
+print("New product:", names.iloc[new_product])
+print("buyers in training:", int(R[:, new_product].sum()))
+
+cold = R.copy().tolil()
+cold[:, new_product] = 0                       # wipe its history: a brand-new product
+cold_sim = cosine_similarity(cold.tocsr().T)
+print("largest item-kNN similarity:", cold_sim[new_product].max())
+
+closest = np.argsort(-content_sim[new_product])[:3]
+print("content neighbors:", names.iloc[closest].tolist())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>New product: Juniper Vane Alpenglow Spray Skirt
+buyers in training: 23
+largest item-kNN similarity: 0.0
+content neighbors: ['Pinecrest Timberline Kayak Paddle', 'Larkspur Ridge Foothill Deck Bag', 'Juniper Vane Summit Paddle Leash']</code></pre>
+                </div>
+
+                <p>With its history wiped, the product's collaborative similarity to everything is exactly 0, so item-kNN could never put it on a list. Its content neighbors are other paddling products, so a content-based score can show it to customers who already paddle from day one. That is why real systems are <strong>hybrids</strong>: collaborative filtering for products with history, content features (or plain popularity) to bridge the cold start. Exercise 3 builds that bridge.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="beyond" class="lesson-section">
+                <h2>⚖️ Beyond Hit Rate: Coverage and Responsibility</h2>
+
+                <p>Hit rate measures one thing: does the list contain the product the customer bought next. Two lists with the same hit rate can be very different for the shop and for customers. A simple second number is <strong>catalog coverage</strong>: how many different products appear on anyone's list at all. Another is how much of the list space goes to the 20 best sellers.</p>
+
+                <pre><code class="language-python">best_sellers = np.argsort(-popularity)[:20]
+methods = {"best sellers": popularity_scores, "item-kNN": knn_scores,
+           "SVD k=5": svd_scores, "content": content_scores}
+
+for name, scores in methods.items():
+    lists = top_k(scores)
+    print(f"{name:12s} HR@10 {hit_rate(scores):.3f}   products shown: {len(np.unique(lists)):3d} of 200   "
+          f"slots used by top-20 sellers: {np.isin(lists, best_sellers).mean():.0%}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>best sellers HR@10 0.209   products shown:  31 of 200   slots used by top-20 sellers: 100%
+item-kNN     HR@10 0.308   products shown: 161 of 200   slots used by top-20 sellers: 51%
+SVD k=5      HR@10 0.311   products shown: 153 of 200   slots used by top-20 sellers: 51%
+content      HR@10 0.192   products shown: 200 of 200   slots used by top-20 sellers: 20%</code></pre>
+                </div>
+
+                <p>The best-seller list only ever shows 31 products, and every one of its slots goes to the top 20. Item-kNN and SVD reach about 80% of the catalog while hitting more often. The content recommender shows every product but hits less. Nothing here is free: you are choosing a balance between accuracy, variety and fairness to products in the tail.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Recommenders Shape What They Measure</h4>
+                    <p>A recommender is trained on purchases, and its recommendations then cause purchases. Popular products get shown more, sell more, and look even more popular next month: a <strong>feedback loop</strong> that can bury new and niche products and narrow what customers see. Purchase histories are also personal data: a list can reveal things (health, finances, family) that a customer would not want shown on a shared screen or in an email preview. Monitor coverage over time, keep some room for new products, and treat purchase data with the care you would want for your own.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Recommender bugs are sneaky: three of these four produce a list and a number without any error at all.</p>
+
+                <h3>1. Similarity on the Wrong Axis</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">wrong_sim = cosine_similarity(R)       # customers x customers: 3000 x 3000
+R @ wrong_sim</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: matmul: dimension mismatch with signature (n,k=200),(k=3000,m)-&gt;(n,m)</code></pre>
+                </div>
+                <p><strong>What it means:</strong> <code>cosine_similarity</code> compares <em>rows</em>. Given <code>R</code>, it compares customers, which produces a 3000 × 3000 matrix that cannot be multiplied with the 3000 × 200 <code>R</code> in that order. <strong>Fix:</strong> for product-to-product similarity pass <code>R.T</code>, so products are the rows. Always print the shape of a similarity matrix: it should be (products, products) for item-based filtering.</p>
+
+                <h3>2. Recommending What They Already Own</h3>
+
+                <pre><code class="language-python">unmasked = np.argsort(-np.asarray(knn_scores), axis=1)[:, :10]
+print(f"slots filled with products the customer already owns: {np.take_along_axis(owned, unmasked, axis=1).mean():.0%}")
+print(f"HR@10 without the mask: {(unmasked == test_col[:, None]).any(axis=1).mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>slots filled with products the customer already owns: 14%
+HR@10 without the mask: 0.270</code></pre>
+                </div>
+                <p><strong>What happened:</strong> a product is very similar to the other things its owner bought, so owned products score high and crowd the list. Customers see items they already have, and the hit rate drops. <strong>Fix:</strong> mask owned items with <code>-np.inf</code> before ranking, as <code>top_k</code> does. (Some products, like socks or fuel, are bought again and again; for those a separate "buy it again" list makes more sense than mixing them in.)</p>
+
+                <h3>3. Sorting the Wrong Way</h3>
+
+                <pre><code class="language-python">scores = np.array(knn_scores)
+scores[owned] = -np.inf
+backwards = np.argsort(scores, axis=1)[:, :10]       # ascending: the LOWEST scores first
+print(f"HR@10: {(backwards == test_col[:, None]).any(axis=1).mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>HR@10: 0.001</code></pre>
+                </div>
+                <p><strong>What happened:</strong> <code>np.argsort</code> sorts from smallest to largest, so <code>[:, :10]</code> picks the ten <em>least</em> recommended products. Worse, the masked owned items (minus infinity) come first of all. A hit rate far below random (0.05) is the giveaway. <strong>Fix:</strong> sort the negated scores, <code>np.argsort(-scores, axis=1)</code>, or reverse with <code>[:, ::-1]</code>. Always compare with the random baseline: a model that loses to random is usually a bug, not a bad model.</p>
+
+                <h3>4. A Product the Model Has Never Seen</h3>
+
+                <pre data-raises="KeyError"><code class="language-python">col_of["CLM-3999"]      # a climbing product launched after the model was built</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>KeyError: 'CLM-3999'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the model's product index was frozen when it was trained, and new products are not in it. In production this appears as a crash the first time someone asks about a new product. <strong>Fix:</strong> check membership first (<code>"CLM-3999" in col_of.index</code>) and route unknown products to a content-based or popularity fallback, then add them to the index when the model is retrained.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: Picked for You</h2>
+
+                <p>Build the recommender behind Pinecrest's "Picked for You" email, the way you would for real: choose the model on a <strong>validation</strong> item, score it <strong>once</strong> on the test item, then retrain on all the data and write five suggestions per customer to a file for the marketing team. Work in a new notebook called <code>lesson_11_2_project</code>, or a script called <code>picked_for_you.py</code>. Allow about 50 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Three-way split by time <span class="step-time">(10 min)</span></h3>
+                    <p>Each customer's last purchase is the test item and the one before it is the validation item. Everything earlier is for fitting. Every customer has at least three purchases, so everyone keeps at least one for fitting.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+from scipy.sparse import csr_matrix
+from sklearn.decomposition import TruncatedSVD
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.decomposition import NMF, TruncatedSVD
-import warnings
-warnings.filterwarnings('ignore')
-
-# Set random seed
-np.random.seed(42)
-
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
-
-print("="*60)
-print("RECOMMENDATION SYSTEMS FUNDAMENTALS")
-print("="*60)
-
-recommendation_concepts = """
-RECOMMENDATION SYSTEMS KEY CONCEPTS:
-
-1. TYPES OF RECOMMENDATION SYSTEMS:
-   • Collaborative Filtering (CF)
-     - User-based: Find similar users
-     - Item-based: Find similar items
-   • Content-Based Filtering
-     - Item features and user preferences
-   • Hybrid Systems
-     - Combine multiple approaches
-   • Knowledge-Based
-     - Domain knowledge and rules
-
-2. COLLABORATIVE FILTERING:
-   • Memory-based: Direct similarity computation
-   • Model-based: Learn latent factors
-   • Advantages: No domain knowledge needed
-   • Challenges: Cold start, sparsity
-
-3. CONTENT-BASED FILTERING:
-   • Feature extraction from items
-   • User profile learning
-   • Advantages: No cold start for items
-   • Challenges: Limited discovery, feature engineering
-
-4. MATRIX FACTORIZATION:
-   • SVD (Singular Value Decomposition)
-   • NMF (Non-negative Matrix Factorization)
-   • ALS (Alternating Least Squares)
-   • Deep Matrix Factorization
-
-5. EVALUATION METRICS:
-   • RMSE (Root Mean Squared Error)
-   • MAE (Mean Absolute Error)
-   • Precision@K, Recall@K
-   • NDCG (Normalized Discounted Cumulative Gain)
-   • Coverage and Diversity
-
-6. CHALLENGES:
-   • Cold Start Problem
-   • Data Sparsity
-   • Scalability
-   • Popularity Bias
-   • Filter Bubbles
-
-7. APPLICATIONS:
-   • E-commerce: Product recommendations
-   • Streaming: Movies, music, videos
-   • Social Media: Friend suggestions
-   • News: Article recommendations
-   • Education: Course suggestions
-"""
-
-print(recommendation_concepts)</code></pre>
-
-        <h2>Creating Sample Data</h2>
-        
-        <pre class="language-python"><code>class RecommendationDataGenerator:
-    """Generate sample data for recommendation systems"""
-    
-    def __init__(self):
-        self.users = None
-        self.items = None
-        self.ratings = None
-        self.item_features = None
-        
-    def generate_movie_ratings(self, n_users=100, n_movies=50, sparsity=0.1):
-        """Generate synthetic movie ratings data"""
-        
-        # Create user and movie names
-        self.users = [f'User_{i}' for i in range(1, n_users + 1)]
-        self.items = [f'Movie_{i}' for i in range(1, n_movies + 1)]
-        
-        # Generate user preferences (latent factors)
-        n_factors = 5
-        user_factors = np.random.randn(n_users, n_factors)
-        item_factors = np.random.randn(n_movies, n_factors)
-        
-        # Generate ratings based on latent factors
-        true_ratings = np.dot(user_factors, item_factors.T)
-        
-        # Scale to 1-5 range
-        true_ratings = 1 + 4 * (true_ratings - true_ratings.min()) / (true_ratings.max() - true_ratings.min())
-        
-        # Add noise
-        noise = np.random.normal(0, 0.5, (n_users, n_movies))
-        ratings_matrix = true_ratings + noise
-        
-        # Clip to valid range
-        ratings_matrix = np.clip(ratings_matrix, 1, 5)
-        
-        # Create sparsity
-        mask = np.random.random((n_users, n_movies)) < sparsity
-        ratings_matrix[~mask] = 0
-        
-        # Convert to DataFrame
-        self.ratings = pd.DataFrame(ratings_matrix, 
-                                   index=self.users, 
-                                   columns=self.items)
-        
-        # Create long format for easier manipulation
-        ratings_long = []
-        for user_idx, user in enumerate(self.users):
-            for movie_idx, movie in enumerate(self.items):
-                if ratings_matrix[user_idx, movie_idx] > 0:
-                    ratings_long.append({
-                        'user': user,
-                        'item': movie,
-                        'rating': ratings_matrix[user_idx, movie_idx]
-                    })
-        
-        self.ratings_long = pd.DataFrame(ratings_long)
-        
-        return self.ratings, self.ratings_long
-    
-    def generate_item_features(self):
-        """Generate item features for content-based filtering"""
-        
-        genres = ['Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Romance']
-        
-        # Generate random genre assignments (multiple genres per movie)
-        item_features = []
-        
-        for movie in self.items:
-            movie_genres = np.random.choice(genres, 
-                                          size=np.random.randint(1, 4), 
-                                          replace=False)
-            
-            # Create feature vector
-            feature_vec = {genre: 1 if genre in movie_genres else 0 
-                          for genre in genres}
-            feature_vec['item'] = movie
-            
-            # Add some continuous features
-            feature_vec['year'] = np.random.randint(1980, 2024)
-            feature_vec['duration'] = np.random.randint(80, 180)
-            feature_vec['budget'] = np.random.randint(1, 200)  # in millions
-            
-            item_features.append(feature_vec)
-        
-        self.item_features = pd.DataFrame(item_features)
-        self.item_features.set_index('item', inplace=True)
-        
-        return self.item_features
-    
-    def split_data(self, test_size=0.2):
-        """Split ratings into train and test sets"""
-        
-        train_data = []
-        test_data = []
-        
-        # Split by user to maintain user behavior
-        for user in self.users:
-            user_ratings = self.ratings_long[self.ratings_long['user'] == user]
-            
-            if len(user_ratings) > 1:
-                # Keep at least one rating in training
-                n_test = max(1, int(len(user_ratings) * test_size))
-                n_train = len(user_ratings) - n_test
-                
-                # Random split
-                indices = np.random.permutation(len(user_ratings))
-                train_indices = indices[:n_train]
-                test_indices = indices[n_train:]
-                
-                train_data.append(user_ratings.iloc[train_indices])
-                test_data.append(user_ratings.iloc[test_indices])
-            else:
-                # If user has only one rating, keep in training
-                train_data.append(user_ratings)
-        
-        train_df = pd.concat(train_data, ignore_index=True)
-        test_df = pd.concat(test_data, ignore_index=True) if test_data else pd.DataFrame()
-        
-        return train_df, test_df
-
-# Generate sample data
-data_gen = RecommendationDataGenerator()
-ratings_matrix, ratings_df = data_gen.generate_movie_ratings(n_users=100, n_movies=50, sparsity=0.15)
-item_features = data_gen.generate_item_features()
-
-print("\n" + "="*60)
-print("SAMPLE DATA GENERATED")
-print("="*60)
-
-print(f"\nRatings Matrix Shape: {ratings_matrix.shape}")
-print(f"Number of ratings: {(ratings_matrix > 0).sum().sum()}")
-print(f"Sparsity: {1 - (ratings_matrix > 0).sum().sum() / (ratings_matrix.shape[0] * ratings_matrix.shape[1]):.2%}")
-
-print("\nSample Ratings:")
-print(ratings_df.head())
-
-print("\nRating Distribution:")
-print(ratings_df['rating'].describe())
-
-# Visualize ratings distribution
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-
-# Rating distribution
-axes[0].hist(ratings_df['rating'], bins=20, edgecolor='black', alpha=0.7)
-axes[0].set_xlabel('Rating')
-axes[0].set_ylabel('Frequency')
-axes[0].set_title('Rating Distribution')
-axes[0].grid(True, alpha=0.3)
-
-# Ratings per user
-ratings_per_user = ratings_df.groupby('user').size()
-axes[1].hist(ratings_per_user, bins=20, edgecolor='black', alpha=0.7, color='green')
-axes[1].set_xlabel('Number of Ratings')
-axes[1].set_ylabel('Number of Users')
-axes[1].set_title('Ratings per User Distribution')
-axes[1].grid(True, alpha=0.3)
-
-plt.suptitle('Recommendation System Data Characteristics', fontsize=14, y=1.02)
-plt.tight_layout()
-plt.show()</code></pre>
-
-        <h2>Collaborative Filtering</h2>
-        
-        <pre class="language-python"><code>class CollaborativeFiltering:
-    """Collaborative filtering recommendation methods"""
-    
-    def __init__(self, ratings_matrix):
-        self.ratings_matrix = ratings_matrix
-        self.similarity_matrix = None
-        
-    def user_based_cf(self, target_user, n_recommendations=5):
-        """User-based collaborative filtering"""
-        
-        # Calculate user similarity matrix
-        user_ratings = self.ratings_matrix.values
-        
-        # Replace 0s with NaN for similarity calculation
-        user_ratings_nan = user_ratings.copy()
-        user_ratings_nan[user_ratings_nan == 0] = np.nan
-        
-        # Calculate cosine similarity between users
-        # Create binary matrix for rated items
-        rated_mask = ~np.isnan(user_ratings_nan)
-        
-        # Calculate similarity
-        similarity_matrix = []
-        for i in range(len(user_ratings_nan)):
-            user_sims = []
-            for j in range(len(user_ratings_nan)):
-                # Find common rated items
-                common_items = rated_mask[i] & rated_mask[j]
-                
-                if common_items.sum() > 0:
-                    # Calculate cosine similarity on common items
-                    user_i = user_ratings_nan[i][common_items]
-                    user_j = user_ratings_nan[j][common_items]
-                    
-                    # Handle NaN values
-                    if not np.isnan(user_i).all() and not np.isnan(user_j).all():
-                        sim = np.dot(user_i, user_j) / (np.linalg.norm(user_i) * np.linalg.norm(user_j))
-                    else:
-                        sim = 0
-                else:
-                    sim = 0
-                
-                user_sims.append(sim)
-            similarity_matrix.append(user_sims)
-        
-        similarity_matrix = np.array(similarity_matrix)
-        
-        # Get target user index
-        user_idx = self.ratings_matrix.index.get_loc(target_user)
-        
-        # Get similar users (excluding self)
-        user_similarities = similarity_matrix[user_idx].copy()
-        user_similarities[user_idx] = -1  # Exclude self
-        
-        # Get top similar users
-        similar_users_idx = np.argsort(user_similarities)[::-1][:10]
-        
-        # Predict ratings for unrated items
-        target_ratings = user_ratings[user_idx]
-        predictions = {}
-        
-        for item_idx in range(len(target_ratings)):
-            if target_ratings[item_idx] == 0:  # Unrated item
-                # Weighted average of similar users' ratings
-                weighted_sum = 0
-                similarity_sum = 0
-                
-                for similar_user_idx in similar_users_idx:
-                    if user_ratings[similar_user_idx, item_idx] > 0:
-                        weighted_sum += (user_similarities[similar_user_idx] * 
-                                       user_ratings[similar_user_idx, item_idx])
-                        similarity_sum += abs(user_similarities[similar_user_idx])
-                
-                if similarity_sum > 0:
-                    predicted_rating = weighted_sum / similarity_sum
-                    predictions[self.ratings_matrix.columns[item_idx]] = predicted_rating
-        
-        # Sort and return top recommendations
-        recommendations = sorted(predictions.items(), key=lambda x: x[1], reverse=True)[:n_recommendations]
-        
-        return recommendations, user_similarities
-    
-    def item_based_cf(self, target_user, n_recommendations=5):
-        """Item-based collaborative filtering"""
-        
-        # Calculate item similarity matrix
-        item_ratings = self.ratings_matrix.T.values
-        
-        # Calculate cosine similarity between items
-        item_similarity = cosine_similarity(item_ratings)
-        
-        # Get user's rated items
-        user_idx = self.ratings_matrix.index.get_loc(target_user)
-        user_ratings = self.ratings_matrix.values[user_idx]
-        rated_items = np.where(user_ratings > 0)[0]
-        
-        # Predict ratings for unrated items
-        predictions = {}
-        
-        for item_idx in range(len(user_ratings)):
-            if user_ratings[item_idx] == 0:  # Unrated item
-                # Weighted average based on item similarity
-                weighted_sum = 0
-                similarity_sum = 0
-                
-                for rated_item_idx in rated_items:
-                    similarity = item_similarity[item_idx, rated_item_idx]
-                    weighted_sum += similarity * user_ratings[rated_item_idx]
-                    similarity_sum += abs(similarity)
-                
-                if similarity_sum > 0:
-                    predicted_rating = weighted_sum / similarity_sum
-                    predictions[self.ratings_matrix.columns[item_idx]] = predicted_rating
-        
-        # Sort and return top recommendations
-        recommendations = sorted(predictions.items(), key=lambda x: x[1], reverse=True)[:n_recommendations]
-        
-        return recommendations, item_similarity
-    
-    def matrix_factorization_svd(self, n_factors=10, n_recommendations=5):
-        """Matrix factorization using SVD"""
-        
-        # Convert to numpy array
-        ratings = self.ratings_matrix.values
-        
-        # Replace 0s with mean rating
-        ratings_filled = ratings.copy()
-        mean_rating = ratings[ratings > 0].mean()
-        ratings_filled[ratings_filled == 0] = mean_rating
-        
-        # Normalize by subtracting mean
-        user_ratings_mean = np.mean(ratings_filled, axis=1)
-        ratings_normalized = ratings_filled - user_ratings_mean.reshape(-1, 1)
-        
-        # Perform SVD
-        U, sigma, Vt = svds(ratings_normalized, k=n_factors)
-        
-        # Convert sigma to diagonal matrix
-        sigma = np.diag(sigma)
-        
-        # Reconstruct ratings matrix
-        predicted_ratings = np.dot(np.dot(U, sigma), Vt) + user_ratings_mean.reshape(-1, 1)
-        
-        # Create predictions DataFrame
-        predictions_df = pd.DataFrame(predicted_ratings, 
-                                     index=self.ratings_matrix.index,
-                                     columns=self.ratings_matrix.columns)
-        
-        return predictions_df, U, sigma, Vt
-    
-    def evaluate_predictions(self, test_data, predictions_df):
-        """Evaluate recommendation predictions"""
-        
-        actual_ratings = []
-        predicted_ratings = []
-        
-        for _, row in test_data.iterrows():
-            user = row['user']
-            item = row['item']
-            actual = row['rating']
-            
-            if user in predictions_df.index and item in predictions_df.columns:
-                predicted = predictions_df.loc[user, item]
-                actual_ratings.append(actual)
-                predicted_ratings.append(predicted)
-        
-        if actual_ratings:
-            rmse = np.sqrt(mean_squared_error(actual_ratings, predicted_ratings))
-            mae = mean_absolute_error(actual_ratings, predicted_ratings)
-            
-            return {'rmse': rmse, 'mae': mae}
-        else:
-            return {'rmse': None, 'mae': None}
-
-# Collaborative filtering demonstration
-cf = CollaborativeFiltering(ratings_matrix)
-
-print("\n" + "="*60)
-print("COLLABORATIVE FILTERING")
-print("="*60)
-
-# User-based CF
-target_user = 'User_1'
-user_recommendations, user_sims = cf.user_based_cf(target_user, n_recommendations=5)
-
-print(f"\nUser-based Recommendations for {target_user}:")
-for item, score in user_recommendations:
-    print(f"  {item}: {score:.3f}")
-
-# Item-based CF
-item_recommendations, item_sims = cf.item_based_cf(target_user, n_recommendations=5)
-
-print(f"\nItem-based Recommendations for {target_user}:")
-for item, score in item_recommendations:
-    print(f"  {item}: {score:.3f}")
-
-# Matrix Factorization
-predictions_df, U, sigma, Vt = cf.matrix_factorization_svd(n_factors=10)
-
-print("\nMatrix Factorization (SVD) Results:")
-print(f"  User factors shape: {U.shape}")
-print(f"  Singular values shape: {sigma.shape}")
-print(f"  Item factors shape: {Vt.shape}")
-
-# Visualize similarity matrices
-fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-# User similarity heatmap (sample)
-sample_users = 20
-im1 = axes[0].imshow(user_sims[:sample_users, :sample_users], cmap='coolwarm', aspect='auto')
-axes[0].set_title('User Similarity Matrix (Sample)')
-axes[0].set_xlabel('User Index')
-axes[0].set_ylabel('User Index')
-plt.colorbar(im1, ax=axes[0])
-
-# Item similarity heatmap (sample)
-sample_items = 20
-im2 = axes[1].imshow(item_sims[:sample_items, :sample_items], cmap='coolwarm', aspect='auto')
-axes[1].set_title('Item Similarity Matrix (Sample)')
-axes[1].set_xlabel('Item Index')
-axes[1].set_ylabel('Item Index')
-plt.colorbar(im2, ax=axes[1])
-
-# Predicted vs Original ratings
-original_sample = ratings_matrix.values[:10, :10]
-predicted_sample = predictions_df.values[:10, :10]
-
-im3 = axes[2].imshow(np.abs(predicted_sample - original_sample), cmap='viridis', aspect='auto')
-axes[2].set_title('Prediction Error Matrix (Sample)')
-axes[2].set_xlabel('Item Index')
-axes[2].set_ylabel('User Index')
-plt.colorbar(im3, ax=axes[2])
-
-plt.suptitle('Collaborative Filtering Analysis', fontsize=14, y=1.02)
-plt.tight_layout()
-plt.show()</code></pre>
-
-        <h2>Content-Based Filtering</h2>
-        
-        <pre class="language-python"><code>class ContentBasedFiltering:
-    """Content-based recommendation methods"""
-    
-    def __init__(self, ratings_df, item_features):
-        self.ratings_df = ratings_df
-        self.item_features = item_features
-        self.user_profiles = {}
-        
-    def build_user_profile(self, user):
-        """Build user profile based on rated items"""
-        
-        # Get user's rated items
-        user_ratings = self.ratings_df[self.ratings_df['user'] == user]
-        
-        if len(user_ratings) == 0:
-            return None
-        
-        # Weight item features by user ratings
-        weighted_features = []
-        
-        for _, row in user_ratings.iterrows():
-            item = row['item']
-            rating = row['rating']
-            
-            if item in self.item_features.index:
-                item_feat = self.item_features.loc[item].values
-                weighted_features.append(rating * item_feat)
-        
-        if weighted_features:
-            # Average weighted features
-            user_profile = np.mean(weighted_features, axis=0)
-            self.user_profiles[user] = user_profile
-            
-            return user_profile
-        
-        return None
-    
-    def recommend_content_based(self, user, n_recommendations=5):
-        """Generate recommendations based on content similarity"""
-        
-        # Build or retrieve user profile
-        if user not in self.user_profiles:
-            user_profile = self.build_user_profile(user)
-            if user_profile is None:
-                return []
-        else:
-            user_profile = self.user_profiles[user]
-        
-        # Get user's already rated items
-        user_items = set(self.ratings_df[self.ratings_df['user'] == user]['item'].values)
-        
-        # Calculate similarity between user profile and all items
-        item_similarities = {}
-        
-        for item in self.item_features.index:
-            if item not in user_items:  # Only unrated items
-                item_feat = self.item_features.loc[item].values
-                
-                # Cosine similarity
-                similarity = np.dot(user_profile, item_feat) / (
-                    np.linalg.norm(user_profile) * np.linalg.norm(item_feat)
-                )
-                
-                item_similarities[item] = similarity
-        
-        # Sort and return top recommendations
-        recommendations = sorted(item_similarities.items(), 
-                               key=lambda x: x[1], reverse=True)[:n_recommendations]
-        
-        return recommendations
-    
-    def hybrid_recommendation(self, user, cf_predictions, weight_cf=0.5, n_recommendations=5):
-        """Hybrid approach combining collaborative and content-based"""
-        
-        # Get content-based recommendations
-        cb_recommendations = self.recommend_content_based(user, n_recommendations=20)
-        cb_scores = {item: score for item, score in cb_recommendations}
-        
-        # Normalize scores
-        if cb_scores:
-            max_cb = max(cb_scores.values())
-            min_cb = min(cb_scores.values())
-            if max_cb > min_cb:
-                cb_scores = {item: (score - min_cb) / (max_cb - min_cb) 
-                           for item, score in cb_scores.items()}
-        
-        # Get CF predictions for the user
-        cf_scores = {}
-        if user in cf_predictions.index:
-            user_cf_predictions = cf_predictions.loc[user]
-            # Get unrated items
-            user_items = set(self.ratings_df[self.ratings_df['user'] == user]['item'].values)
-            
-            for item in cf_predictions.columns:
-                if item not in user_items:
-                    cf_scores[item] = user_cf_predictions[item]
-        
-        # Normalize CF scores
-        if cf_scores:
-            max_cf = max(cf_scores.values())
-            min_cf = min(cf_scores.values())
-            if max_cf > min_cf:
-                cf_scores = {item: (score - min_cf) / (max_cf - min_cf) 
-                           for item, score in cf_scores.items()}
-        
-        # Combine scores
-        hybrid_scores = {}
-        all_items = set(cb_scores.keys()) | set(cf_scores.keys())
-        
-        for item in all_items:
-            cb_score = cb_scores.get(item, 0)
-            cf_score = cf_scores.get(item, 0)
-            
-            hybrid_score = weight_cf * cf_score + (1 - weight_cf) * cb_score
-            hybrid_scores[item] = hybrid_score
-        
-        # Sort and return top recommendations
-        recommendations = sorted(hybrid_scores.items(), 
-                               key=lambda x: x[1], reverse=True)[:n_recommendations]
-        
-        return recommendations
-
-# Content-based filtering demonstration
-cbf = ContentBasedFiltering(ratings_df, item_features)
-
-print("\n" + "="*60)
-print("CONTENT-BASED FILTERING")
-print("="*60)
-
-# Build user profile
-user_profile = cbf.build_user_profile(target_user)
-
-print(f"\nUser Profile for {target_user}:")
-print(f"  Profile shape: {user_profile.shape}")
-print(f"  Average genre preferences:")
-for idx, genre in enumerate(['Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Romance']):
-    print(f"    {genre}: {user_profile[idx]:.3f}")
-
-# Content-based recommendations
-cb_recommendations = cbf.recommend_content_based(target_user, n_recommendations=5)
-
-print(f"\nContent-based Recommendations for {target_user}:")
-for item, score in cb_recommendations:
-    print(f"  {item}: {score:.3f}")
-
-# Hybrid recommendations
-hybrid_recommendations = cbf.hybrid_recommendation(target_user, predictions_df, 
-                                                  weight_cf=0.6, n_recommendations=5)
-
-print(f"\nHybrid Recommendations for {target_user} (60% CF, 40% CB):")
-for item, score in hybrid_recommendations:
-    print(f"  {item}: {score:.3f}")</code></pre>
-
-        <h2>Advanced Techniques</h2>
-        
-        <pre class="language-python"><code>class AdvancedRecommendation:
-    """Advanced recommendation techniques"""
-    
-    def __init__(self, ratings_matrix):
-        self.ratings_matrix = ratings_matrix
-        
-    def nmf_factorization(self, n_components=10):
-        """Non-negative Matrix Factorization"""
-        
-        # Prepare data
-        ratings = self.ratings_matrix.values
-        ratings_filled = ratings.copy()
-        
-        # Fill missing values with small positive value
-        ratings_filled[ratings_filled == 0] = 0.01
-        
-        # Apply NMF
-        nmf = NMF(n_components=n_components, init='random', random_state=42)
-        user_factors = nmf.fit_transform(ratings_filled)
-        item_factors = nmf.components_
-        
-        # Reconstruct ratings
-        predicted_ratings = np.dot(user_factors, item_factors)
-        
-        predictions_df = pd.DataFrame(predicted_ratings,
-                                     index=self.ratings_matrix.index,
-                                     columns=self.ratings_matrix.columns)
-        
-        return predictions_df, user_factors, item_factors
-    
-    def popularity_based(self, n_recommendations=5):
-        """Simple popularity-based recommendations"""
-        
-        # Calculate item popularity
-        ratings = self.ratings_matrix.values
-        item_popularity = {}
-        
-        for item_idx, item_name in enumerate(self.ratings_matrix.columns):
-            item_ratings = ratings[:, item_idx]
-            rated_count = np.sum(item_ratings > 0)
-            avg_rating = np.mean(item_ratings[item_ratings > 0]) if rated_count > 0 else 0
-            
-            # Combine rating count and average rating
-            popularity_score = rated_count * 0.3 + avg_rating * 0.7
-            item_popularity[item_name] = {
-                'score': popularity_score,
-                'count': rated_count,
-                'avg_rating': avg_rating
-            }
-        
-        # Sort by popularity
-        popular_items = sorted(item_popularity.items(), 
-                             key=lambda x: x[1]['score'], reverse=True)
-        
-        return popular_items[:n_recommendations]
-    
-    def association_rules(self, min_support=0.1):
-        """Association rule-based recommendations"""
-        
-        # Convert to binary matrix (rated/not rated)
-        binary_matrix = (self.ratings_matrix.values > 0).astype(int)
-        
-        # Find frequent itemsets
-        item_sets = {}
-        n_users = len(binary_matrix)
-        
-        # Single items
-        for item_idx, item_name in enumerate(self.ratings_matrix.columns):
-            support = np.sum(binary_matrix[:, item_idx]) / n_users
-            if support >= min_support:
-                item_sets[frozenset([item_name])] = support
-        
-        # Pairs of items
-        for i in range(len(self.ratings_matrix.columns)):
-            for j in range(i+1, len(self.ratings_matrix.columns)):
-                item_i = self.ratings_matrix.columns[i]
-                item_j = self.ratings_matrix.columns[j]
-                
-                # Users who rated both items
-                both_rated = binary_matrix[:, i] & binary_matrix[:, j]
-                support = np.sum(both_rated) / n_users
-                
-                if support >= min_support:
-                    item_sets[frozenset([item_i, item_j])] = support
-        
-        # Generate association rules
-        rules = []
-        for itemset, support in item_sets.items():
-            if len(itemset) == 2:
-                items = list(itemset)
-                
-                # Rule: item_i -> item_j
-                for i in range(2):
-                    antecedent = items[i]
-                    consequent = items[1-i]
-                    
-                    # Calculate confidence
-                    antecedent_support = item_sets.get(frozenset([antecedent]), 0)
-                    if antecedent_support > 0:
-                        confidence = support / antecedent_support
-                        
-                        # Calculate lift
-                        consequent_support = item_sets.get(frozenset([consequent]), 0)
-                        if consequent_support > 0:
-                            lift = confidence / consequent_support
-                        else:
-                            lift = 0
-                        
-                        rules.append({
-                            'antecedent': antecedent,
-                            'consequent': consequent,
-                            'support': support,
-                            'confidence': confidence,
-                            'lift': lift
-                        })
-        
-        # Sort by lift
-        rules = sorted(rules, key=lambda x: x['lift'], reverse=True)
-        
-        return rules
-    
-    def diversity_reranking(self, recommendations, item_features, diversity_weight=0.3):
-        """Re-rank recommendations to increase diversity"""
-        
-        if len(recommendations) <= 1:
-            return recommendations
-        
-        # Extract item names from recommendations
-        items = [item for item, _ in recommendations[:10]]  # Consider top 10
-        
-        # Calculate pairwise similarities
-        similarities = []
-        for i, item_i in enumerate(items):
-            for j, item_j in enumerate(items):
-                if i != j and item_i in item_features.index and item_j in item_features.index:
-                    feat_i = item_features.loc[item_i].values
-                    feat_j = item_features.loc[item_j].values
-                    
-                    sim = np.dot(feat_i, feat_j) / (np.linalg.norm(feat_i) * np.linalg.norm(feat_j))
-                    similarities.append(sim)
-        
-        avg_similarity = np.mean(similarities) if similarities else 0
-        
-        # Re-rank with diversity penalty
-        reranked = []
-        remaining = list(recommendations)
-        
-        # Add first item
-        reranked.append(remaining.pop(0))
-        
-        while remaining and len(reranked) < 5:
-            best_score = -np.inf
-            best_idx = 0
-            
-            for idx, (item, score) in enumerate(remaining):
-                # Calculate diversity from already selected items
-                diversity = 0
-                for selected_item, _ in reranked:
-                    if item in item_features.index and selected_item in item_features.index:
-                        feat_i = item_features.loc[item].values
-                        feat_s = item_features.loc[selected_item].values
-                        
-                        sim = np.dot(feat_i, feat_s) / (np.linalg.norm(feat_i) * np.linalg.norm(feat_s))
-                        diversity += (1 - sim)
-                
-                diversity = diversity / len(reranked)
-                
-                # Combine score and diversity
-                combined_score = (1 - diversity_weight) * score + diversity_weight * diversity
-                
-                if combined_score > best_score:
-                    best_score = combined_score
-                    best_idx = idx
-            
-            reranked.append(remaining.pop(best_idx))
-        
-        return reranked
-
-# Advanced techniques
-advanced = AdvancedRecommendation(ratings_matrix)
-
-print("\n" + "="*60)
-print("ADVANCED RECOMMENDATION TECHNIQUES")
-print("="*60)
-
-# NMF
-nmf_predictions, user_factors, item_factors = advanced.nmf_factorization(n_components=10)
-print("\nNMF Factorization:")
-print(f"  User factors shape: {user_factors.shape}")
-print(f"  Item factors shape: {item_factors.shape}")
-
-# Popularity-based
-popular_items = advanced.popularity_based(n_recommendations=5)
-print("\nMost Popular Items:")
-for item, stats in popular_items:
-    print(f"  {item}: Score={stats['score']:.2f}, Count={stats['count']}, Avg={stats['avg_rating']:.2f}")
-
-# Association rules
-rules = advanced.association_rules(min_support=0.05)
-print("\nTop Association Rules:")
-for rule in rules[:5]:
-    print(f"  {rule['antecedent']} → {rule['consequent']}")
-    print(f"    Support: {rule['support']:.3f}, Confidence: {rule['confidence']:.3f}, Lift: {rule['lift']:.3f}")
-
-# Diversity re-ranking
-print("\nDiversity Re-ranking Example:")
-original_recs = cb_recommendations[:5]
-diverse_recs = advanced.diversity_reranking(cb_recommendations, item_features, diversity_weight=0.4)
-
-print("  Original order:")
-for item, score in original_recs:
-    print(f"    {item}: {score:.3f}")
-    
-print("  After diversity re-ranking:")
-for item, score in diverse_recs:
-    print(f"    {item}: {score:.3f}")</code></pre>
-
-        <h2>Evaluation and Metrics</h2>
-        
-        <pre class="language-python"><code>class RecommendationEvaluator:
-    """Evaluate recommendation system performance"""
-    
-    def __init__(self):
-        self.metrics = {}
-        
-    def evaluate_rating_prediction(self, actual_ratings, predicted_ratings):
-        """Evaluate rating prediction accuracy"""
-        
-        # RMSE
-        rmse = np.sqrt(mean_squared_error(actual_ratings, predicted_ratings))
-        
-        # MAE
-        mae = mean_absolute_error(actual_ratings, predicted_ratings)
-        
-        # Correlation
-        correlation = np.corrcoef(actual_ratings, predicted_ratings)[0, 1]
-        
-        return {
-            'rmse': rmse,
-            'mae': mae,
-            'correlation': correlation
-        }
-    
-    def precision_recall_at_k(self, recommendations, relevant_items, k=5):
-        """Calculate precision and recall at K"""
-        
-        # Get top K recommendations
-        top_k = recommendations[:k]
-        recommended_items = set([item for item, _ in top_k])
-        
-        # Calculate metrics
-        relevant_set = set(relevant_items)
-        
-        if len(recommended_items) > 0:
-            precision = len(recommended_items & relevant_set) / len(recommended_items)
-        else:
-            precision = 0
-            
-        if len(relevant_set) > 0:
-            recall = len(recommended_items & relevant_set) / len(relevant_set)
-        else:
-            recall = 0
-        
-        # F1 score
-        if precision + recall > 0:
-            f1 = 2 * precision * recall / (precision + recall)
-        else:
-            f1 = 0
-        
-        return {
-            'precision@k': precision,
-            'recall@k': recall,
-            'f1@k': f1
-        }
-    
-    def coverage(self, all_recommendations, all_items):
-        """Calculate catalog coverage"""
-        
-        recommended_items = set()
-        for recs in all_recommendations:
-            for item, _ in recs:
-                recommended_items.add(item)
-        
-        coverage = len(recommended_items) / len(all_items)
-        
-        return coverage
-    
-    def novelty(self, recommendations, item_popularity):
-        """Calculate recommendation novelty"""
-        
-        novelty_scores = []
-        
-        for item, _ in recommendations:
-            if item in item_popularity:
-                # Novelty inversely related to popularity
-                novelty = 1 / (1 + item_popularity[item])
-                novelty_scores.append(novelty)
-        
-        return np.mean(novelty_scores) if novelty_scores else 0
-    
-    def compare_methods(self, methods_results):
-        """Compare different recommendation methods"""
-        
-        comparison_df = pd.DataFrame(methods_results).T
-        
-        # Visualize comparison
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-        
-        # RMSE comparison
-        if 'rmse' in comparison_df.columns:
-            axes[0, 0].bar(comparison_df.index, comparison_df['rmse'])
-            axes[0, 0].set_ylabel('RMSE')
-            axes[0, 0].set_title('Root Mean Squared Error (Lower is Better)')
-            axes[0, 0].tick_params(axis='x', rotation=45)
-            
-        # Precision comparison
-        if 'precision' in comparison_df.columns:
-            axes[0, 1].bar(comparison_df.index, comparison_df['precision'])
-            axes[0, 1].set_ylabel('Precision')
-            axes[0, 1].set_title('Precision (Higher is Better)')
-            axes[0, 1].tick_params(axis='x', rotation=45)
-        
-        # Coverage comparison
-        if 'coverage' in comparison_df.columns:
-            axes[1, 0].bar(comparison_df.index, comparison_df['coverage'])
-            axes[1, 0].set_ylabel('Coverage')
-            axes[1, 0].set_title('Catalog Coverage (Higher is Better)')
-            axes[1, 0].tick_params(axis='x', rotation=45)
-        
-        # Overall scores (normalized)
-        normalized_scores = comparison_df.copy()
-        for col in normalized_scores.columns:
-            if col in ['rmse', 'mae']:  # Lower is better
-                normalized_scores[col] = 1 / (1 + normalized_scores[col])
-            else:  # Higher is better
-                max_val = normalized_scores[col].max()
-                if max_val > 0:
-                    normalized_scores[col] = normalized_scores[col] / max_val
-        
-        overall_scores = normalized_scores.mean(axis=1)
-        axes[1, 1].bar(overall_scores.index, overall_scores)
-        axes[1, 1].set_ylabel('Score')
-        axes[1, 1].set_title('Overall Performance (Normalized)')
-        axes[1, 1].tick_params(axis='x', rotation=45)
-        
-        plt.suptitle('Recommendation Methods Comparison', fontsize=14, y=1.02)
-        plt.tight_layout()
-        plt.show()
-        
-        return comparison_df
-
-# Evaluation
-evaluator = RecommendationEvaluator()
-
-print("\n" + "="*60)
-print("EVALUATION AND COMPARISON")
-print("="*60)
-
-# Split data for evaluation
-train_data, test_data = data_gen.split_data(test_size=0.2)
-
-print(f"\nData Split:")
-print(f"  Training ratings: {len(train_data)}")
-print(f"  Test ratings: {len(test_data)}")
-
-# Evaluate different methods
-methods_results = {}
-
-# Evaluate SVD
-if len(test_data) > 0:
-    svd_eval = cf.evaluate_predictions(test_data, predictions_df)
-    if svd_eval['rmse'] is not None:
-        methods_results['SVD'] = {
-            'rmse': svd_eval['rmse'],
-            'mae': svd_eval['mae'],
-            'coverage': 0.8,  # Example value
-            'precision': 0.75  # Example value
-        }
-
-# Evaluate NMF
-nmf_eval = cf.evaluate_predictions(test_data, nmf_predictions)
-if nmf_eval['rmse'] is not None:
-    methods_results['NMF'] = {
-        'rmse': nmf_eval['rmse'],
-        'mae': nmf_eval['mae'],
-        'coverage': 0.75,
-        'precision': 0.7
-    }
-
-# Add example values for other methods
-methods_results['User-based CF'] = {
-    'rmse': 0.95,
-    'mae': 0.72,
-    'coverage': 0.6,
-    'precision': 0.65
-}
-
-methods_results['Content-based'] = {
-    'rmse': 1.05,
-    'mae': 0.8,
-    'coverage': 0.9,
-    'precision': 0.6
-}
-
-methods_results['Hybrid'] = {
-    'rmse': 0.9,
-    'mae': 0.7,
-    'coverage': 0.85,
-    'precision': 0.8
-}
-
-print("\nMethods Comparison:")
-comparison_df = evaluator.compare_methods(methods_results)
-print(comparison_df)</code></pre>
-
-        <h2>Best Practices and Implementation Tips</h2>
-        
-        <pre class="language-python"><code>print("\n" + "="*60)
-print("RECOMMENDATION SYSTEM BEST PRACTICES")
-print("="*60)
-
-best_practices = """
-KEY GUIDELINES:
-
-1. DATA QUALITY:
-   • Handle implicit vs explicit feedback
-   • Address rating bias (normalization)
-   • Consider temporal dynamics
-   • Handle missing data appropriately
-   • Validate data consistency
-
-2. COLD START SOLUTIONS:
-   • New Users: Use demographics, popular items
-   • New Items: Use content features, similar items
-   • Hybrid approaches for robustness
-   • Onboarding questionnaires
-   • Transfer learning from similar domains
-
-3. SCALABILITY:
-   • Use approximate algorithms (LSH, random sampling)
-   • Distributed computing (Spark, Dask)
-   • Caching and pre-computation
-   • Incremental learning
-   • Efficient data structures
-
-4. ALGORITHM SELECTION:
-   • Sparse data: Use model-based CF
-   • Rich features: Content-based or hybrid
-   • Large scale: Matrix factorization
-   • Real-time: Pre-compute or simple methods
-   • Explainability needed: Item-based or content
-
-5. EVALUATION STRATEGY:
-   • Offline: Historical data, cross-validation
-   • Online: A/B testing, interleaving
-   • Business metrics: CTR, conversion, retention
-   • User satisfaction surveys
-   • Long-term engagement tracking
-
-6. DIVERSITY & FAIRNESS:
-   • Avoid filter bubbles
-   • Promote long-tail items
-   • Consider demographic parity
-   • Temporal diversity
-   • Explanation diversity
-
-7. IMPLEMENTATION TIPS:
-   • Start simple, iterate
-   • Monitor performance metrics
-   • Handle edge cases gracefully
-   • Implement fallback strategies
-   • Regular model updates
-"""
-
-print(best_practices)
-
-# Implementation checklist
-implementation_checklist = """
-IMPLEMENTATION CHECKLIST:
-
-□ Data Pipeline
-  - Data collection and storage
-  - ETL processes
-  - Real-time data streaming
-  - Data quality monitoring
-
-□ Model Development
-  - Baseline model (popularity)
-  - Collaborative filtering
-  - Content-based filtering
-  - Hybrid approach
-  - Deep learning (if applicable)
-
-□ Evaluation Framework
-  - Offline evaluation metrics
-  - A/B testing infrastructure
-  - Business KPI tracking
-  - User feedback collection
-
-□ Production System
-  - Model serving API
-  - Caching layer
-  - Load balancing
-  - Monitoring and alerting
-  - Fallback mechanisms
-
-□ Optimization
-  - Query optimization
-  - Model compression
-  - Distributed computing
-  - Incremental updates
-  - Edge computing
-
-□ User Experience
-  - Explanation generation
-  - Diversity controls
-  - Feedback collection
-  - Personalization settings
-  - Privacy controls
-"""
-
-print(implementation_checklist)</code></pre>
-
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Build a Movie Recommendation System</h3>
-            <p>Create a complete movie recommendation system:</p>
-            <ol>
-                <li>Load MovieLens dataset</li>
-                <li>Implement user-based and item-based CF</li>
-                <li>Add content features (genres, year, cast)</li>
-                <li>Build hybrid recommender</li>
-                <li>Implement evaluation metrics</li>
-                <li>Create API for serving recommendations</li>
-            </ol>
+
+interactions = pd.read_csv("data/interactions.csv").sort_values(["customer_id", "last_purchase_date", "product_id"])
+products = pd.read_csv("data/products_ml.csv")
+
+test = interactions.groupby("customer_id").tail(1)
+rest = interactions.drop(test.index)
+valid = rest.groupby("customer_id").tail(1)
+fit_rows = rest.drop(valid.index)
+
+print(f"fit {len(fit_rows):,}   validation {len(valid):,}   test {len(test):,}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>fit 26,178   validation 3,000   test 3,000</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Reusable helpers <span class="step-time">(10 min)</span></h3>
+                    <p>Write the matrix builder and the evaluation as functions of their inputs, so the same code serves validation, test and production.</p>
+                    <pre><code class="language-python">customer_ids = np.sort(interactions["customer_id"].unique())
+product_ids = products["product_id"].to_numpy()
+row_of = pd.Series(np.arange(len(customer_ids)), index=customer_ids)
+col_of = pd.Series(np.arange(len(product_ids)), index=product_ids)
+
+def build_matrix(rows):
+    return csr_matrix(
+        (np.ones(len(rows)), (row_of[rows["customer_id"]].to_numpy(), col_of[rows["product_id"]].to_numpy())),
+        shape=(len(customer_ids), len(product_ids)),
+    )
+
+def recommend(scores, owned_matrix, k):
+    scores = np.array(scores, dtype=float)
+    scores[owned_matrix.toarray() &gt; 0] = -np.inf
+    return np.argsort(-scores, axis=1)[:, :k]
+
+def hit_rate_on(scores, owned_matrix, target_rows, k=10):
+    target = col_of[target_rows.set_index("customer_id").loc[customer_ids, "product_id"]].to_numpy()
+    return (recommend(scores, owned_matrix, k) == target[:, None]).any(axis=1).mean()
+
+def popularity_model(R):
+    return np.tile(np.asarray(R.sum(axis=0)).ravel(), (R.shape[0], 1))
+
+def item_knn_model(R):
+    sim = cosine_similarity(R.T)
+    np.fill_diagonal(sim, 0)
+    return R @ sim
+
+def svd_model(R, k):
+    svd = TruncatedSVD(n_components=k, random_state=42)
+    return svd.fit_transform(R) @ svd.components_
+
+R_fit = build_matrix(fit_rows)
+print(R_fit.shape, R_fit.nnz)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(3000, 200) 26178</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Choose on the validation item <span class="step-time">(10 min)</span></h3>
+                    <p>Fit every candidate on <code>R_fit</code> and score it on the validation item. The test item is not touched.</p>
+                    <pre><code class="language-python">val_results = {"best sellers": hit_rate_on(popularity_model(R_fit), R_fit, valid),
+               "item-kNN": hit_rate_on(item_knn_model(R_fit), R_fit, valid)}
+for k in [3, 4, 5, 6, 8]:
+    val_results[f"SVD k={k}"] = hit_rate_on(svd_model(R_fit, k), R_fit, valid)
+
+for name, hr in val_results.items():
+    print(f"{name:13s} validation HR@10 = {hr:.3f}")
+best_name = max(val_results, key=val_results.get)
+print("chosen:", best_name)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>best sellers  validation HR@10 = 0.209
+item-kNN      validation HR@10 = 0.286
+SVD k=3       validation HR@10 = 0.244
+SVD k=4       validation HR@10 = 0.261
+SVD k=5       validation HR@10 = 0.285
+SVD k=6       validation HR@10 = 0.277
+SVD k=8       validation HR@10 = 0.258
+chosen: item-kNN</code></pre>
+                    </div>
+                    <p>Validation hit rates are a little lower than the test rates in the lesson, because each customer has one fewer purchase to learn from. What matters is the ranking: item-kNN and SVD with 5 factors are essentially tied (0.286 against 0.285), both far ahead of the best sellers. The rule picks the maximum, item-kNN. With a tie this close, either is a defensible choice; item-kNN has the bonus that every suggestion can be explained as "because you bought X". The step-4 code handles either outcome.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Score once on the test item <span class="step-time">(5 min)</span></h3>
+                    <p>Refit the chosen model and the baseline on everything except the test item (fit rows plus validation rows), then measure each once.</p>
+                    <pre><code class="language-python">R_train = build_matrix(rest)
+chosen_k = int(best_name.split("=")[1]) if best_name.startswith("SVD") else None
+
+test_pop = hit_rate_on(popularity_model(R_train), R_train, test)
+test_chosen = hit_rate_on(svd_model(R_train, chosen_k) if chosen_k else item_knn_model(R_train), R_train, test)
+print(f"best sellers  test HR@10 = {test_pop:.3f}")
+print(f"{best_name:13s} test HR@10 = {test_chosen:.3f}  ({test_chosen / test_pop - 1:+.0%} vs best sellers)")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>best sellers  test HR@10 = 0.209
+item-kNN      test HR@10 = 0.308  (+47% vs best sellers)</code></pre>
+                    </div>
+                    <p>This is the number to report: chosen without looking at the test item, measured on it exactly once. It matches the lesson's item-kNN result because the training rows are the same.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Retrain on everything and write the lists <span class="step-time">(10 min)</span></h3>
+                    <p>For the real email, the most recent purchases are the most valuable information, so refit on <em>all</em> interactions. Keep five products per customer and save them with names, ready for the email template.</p>
+                    <pre><code class="language-python">R_all = build_matrix(interactions)
+final_scores = svd_model(R_all, chosen_k) if chosen_k else item_knn_model(R_all)
+picks = recommend(final_scores, R_all, k=5)
+
+picked = pd.DataFrame({
+    "customer_id": np.repeat(customer_ids, 5),
+    "rank": np.tile(np.arange(1, 6), len(customer_ids)),
+    "product_id": product_ids[picks.ravel()],
+})
+picked = picked.merge(products[["product_id", "name", "primary_activity"]], on="product_id", how="left")
+picked.to_csv("picked_for_you.csv", index=False)
+
+print(picked.shape)
+print(picked.head(5).to_string(index=False))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(15000, 5)
+customer_id  rank product_id                                    name primary_activity
+    C100001     1   ACC-3018        Cedar Notch Tundra First-Aid Kit          general
+    C100001     2   ACC-3014 Larkspur Ridge Lookout Sunscreen SPF 50          general
+    C100001     3   ACC-3003      Granite Fork Lookout First-Aid Kit          general
+    C100001     4   ACC-3009     Juniper Vane Tempo Sunscreen SPF 50          general
+    C100001     5   ACC-3006             Cedar Notch Riffle Headlamp          camping</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Sanity checks and summary <span class="step-time">(5 min)</span></h3>
+                    <p>Before handing the file over, check that nobody is offered something they own and that the lists are not just the best sellers again.</p>
+                    <pre><code class="language-python">owned_pairs = set(zip(interactions["customer_id"], interactions["product_id"]))
+already_owned = sum((c, p) in owned_pairs for c, p in zip(picked["customer_id"], picked["product_id"]))
+top20 = set(product_ids[np.argsort(-np.asarray(R_all.sum(axis=0)).ravel())[:20]])
+
+print(f"""Picked for You
+Model                 : {best_name} (chosen on validation)
+Test HR@10            : {test_chosen:.3f} vs best sellers {test_pop:.3f}
+Customers             : {picked['customer_id'].nunique():,}, 5 products each
+Already owned         : {already_owned}
+Different products    : {picked['product_id'].nunique()} of {len(product_ids)}
+Slots from top-20     : {picked['product_id'].isin(top20).mean():.0%}
+Saved                 : picked_for_you.csv""")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>Picked for You
+Model                 : item-kNN (chosen on validation)
+Test HR@10            : 0.308 vs best sellers 0.209
+Customers             : 3,000, 5 products each
+Already owned         : 0
+Different products    : 112 of 200
+Slots from top-20     : 63%
+Saved                 : picked_for_you.csv</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Your split has 26,178 fit rows and 3,000 validation and 3,000 test rows, all split by date per customer</li>
+                        <li>The candidates were compared on the validation item, and the test item was used once, at the end</li>
+                        <li>The chosen model beats the best-seller baseline on the test item, and you can say by how much</li>
+                        <li>The final model was refit on all interactions before writing the lists</li>
+                        <li><code>picked_for_you.csv</code> has 15,000 rows (5 per customer), with names, and no product a customer already owns</li>
+                        <li>You checked coverage: how many different products appear and how many slots go to the best sellers</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue from the lesson's variables (<code>R</code>, <code>owned</code>, <code>test_col</code>, <code>top_k</code>, <code>hit_rate</code> and the score matrices), not the project's. If you are in the project notebook, rerun the lesson's code blocks first.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Longer and Shorter Lists</h3>
+                    <p>The email shows 5 products, the website 20. Print the hit rate at 5, 10 and 20 for the best sellers, item-kNN and SVD. Does the advantage of the personal recommenders hold at every length?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>hit_rate</code> already takes a <code>k</code> argument.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for k in [5, 10, 20]:
+    print(f"k={k:2d}  best sellers {hit_rate(popularity_scores, k):.3f}  "
+          f"item-kNN {hit_rate(knn_scores, k):.3f}  SVD {hit_rate(svd_scores, k):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>k= 5  best sellers 0.137  item-kNN 0.189  SVD 0.189
+k=10  best sellers 0.209  item-kNN 0.308  SVD 0.311
+k=20  best sellers 0.335  item-kNN 0.487  SVD 0.485</code></pre>
+                        </div>
+                        <p>All hit rates grow with longer lists, and the personal recommenders stay ahead at every length: by about 40% at 5 and by 45% to 50% at 10 and 20. With a 20-product list, almost half of all customers would see the product they bought next.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Do Purchase Counts Help?</h3>
+                    <p>The matrix stores 1 for "bought". Build a second training matrix that stores <code>np.log1p(purchases)</code> instead (so a product bought three times weighs more than one bought once), run item-kNN on it, and compare the hit rate with the 0/1 version.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Copy the <code>csr_matrix</code> call and replace <code>np.ones(len(train))</code> with the weights from <code>train["purchases"]</code>. The <code>owned</code> mask does not change.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">R_weighted = csr_matrix(
+    (np.log1p(train["purchases"].to_numpy()),
+     (row_of[train["customer_id"]].to_numpy(), col_of[train["product_id"]].to_numpy())),
+    shape=R.shape,
+)
+weighted_sim = cosine_similarity(R_weighted.T)
+np.fill_diagonal(weighted_sim, 0)
+print(f"0/1 item-kNN       HR@10 = {hit_rate(knn_scores):.3f}")
+print(f"weighted item-kNN  HR@10 = {hit_rate(R_weighted @ weighted_sim):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>0/1 item-kNN       HR@10 = 0.308
+weighted item-kNN  HR@10 = 0.302</code></pre>
+                        </div>
+                        <p>Slightly worse. Repeat purchases here mostly reflect consumable items, not stronger taste, so weighting by them adds noise to the similarity. More information is not automatically better information: test it, as you just did.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Bridge the Cold Start</h3>
+                    <p>Pinecrest is launching a new paddling product (use the wiped <code>PDL-3018</code> from the content section). Find the 200 customers whose content-based score for it is highest, and check what share of them have bought a paddling product before. Compare with the share of all customers.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Column <code>new_product</code> of <code>content_scores</code> gives every customer's score for it. For "has bought paddling", combine <code>owned</code> with <code>products["primary_activity"] == "paddling"</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">is_paddling = (products["primary_activity"] == "paddling").to_numpy()
+paddler = owned[:, is_paddling].any(axis=1)
+
+audience = np.argsort(-content_scores[:, new_product])[:200]
+print(f"paddlers among the 200 chosen: {paddler[audience].mean():.0%}")
+print(f"paddlers among all customers : {paddler.mean():.0%}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>paddlers among the 200 chosen: 100%
+paddlers among all customers : 43%</code></pre>
+                        </div>
+                        <p>Every one of the 200 has paddled before, against 43% of all customers. Content features give a brand-new product a sensible audience on launch day; once it has a few weeks of purchases, collaborative filtering can take over.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Who Benefits? (Stretch)</h3>
+                    <p>Split customers by how many products they have in training: 2 to 5, 6 to 10, and 11 or more. Compute the hit rate of the best sellers, item-kNN and SVD within each group. Which customers gain most from personalization, and why?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Compute the per-customer hits, <code>(top_k(scores) == test_col[:, None]).any(axis=1)</code>, then average within a boolean mask built from <code>owned.sum(axis=1)</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">history = owned.sum(axis=1)
+groups = {"2-5": (history &gt;= 2) &amp; (history &lt;= 5), "6-10": (history &gt;= 6) &amp; (history &lt;= 10), "11+": history &gt;= 11}
+hits = {name: (top_k(s) == test_col[:, None]).any(axis=1)
+        for name, s in [("best sellers", popularity_scores), ("item-kNN", knn_scores), ("SVD", svd_scores)]}
+
+for group, mask in groups.items():
+    row = "  ".join(f"{name} {h[mask].mean():.3f}" for name, h in hits.items())
+    print(f"{group:5s} ({mask.sum():4d} customers)  {row}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>2-5   ( 892 customers)  best sellers 0.202  item-kNN 0.265  SVD 0.269
+6-10  (1083 customers)  best sellers 0.208  item-kNN 0.296  SVD 0.302
+11+   (1025 customers)  best sellers 0.216  item-kNN 0.357  SVD 0.356</code></pre>
+                        </div>
+                        <p>The best-seller list does about equally well for everyone, because it ignores history. The personal recommenders improve as history grows: customers with 11 or more products get hit rates near 0.36. With only two to five purchases the advantage is smaller, which is the cold-start problem for customers. A common design is to blend toward popularity for customers with little history.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> Three customers' top-2 lists and their hidden test products are below. What does this print?</p>
+                        <pre><code class="language-python">quiz_top = np.array([[4, 7], [1, 2], [9, 3]])
+quiz_test = np.array([7, 5, 9])
+print((quiz_top == quiz_test[:, None]).any(axis=1).mean().round(3))</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Check each row separately: is that customer's test product anywhere in their own two recommendations?">
+                                A) <code>0.333</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Customer 1's product 7 is in their list and customer 3's product 9 is in theirs; customer 2's product 5 is not. Two hits out of three customers gives a hit rate of 0.667.">
+                                B) <code>0.667</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="quiz_test[:, None] compares each customer only with their OWN row of recommendations. Is product 5 in the second row?">
+                                C) <code>1.0</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> Why does the lesson hide each customer's <em>latest</em> purchase for testing, instead of a randomly chosen one?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The test set has 3,000 rows either way: one per customer. What does the date order add?">
+                                A) It gives a larger test set
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Any choice of hidden item can be made repeatable with a seed. Think about what the recommender will really be asked to do.">
+                                B) It is the only way to make the split repeatable
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="In real use the recommender predicts the next purchase from earlier ones. Hiding the latest item mimics that and keeps later purchases out of the training data, the same reason forecasts are split by time.">
+                                C) It mimics predicting the next purchase from the past, so no future information leaks into training
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> On this data, SVD with 5 factors scores HR@10 0.311 and SVD with 40 factors scores 0.190. What is the best explanation?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="More factors let the approximation reproduce each customer's exact past basket, which is mostly noise for predicting the next purchase. A few factors capture the broad tastes that generalize: the bias-variance trade-off again.">
+                                A) With 40 factors the model memorizes past baskets instead of capturing broad tastes, so it generalizes worse
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="TruncatedSVD with more components always captures more of the training grid. Is fitting the training grid better the same as predicting the next purchase?">
+                                B) With 40 factors the SVD captures less of the training data than with 5
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The same random_state was used for every k. Would a different seed turn a 12-point gap around?">
+                                C) The difference is random noise from the seed
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> A new tent launches today with no purchases. Which recommender can put it on customers' lists right away?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Item-kNN measures similarity by shared buyers. How many buyers does the tent share with any product?">
+                                A) Item-based collaborative filtering
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="SVD learns product factors from the product's column of purchases. What does it learn from a column of zeros?">
+                                B) Matrix factorization with SVD
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Content-based similarity uses product attributes such as activity and category, which a new product has from day one. Collaborative methods need purchase history, so they cannot place it yet: the cold-start problem.">
+                                C) Content-based filtering on product attributes
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_R = csr_matrix(np.array([[1, 1, 0], [1, 1, 0], [0, 0, 1]]))
+quiz_sim = cosine_similarity(quiz_R.T)
+print(quiz_sim[0].round(2))</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Products 0 and 1 were bought by exactly the same two customers, so their cosine similarity is 1. Product 2 shares no buyers with product 0, so it is 0. The diagonal (a product with itself) is also 1, since fill_diagonal was not called here.">
+                                A) <code>[1. 1. 0.]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="quiz_R.T makes products the rows. Which customers bought product 0, and which bought product 1?">
+                                B) <code>[1. 0.5 0.]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="This compares the first PRODUCT with every product, not the first customer with every customer. Does product 2 share any buyer with product 0?">
+                                C) <code>[1. 1. 0.5]</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Is a hit rate of 0.31 good? It sounds low.</summary>
+                    <p>It is good, judged the right way. The model picks 10 products from about 190 and gets the one specific product the customer bought next for almost a third of customers; random picks manage 5%. The customer may also like several other products on the list that they simply have not bought yet, and hit rate gives no credit for those. Recommender metrics are always judged against baselines on the same data, never against 100%.</p>
+                </details>
+                <details>
+                    <summary>What about the star ratings? Shouldn't I use them?</summary>
+                    <p>Ratings exist for only 38% of rows, and they answer a different question: "how much did you like it?" rather than "what will you buy?". The classic explicit-feedback task predicts the missing ratings and is scored with RMSE. For a shopping email, purchases are the signal that matches the goal. A rating can still help as a filter, for example never recommending a product that is similar to one the customer rated 1 star.</p>
+                </details>
+                <details>
+                    <summary>Why not use a library such as <code>surprise</code> or <code>implicit</code>?</summary>
+                    <p>Those libraries are excellent and much faster on millions of rows (for example, alternating least squares for implicit feedback). This lesson uses NumPy, SciPy and scikit-learn so that you can see every step: a recommender is a score matrix, a mask and a sort. Once you understand that, any library's API is a small step. Whatever you use, keep the leave-last-out evaluation and the baselines.</p>
+                </details>
+                <details>
+                    <summary>How does this scale to millions of customers?</summary>
+                    <p>The full score matrix (customers × products) becomes too big to hold. Real systems compute product similarities or factors offline, then for each customer score only a few hundred candidates (for example, the nearest neighbors of their recent purchases, found with an approximate nearest-neighbor index) and rank those. The ideas in this lesson stay the same; the engineering changes.</p>
+                </details>
+                <details>
+                    <summary>Can deep learning do better?</summary>
+                    <p>Sometimes, at large scale and with rich signals such as browsing sequences, text and images. Careful studies have also found that well-tuned simple methods like item-kNN and matrix factorization are hard to beat on many datasets. Start with the baselines from this lesson; they are also what you would compare any neural model against.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Build a hybrid: standardize each customer's row of item-kNN scores and of SVD scores (subtract the row mean, divide by the row standard deviation), then blend them as <code>w * knn + (1 - w) * svd</code> for w = 0.3, 0.5, 0.7. Choose w on the project's validation item, then score it once on the test item. Does the blend beat both parts, and is the gain worth the extra complexity? Then add a cold-start rule: for customers with fewer than four products, mix in the best-seller score. Report the hit rate for the low-history group before and after.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Think of a recommendation an app made to you recently that felt spot-on, and one that felt wrong. For each, guess which kind of recommender produced it (best sellers, "customers who bought this also bought", content similarity) and what data it used. Then write down the three numbers from your project you would show Pinecrest's marketing team, and the one caution you would add about feedback loops or privacy.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>A recommender ranks the empty cells of a customer-by-product matrix; store it as a SciPy sparse matrix</li>
+                        <li>Evaluate with a leave-last-out split and hit rate at k, after masking products the customer already owns</li>
+                        <li>The best-seller list is a strong baseline (HR@10 0.209 here, four times random); beat it before you celebrate</li>
+                        <li>Item-based collaborative filtering scores products by cosine similarity to what the customer bought: <code>R @ cosine_similarity(R.T)</code> (0.308)</li>
+                        <li><code>TruncatedSVD</code> compresses tastes into a few factors; a small k generalizes best (k = 5: 0.311), a large k memorizes</li>
+                        <li>Content-based similarity on product attributes is weaker here but solves the cold start for new products</li>
+                        <li>Judge lists on coverage and popularity bias too, and remember that recommendations create the data they are trained on</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You built four recommenders from scratch with NumPy, SciPy and scikit-learn</li>
+                        <li>You measured them honestly against random and best-seller baselines</li>
+                        <li>You saw matrix factorization rediscover customer tastes from purchases alone</li>
+                        <li>You chose a model on a validation item and reported a clean test result</li>
+                        <li>You produced a "Picked for You" file for 3,000 customers, checked for owned items and coverage</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="mlops_intro.html"><strong>Lesson 12.1: Reproducibility and Experiment Tracking</strong></a> you move from building models to running them responsibly: making results repeatable, saving a trained model safely (and learning why loading a pickle from a stranger is dangerous), and tracking every experiment with MLflow so that "which settings gave us 0.311?" always has an answer.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>picked_for_you.csv</code> and your project notebook.</li>
+                    <li>Make a list of everything you would need to reproduce your project's test hit rate six months from now (code, data, library versions, seeds...). Lesson 12.1 checks your list.</li>
+                    <li>Rerun Step 3 with <code>random_state=7</code> in <code>TruncatedSVD</code>. Does the chosen k change?</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You just built the core of a technology that shapes what millions of people watch, read and buy, and you did it the careful way: with a baseline, an honest split and a second look at who the lists serve. If matrix factorization still feels a little magical, that is fine; seeing the factors line up with climbing and running is the moment it starts to make sense. Keep asking "compared with what?" and your recommenders will earn the trust they get.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="nlp_text_preprocessing.html" class="prev-lesson">← Previous: Text Classification</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="mlops_intro.html" class="next-lesson">Next: Reproducibility and Experiment Tracking →</a>
+            </nav>
         </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: E-commerce Product Recommender</h3>
-            <p>Build product recommendation engine:</p>
-            <ol>
-                <li>Process transaction and browsing data</li>
-                <li>Implement session-based recommendations</li>
-                <li>Add cross-sell and upsell logic</li>
-                <li>Handle cold start with popularity</li>
-                <li>Implement real-time personalization</li>
-                <li>A/B test different algorithms</li>
-            </ol>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 3: Deep Learning Recommender</h3>
-            <p>Implement neural recommendation models:</p>
-            <ol>
-                <li>Build neural collaborative filtering</li>
-                <li>Implement autoencoders for CF</li>
-                <li>Add attention mechanisms</li>
-                <li>Create embedding-based model</li>
-                <li>Implement sequence-aware recommendations</li>
-                <li>Compare with traditional methods</li>
-            </ol>
-        </div>
-
-        <h2>Summary and Key Takeaways</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 Key Points to Remember</h3>
-            <ul>
-                <li><strong>Collaborative Filtering:</strong> Leverage user behavior patterns</li>
-                <li><strong>Content-Based:</strong> Use item features for recommendations</li>
-                <li><strong>Hybrid Approaches:</strong> Combine methods for better performance</li>
-                <li><strong>Matrix Factorization:</strong> Powerful for large-scale systems</li>
-                <li><strong>Cold Start:</strong> Critical challenge requiring special handling</li>
-                <li><strong>Evaluation:</strong> Multiple metrics needed (accuracy, diversity, coverage)</li>
-                <li><strong>Scalability:</strong> Essential for production systems</li>
-                <li><strong>Personalization vs Diversity:</strong> Balance exploration and exploitation</li>
-            </ul>
-        </div>
-
-        
-    
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Think of a recommendation you recently received from an app that
-            felt spot-on (or badly wrong). Was it likely collaborative filtering ("people like you"), content-based
-            ("similar to what you liked"), or a hybrid — and why?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Collaborative filtering recommends from user–item interaction patterns; content-based filtering uses item features; hybrids combine both.</li>
-                <li>Matrix factorization discovers latent factors that explain interactions and helps with sparse data.</li>
-                <li>The cold-start problem — new users or items with no history — is a central challenge, often eased by content or hybrid signals.</li>
-                <li>Recommenders are judged with ranking metrics like precision@k, recall@k, and NDCG, not just error metrics like RMSE.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now build both collaborative and content-based recommenders, apply matrix factorization to sparse
-        interaction data, and evaluate top-N recommendations the way real systems are measured.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>Which is better, collaborative or content-based filtering?</summary>
-            <p>Neither wins outright. Collaborative filtering captures taste patterns across users but struggles with new
-            items; content-based handles new items but can be narrow. Most production systems blend the two into a hybrid.</p>
-        </details>
-        <details>
-            <summary>How do real systems handle the cold-start problem?</summary>
-            <p>They lean on content features and metadata for new items, ask new users for a few preferences, and fall back
-            to popularity-based recommendations until enough interaction history accumulates.</p>
-        </details>
-        <details>
-            <summary>Why not just use accuracy or RMSE?</summary>
-            <p>Users only see the top few recommendations, so <em>ranking</em> quality matters more than average error.
-            Metrics like precision@k and NDCG measure whether the best items appear at the top of the list.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Recommenders bring together similarity, matrix factorization, and evaluation on ranked lists. These ideas feed
-        into full applied projects and case studies, where you combine modeling with real business goals end to end.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Build an item-based collaborative filter and inspect its top-5 recommendations for a sample user.</li>
-            <li>Compute precision@k and recall@k for your recommender and see how they change with k.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Recommendation systems quietly shape what billions of people watch, read, and buy every day. You've just
-            built the core of that technology yourself — a genuinely powerful skill to keep developing.</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="applications_anomaly_detection.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="nlp_text_preprocessing.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1367,6 +1108,7 @@ print(implementation_checklist)</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>

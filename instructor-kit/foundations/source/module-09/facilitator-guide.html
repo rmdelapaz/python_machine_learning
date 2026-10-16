@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facilitator Guide: Session 9</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">contains answers &amp; timing · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Facilitator Guide</div>
+    <h1>Session 9: Random Forests and Gradient Boosting</h1>
+    <p class="sub">How to teach Session 9 of Machine Learning Foundations: bagging and random forests (the bootstrap, averaging away variance, decorrelated trees, out-of-bag validation, honest importances) and gradient boosting (small trees that correct each other, the learning rate, early stopping, native categories, XGBoost and LightGBM). Learners leave able to say which error each ensemble fixes, and with a forest call list and a demand forecaster started.</p>
+    <div class="meta-row">
+      <span class="chip"><b>2</b> lessons</span>
+      <span class="chip"><b>3 hrs</b> session</span>
+      <span class="chip">Lessons <b>5.2–5.3</b></span>
+      <span class="chip">Session <b>9</b> of 11</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>How to Use This Guide</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Same rhythm as every session: frame → live demo → guided labs → start the project. Exercises, quizzes and journals are homework.</li>
+  <li>Every code block below was run to produce the output under it (Python 3.12, scikit-learn 1.9.1, XGBoost 3.4, LightGBM 4.7, 4 CPU threads). The demos are the lesson pages' code without the plotting lines: show the pictures from <code class="inline">trees_random_forest.html</code> (bagging diagram, the trees curve, the noise-column bars) and <code class="inline">trees_gradient_boosting.html</code> (1 / 10 / 300 trees, the validation U-turn).</li>
+  <li>XGBoost and LightGBM outputs may differ in the last digit on another machine (multithreaded floating-point sums); say so once, when you run them.</li>
+  <li>Labs are in <code class="inline">labs/module-09/</code>. The two fraud labs continue the kit's payments thread: logistic regression found 53 frauds in its top 100 in Session 1; the eight-rule tree in Session 8 scored AP 0.253; today the forest and the boosters.</li>
+</ul>
+<div class="note warn"><div class="t">The #1 risk of Session 9: two ensemble lessons blur into one</div>
+<p>Learners leave saying "forests and boosting are both lots of trees". Keep the two pictures apart all day: a <b>panel</b> of independent, quirky experts whose average cancels their quirks (variance), and a <b>golfer</b> whose every putt aims at what is left (bias). Put both on the board, side by side, and make every exit-ticket answer use one of them. The second risk is CPU time: Step 2 of 5.2 fits 100 trees in a Python loop and Step 9 runs permutation importance; both take a few seconds on a laptop. Start them and talk.</p>
+</div>
+
+  <div class="sec"><h2>Before the Session</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ <b>Run the kit check:</b> <code class="inline">python3 labs/check_labs.py module-09</code> (8 files, about 50 seconds). Every line PASS.</li>
+  <li>☐ <b>Check the libraries on the projector machine:</b> <code class="inline">python -c "import xgboost, lightgbm; print(xgboost.__version__, lightgbm.__version__)"</code> (3.4 and 4.7 in the course environment). <code class="inline">check_environment.py</code> from Session 1 lists both.</li>
+  <li>☐ <b>Downloads:</b> none.</li>
+  <li>☐ <b>Projector machine:</b> <code class="inline">(.venv)</code> active in your own <code class="inline">pinecrest-ml</code>, JupyterLab started there, notebooks <code class="inline">lesson_5_2</code> and <code class="inline">lesson_5_3</code>. Browser tabs: <code class="inline">trees_random_forest.html</code>, <code class="inline">trees_gradient_boosting.html</code>.</li>
+  <li>☐ <b>Board, before learners arrive:</b> left, the panel of new hires with an averaging arrow and <b>variance of an average = ρσ² + (1 − ρ)σ²/n</b>; right, a golf green with three putts and <b>F = F + ν · tree</b>.</li>
+  <li>☐ <b>Print or share:</b> the Session 9 workbook pages; sticky notes for the exit ticket.</li>
+</ul>
+<div class="blk warn"><div class="h">Known environment traps</div>
+<table class="timing">
+<thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td><code class="inline">TypeError: BaggingClassifier.__init__() got an unexpected keyword argument 'base_estimator'</code></td><td>Old tutorial code</td><td><code class="inline">estimator=</code>.</td></tr>
+<tr><td><code class="inline">ValueError: Out of bag estimation only available if bootstrap=True</code></td><td>OOB with <code class="inline">bootstrap=False</code> (or ExtraTrees' default)</td><td><code class="inline">bootstrap=True</code>.</td></tr>
+<tr><td><code class="inline">UserWarning: Some inputs do not have OOB scores</code></td><td>Too few trees for OOB</td><td>100 trees or more.</td></tr>
+<tr><td><code class="inline">ValueError: could not convert string to float: 'Bend'</code></td><td>Text column given to HistGradientBoosting</td><td><code class="inline">X[cols] = X[cols].astype("category")</code>.</td></tr>
+<tr><td><code class="inline">ValueError: DataFrame.dtypes for data must be int, float, bool or category...</code></td><td>Text column given to XGBoost</td><td>Category dtype and <code class="inline">enable_categorical=True</code>.</td></tr>
+<tr><td><code class="inline">TypeError: XGBClassifier.fit() got an unexpected keyword argument 'early_stopping_rounds'</code></td><td>XGBoost 1.x code</td><td>Put <code class="inline">early_stopping_rounds</code> and <code class="inline">eval_metric</code> in the constructor.</td></tr>
+<tr><td>A LightGBM deprecation warning about <code class="inline">eval_set</code></td><td>LightGBM 4.7 renamed it</td><td><code class="inline">eval_X=</code> and <code class="inline">eval_y=</code>.</td></tr>
+<tr><td><code class="inline">ModuleNotFoundError: No module named 'xgboost'</code></td><td>Environment not active, or an old install</td><td>Activate; <code class="inline">python -m pip install -r requirements.txt</code>.</td></tr>
+<tr><td>XGBoost numbers differ in the last digit from the page</td><td>Thread count, processor</td><td>Normal; a different first decimal means different data or settings.</td></tr>
+</tbody>
+</table>
+</div>
+
+  <div class="sec"><h2>Session 9 Agenda (3 hours)</h2><span class="rule"></span></div>
+  <table class="timing">
+    <thead><tr><th>Clock</th><th>Minutes</th><th>Segment</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="t">0:00</td><td class="t">10</td><td>Warm-up</td><td>Five retrieval questions on Lessons 4.3 and 5.1; homework check (SVM shortlist, rule book, the bootstrap prediction).</td></tr>
+      <tr><td class="t">0:10</td><td class="t">10</td><td><b>5.2</b> Frame and mental model</td><td>A panel of new hires; the variance of an average: more models and less alike models.</td></tr>
+      <tr><td class="t">0:20</td><td class="t">30</td><td><b>5.2</b> Live demo</td><td>The bootstrap, bagging by hand, BaggingClassifier, the forest's correlation trick, how many trees, OOB against CV, tuning by OOB, the noise column, three mistakes.</td></tr>
+      <tr><td class="t">0:50</td><td class="t">25</td><td><b>5.2</b> Guided lab</td><td><code class="inline">labs/module-09/l5_2-random-forests/fraud_forest_starter.py</code>, then <code class="inline">labs/module-09/l5_2-random-forests/decorrelate_starter.py</code> in pairs.</td></tr>
+      <tr><td class="t">1:15</td><td class="t">10</td><td><b>5.2</b> Start the lesson project</td><td>The churn forest and call list, Steps 1 and 2; Steps 3 to 6 go home.</td></tr>
+      <tr><td class="t">1:25</td><td class="t">10</td><td>Break</td><td>Leave the variance formula and the panel picture on the board.</td></tr>
+      <tr><td class="t">1:35</td><td class="t">10</td><td><b>5.3</b> Frame and mental model</td><td>Putting on a golf green: each stroke aims at what is left; the learning rate.</td></tr>
+      <tr><td class="t">1:45</td><td class="t">30</td><td><b>5.3</b> Live demo</td><td>Boosting by hand on a wave, learning rates, HistGradientBoosting with native categories, the validation curve, early stopping, XGBoost and LightGBM, three mistakes.</td></tr>
+      <tr><td class="t">2:15</td><td class="t">25</td><td><b>5.3</b> Guided lab</td><td><code class="inline">labs/module-09/l5_3-gradient-boosting/boosting_by_hand_starter.py</code>, then <code class="inline">labs/module-09/l5_3-gradient-boosting/fraud_boosters_starter.py</code> in pairs.</td></tr>
+      <tr><td class="t">2:40</td><td class="t">10</td><td><b>5.3</b> Start the lesson project</td><td>The weekly demand forecaster, Steps 1 and 2; Steps 3 to 6 go home.</td></tr>
+      <tr><td class="t">2:50</td><td class="t">10</td><td>Wrap-up</td><td>Exit ticket (3 questions), homework, bring list for Session 10.</td></tr>
+      <tr><td class="t"><b>Total</b></td><td class="t"><b>180</b></td><td></td><td>Ends at 3:00.</td></tr>
+    </tbody>
+  </table>
+<p><b>In the room.</b> The lessons estimate 100 + 100 minutes for a solo learner; the room has 150 after the warm-up, break and wrap-up, so 75 minutes per lesson: mental model, demo, guided labs and the start of the project.</p>
+<p><b>Goes home (2 to 3 hours).</b> The churn forest and call list Steps 3 to 6, and the demand forecaster Steps 3 to 6; Hands-on Exercises 1 to 3 of each lesson (Exercise 4 is a stretch); both Quick Quizzes and journal entries; both "Before the Next Lesson" lists; unfinished labs.</p>
+<p><b>Protect, in this order:</b> 5.2 demo Steps 2 and 5 (averaging, and the worse-trees-better-forest result); 5.3 demo Steps 2, 3 and 7 (the loop, the learning rate, the validation U-turn); Lab A of each lesson. <b>Cut first:</b> 5.2 Steps 3, 4, 6 and 10 to 12; then 5.3 Steps 9 and 11 to 13 (say the three fixes); then the paired Lab B of each lesson (homework).</p>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">0:00</span><h3>Warm-up: Support Vector Machines and Decision Trees</h3><span class="dur">10 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Run it</div>
+<p>Five questions on the slide; two minutes alone, one with a neighbor, then cold-call. Walk the room for the Session 8 homework: <code class="inline">svm_shortlist.csv</code>, <code class="inline">churn_rules.txt</code>, and the written bootstrap prediction (W5).</p>
+<ul class="tick">
+  <li><b>W1</b> Lesson 4.3: you raise a linear SVM's C from 0.01 to 100 on overlapping data. Street width and number of support vectors? <b>Answer:</b> Narrower street, fewer support vectors (the lesson: 4.06 wide with 42 support vectors, then 0.75 with 7). C is the price of a violation.</li>
+  <li><b>W2</b> An RBF SVM with gamma=1000 scores 1.000 on training data and 0.650 on test data. What happened, and what would have warned you without the test set? <b>Answer:</b> Each point's influence shrank to a tiny bubble: it memorized the training set. Cross-validation would have shown it, and so would the support-vector count (nearly every point). Today's boosting has the same trap with a new dial: the number of trees.</li>
+  <li><b>W3</b> A tree node holds 40 stayers and 10 churners. Gini impurity? Predict, then check. <b>Answer:</b> <code class="inline">0.32</code>. 1 - (0.64 + 0.04) = 0.32. A customer landing there gets churn probability 0.2.</li>
+  <li><b>W4</b> Why does an SVM need StandardScaler while a decision tree does not? <b>Answer:</b> The SVM's kernel and margin are distances, so units matter. A tree only asks "above this threshold?", and rescaling moves the threshold, not the customers. Same for today's forests and boosted trees: no scaling.</li>
+  <li><b>W5</b> Homework check: a bootstrap sample of 4,500 rows drawn with replacement from 4,500. What share of the distinct customers does it contain? <b>Answer:</b> About 63%. Lesson 5.2's first block shows 62.9% (2,830 customers); theory 63.2%. Collect the written predictions: most people guess 100% or 50%. Today opens with exactly this.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Bridge to today</div>
+<p>"Last session ended with a problem: one tree is unstable, three trees on slightly different customers disagreed about one customer in four. Today we turn that weakness into the two most successful models for tables like Pinecrest's."</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Lesson Plans</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">5.2</span><h3>Bagging and Random Forests</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Draw a bootstrap sample and explain why it contains about 63% of the original rows</li>
+  <li>Build a bagged ensemble by hand and with <code class="inline">BaggingClassifier(estimator=...)</code>, and explain why averaging reduces variance</li>
+  <li>Explain how a random forest decorrelates its trees with <code class="inline">max_features</code>, and tune <code class="inline">n_estimators</code>, <code class="inline">max_features</code> and <code class="inline">min_samples_leaf</code></li>
+  <li>Use out-of-bag predictions as a built-in validation estimate</li>
+  <li>Compare impurity-based and permutation importance, and recognize the bias of the first</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: the panel of new hires; the variance of an average</td></tr>
+<tr><td class="t">30m</td><td>Live demo: Steps 1 to 12</td></tr>
+<tr><td class="t">25m</td><td>Guided lab: <code class="inline">fraud_forest_starter.py</code> (13m), then <code class="inline">decorrelate_starter.py</code> in pairs (12m)</td></tr>
+<tr><td class="t">10m</td><td>Start the lesson project: Steps 1 and 2</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"Remember the new hire from Lesson 1.1 studying case files? One diligent new hire who memorizes every file makes confident, quirky judgments: that is an unlimited tree. Now hire a panel of 100. Each studies their own random stack of files from the same archive, some files twice, some missing. For a new customer, everyone gives an opinion and you average."</p>
+<p>"Each panelist is still quirky, but the quirks point in different directions and cancel out. What they agree on is the real pattern. That is <b>bagging</b>. A <b>random forest</b> adds one rule: at every decision, a panelist may only look at a random handful of the columns, which makes them disagree more usefully."</p>
+<p>Point at the formula: "Averaging n models: ρσ² + (1 − ρ)σ²/n. More models shrink the second term. Only less alike models shrink the first. Bagging pulls one lever; a forest pulls both."</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook <code class="inline">lesson_5_2</code>, the 1.1 split and ten features. Step 2 runs 100 trees in a loop: a few seconds.</p>
+<ol class="steps">
+  <li><b>The bootstrap (3m).</b> "Draw 4,500 customers from 4,500, putting each one back after every draw. How many distinct customers? You wrote a guess at home."
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+<span class="k">from</span> sklearn.tree <span class="k">import</span> DecisionTreeClassifier
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> roc_auc_score
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+features = [<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"days_since_last_order"</span>,
+            <span class="s">"returns_12m"</span>, <span class="s">"return_rate"</span>, <span class="s">"support_tickets_12m"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>]
+X = customers[features]
+y = customers[<span class="s">"churned"</span>]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=<span class="s">0.25</span>, stratify=y, random_state=<span class="s">42</span>)
+
+rng = np.random.default_rng(<span class="s">42</span>)
+n = len(X_train)
+rows = rng.integers(<span class="s">0</span>, n, size=n)                   <span class="c"># n draws with replacement</span>
+times_drawn = np.bincount(rows, minlength=n)
+
+print(<span class="s">f"draws: {len(rows)}, distinct customers: {np.count_nonzero(times_drawn)} ({np.count_nonzero(times_drawn) / n:.1%})"</span>)
+print(<span class="s">"how many customers were drawn 0, 1, 2, ... times:"</span>, np.bincount(times_drawn))
+print(<span class="s">f"theory: 1 - (1 - 1/n)^n = {1 - (1 - 1 / n) ** n:.3f}"</span>)</pre>
+<pre class="out">draws: 4500, distinct customers: 2830 (62.9%)
+how many customers were drawn 0, 1, 2, ... times: [1670 1626  840  281   65   17    1]
+theory: 1 - (1 - 1/n)^n = 0.632</pre>
+1,670 customers were never drawn: they are out-of-bag for this sample. Write 63.2% / 36.8% on the board; it comes back in Step 7.</li>
+  <li><b>Bagging by hand (4m).</b> "The worst-behaved model from Lesson 5.1, an unlimited tree, a hundred times, each on its own bootstrap sample. Average their votes."
+<pre class="code">single = DecisionTreeClassifier(random_state=<span class="s">42</span>).fit(X_train, y_train)
+print(<span class="s">f"one unlimited tree: test ROC AUC {roc_auc_score(y_test, single.predict_proba(X_test)[:, 1]):.3f}"</span>)
+
+tree_probas = []
+<span class="k">for</span> i <span class="k">in</span> range(<span class="s">100</span>):
+    rows = rng.integers(<span class="s">0</span>, n, size=n)
+    tree = DecisionTreeClassifier(random_state=<span class="s">42</span>).fit(X_train.iloc[rows], y_train.iloc[rows])
+    tree_probas.append(tree.predict_proba(X_test)[:, <span class="s">1</span>])
+tree_probas = np.array(tree_probas)                 <span class="c"># 100 trees x 1,500 test customers</span>
+
+<span class="k">for</span> k <span class="k">in</span> [<span class="s">1</span>, <span class="s">5</span>, <span class="s">10</span>, <span class="s">25</span>, <span class="s">50</span>, <span class="s">100</span>]:
+    print(<span class="s">f"average of {k:3d} trees: test ROC AUC {roc_auc_score(y_test, tree_probas[:k].mean(axis=0)):.3f}"</span>)</pre>
+<pre class="out">one unlimited tree: test ROC AUC 0.683
+average of   1 trees: test ROC AUC 0.668
+average of   5 trees: test ROC AUC 0.801
+average of  10 trees: test ROC AUC 0.825
+average of  25 trees: test ROC AUC 0.835
+average of  50 trees: test ROC AUC 0.842
+average of 100 trees: test ROC AUC 0.848</pre>
+No single tree improved; the AUC climbs from 0.68 to 0.85 by averaging alone. The first 10 trees give most of the gain.</li>
+  <li><b>The divided customer (2m).</b> "Each tree is certain. The panel is honestly unsure."
+<pre class="code">panel = tree_probas.mean(axis=<span class="s">0</span>)
+divided = int(np.argmin(np.abs(panel - <span class="s">0.5</span>)))
+print(<span class="s">f"test customer {customers.loc[X_test.index[divided], 'customer_id']}: "</span>
+      <span class="s">f"{panel[divided]:.2f} average churn vote, really churned: {y_test.iloc[divided]}"</span>)
+print(<span class="s">"first 20 trees say:"</span>, tree_probas[:<span class="s">20</span>, divided])
+print(<span class="s">"distinct probabilities: one tree"</span>, len(np.unique(tree_probas[<span class="s">0</span>])), <span class="s">"| the panel"</span>, len(np.unique(panel)))</pre>
+<pre class="out">test customer C105686: 0.50 average churn vote, really churned: 1
+first 20 trees say: [1. 0. 1. 1. 0. 0. 0. 1. 1. 1. 0. 1. 0. 1. 1. 1. 0. 1. 1. 1.]
+distinct probabilities: one tree 2 | the panel 99</pre>
+And the panel gives 99 distinct probabilities where one tree gives 2: now a top 50 is possible.</li>
+  <li><b>BaggingClassifier (2m).</b> "scikit-learn packages the loop. The argument is <code class="inline">estimator=</code>."
+<pre class="code"><span class="k">from</span> sklearn.ensemble <span class="k">import</span> BaggingClassifier
+
+bagging = BaggingClassifier(estimator=DecisionTreeClassifier(), n_estimators=<span class="s">100</span>, random_state=<span class="s">42</span>)
+bagging.fit(X_train, y_train)
+print(<span class="s">f"BaggingClassifier, 100 trees: test ROC AUC {roc_auc_score(y_test, bagging.predict_proba(X_test)[:, 1]):.3f}"</span>)
+print(len(bagging.estimators_), <span class="s">"fitted trees; first tree trained on"</span>, len(np.unique(bagging.estimators_samples_[<span class="s">0</span>])), <span class="s">"distinct customers"</span>)</pre>
+<pre class="out">BaggingClassifier, 100 trees: test ROC AUC 0.849
+100 fitted trees; first tree trained on 2834 distinct customers</pre></li>
+  <li><b>The random forest's one twist (4m).</b> "Bagged trees are too alike: almost all ask about recency first. A forest lets each split choose among a random handful of features." Point at the formula: this attacks ρ.
+<pre class="code"><span class="k">from</span> sklearn.ensemble <span class="k">import</span> RandomForestClassifier
+
+forest = RandomForestClassifier(n_estimators=<span class="s">100</span>, random_state=<span class="s">42</span>, n_jobs=-<span class="s">1</span>).fit(X_train, y_train)
+print(<span class="s">f"random forest, 100 trees: test ROC AUC {roc_auc_score(y_test, forest.predict_proba(X_test)[:, 1]):.3f}"</span>)
+
+<span class="k">def</span> per_tree(ensemble):
+    <span class="s">"""Churn probabilities of every tree in an ensemble, one row per tree."""</span>
+    X_array = X_test.to_numpy()                       <span class="c"># the inner trees were fitted without column names</span>
+    <span class="k">return</span> np.array([t.predict_proba(X_array)[:, <span class="s">1</span>] <span class="k">for</span> t <span class="k">in</span> ensemble.estimators_])
+
+<span class="k">for</span> name, ensemble <span class="k">in</span> [(<span class="s">"bagging"</span>, bagging), (<span class="s">"random forest"</span>, forest)]:
+    probas = per_tree(ensemble)
+    one_tree = np.mean([roc_auc_score(y_test, p) <span class="k">for</span> p <span class="k">in</span> probas])
+    rho = np.corrcoef(probas)[np.triu_indices(len(probas), k=<span class="s">1</span>)].mean()
+    print(<span class="s">f"{name:14s} average single-tree AUC {one_tree:.3f}   average correlation between trees {rho:.3f}"</span>)</pre>
+<pre class="out">random forest, 100 trees: test ROC AUC 0.855
+bagging        average single-tree AUC 0.666   average correlation between trees 0.354
+random forest  average single-tree AUC 0.648   average correlation between trees 0.288</pre>
+Each forest tree is WORSE (0.648 vs 0.666) and the forest is BETTER (0.855 vs 0.849): less alike trees average better. That sentence is the lesson.</li>
+  <li><b>How many trees? (2m).</b> "Average the first k trees of each."
+<pre class="code">ks = np.arange(<span class="s">1</span>, <span class="s">101</span>)
+<span class="k">for</span> name, ensemble <span class="k">in</span> [(<span class="s">"bagging"</span>, bagging), (<span class="s">"random forest"</span>, forest)]:
+    probas = per_tree(ensemble)
+    curve = [roc_auc_score(y_test, probas[:k].mean(axis=<span class="s">0</span>)) <span class="k">for</span> k <span class="k">in</span> ks]
+    print(<span class="s">f"{name:14s} AUC with 1, 10, 50, 100 trees:"</span>, [round(curve[k - <span class="s">1</span>], <span class="s">3</span>) <span class="k">for</span> k <span class="k">in</span> [<span class="s">1</span>, <span class="s">10</span>, <span class="s">50</span>, <span class="s">100</span>]])</pre>
+<pre class="out">bagging        AUC with 1, 10, 50, 100 trees: [0.677, 0.821, 0.846, 0.849]
+random forest  AUC with 1, 10, 50, 100 trees: [0.649, 0.806, 0.849, 0.855]</pre>
+Show the lesson's plateau chart. More trees never overfit; they cost time.</li>
+  <li><b>Out-of-bag validation (4m).</b> "Every customer was left out by about a third of the trees. Those trees' average is an honest prediction, from one fit."
+<pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> StratifiedKFold, cross_val_score
+
+oob_forest = RandomForestClassifier(n_estimators=<span class="s">300</span>, min_samples_leaf=<span class="s">5</span>, oob_score=<span class="k">True</span>, random_state=<span class="s">42</span>, n_jobs=-<span class="s">1</span>)
+oob_forest.fit(X_train, y_train)
+oob_proba = oob_forest.oob_decision_function_[:, <span class="s">1</span>]          <span class="c"># one OOB probability per training customer</span>
+
+cv = StratifiedKFold(n_splits=<span class="s">5</span>, shuffle=<span class="k">True</span>, random_state=<span class="s">42</span>)
+cv_auc = cross_val_score(oob_forest, X_train, y_train, cv=cv, scoring=<span class="s">"roc_auc"</span>).mean()
+print(<span class="s">f"OOB accuracy (oob_score_)  {oob_forest.oob_score_:.3f}"</span>)
+print(<span class="s">f"OOB ROC AUC                {roc_auc_score(y_train, oob_proba):.3f}"</span>)
+print(<span class="s">f"5-fold CV ROC AUC          {cv_auc:.3f}"</span>)
+print(<span class="s">f"test ROC AUC               {roc_auc_score(y_test, oob_forest.predict_proba(X_test)[:, 1]):.3f}"</span>)</pre>
+<pre class="out">OOB accuracy (oob_score_)  0.872
+OOB ROC AUC                0.866
+5-fold CV ROC AUC          0.868
+test ROC AUC               0.865</pre>
+OOB 0.866, CV 0.868, test 0.865: OOB costs one fit instead of five. Then the limits: preprocessing that learned from the target, time or group structure.</li>
+  <li><b>Tuning by OOB (3m).</b> "One fit per setting."
+<pre class="code">results = []
+<span class="k">for</span> max_features <span class="k">in</span> [<span class="s">"sqrt"</span>, <span class="s">0.5</span>, <span class="k">None</span>]:
+    <span class="k">for</span> leaf <span class="k">in</span> [<span class="s">1</span>, <span class="s">5</span>, <span class="s">20</span>]:
+        model = RandomForestClassifier(n_estimators=<span class="s">200</span>, max_features=max_features, min_samples_leaf=leaf,
+                                       oob_score=<span class="k">True</span>, random_state=<span class="s">42</span>, n_jobs=-<span class="s">1</span>).fit(X_train, y_train)
+        results.append({<span class="s">"max_features"</span>: str(max_features), <span class="s">"min_samples_leaf"</span>: leaf,
+                        <span class="s">"oob_auc"</span>: roc_auc_score(y_train, model.oob_decision_function_[:, <span class="s">1</span>])})
+
+grid = pd.DataFrame(results).pivot(index=<span class="s">"max_features"</span>, columns=<span class="s">"min_samples_leaf"</span>, values=<span class="s">"oob_auc"</span>)
+print(grid.round(<span class="s">3</span>))</pre>
+<pre class="out">min_samples_leaf     1      5      20
+max_features                         
+0.5               0.856  0.866  0.870
+None              0.851  0.862  0.867
+sqrt              0.857  0.865  0.870</pre>
+Larger leaves help in every row; max_features matters little here (ten features, several redundant). Forests are forgiving to tune.</li>
+  <li><b>A column of pure noise (4m).</b> "Add random numbers as a feature and ask both importance measures about it."
+<pre class="code"><span class="k">from</span> sklearn.inspection <span class="k">import</span> permutation_importance
+
+noise_rng = np.random.default_rng(<span class="s">42</span>)
+X_train_noisy = X_train.assign(noise=noise_rng.normal(size=len(X_train)))
+X_test_noisy = X_test.assign(noise=noise_rng.normal(size=len(X_test)))
+
+noisy_forest = RandomForestClassifier(n_estimators=<span class="s">300</span>, min_samples_leaf=<span class="s">5</span>, random_state=<span class="s">42</span>, n_jobs=-<span class="s">1</span>)
+noisy_forest.fit(X_train_noisy, y_train)
+perm = permutation_importance(noisy_forest, X_test_noisy, y_test, scoring=<span class="s">"roc_auc"</span>, n_repeats=<span class="s">5</span>, random_state=<span class="s">42</span>)
+
+importance = pd.DataFrame({<span class="s">"impurity (MDI)"</span>: noisy_forest.feature_importances_,
+                           <span class="s">"permutation (AUC drop)"</span>: perm.importances_mean},
+                          index=X_train_noisy.columns).sort_values(<span class="s">"impurity (MDI)"</span>)
+print(importance.iloc[::-<span class="s">1</span>].round(<span class="s">3</span>))</pre>
+<pre class="out">                       impurity (MDI)  permutation (AUC drop)
+days_since_last_order           0.302                   0.161
+tenure_months                   0.153                   0.048
+discount_share                  0.139                   0.085
+spend_12m                       0.087                  -0.002
+avg_order_value                 0.075                   0.001
+return_rate                     0.066                   0.003
+noise                           0.065                   0.005
+support_tickets_12m             0.042                   0.014
+orders_12m                      0.036                   0.002
+app_user                        0.025                   0.013
+returns_12m                     0.010                   0.001</pre>
+MDI ranks noise above four real features; permutation on the test set gives it 0.005. Spend and AOV also drop: busy in the trees, not needed. Lab A shows the reverse bias on a 0/1 column.</li>
+  <li><b>Mistake: base_estimator (1m).</b> "Old tutorials."
+<pre class="code">BaggingClassifier(base_estimator=DecisionTreeClassifier(), n_estimators=<span class="s">50</span>)</pre>
+<pre class="out">TypeError: BaggingClassifier.__init__() got an unexpected keyword argument 'base_estimator'</pre>
+It is <code class="inline">estimator=</code> now.</li>
+  <li><b>Mistake: OOB without the bootstrap (1m).</b> 
+<pre class="code">RandomForestClassifier(bootstrap=<span class="k">False</span>, oob_score=<span class="k">True</span>, random_state=<span class="s">42</span>).fit(X_train, y_train)</pre>
+<pre class="out">ValueError: Out of bag estimation only available if bootstrap=True</pre></li>
+  <li><b>Mistake: judging a forest on its training rows (1m).</b> "No error."
+<pre class="code">train_auc = roc_auc_score(y_train, forest.predict_proba(X_train)[:, <span class="s">1</span>])
+oob_check = RandomForestClassifier(n_estimators=<span class="s">100</span>, oob_score=<span class="k">True</span>, random_state=<span class="s">42</span>, n_jobs=-<span class="s">1</span>).fit(X_train, y_train)
+print(<span class="s">f"training AUC {train_auc:.3f}   OOB AUC {roc_auc_score(y_train, oob_check.oob_decision_function_[:, 1]):.3f}"</span>)</pre>
+<pre class="out">training AUC 1.000   OOB AUC 0.851</pre>
+Every training customer was in about 63% of the trees' samples. Never <code class="inline">predict</code> on the training rows to judge a forest (and never feed those predictions into another model: Lesson 5.4).</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>Judging the forest on its training rows</b> (AUC 1.000 or close). Coach: "Which trees had seen this customer?" Use OOB, CV or the test set.</li>
+  <li><b>Believing more trees overfit.</b> Learners carry the depth lesson over. Coach with the plateau chart: more trees make the average more precise; the cost is time.</li>
+  <li><b>Reading MDI as truth.</b> The noise column and, in Lab A, the 0/1 column <code class="inline">device_new</code>. Coach: "Was it measured on training or unseen data, and does the column have many distinct values?"</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (13m, everyone):</b> <code class="inline">labs/module-09/l5_2-random-forests/fraud_forest_starter.py</code>; reference <code class="inline">labs/module-09/l5_2-random-forests/fraud_forest_solution.py</code>. A forest for the payments team's review queue: leaf size tuned out-of-bag by average precision, one test against logistic regression and a single tree, distinct scores, MDI against permutation importance. About 20 seconds to run.</li>
+  <li><b>Expected, Lab A:</b> OOB AP 0.489 / 0.511 / 0.513 / 0.503 for leaf 1 / 3 / 5 / 10; test: logistic regression AUC 0.848, AP 0.444, 53 frauds in the top 100; one tree 0.684, 0.129, 41; forest 0.842, 0.479, 57; distinct scores 2 against 10,197; <code class="inline">device_new</code> MDI 0.081 but permutation 0.122; <code class="inline">amount</code> 0.176 vs 0.058.</li>
+  <li><b>Circulate in Lab A for:</b> OOB tuned by accuracy (all 0.99); permutation importance with the default scoring (accuracy: tiny drops everywhere). <b>Debrief:</b> "The forest has a LOWER AUC than logistic regression and a HIGHER AP and a better top 100. For a review queue, which matters?" (AP and the top of the list.) Then the importance flip: MDI underrates a 0/1 column and overrates many-valued ones.</li>
+  <li><b>Lab B (12m, pairs):</b> <code class="inline">labs/module-09/l5_2-random-forests/decorrelate_starter.py</code>; reference <code class="inline">labs/module-09/l5_2-random-forests/decorrelate_solution.py</code>. The variance formula measured: as max_features goes from 1 to 10, single trees get better and more alike, and the forest is best in between.</li>
+  <li><b>Expected, Lab B:</b> forest AUC 0.865 equals the average of its 200 trees; one-tree AUC 0.709 → 0.747, correlation 0.357 → 0.535; forest test AUC 0.854 / 0.864 / 0.865 / 0.861 / 0.856 for max_features 1 / 2 / 3 / 5 / 10; first-k-trees 0.755 (1) to 0.866 (100); top 50 holds 41 churners and the trees disagree more about them (spread 0.284 vs 0.178).</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-09/l5_2-random-forests/debug_forest.py</code>: <code class="inline">base_estimator</code>, OOB without the bootstrap, training AUC printed as OOB, and no <code class="inline">random_state</code>. Fixed: bagging 0.849, forest OOB 0.866, test 0.865, every run.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The <b>churn forest and call list</b> (lesson page, "Project: A Churn Forest and a Call List"). In the room: Steps 1 and 2 (10 minutes).</p>
+<ul class="tick">
+  <li>Step 1: the 5.1 project's columns and split. <b>Check:</b> <code class="inline">(4500, 15) (1500, 15) C102112</code>.</li>
+  <li>Step 2: a forest pipeline with the encoder, leaf size tuned out-of-bag. <b>Done</b> = OOB AUC 0.863 / 0.865 / 0.868 / 0.866 / 0.864 for leaf 1 / 5 / 10 / 20 / 40; pick 10.</li>
+  <li><b>Goes home:</b> Steps 3 to 6 (test: forest 0.863, rule tree 0.837, logistic regression 0.825; top 50: 41 / 36 / 31; permutation importance; <code class="inline">call_list.csv</code>).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these during the demo and the labs:</p>
+<ul class="tick">
+  <li>Why did averaging 100 bad trees give a good model? <b>Answer:</b> their errors partly cancel; nothing about any tree improved.</li>
+  <li>Each forest tree is worse than a bagged tree. Why is the forest better? <b>Answer:</b> its trees are less correlated, so the average cancels more error.</li>
+  <li>Can a forest have too many trees? <b>Answer:</b> not in accuracy; only in time and memory.</li>
+  <li>When is the OOB score not enough? <b>Answer:</b> preprocessing that learned from the target, time- or group-structured rows; and the test set still stays locked.</li>
+</ul>
+<p>Workbook self-check, items Q1 to Q6.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q1</b> <span data-sc="1"><code class="inline">0.632</code></span>; <b>Q2</b> <span data-sc="2">C) Lowering <code class="inline">max_features</code></span>; <b>Q3</b> <span data-sc="3">A) Only the trees whose bootstrap sample did not include that customer</span>; <b>Q4</b> <span data-sc="4">D) <code class="inline">ValueError: Out of bag estimation only available if bootstrap=True</code></span>; <b>Q5</b> <span data-sc="5"><code class="inline">[1.0, 0.37, 0.307]</code></span>; <b>Q6</b> <span data-sc="6">B) MDI was inflated: a many-valued column wins chance splits on the training data</span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> keep the panel picture in front of strugglers; in Lab A, let a pair skip TODO 1 (use leaf 5) and spend the time on the importance table.</p>
+<p><b>Stretch:</b> the lesson's Exercise 3 (Extra-Trees) and the Bonus Challenge (a MiniForest class with its own OOB score).</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">5.3</span><h3>Gradient Boosting</h3><span class="dur">75 min</span></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">Objectives (from the lesson page)</div>
+<ul class="tick">
+  <li>Explain how boosting adds small trees one after another, each fitted to the remaining errors, and how the learning rate controls the step size</li>
+  <li>Train <code class="inline">HistGradientBoostingClassifier</code> and <code class="inline">HistGradientBoostingRegressor</code> on data with missing values and native categorical columns</li>
+  <li>Use early stopping on a validation set to choose the number of trees without touching the test set</li>
+  <li>Run the same model with <code class="inline">XGBClassifier</code> and <code class="inline">LGBMClassifier</code>, including their categorical and early-stopping options</li>
+  <li>Choose between a random forest, scikit-learn's boosting and the external libraries for a given problem</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Timing in the room</div>
+<table class="timing">
+<tbody>
+<tr><td class="t">10m</td><td>Frame: the golf green; learning rate; boosting fixes bias</td></tr>
+<tr><td class="t">30m</td><td>Live demo: Steps 1 to 13</td></tr>
+<tr><td class="t">25m</td><td>Guided lab: <code class="inline">boosting_by_hand_starter.py</code> (13m), then <code class="inline">fraud_boosters_starter.py</code> in pairs (12m)</td></tr>
+<tr><td class="t">10m</td><td>Start the lesson project: Steps 1 and 2</td></tr>
+</tbody>
+</table>
+</div>
+<div class="blk"><div class="h">Mental model to say</div>
+<p>"A golfer rarely sinks a long putt in one stroke. The first putt gets close; the second corrects what is left; the third tidies up. Every stroke aims at the <b>remaining</b> distance."</p>
+<p>"Boosting starts from a crude guess, the average. Tree 1 aims at the gap between that guess and the truth. Tree 2 at what is left after tree 1, and so on. The <b>learning rate</b> is how hard you hit each putt: a gentle tap needs more strokes but rarely overshoots." Then contrast with the panel on the left of the board: "The forest's trees never talk to each other; boosting's trees each fix the one before. Forests fix variance; boosting fixes bias, and keeps going until you stop it."</p>
+</div>
+<div class="blk"><div class="h">Live demo (you type, they follow)</div>
+<p>New notebook <code class="inline">lesson_5_3</code>. The first three steps are the toy wave; then churn with native categories; then the two external libraries.</p>
+<ol class="steps">
+  <li><b>A wavy problem with a noise floor (2m).</b> "200 noisy points on a wave, plus 1,000 fresh points to play new data. The noise variance is 0.25: no model can beat that on new data."
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.tree <span class="k">import</span> DecisionTreeRegressor
+
+rng = np.random.default_rng(<span class="s">42</span>)
+
+<span class="k">def</span> make_wave(n):
+    x = rng.uniform(<span class="s">0</span>, <span class="s">10</span>, n)
+    y = <span class="s">3</span> * np.sin(x) + <span class="s">0.3</span> * x + rng.normal(<span class="s">0</span>, <span class="s">0.5</span>, n)
+    <span class="k">return</span> x.reshape(-<span class="s">1</span>, <span class="s">1</span>), y
+
+X_toy, y_toy = make_wave(<span class="s">200</span>)
+X_new, y_new = make_wave(<span class="s">1000</span>)
+print(X_toy.shape, X_new.shape, <span class="s">f"noise variance {0.5 ** 2}"</span>)</pre>
+<pre class="out">(200, 1) (1000, 1) noise variance 0.25</pre></li>
+  <li><b>Boosting by hand (5m).</b> "Start from the average. Fit a small tree to what is still wrong. Add a fraction of it. Repeat." Read the loop line by line; it is the whole algorithm.
+<pre class="code"><span class="k">def</span> boost(learning_rate, n_trees, report=()):
+    pred = np.full(len(y_toy), y_toy.mean())       <span class="c"># start: the average</span>
+    pred_new = np.full(len(y_new), y_toy.mean())
+    <span class="k">for</span> m <span class="k">in</span> range(<span class="s">1</span>, n_trees + <span class="s">1</span>):
+        residual = y_toy - pred                       <span class="c"># what is still wrong</span>
+        tree = DecisionTreeRegressor(max_depth=<span class="s">2</span>, random_state=<span class="s">42</span>).fit(X_toy, residual)
+        pred += learning_rate * tree.predict(X_toy)   <span class="c"># a small step towards the truth</span>
+        pred_new += learning_rate * tree.predict(X_new)
+        <span class="k">if</span> m <span class="k">in</span> report:
+            print(<span class="s">f"{m:4d} trees  train MSE {np.mean((y_toy - pred) ** 2):.3f}"</span>
+                  <span class="s">f"  new-data MSE {np.mean((y_new - pred_new) ** 2):.3f}"</span>)
+    <span class="k">return</span> pred_new
+
+curve = boost(learning_rate=<span class="s">0.3</span>, n_trees=<span class="s">300</span>, report=(<span class="s">1</span>, <span class="s">3</span>, <span class="s">10</span>, <span class="s">30</span>, <span class="s">100</span>, <span class="s">300</span>))</pre>
+<pre class="out">   1 trees  train MSE 3.055  new-data MSE 2.964
+   3 trees  train MSE 1.364  new-data MSE 1.410
+  10 trees  train MSE 0.353  new-data MSE 0.476
+  30 trees  train MSE 0.156  new-data MSE 0.361
+ 100 trees  train MSE 0.075  new-data MSE 0.393
+ 300 trees  train MSE 0.010  new-data MSE 0.471</pre>
+Training error falls forever, far below the 0.25 floor: memorizing. New-data error bottoms near 30 trees, then creeps up. That U-turn is why every boosting library has early stopping. Show the lesson's 1 / 10 / 300 trees pictures.</li>
+  <li><b>The learning rate (3m).</b> "How hard you hit each putt." Predict first: which rate gives the best new-data error?
+<pre class="code"><span class="k">for</span> lr <span class="k">in</span> [<span class="s">1.0</span>, <span class="s">0.05</span>]:
+    print(<span class="s">f"learning rate {lr}"</span>)
+    boost(learning_rate=lr, n_trees=<span class="s">300</span>, report=(<span class="s">10</span>, <span class="s">100</span>, <span class="s">300</span>))</pre>
+<pre class="out">learning rate 1.0
+  10 trees  train MSE 0.220  new-data MSE 0.449
+ 100 trees  train MSE 0.006  new-data MSE 0.508
+ 300 trees  train MSE 0.000  new-data MSE 0.520
+learning rate 0.05
+  10 trees  train MSE 2.454  new-data MSE 2.398
+ 100 trees  train MSE 0.210  new-data MSE 0.369
+ 300 trees  train MSE 0.124  new-data MSE 0.354</pre>
+Full strength memorizes fast; 0.05 needs many more trees but ends at 0.354, better than 0.3 ever did. Small rate + many trees + early stopping is the recipe.</li>
+  <li><b>Churn, with categories as categories (3m).</b> "The one preparation step: <code class="inline">astype("category")</code>. No imputer, no scaler."
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+numeric = [<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>, <span class="s">"spend_12m"</span>, <span class="s">"avg_order_value"</span>, <span class="s">"days_since_last_order"</span>,
+           <span class="s">"returns_12m"</span>, <span class="s">"return_rate"</span>, <span class="s">"support_tickets_12m"</span>, <span class="s">"discount_share"</span>, <span class="s">"app_user"</span>,
+           <span class="s">"email_opens_90d"</span>]
+categorical = [<span class="s">"home_store"</span>, <span class="s">"region"</span>, <span class="s">"age_group"</span>, <span class="s">"loyalty_tier"</span>, <span class="s">"preferred_category"</span>]
+
+X = customers[numeric + categorical].copy()
+X[categorical] = X[categorical].astype(<span class="s">"category"</span>)
+y = customers[<span class="s">"churned"</span>]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=<span class="s">0.25</span>, stratify=y, random_state=<span class="s">42</span>
+)
+print(X_train.shape, X_test.shape)
+print(<span class="s">"missing in training:"</span>, X_train[[<span class="s">"email_opens_90d"</span>, <span class="s">"age_group"</span>]].isna().sum().to_dict())</pre>
+<pre class="out">(4500, 16) (1500, 16)
+missing in training: {'email_opens_90d': 419, 'age_group': 359}</pre></li>
+  <li><b>HistGradientBoosting (2m).</b> "Hist: each feature is cut into at most 255 bins; missing values get their own bin."
+<pre class="code"><span class="k">from</span> sklearn.ensemble <span class="k">import</span> HistGradientBoostingClassifier
+<span class="k">from</span> sklearn.metrics <span class="k">import</span> roc_auc_score, average_precision_score
+
+hgb = HistGradientBoostingClassifier(random_state=<span class="s">42</span>)
+hgb.fit(X_train, y_train)
+
+p_hgb = hgb.predict_proba(X_test)[:, <span class="s">1</span>]
+print(<span class="s">f"accuracy {hgb.score(X_test, y_test):.3f}  ROC AUC {roc_auc_score(y_test, p_hgb):.3f}"</span>
+      <span class="s">f"  average precision {average_precision_score(y_test, p_hgb):.3f}"</span>)
+print(<span class="s">"trees built:"</span>, hgb.n_iter_)
+print(<span class="s">"treated as categorical:"</span>, list(X_train.columns[hgb.is_categorical_]))</pre>
+<pre class="out">accuracy 0.867  ROC AUC 0.862  average precision 0.609
+trees built: 100
+treated as categorical: ['home_store', 'region', 'age_group', 'loyalty_tier', 'preferred_category']</pre>
+100 trees: with 4,500 rows, early stopping ("auto") is off.</li>
+  <li><b>Against the baseline and logistic regression (3m).</b> "Zero preprocessing."
+<pre class="code"><span class="k">from</span> sklearn.compose <span class="k">import</span> make_column_transformer
+<span class="k">from</span> sklearn.dummy <span class="k">import</span> DummyClassifier
+<span class="k">from</span> sklearn.impute <span class="k">import</span> SimpleImputer
+<span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> OneHotEncoder, StandardScaler
+
+linear_prep = make_column_transformer(
+    (make_pipeline(SimpleImputer(strategy=<span class="s">"median"</span>), StandardScaler()), numeric),
+    (make_pipeline(SimpleImputer(strategy=<span class="s">"most_frequent"</span>), OneHotEncoder(handle_unknown=<span class="s">"ignore"</span>)), categorical),
+)
+logreg = make_pipeline(linear_prep, LogisticRegression(max_iter=<span class="s">1000</span>))
+
+<span class="k">for</span> name, model <span class="k">in</span> [(<span class="s">"baseline"</span>, DummyClassifier(strategy=<span class="s">"most_frequent"</span>)),
+                    (<span class="s">"logistic regression"</span>, logreg),
+                    (<span class="s">"hist gradient boosting"</span>, hgb)]:
+    model.fit(X_train, y_train)
+    p = model.predict_proba(X_test)[:, <span class="s">1</span>]
+    print(<span class="s">f"{name:24s} ROC AUC {roc_auc_score(y_test, p):.3f}  AP {average_precision_score(y_test, p):.3f}"</span>)</pre>
+<pre class="out">baseline                 ROC AUC 0.500  AP 0.165
+logistic regression      ROC AUC 0.826  AP 0.493
+hist gradient boosting   ROC AUC 0.862  AP 0.609</pre>
+About +0.035 AUC and +0.12 AP over logistic regression: the threshold in recency, the U in tenure and the tickets-by-app interaction, found by the trees. Fair note: Lesson 2.3's hand-built features got logistic regression to 0.880.</li>
+  <li><b>Is 100 trees right? (3m).</b> "Carve a validation set from the training rows and watch the loss after every tree."
+<pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> log_loss
+
+X_fit, X_val, y_fit, y_val = train_test_split(
+    X_train, y_train, test_size=<span class="s">0.2</span>, stratify=y_train, random_state=<span class="s">42</span>
+)
+long_run = HistGradientBoostingClassifier(learning_rate=<span class="s">0.1</span>, max_iter=<span class="s">400</span>, early_stopping=<span class="k">False</span>,
+                                          random_state=<span class="s">42</span>).fit(X_fit, y_fit)
+
+train_loss = [log_loss(y_fit, p) <span class="k">for</span> p <span class="k">in</span> long_run.staged_predict_proba(X_fit)]
+val_loss = [log_loss(y_val, p) <span class="k">for</span> p <span class="k">in</span> long_run.staged_predict_proba(X_val)]
+best = int(np.argmin(val_loss)) + <span class="s">1</span>
+print(<span class="s">f"best number of trees on validation: {best}  (val loss {min(val_loss):.4f})"</span>)
+print(<span class="s">f"after 100 trees: val loss {val_loss[99]:.4f};  after 400: {val_loss[-1]:.4f}"</span>)</pre>
+<pre class="out">best number of trees on validation: 27  (val loss 0.2901)
+after 100 trees: val loss 0.3026;  after 400: 0.4306</pre>
+Best at 27 trees; the default 100 is already past it. Show the lesson's U-turn chart.</li>
+  <li><b>Early stopping does it for you (3m).</b> "Three learning rates, a generous max_iter, early stopping on."
+<pre class="code"><span class="k">for</span> lr <span class="k">in</span> [<span class="s">0.3</span>, <span class="s">0.1</span>, <span class="s">0.03</span>]:
+    model = HistGradientBoostingClassifier(
+        learning_rate=lr, max_iter=<span class="s">2000</span>, early_stopping=<span class="k">True</span>, validation_fraction=<span class="s">0.2</span>,
+        n_iter_no_change=<span class="s">20</span>, random_state=<span class="s">42</span>,
+    ).fit(X_train, y_train)
+    auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, <span class="s">1</span>])
+    print(<span class="s">f"learning_rate {lr:4}  trees used {model.n_iter_:4d}  test ROC AUC {auc:.3f}"</span>)</pre>
+<pre class="out">learning_rate  0.3  trees used   29  test ROC AUC 0.846
+learning_rate  0.1  trees used   56  test ROC AUC 0.867
+learning_rate 0.03  trees used  149  test ROC AUC 0.870</pre>
+0.03 uses the most trees and gives the best model. random_state now decides which rows become the internal validation set.</li>
+  <li><b>XGBoost (2m).</b> "Same estimator API. Early stopping goes in the constructor; the validation set in fit. Never the test set."
+<pre class="code"><span class="k">from</span> xgboost <span class="k">import</span> XGBClassifier
+
+xgb_model = XGBClassifier(
+    n_estimators=<span class="s">2000</span>, learning_rate=<span class="s">0.03</span>, max_depth=<span class="s">4</span>,
+    enable_categorical=<span class="k">True</span>, eval_metric=<span class="s">"logloss"</span>, early_stopping_rounds=<span class="s">50</span>,
+    random_state=<span class="s">42</span>, verbosity=<span class="s">0</span>,
+)
+xgb_model.fit(X_fit, y_fit, eval_set=[(X_val, y_val)], verbose=<span class="k">False</span>)
+
+p_xgb = xgb_model.predict_proba(X_test)[:, <span class="s">1</span>]
+print(<span class="s">f"XGBoost   best iteration {xgb_model.best_iteration:4d}  test ROC AUC {roc_auc_score(y_test, p_xgb):.3f}"</span>)</pre>
+<pre class="out">XGBoost   best iteration  218  test ROC AUC 0.864</pre>
+"Yours may vary slightly": multithreaded sums.</li>
+  <li><b>LightGBM (2m).</b> "<code class="inline">eval_X</code> and <code class="inline">eval_y</code> in fit, early stopping as a callback."
+<pre class="code"><span class="k">import</span> lightgbm <span class="k">as</span> lgb
+<span class="k">from</span> lightgbm <span class="k">import</span> LGBMClassifier
+
+lgbm_model = LGBMClassifier(
+    n_estimators=<span class="s">2000</span>, learning_rate=<span class="s">0.03</span>, num_leaves=<span class="s">15</span>,
+    random_state=<span class="s">42</span>, verbose=-<span class="s">1</span>,
+)
+lgbm_model.fit(X_fit, y_fit, eval_X=X_val, eval_y=y_val, eval_metric=<span class="s">"binary_logloss"</span>,
+               callbacks=[lgb.early_stopping(<span class="s">50</span>, verbose=<span class="k">False</span>)])
+
+p_lgbm = lgbm_model.predict_proba(X_test)[:, <span class="s">1</span>]
+print(<span class="s">f"LightGBM  best iteration {lgbm_model.best_iteration_:4d}  test ROC AUC {roc_auc_score(y_test, p_lgbm):.3f}"</span>)</pre>
+<pre class="out">LightGBM  best iteration  262  test ROC AUC 0.865</pre>
+All three land in the same place: the learning rate and stopping matter more than the logo.</li>
+  <li><b>Mistake: text columns (1m).</b> 
+<pre class="code">HistGradientBoostingClassifier().fit(customers[[<span class="s">"tenure_months"</span>, <span class="s">"home_store"</span>]], y)</pre>
+<pre class="out">ValueError: could not convert string to float: 'Bend'</pre>
+<code class="inline">astype("category")</code>.</li>
+  <li><b>Mistake: old XGBoost arguments (1m).</b> 
+<pre class="code">XGBClassifier(n_estimators=<span class="s">500</span>, enable_categorical=<span class="k">True</span>, verbosity=<span class="s">0</span>).fit(
+    X_fit, y_fit, eval_set=[(X_val, y_val)], early_stopping_rounds=<span class="s">50</span>
+)</pre>
+<pre class="out">TypeError: XGBClassifier.fit() got an unexpected keyword argument 'early_stopping_rounds'</pre>
+Constructor, not fit.</li>
+  <li><b>Mistake: early stopping on the test set (1m).</b> "No error, and that is the problem."
+<pre class="code">peeking = XGBClassifier(
+    n_estimators=<span class="s">2000</span>, learning_rate=<span class="s">0.03</span>, max_depth=<span class="s">4</span>, enable_categorical=<span class="k">True</span>,
+    eval_metric=<span class="s">"auc"</span>, early_stopping_rounds=<span class="s">50</span>, random_state=<span class="s">42</span>, verbosity=<span class="s">0</span>,
+)
+peeking.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=<span class="k">False</span>)
+print(<span class="s">f"stopped at {peeking.best_iteration} trees, the best point ON THE TEST SET"</span>)
+print(<span class="s">f"reported test ROC AUC {roc_auc_score(y_test, peeking.predict_proba(X_test)[:, 1]):.3f}"</span>)</pre>
+<pre class="out">stopped at 127 trees, the best point ON THE TEST SET
+reported test ROC AUC 0.872</pre>
+Slightly better than the honest models, and you can no longer tell how much is real.</li>
+</ol>
+</div>
+<div class="blk warn"><div class="h">Three mistakes to expect, and how to coach each</div>
+<ul class="tick">
+  <li><b>No early stopping, or early stopping on the test set.</b> Coach: "Which rows chose the number of trees?" Validation carved from training; test once.</li>
+  <li><b>Text columns.</b> <code class="inline">could not convert string to float</code> (HistGradientBoosting) or the long XGBoost dtype message. Coach: "What dtype is that column?" <code class="inline">astype("category")</code>.</li>
+  <li><b>Old API arguments copied from the internet.</b> <code class="inline">early_stopping_rounds</code> in XGBoost's <code class="inline">fit</code>; LightGBM's <code class="inline">eval_set</code>. Coach: "Read the last line; which argument does it name?" Then check the lesson's comparison table.</li>
+</ul>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A (13m, everyone):</b> <code class="inline">labs/module-09/l5_3-gradient-boosting/boosting_by_hand_starter.py</code>; reference <code class="inline">labs/module-09/l5_3-gradient-boosting/boosting_by_hand_solution.py</code>. The lesson's loop, for churn: start at the log-odds of the churn rate, fit depth-3 regression trees to y − p, step 0.3, pick the number of trees on validation, test once, compare with HistGradientBoosting.</li>
+  <li><b>Expected, Lab A:</b> start −1.619 (back to 0.165 through the sigmoid); validation loss 0.4375 after 1 tree, 0.2954 after 100, best 275 trees (0.2892); hand-made test AUC 0.870, log loss 0.3082; HistGradientBoosting (max_depth 3, early stopping) 165 trees, AUC 0.866, log loss 0.3091. Stretch: rate 1.0 is best at 72 trees and worse after 300 (0.3072).</li>
+  <li><b>Circulate in Lab A for:</b> <code class="inline">residual = y - F</code> (log-odds instead of probabilities: the loss explodes); updating only <code class="inline">F_fit</code> and not <code class="inline">F_val</code>. <b>Debrief:</b> "Fifteen lines, and it matches the library. The library takes smarter steps (it uses curvature, so it needs fewer trees), but the idea is exactly this."</li>
+  <li><b>Lab B (12m, pairs):</b> <code class="inline">labs/module-09/l5_3-gradient-boosting/fraud_boosters_starter.py</code>; reference <code class="inline">labs/module-09/l5_3-gradient-boosting/fraud_boosters_solution.py</code>. HistGradientBoosting, XGBoost and LightGBM on fraud with a native category column and early stopping on validation by average precision; then the peeking version.</li>
+  <li><b>Expected, Lab B:</b> HGB defaults AUC 0.841, AP 0.415, 55 in the top 100 (only 46 trees: "auto" early stopping is on above 10,000 rows); gentle HGB 0.857 / 0.475 / 57; XGBoost 0.862 / 0.503 / 61; LightGBM 0.861 / 0.492 / 59; peeking 0.867 / 0.510 / 60. The fraud thread: logistic regression 53, forest 57, XGBoost 61.</li>
+  <li><b>Fast finishers:</b> <code class="inline">labs/module-09/l5_3-gradient-boosting/debug_boosting.py</code>: text columns, <code class="inline">early_stopping_rounds</code> in fit, and early stopping on the test set. Fixed: HGB 0.862, XGBoost 0.864 at 218 trees.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Start the lesson project</div>
+<p>The <b>weekly demand forecaster</b> (lesson page, "Project: Weekly Demand Forecaster"). In the room: Steps 1 and 2 (10 minutes).</p>
+<ul class="tick">
+  <li>Step 1: split by time, 2024 against 2025. <b>Check:</b> <code class="inline">5088 training weeks x products x stores; 4896 test</code>, mean units 24.4 vs 26.3 (Pinecrest is growing). Ask: why not <code class="inline">train_test_split</code>?</li>
+  <li>Step 2: three baselines. <b>Done</b> = MAE 17.13 (overall mean), 13.42 (per-product mean), 13.81 (same week last year).</li>
+  <li><b>Goes home:</b> Steps 3 to 6 (HGB squared error 8.16 with 45 negative forecasts; Poisson 8.05, smallest forecast 0.395; per-category table; <code class="inline">demand_forecast_2025.csv</code>, 40% lower error than the per-product mean). Remind them of Session 8's Lab B: a tree cannot follow growth, and neither can boosting.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Checks for understanding</div>
+<p>Ask these during the demo and the labs:</p>
+<ul class="tick">
+  <li>What is each new tree trained on? <b>Answer:</b> what the current model still gets wrong (residuals; y − p for classification).</li>
+  <li>Lower the learning rate from 0.1 to 0.01 with early stopping on. What happens? <b>Answer:</b> many more trees, similar or slightly better validation score.</li>
+  <li>Why does a forest not need early stopping but boosting does? <b>Answer:</b> averaging more trees only makes the average more precise; adding more corrections keeps fitting finer detail, including noise.</li>
+  <li>When would you still pick a random forest? <b>Answer:</b> little time to tune, a robust baseline; boosting usually wins once tuned.</li>
+</ul>
+<p>Workbook self-check, items Q7 to Q12.</p>
+<p style="font-size:.9rem;margin:.2rem 0">Answers: <b>Q7</b> <span data-sc="7"><code class="inline">[20.6 19.4]</code></span>; <b>Q8</b> <span data-sc="8">A) Bagging averages independent deep trees and mainly reduces variance; boosting adds small trees in sequence, each fixing what is still wrong, and mainly reduces bias</span>; <b>Q9</b> <span data-sc="9">C) 100: early_stopping="auto" is off below 10,000 rows, so it builds max_iter=100</span>; <b>Q10</b> <span data-sc="10">B) <code class="inline">ValueError: could not convert string to float: 'Bend'</code></span>; <b>Q11</b> <span data-sc="11">D) A validation set split off from the training rows</span>; <b>Q12</b> <span data-sc="12">B) Use loss="poisson", which predicts on a log scale</span>. Full set with explanations in the Answer Key.</p></div>
+<div class="blk"><div class="h">Differentiation</div>
+<p><b>Support:</b> in Lab A, give strugglers the three loop lines from the docstring and ask them only to explain each in words. Pair a strong typist with a strong explainer in Lab B.</p>
+<p><b>Stretch:</b> the lesson's Exercise 3 (a monotonic constraint on recency), Exercise 4 (boosting on rare fraud) and the quantile-loss Bonus Challenge (a 90% safety-stock forecast).</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Closing</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Exit ticket (3 questions, no notes, 4 minutes)</div>
+<p>Questions on the slide; answers in the workbook's Exit Ticket box or on a sticky note. Sort them: the pile for question 1 shows whether the panel and the golfer stayed apart; Session 10's Lesson 5.4 needs that distinction (diverse members).</p>
+<ol class="steps">
+  <li>A forest and a boosted model are both made of trees. In two sentences: how are their trees different, and which kind of error does each mainly fix? <b>Answer:</b> A forest grows many deep, independent trees on bootstrap samples and averages them: it mainly reduces variance. Boosting grows small trees one after another, each fitted to what the model still gets wrong: it mainly reduces bias (and needs early stopping).</li>
+  <li>Why is a forest's out-of-bag score free, and when should you not trust it? <b>Answer:</b> Each tree never saw about 37% of the training rows, so averaging only those trees gives an unseen-data prediction for every row from one fit. Do not trust it when preprocessing learned from the target, when rows are not independent (time or groups), or with too few trees.</li>
+  <li>A colleague early-stops XGBoost with eval_set=[(X_test, y_test)] and reports AUC 0.867. What is wrong, and what do you tell them? <b>Answer:</b> The number of trees was chosen by watching the test set, so the test score is partly a training score. Early-stop on a validation set split off the training rows (or HistGradientBoosting's built-in early stopping) and touch the test set once.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Homework (about 2 to 3 hours)</div>
+<ul class="tick">
+  <li><b>Finish both lesson projects:</b> the churn forest and call list (Steps 3 to 6: forest 0.863, 41 of 50, <code class="inline">call_list.csv</code>) and the demand forecaster (Steps 3 to 6: Poisson MAE 8.05, <code class="inline">demand_forecast_2025.csv</code>).</li>
+  <li><b>Lesson exercises:</b> 5.2 Exercises 1 to 3 (the 63% rule, bagging a stable model, Extra-Trees); 5.3 Exercises 1 to 3 (stumps or bushes, tree size with early stopping, a monotonic constraint). Exercise 4 of each is a stretch.</li>
+  <li><b>Both Quick Quizzes</b> and <b>both journal entries</b>.</li>
+  <li><b>Before the Next Lesson:</b> 5.2: refit the project forest with 50 and 1,000 trees. 5.3: rerun the churn early-stopping block with random_state=7, and WRITE DOWN a prediction: will averaging a logistic regression's and the booster's probabilities beat the booster alone? Lesson 5.4 opens with it.</li>
+  <li><b>Start thinking about your final project:</b> churn, demand or fraud (Session 10 chooses; Session 11 is the studio).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Bring list for Session 10</div>
+<ul class="tick">
+  <li>A laptop on which <code class="inline">check_environment.py</code> still ends with READY (nothing new to install).</li>
+  <li>The <code class="inline">pinecrest-ml</code> folder with <code class="inline">data/</code> and <code class="inline">labs/</code>; Session 10's starters are in <code class="inline">labs/module-10/</code>.</li>
+  <li>The 5.2 and 5.3 project notebooks: Lesson 5.4's bake-off puts a logistic regression, a forest and a booster on the same churn split, and your numbers are the reference.</li>
+  <li>Your written prediction about averaging logistic regression with boosting.</li>
+  <li>A first idea for the final project: which of churn, demand or fraud, and why. The workbook and the journal.</li>
+</ul>
+</div>
+
+  <div class="sec"><h2>If You Run Long or Short</h2><span class="rule"></span></div>
+<div class="blk warn"><div class="h">Running long: what to protect and what to cut first</div>
+<ul class="tick">
+  <li><b>Protect:</b> 5.2 Steps 2 and 5; 5.3 Steps 2, 3 and 7; Lab A of each lesson.</li>
+  <li><b>Cut first (saves 6m):</b> 5.2 Steps 3, 4 and 10 to 12; say the three fixes.</li>
+  <li><b>Cut second (saves 6m):</b> 5.3 Steps 9, 11 to 13; run only XGBoost, say LightGBM "lands in the same place".</li>
+  <li><b>Cut third (saves 12m per lesson):</b> Lab B of each lesson goes home; the expected output is in each starter.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Running short: what to add</div>
+<ul class="tick">
+  <li>5.2 Exercise 2 live: bagging a logistic regression gains nothing (0.8295 vs 0.8292): bagging needs variance to remove.</li>
+  <li>5.3 Exercise 1 live: stumps, depth 2 and depth 5 on the wave.</li>
+  <li>Put the whole fraud thread on the board: top-100 frauds 53 (logistic regression), 57 (forest), 61 (XGBoost); AP 0.444, 0.479, 0.503. Ask: "Worth the complexity?" (Lesson 5.4's question.)</li>
+</ul>
+</div>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 9 · Facilitator Guide · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Learn PyTorch's core building blocks (tensors, nn.Module, loss functions and optimizers, Dataset and DataLoader, the training loop with validation and early stopping, and saving and loading models) by training a churn network on Pinecrest Outfitters customers. Python Machine Learning Lesson 10.2.">
+    <meta name="author" content="Ray de la Paz">
+    <title>PyTorch Fundamentals - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
+</head>
+<body>
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
+    </nav>
+
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>🔥 Lesson 10.2: PyTorch Fundamentals</h1>
+                <p class="lead">Rebuild your hand-made network with the tools professionals use: tensors, layers, losses, optimizers and data loaders, wired into a training loop that knows when to stop.</p>
+
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Create and reshape tensors, convert between NumPy and PyTorch, and get the <code>float32</code> dtype right</li>
+                        <li>Define a network with <code>nn.Linear</code>, <code>nn.Sequential</code> and your own <code>nn.Module</code> subclass</li>
+                        <li>Choose the loss function that matches the task, and train with an optimizer, a <code>Dataset</code> and a <code>DataLoader</code></li>
+                        <li>Write the standard training loop with <code>model.train()</code>, <code>model.eval()</code>, <code>torch.no_grad()</code>, a validation set and early stopping</li>
+                        <li>Save and reload a trained model with <code>state_dict</code>, and judge it honestly against gradient boosting</li>
+                    </ul>
+                </div>
+
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 110 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="deep_learning_basics.html">Lesson 10.1: Neural Networks from Scratch</a>; <a href="pipelines_composite.html">Lesson 2.2: Pipelines</a> (ColumnTransformer)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A PyTorch churn model on every usable feature, with early stopping, saved to disk and compared with logistic regression and gradient boosting</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code> (exercise 4 uses <code>data/weekly_demand.csv</code>)</li>
+                </ul>
+            </header>
+
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">From Hand-Made to PyTorch</a></li>
+                        <li><a href="#tensors" class="toc-link">Tensors</a></li>
+                        <li><a href="#modules" class="toc-link">Models as nn.Module</a></li>
+                        <li><a href="#loss-optim" class="toc-link">Loss Functions and Optimizers</a></li>
+                        <li><a href="#data" class="toc-link">Dataset and DataLoader</a></li>
+                        <li><a href="#loop" class="toc-link">The Training Loop</a></li>
+                        <li><a href="#early-stopping" class="toc-link">Validation and Early Stopping</a></li>
+                        <li><a href="#saving" class="toc-link">Saving and Loading</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: A PyTorch Churn Model</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 From Hand-Made to PyTorch</h2>
+
+                <p>In Lesson 10.1 you built a network from parts: a dictionary of weight arrays, a forward function, a loss, a backward pass (then autograd), and a loop that nudged every weight. It worked, and it would not survive contact with a real project. Twenty layers, a million images, mini-batches, saving the result: each would mean more hand-written plumbing.</p>
+
+                <p><strong>PyTorch</strong> is a library of exactly that plumbing, written once and well. It is the most widely used deep learning framework in research and very common in industry, and everything you learned in 10.1 maps onto one of its pieces:</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>In Lesson 10.1 you wrote</th><th>PyTorch gives you</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>NumPy arrays</td><td><code>torch.Tensor</code>: arrays that track gradients and can live on a GPU</td></tr>
+                            <tr><td>A dictionary of weights + <code>forward()</code></td><td><code>nn.Module</code>, with layers such as <code>nn.Linear</code> that create and initialize their own weights</td></tr>
+                            <tr><td><code>bce_loss()</code></td><td>Loss objects: <code>nn.BCEWithLogitsLoss</code>, <code>nn.CrossEntropyLoss</code>, <code>nn.MSELoss</code></td></tr>
+                            <tr><td><code>backward()</code></td><td>Autograd: <code>loss.backward()</code></td></tr>
+                            <tr><td>The update loop and <code>grad.zero_()</code></td><td>An optimizer: <code>optimizer.step()</code> and <code>optimizer.zero_grad()</code></td></tr>
+                            <tr><td>Full-batch training on arrays</td><td><code>Dataset</code> and <code>DataLoader</code>: shuffled mini-batches</td></tr>
+                            <tr><td><code>np.savez</code></td><td><code>torch.save(model.state_dict())</code></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: A Workshop with Labeled Drawers</h4>
+                    <p>Lesson 10.1 was carving every tool yourself before building a chair. PyTorch is a workshop where each tool sits in its labeled drawer: tensors in one, layers in another, losses, optimizers, data loaders. You still decide what to build and in what order, and you still hold the tools yourself (PyTorch does not hide the training loop from you, unlike some higher-level libraries), but you never carve a chisel again.</p>
+                </div>
+
+                <p>The whole lesson builds toward this loop, which every PyTorch project in this course uses, including the image and sequence models in Lessons 10.3 to 10.5:</p>
+
+                <div class="mermaid">
+graph TD
+    A["DataLoader gives a mini-batch"] --> B["optimizer.zero_grad()"]
+    B --> C["Forward: logits = model(xb)"]
+    C --> D["loss = loss_fn(logits, yb)"]
+    D --> E["loss.backward()"]
+    E --> F["optimizer.step()"]
+    F --> A
+    F --> G["After each epoch: validate"]
+                </div>
+
+                <div class="card card-warning">
+                    <h4>⚠️ An Honest Word Before You Start</h4>
+                    <p>This lesson trains networks on Pinecrest's churn table because it is data you know well, so every new tool has a familiar result to check against. But a table of customer features is not where deep learning shines. On tabular data, gradient-boosted trees are usually as good or better, and much less work. The project measures exactly that. Lessons 10.3 to 10.5 move to images and sequences, where networks are the right tool.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="tensors" class="lesson-section">
+                <h2>🧊 Tensors</h2>
+
+                <p>A <strong>tensor</strong> is PyTorch's array: like a NumPy array, it has a shape and a data type and supports the same kind of arithmetic, slicing and broadcasting. It adds two things: it can record operations for autograd, and it can live on a GPU.</p>
+
+                <pre><code class="language-python">import numpy as np
+import pandas as pd
+import torch
+
+print(torch.__version__)
+
+t = torch.tensor([[1.0, 2.0, 3.0],
+                  [4.0, 5.0, 6.0]])
+print(t)
+print(t.shape, t.dtype, t.device)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>2.14.1+cpu
+tensor([[1., 2., 3.],
+        [4., 5., 6.]])
+torch.Size([2, 3]) torch.float32 cpu</code></pre>
+                </div>
+
+                <p>Your version line may show a different suffix (<code>+cpu</code> means a CPU-only build, which is all this course needs). Three attributes describe every tensor: its <code>shape</code>, its <code>dtype</code> (here <code>float32</code>), and its <code>device</code> (here the CPU). Operations look like NumPy, with <code>dim=</code> where NumPy says <code>axis=</code>:</p>
+
+                <pre><code class="language-python">print(t * 10)
+print(t.sum(dim=0))                 # column sums
+print(t.mean().item())              # .item() turns a one-value tensor into a Python number
+print(t @ t.T)                      # matrix multiplication, as in Lesson 10.1
+print(t.reshape(3, 2))
+print(t[:, 0].shape, t[:, 0].unsqueeze(1).shape)   # unsqueeze adds a dimension of size 1</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>tensor([[10., 20., 30.],
+        [40., 50., 60.]])
+tensor([5., 7., 9.])
+3.5
+tensor([[14., 32.],
+        [32., 77.]])
+tensor([[1., 2.],
+        [3., 4.],
+        [5., 6.]])
+torch.Size([2]) torch.Size([2, 1])</code></pre>
+                </div>
+
+                <p>Keep an eye on <code>unsqueeze(1)</code>: it turns a flat vector of 2 values into a column of shape (2, 1). You will need it for targets in a moment.</p>
+
+                <h3>🔁 NumPy In, NumPy Out, and the dtype Trap</h3>
+
+                <pre><code class="language-python">arr = np.array([0.5, 1.5, 2.5])
+shared = torch.from_numpy(arr)       # shares memory with arr
+copied = torch.tensor(arr, dtype=torch.float32)
+
+arr[0] = 99.0
+print(shared, shared.dtype)
+print(copied, copied.dtype)
+print(copied.numpy())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>tensor([99.0000,  1.5000,  2.5000], dtype=torch.float64) torch.float64
+tensor([0.5000, 1.5000, 2.5000]) torch.float32
+[0.5 1.5 2.5]</code></pre>
+                </div>
+
+                <p>Two lessons in one block. First, <code>torch.from_numpy</code> shares memory with the array, so changing <code>arr</code> changed <code>shared</code>; <code>torch.tensor</code> makes an independent copy. Second, and more important: <strong>NumPy's default is <code>float64</code>; PyTorch layers use <code>float32</code></strong>. Anything coming from NumPy, pandas or scikit-learn arrives as <code>float64</code> and must be converted, or the first layer refuses it (mistake 1). Converting with <code>dtype=torch.float32</code> as you create the tensor is the simplest habit.</p>
+
+                <h3>📂 The Churn Data as Tensors</h3>
+                <p>Now the real data. Take the ten numeric features from Lessons 1.1 and 10.1, make the course's standard test split, and then split the training part again: 80% to fit the weights and 20% as a <strong>validation set</strong> for decisions during training (how many epochs, which settings). The test set stays locked until the very end.</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+
+X_train_df, X_test_df, y_train_s, y_test_s = train_test_split(
+    customers[features], customers["churned"], test_size=0.25, stratify=customers["churned"], random_state=42
+)
+X_fit_df, X_val_df, y_fit_s, y_val_s = train_test_split(
+    X_train_df, y_train_s, test_size=0.2, stratify=y_train_s, random_state=42
+)
+scaler = StandardScaler().fit(X_fit_df)          # fit on the fitting rows only
+
+
+def to_tensors(X_df, y_s):
+    X_t = torch.tensor(scaler.transform(X_df), dtype=torch.float32)
+    y_t = torch.tensor(y_s.to_numpy(), dtype=torch.float32).unsqueeze(1)   # shape (n, 1)
+    return X_t, y_t
+
+
+X_fit, y_fit = to_tensors(X_fit_df, y_fit_s)
+X_val, y_val = to_tensors(X_val_df, y_val_s)
+X_test, y_test = to_tensors(X_test_df, y_test_s)
+print(X_fit.shape, y_fit.shape, X_val.shape, X_test.shape)
+print(X_fit.dtype, y_fit[:5].squeeze(1))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>torch.Size([3600, 10]) torch.Size([3600, 1]) torch.Size([900, 10]) torch.Size([1500, 10])
+torch.float32 tensor([0., 0., 0., 0., 0.])</code></pre>
+                </div>
+
+                <p>3,600 rows to fit, 900 to validate, 1,500 to test. The targets are <code>float32</code> too (the binary loss compares floats) and shaped (n, 1) to match the network's single output column.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Devices, in One Paragraph</h4>
+                    <p>On a machine with an NVIDIA GPU, <code>device = "cuda" if torch.cuda.is_available() else "cpu"</code>, then <code>model.to(device)</code> and <code>xb.to(device)</code> for each batch, moves the work to the GPU. Model and data must be on the same device. This course runs on the CPU throughout: small data, small models, a few epochs. The code you write here runs on a GPU with only those lines added.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="modules" class="lesson-section">
+                <h2>🧱 Models as nn.Module</h2>
+
+                <p>The <code>torch.nn</code> module holds the layers. The workhorse is <code>nn.Linear(in_features, out_features)</code>: the <code>X @ W + b</code> of Lesson 10.1, with its weights created and randomly initialized for you.</p>
+
+                <pre><code class="language-python">from torch import nn
+
+torch.manual_seed(42)
+layer = nn.Linear(10, 16)
+print(layer)
+print(layer.weight.shape, layer.bias.shape)
+print(layer(X_fit[:3]).shape)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>Linear(in_features=10, out_features=16, bias=True)
+torch.Size([16, 10]) torch.Size([16])
+torch.Size([3, 16])</code></pre>
+                </div>
+
+                <p>One surprise: the weight is stored as (16, 10), outputs by inputs, the transpose of Lesson 10.1's convention. The layer computes <code>x @ weight.T + bias</code>, so the result is still (3, 16). You rarely touch the weight matrix directly; just remember that <code>nn.Linear(10, 16)</code> means "10 in, 16 out".</p>
+
+                <p>For a simple stack of layers, <code>nn.Sequential</code> chains them in order. Here is the network from Lesson 10.1, with the same 193 parameters:</p>
+
+                <pre><code class="language-python">torch.manual_seed(42)
+seq_model = nn.Sequential(nn.Linear(10, 16), nn.ReLU(), nn.Linear(16, 1))
+print(seq_model)
+print("parameters:", sum(p.numel() for p in seq_model.parameters()))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>Sequential(
+  (0): Linear(in_features=10, out_features=16, bias=True)
+  (1): ReLU()
+  (2): Linear(in_features=16, out_features=1, bias=True)
+)
+parameters: 193</code></pre>
+                </div>
+
+                <h3>🏗️ Your Own Module</h3>
+                <p>Most real models are written as a class that inherits from <code>nn.Module</code>. The pattern has two parts: create the layers in <code>__init__</code> (so PyTorch registers their parameters), and wire them together in <code>forward</code>. It looks like more code than <code>nn.Sequential</code>, but it lets <code>forward</code> do anything Python can do: branches, several inputs, skip connections.</p>
+
+                <pre><code class="language-python">class ChurnNet(nn.Module):
+    def __init__(self, n_features, n_hidden=16):
+        super().__init__()                         # always call this first
+        self.hidden = nn.Linear(n_features, n_hidden)
+        self.output = nn.Linear(n_hidden, 1)
+
+    def forward(self, x):
+        return self.output(torch.relu(self.hidden(x)))   # raw scores (logits): no sigmoid here
+
+
+torch.manual_seed(42)
+model = ChurnNet(n_features=10)
+for name, param in model.named_parameters():
+    print(f"{name:14s} {tuple(param.shape)}")
+
+logits = model(X_fit[:4])
+print(logits.squeeze(1))
+print(torch.sigmoid(logits).squeeze(1))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>hidden.weight  (16, 10)
+hidden.bias    (16,)
+output.weight  (1, 16)
+output.bias    (1,)
+tensor([-0.0142,  0.3132,  0.1372,  0.0113], grad_fn=&lt;SqueezeBackward1&gt;)
+tensor([0.4965, 0.5777, 0.5343, 0.5028], grad_fn=&lt;SqueezeBackward1&gt;)</code></pre>
+                </div>
+
+                <p>Three things to notice:</p>
+                <ul>
+                    <li>You call <code>model(x)</code>, never <code>model.forward(x)</code>: calling the module runs <code>forward</code> plus PyTorch's bookkeeping.</li>
+                    <li>The printout ends with <code>grad_fn=...</code>: autograd is already recording, ready for <code>backward</code>, exactly like 10.1's tensors with <code>requires_grad=True</code>. Every parameter of an <code>nn.Module</code> tracks gradients automatically.</li>
+                    <li>The model returns <strong>logits</strong>, the raw scores before the sigmoid. Applying <code>torch.sigmoid</code> turns them into probabilities. Why not put the sigmoid inside the model? The next section explains.</li>
+                </ul>
+
+                <div class="card card-info">
+                    <h4>💡 Why torch.manual_seed(42)?</h4>
+                    <p>A new layer starts from random weights, and a shuffled <code>DataLoader</code> draws a random order of rows. Seeding PyTorch's random generator right before creating a model (and before training) makes a run repeat exactly, so a difference between two runs means your change did something, not that you rolled different dice.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="loss-optim" class="lesson-section">
+                <h2>🎯 Loss Functions and Optimizers</h2>
+
+                <p>The loss must match the task, and so must the last layer. This table covers almost every model you will train:</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Task</th><th>Last layer outputs</th><th>Loss</th><th>Target</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Yes or no (churn)</td><td>1 logit</td><td><code>nn.BCEWithLogitsLoss()</code></td><td>float 0.0 or 1.0, shape (n, 1)</td></tr>
+                            <tr><td>One of k classes</td><td>k logits</td><td><code>nn.CrossEntropyLoss()</code></td><td>integer class index, shape (n,)</td></tr>
+                            <tr><td>A number</td><td>1 value</td><td><code>nn.MSELoss()</code> or <code>nn.L1Loss()</code></td><td>float, shape (n, 1)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p><code>BCEWithLogitsLoss</code> is binary cross-entropy (10.1's <code>bce_loss</code>) with the sigmoid built in. Combining them lets PyTorch compute the loss in a numerically safe way, without the <code>np.clip</code> trick, even for extreme scores. So the rule is: <strong>the model outputs logits, and the loss applies the sigmoid</strong>. Apply the sigmoid yourself only when you want probabilities for reporting. <code>CrossEntropyLoss</code> follows the same rule for many classes, with softmax built in:</p>
+
+                <pre><code class="language-python">ce = nn.CrossEntropyLoss()
+class_logits = torch.tensor([[2.0, 0.5, -1.0],     # row 1: class 0 looks most likely
+                             [0.1, 0.2, 3.0]])     # row 2: class 2 looks most likely
+labels = torch.tensor([0, 2])                       # the true classes, as integers
+
+print(f"cross-entropy: {ce(class_logits, labels).item():.4f}")
+print(class_logits.softmax(dim=1).round(decimals=3))
+print("predicted classes:", class_logits.argmax(dim=1))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>cross-entropy: 0.1755
+tensor([[0.7860, 0.1750, 0.0390],
+        [0.0490, 0.0540, 0.8960]])
+predicted classes: tensor([0, 2])</code></pre>
+                </div>
+
+                <p>Softmax turns each row of logits into probabilities that sum to 1, and <code>argmax</code> picks the predicted class. The image classifier in Lesson 10.3 has 10 classes and uses exactly this pair.</p>
+
+                <h3>🚶 Optimizers</h3>
+                <p>An <strong>optimizer</strong> owns the update step. You hand it the model's parameters and a learning rate once; after that, <code>optimizer.step()</code> updates every parameter from its <code>.grad</code>, and <code>optimizer.zero_grad()</code> resets the gradients (the reset you did by hand in 10.1). Watch one step lower the loss:</p>
+
+                <pre><code class="language-python">loss_fn = nn.BCEWithLogitsLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+before = loss_fn(model(X_fit), y_fit)
+optimizer.zero_grad()      # clear old gradients
+before.backward()          # compute new ones
+optimizer.step()           # update every parameter
+after = loss_fn(model(X_fit), y_fit)
+print(f"loss before one step {before.item():.4f}, after {after.item():.4f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>loss before one step 0.7570, after 0.7288</code></pre>
+                </div>
+
+                <p><code>torch.optim.SGD</code> is the plain gradient descent of 10.1 (optionally with momentum). <strong>Adam</strong> adapts the step size for each parameter from the history of its gradients, and it is the usual default because it works well with little tuning; <code>lr=0.001</code> to <code>0.01</code> is the typical range. Exercise 2 compares the two.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="data" class="lesson-section">
+                <h2>📦 Dataset and DataLoader</h2>
+
+                <p>Lesson 10.1 used every row in every step. Real training uses <strong>mini-batches</strong>: shuffle the rows, cut them into batches of, say, 64, and take one optimizer step per batch. Each step is cheaper and noisier, and you get many steps per epoch instead of one; in practice this reaches a good model much faster, and it is the only option when the data does not fit in memory.</p>
+
+                <p>PyTorch splits the job in two. A <strong><code>Dataset</code></strong> knows how many samples there are and how to fetch sample number <code>i</code>. A <strong><code>DataLoader</code></strong> wraps a dataset and serves shuffled batches. When your data is already in tensors, <code>TensorDataset</code> is a ready-made dataset:</p>
+
+                <pre><code class="language-python">from torch.utils.data import TensorDataset, DataLoader
+
+fit_set = TensorDataset(X_fit, y_fit)
+first_x, first_y = fit_set[0]
+print(len(fit_set), first_x.shape, first_y)
+
+torch.manual_seed(42)
+fit_loader = DataLoader(fit_set, batch_size=64, shuffle=True)
+xb, yb = next(iter(fit_loader))
+print(xb.shape, yb.shape, "batches per epoch:", len(fit_loader))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>3600 torch.Size([10]) tensor([0.])
+torch.Size([64, 10]) torch.Size([64, 1]) batches per epoch: 57</code></pre>
+                </div>
+
+                <p>3,600 rows in batches of 64 make 57 batches (the last one has only 16 rows). <code>shuffle=True</code> reshuffles at the start of every epoch, using PyTorch's random generator, which is why the seed comes first. Validation and test data are never shuffled: order does not matter for evaluation.</p>
+
+                <h3>✍️ Writing Your Own Dataset</h3>
+                <p>When the data needs work per sample (reading an image file, cutting a window out of a time series), you write a <code>Dataset</code> class with three methods. Here is one that builds its tensors straight from a slice of the customer table and a fitted scaler:</p>
+
+                <pre><code class="language-python">from torch.utils.data import Dataset
+
+
+class ChurnDataset(Dataset):
+    def __init__(self, frame, scaler):
+        self.X = torch.tensor(scaler.transform(frame[features]), dtype=torch.float32)
+        self.y = torch.tensor(frame["churned"].to_numpy(), dtype=torch.float32).unsqueeze(1)
+
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, i):
+        return self.X[i], self.y[i]
+
+
+val_dataset = ChurnDataset(customers.loc[X_val_df.index], scaler)
+print(len(val_dataset), torch.equal(val_dataset.X, X_val))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>900 True</code></pre>
+                </div>
+
+                <p>The same 900 validation rows, the same values. Anything with <code>__len__</code> and <code>__getitem__</code> works with <code>DataLoader</code>; torchvision's image datasets in Lessons 10.3 and 10.5 are built exactly this way. <code>torch.utils.data.Subset(dataset, indices)</code> picks some rows of any dataset, which those lessons use to train on a smaller sample.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="loop" class="lesson-section">
+                <h2>🔄 The Training Loop</h2>
+
+                <p>Now assemble the pieces. Two small functions do all the work: one trains for one epoch, one evaluates. Write them once and reuse them; Lesson 10.3 uses the same shape.</p>
+
+                <pre><code class="language-python">from sklearn.metrics import roc_auc_score
+
+
+def train_one_epoch(model, loader, loss_fn, optimizer):
+    model.train()                                  # training mode (matters for dropout)
+    total_loss, n = 0.0, 0
+    for xb, yb in loader:
+        optimizer.zero_grad()                      # 1. reset gradients
+        loss = loss_fn(model(xb), yb)              # 2. forward pass and loss
+        loss.backward()                            # 3. backward pass
+        optimizer.step()                           # 4. update
+        total_loss += loss.item() * len(yb)
+        n += len(yb)
+    return total_loss / n                          # average loss over the epoch
+
+
+def evaluate(model, X, y, loss_fn):
+    model.eval()                                   # prediction mode
+    with torch.no_grad():                          # no gradient bookkeeping needed
+        logits = model(X)
+        loss = loss_fn(logits, y).item()
+        auc = roc_auc_score(y.squeeze(1).numpy(), logits.squeeze(1).numpy())
+    return loss, auc</code></pre>
+
+                <p>The four numbered lines are 10.1's loop, one batch at a time. The rest is bookkeeping you will see in every PyTorch project:</p>
+                <ul>
+                    <li><code>model.train()</code> and <code>model.eval()</code> switch layers that behave differently while training, such as dropout (in the project) and batch normalization. This model has neither yet, but the habit costs nothing and prevents a silent bug later (mistake 4).</li>
+                    <li><code>torch.no_grad()</code> turns off autograd's recording during evaluation: faster, less memory, and the outputs can go straight to NumPy.</li>
+                    <li><code>loss.item()</code> pulls the number out of the tensor. Summing <code>loss.item() * len(yb)</code> gives an honest average even though the last batch is smaller.</li>
+                    <li>ROC AUC works on logits directly: the sigmoid never changes the order of the scores, and AUC only cares about order.</li>
+                </ul>
+
+                <p>Train a wider version of the network (64 hidden units) for 30 epochs with Adam, and watch both the training loss and the validation loss:</p>
+
+                <pre><code class="language-python">torch.manual_seed(42)
+model = ChurnNet(n_features=10, n_hidden=64)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+fit_loader = DataLoader(fit_set, batch_size=64, shuffle=True)
+
+history = []
+for epoch in range(1, 31):
+    train_loss = train_one_epoch(model, fit_loader, loss_fn, optimizer)
+    val_loss, val_auc = evaluate(model, X_val, y_val, loss_fn)
+    history.append({"epoch": epoch, "train": train_loss, "validation": val_loss, "val_auc": val_auc})
+    if epoch % 5 == 0:
+        print(f"epoch {epoch:2d}  train loss {train_loss:.3f}  val loss {val_loss:.3f}  val AUC {val_auc:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>epoch  5  train loss 0.323  val loss 0.311  val AUC 0.862
+epoch 10  train loss 0.313  val loss 0.315  val AUC 0.869
+epoch 15  train loss 0.309  val loss 0.326  val AUC 0.848
+epoch 20  train loss 0.301  val loss 0.304  val AUC 0.870
+epoch 25  train loss 0.296  val loss 0.311  val AUC 0.863
+epoch 30  train loss 0.294  val loss 0.341  val AUC 0.841</code></pre>
+                </div>
+
+                <p>Training output in this module is labeled "may vary": with the same seed and the same number of CPU threads, PyTorch repeats a run exactly, but a different processor or library build can change the last digits. Compare trends, not the third decimal. Plot the two curves:</p>
+
+                <pre><code class="language-python">import matplotlib.pyplot as plt
+
+curves = pd.DataFrame(history).set_index("epoch")
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.plot(curves.index, curves["train"], color="#667eea", linewidth=2, label="training loss (average over the epoch)")
+ax.plot(curves.index, curves["validation"], color="#e8833a", linewidth=2, label="validation loss")
+best_epoch = curves["validation"].idxmin()
+ax.axvline(best_epoch, color="gray", linestyle="--", linewidth=1, label=f"lowest validation loss (epoch {best_epoch})")
+ax.set_xlabel("epoch")
+ax.set_ylabel("binary cross-entropy")
+ax.set_title("Training loss keeps falling; validation loss stops improving")
+ax.legend()
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/deep_learning_pytorch_curves.png" alt="Line chart of loss over 30 epochs. The training loss falls steadily from 0.38 to 0.29. The validation loss drops to about 0.31 within three epochs, then zigzags between 0.29 and 0.33 without a clear trend, and jumps to 0.34 at epoch 30. A dashed vertical line marks epoch 18, the lowest validation loss." width="990" height="440" loading="lazy">
+                    <figcaption>The training loss keeps falling, but after the first few epochs the validation loss only zigzags: more epochs mostly help the rows the model trains on. The zigzag is also why early stopping waits a few epochs before giving up.</figcaption>
+                </figure>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="early-stopping" class="lesson-section">
+                <h2>⏱️ Validation and Early Stopping</h2>
+
+                <p>How many epochs should you train? Too few and the network underfits; too many and it starts memorizing the fitting rows, which the validation curve reveals as it flattens or rises while the training curve keeps falling. <strong>Early stopping</strong> automates the decision: after every epoch, check the validation loss; whenever it is the best so far, save a copy of the weights; if it has not improved for <code>patience</code> epochs, stop and restore the best copy.</p>
+
+                <p>The weights live in the model's <code>state_dict()</code>, a dictionary from parameter names to tensors. <code>copy.deepcopy</code> takes a snapshot that later training cannot change:</p>
+
+                <pre><code class="language-python">import copy
+
+
+def fit(model, train_loader, X_val, y_val, loss_fn, optimizer, max_epochs=50, patience=5):
+    best_loss, best_state, best_epoch = float("inf"), None, 0
+    for epoch in range(1, max_epochs + 1):
+        train_one_epoch(model, train_loader, loss_fn, optimizer)
+        val_loss, val_auc = evaluate(model, X_val, y_val, loss_fn)
+        if val_loss &lt; best_loss:
+            best_loss, best_epoch = val_loss, epoch
+            best_state = copy.deepcopy(model.state_dict())
+        elif epoch - best_epoch &gt;= patience:
+            break
+    model.load_state_dict(best_state)              # roll back to the best epoch
+    print(f"stopped after epoch {epoch}; best epoch {best_epoch}, validation loss {best_loss:.4f}")
+    return model
+
+
+torch.manual_seed(42)
+model = ChurnNet(n_features=10, n_hidden=64)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+fit_loader = DataLoader(fit_set, batch_size=64, shuffle=True)
+model = fit(model, fit_loader, X_val, y_val, loss_fn, optimizer)
+
+print(f"validation AUC of the restored model: {evaluate(model, X_val, y_val, loss_fn)[1]:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (yours may vary slightly)</h4>
+                    <pre><code>stopped after epoch 23; best epoch 18, validation loss 0.2937
+validation AUC of the restored model: 0.881</code></pre>
+                </div>
+
+                <div class="card card-warning">
+                    <h4>⚠️ The Validation Set Is Now "Used"</h4>
+                    <p>Early stopping chose the epoch by looking at the validation rows, so the validation AUC is slightly optimistic: the model was picked because it did well there. That is exactly why the test set exists. Report the test score once, at the end, as the project does. The same logic as cross-validation and tuning in Lessons 1.3 and 6.2, applied to epochs.</p>
+                </div>
+
+                <p>Professional training libraries (PyTorch Lightning, for example) wrap this loop, early stopping and checkpointing included, into a <code>Trainer</code> object. They save typing; they do nothing you cannot now write and read yourself.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="saving" class="lesson-section">
+                <h2>💾 Saving and Loading</h2>
+
+                <p>The recommended way to save a PyTorch model is to save its <code>state_dict</code> (the weights), not the model object. To load, you create a fresh model from your class and pour the weights into it:</p>
+
+                <pre><code class="language-python">torch.save(model.state_dict(), "churn_net.pt")
+
+state = torch.load("churn_net.pt", weights_only=True)
+print(list(state.keys()))
+
+reloaded = ChurnNet(n_features=10, n_hidden=64)    # same architecture as the saved model
+reloaded.load_state_dict(state)
+reloaded.eval()
+
+model.eval()
+with torch.no_grad():
+    print("same test predictions:", torch.equal(model(X_test), reloaded(X_test)))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>['hidden.weight', 'hidden.bias', 'output.weight', 'output.bias']
+same test predictions: True</code></pre>
+                </div>
+
+                <p><code>load_state_dict</code> checks that every name and shape lines up and raises an error if not (mistake 6); when it is the last line of a notebook cell, you see its report, <code>&lt;All keys matched successfully&gt;</code>. Two practical consequences of saving weights rather than objects:</p>
+                <ul>
+                    <li>The <strong>class definition</strong> is part of your model. Keep <code>ChurnNet</code> in a <code>.py</code> file next to the weights, with the settings (<code>n_hidden=64</code>) you used.</li>
+                    <li>The <strong>preprocessing</strong> is part of your model too. The network only understands features scaled with the fitting rows' statistics, so the fitted <code>scaler</code> must be saved alongside (the project does it with <code>joblib</code>; Lesson 12.1 covers safe formats).</li>
+                </ul>
+
+                <div class="card card-danger">
+                    <h4>🛑 Only Load Files You Trust</h4>
+                    <p><code>torch.load</code> can unpickle arbitrary Python objects, and unpickling can run code. <code>weights_only=True</code> (the default in current PyTorch, written out here so the intent is clear) restricts loading to tensors and simple containers. Never turn it off for a file from a source you do not trust.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Most PyTorch errors are about dtypes and shapes, and the messages say exactly which. The silent ones are about modes and losses.</p>
+
+                <h3>1. Feeding float64 Data to a float32 Model</h3>
+
+                <pre data-raises="RuntimeError"><code class="language-python">raw = torch.from_numpy(scaler.transform(X_val_df))     # float64, straight from NumPy
+model(raw)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>RuntimeError: mat1 and mat2 must have the same dtype, but got Double and Float</code></pre>
+                </div>
+                <p><strong>What it means:</strong> "Double" is <code>float64</code>, "Float" is <code>float32</code>. The data came from scikit-learn in NumPy's default precision; the layer's weights are <code>float32</code>. <strong>Fix:</strong> create tensors with <code>torch.tensor(array, dtype=torch.float32)</code>, or convert with <code>.float()</code>.</p>
+
+                <h3>2. The Wrong Number of Features</h3>
+
+                <pre data-raises="RuntimeError"><code class="language-python">model(X_val[:, :9])            # one column short</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>RuntimeError: mat1 and mat2 shapes cannot be multiplied (900x9 and 10x64)</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the batch is 900 rows by 9 columns, and the first layer expects 10 inputs (its weight, transposed for the multiplication, is 10 × 64). <strong>Fix:</strong> make <code>n_features</code> come from the data (<code>X.shape[1]</code>) rather than a typed number, and check that the same columns, in the same order, reach the model at training and prediction time.</p>
+
+                <h3>3. Target Shape Does Not Match the Output</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">flat_targets = y_val.squeeze(1)                 # shape (900,)
+loss_fn(model(X_val), flat_targets)             # model output is (900, 1)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Target size (torch.Size([900])) must be the same as input size (torch.Size([900, 1]))</code></pre>
+                </div>
+                <p><strong>What it means:</strong> <code>BCEWithLogitsLoss</code> compares outputs and targets element by element and insists on identical shapes. <strong>Fix:</strong> shape the targets (n, 1) with <code>unsqueeze(1)</code>, as <code>to_tensors</code> does, or squeeze the output. (<code>CrossEntropyLoss</code> is the exception: logits (n, k) and integer targets (n,).)</p>
+
+                <h3>4. Forgetting model.eval() When the Model Has Dropout</h3>
+
+                <pre><code class="language-python">torch.manual_seed(42)
+dropout_net = nn.Sequential(nn.Linear(10, 32), nn.ReLU(), nn.Dropout(0.5), nn.Linear(32, 1))
+one_customer = X_test[:1]
+
+dropout_net.train()
+with torch.no_grad():
+    print("train mode:", [round(dropout_net(one_customer).item(), 3) for _ in range(3)])
+dropout_net.eval()
+with torch.no_grad():
+    print("eval mode: ", [round(dropout_net(one_customer).item(), 3) for _ in range(3)])</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>train mode: [0.367, 0.958, -0.361]
+eval mode:  [0.348, 0.348, 0.348]</code></pre>
+                </div>
+                <p><strong>What happened:</strong> in training mode, dropout switches off a random half of the hidden units on every call, so the same customer gets a different score each time. In evaluation mode, every unit is used and the answer is stable. <code>torch.no_grad()</code> does <em>not</em> switch modes: it only stops gradient tracking. <strong>Fix:</strong> call <code>model.eval()</code> before evaluating or predicting, and <code>model.train()</code> before training again (the loop functions do both).</p>
+
+                <h3>5. A Sigmoid in the Model and in the Loss</h3>
+
+                <pre><code class="language-python">sure_churner = torch.tensor([[1.0]])
+for name, output in [("logit 8.0 (correct)", torch.tensor([[8.0]])),
+                     ("sigmoid(8.0) passed as a logit", torch.sigmoid(torch.tensor([[8.0]])))]:
+    print(f"{name:32s} loss {loss_fn(output, sure_churner).item():.4f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>logit 8.0 (correct)              loss 0.0003
+sigmoid(8.0) passed as a logit   loss 0.3134</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the model is confidently right (logit 8 means a probability of 0.9997), and the loss is near 0, as it should be. If the model already applies a sigmoid, the loss applies a second one: the most confident possible output, 1.0, then reads as a probability of only 0.73, so the loss can never fall below 0.31 and training pushes in strange directions. Nothing crashes. <strong>Fix:</strong> no sigmoid at the end of the model when you use <code>BCEWithLogitsLoss</code> (or softmax with <code>CrossEntropyLoss</code>); apply it only to report probabilities.</p>
+
+                <h3>6. Loading Weights into a Different Architecture</h3>
+
+                <pre data-raises="RuntimeError"><code class="language-python">ChurnNet(n_features=10, n_hidden=16).load_state_dict(torch.load("churn_net.pt", weights_only=True))</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>RuntimeError: Error(s) in loading state_dict for ChurnNet:
+	size mismatch for hidden.weight: copying a param with shape torch.Size([64, 10]) from checkpoint, the shape in current model is torch.Size([16, 10]).
+	size mismatch for hidden.bias: copying a param with shape torch.Size([64]) from checkpoint, the shape in current model is torch.Size([16]).
+	size mismatch for output.weight: copying a param with shape torch.Size([1, 64]) from checkpoint, the shape in current model is torch.Size([1, 16]).</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the file holds weights for a 64-unit hidden layer, and the new model has 16 units, so the shapes do not fit. <strong>Fix:</strong> recreate the model with exactly the settings it was trained with. Saving those settings next to the weights (in a small JSON file, or in the same dictionary you pass to <code>torch.save</code>) avoids the guesswork.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: A PyTorch Churn Model</h2>
+
+                <p>The lesson used ten numeric features. Now give a network everything usable in the churn table: all eleven numeric columns (including <code>email_opens_90d</code>, which has gaps) and the five categorical ones, prepared with the <code>ColumnTransformer</code> from Lesson 2.2. Then train with dropout and early stopping, test once, compare honestly with logistic regression and gradient boosting, and save everything needed to use the model later. Start a fresh notebook, <code>lesson_10_2_project</code>; the code is self-contained apart from <code>train_one_epoch</code>, <code>evaluate</code> and <code>fit</code>, which you copy from the lesson. Allow about 45 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load and split three ways <span class="step-time">(5 min)</span></h3>
+                    <p>Leave out <code>customer_id</code>, <code>signup_date</code> (it duplicates tenure) and, above all, <code>cancellation_reason</code>, the leak from Lesson 1.2. Split off the standard test set, then a validation set for early stopping.</p>
+                    <pre><code class="language-python">import pandas as pd
+import torch
+from torch import nn
+from torch.utils.data import TensorDataset, DataLoader
+from sklearn.model_selection import train_test_split
+
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order", "returns_12m",
+           "return_rate", "support_tickets_12m", "discount_share", "app_user", "email_opens_90d"]
+categorical = ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"]
+
+X_all, y_all = customers[numeric + categorical], customers["churned"]
+X_train_df, X_test_df, y_train_s, y_test_s = train_test_split(
+    X_all, y_all, test_size=0.25, stratify=y_all, random_state=42)
+X_fit_df, X_val_df, y_fit_s, y_val_s = train_test_split(
+    X_train_df, y_train_s, test_size=0.2, stratify=y_train_s, random_state=42)
+print(len(X_fit_df), len(X_val_df), len(X_test_df))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>3600 900 1500</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Preprocess, fitted on the fitting rows only <span class="step-time">(10 min)</span></h3>
+                    <p>Networks need every input numeric, scaled and free of gaps. Impute and scale the numbers; impute and one-hot encode the categories. <code>sparse_output=False</code> gives a dense array that converts straight to a tensor.</p>
+                    <pre><code class="language-python">from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+preprocess = ColumnTransformer([
+    ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric),
+    ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"),
+                          OneHotEncoder(sparse_output=False, handle_unknown="ignore")), categorical),
+])
+A_fit = preprocess.fit_transform(X_fit_df)
+A_val, A_test = preprocess.transform(X_val_df), preprocess.transform(X_test_df)
+
+
+def as_tensors(A, y_s):
+    return torch.tensor(A, dtype=torch.float32), torch.tensor(y_s.to_numpy(), dtype=torch.float32).unsqueeze(1)
+
+
+X_fit, y_fit = as_tensors(A_fit, y_fit_s)
+X_val, y_val = as_tensors(A_val, y_val_s)
+X_test, y_test = as_tensors(A_test, y_test_s)
+print(X_fit.shape, X_val.shape, X_test.shape)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>torch.Size([3600, 40]) torch.Size([900, 40]) torch.Size([1500, 40])</code></pre>
+                    </div>
+                    <p>Sixteen columns became 40: eleven numeric plus 29 one-hot columns. The model's input size comes from <code>X_fit.shape[1]</code>, never typed by hand.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: A model with dropout <span class="step-time">(5 min)</span></h3>
+                    <p><strong>Dropout</strong> randomly zeroes a share of the hidden units on each training step, so the network cannot lean on any single unit: a cheap, effective guard against overfitting. It is active only in <code>train()</code> mode.</p>
+                    <pre><code class="language-python">class ChurnMLP(nn.Module):
+    def __init__(self, n_features, n_hidden=32, dropout=0.2):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_features, n_hidden), nn.ReLU(), nn.Dropout(dropout),
+            nn.Linear(n_hidden, 1),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+settings = {"n_features": X_fit.shape[1], "n_hidden": 32, "dropout": 0.2}
+torch.manual_seed(42)
+churn_mlp = ChurnMLP(**settings)
+print(churn_mlp)
+print("parameters:", sum(p.numel() for p in churn_mlp.parameters()))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>ChurnMLP(
+  (net): Sequential(
+    (0): Linear(in_features=40, out_features=32, bias=True)
+    (1): ReLU()
+    (2): Dropout(p=0.2, inplace=False)
+    (3): Linear(in_features=32, out_features=1, bias=True)
+  )
+)
+parameters: 1345</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Train with early stopping <span class="step-time">(10 min)</span></h3>
+                    <p>Use the lesson's <code>fit</code> function: Adam with a learning rate of 0.003, batches of 64, up to 30 epochs, patience 5. Expect well under a minute on a laptop.</p>
+                    <pre><code class="language-python">loss_fn = nn.BCEWithLogitsLoss()
+optimizer = torch.optim.Adam(churn_mlp.parameters(), lr=0.003)
+torch.manual_seed(42)
+loader = DataLoader(TensorDataset(X_fit, y_fit), batch_size=64, shuffle=True)
+
+churn_mlp = fit(churn_mlp, loader, X_val, y_val, loss_fn, optimizer, max_epochs=30, patience=5)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output (yours may vary slightly)</h4>
+                        <pre><code>stopped after epoch 22; best epoch 17, validation loss 0.3138</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Open the test set once, and compare honestly <span class="step-time">(10 min)</span></h3>
+                    <p>Score the network on the test set. For a fair comparison, train logistic regression and gradient boosting on the same 3,600 fitting rows and the same prepared features (boosting would also accept the raw categories; Lesson 5.3).</p>
+                    <pre><code class="language-python">from sklearn.dummy import DummyClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_auc_score
+
+net_auc = evaluate(churn_mlp, X_test, y_test, loss_fn)[1]
+scores = {"neural network (PyTorch)": net_auc}
+for name, clf in [("baseline", DummyClassifier(strategy="most_frequent")),
+                  ("logistic regression", LogisticRegression(max_iter=1000)),
+                  ("gradient boosting", HistGradientBoostingClassifier(random_state=42))]:
+    clf.fit(A_fit, y_fit_s)
+    scores[name] = roc_auc_score(y_test_s, clf.predict_proba(A_test)[:, 1])
+
+for name, auc in sorted(scores.items(), key=lambda item: item[1]):
+    print(f"{name:26s} test ROC AUC {auc:.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output (yours may vary slightly)</h4>
+                        <pre><code>baseline                   test ROC AUC 0.500
+logistic regression        test ROC AUC 0.826
+neural network (PyTorch)   test ROC AUC 0.846
+gradient boosting          test ROC AUC 0.850</code></pre>
+                    </div>
+                    <p>Read this the way a careful analyst would. The network clearly beats the baseline and logistic regression, because the churn effects are partly nonlinear. Gradient boosting edges it out, and a gap of 0.004 is within the wobble of a single test set, so call it a tie on accuracy. The tie-breaker is everything else: boosting got there with default settings, while the network needed scaling, an architecture, a learning rate, dropout and early stopping, each of them a choice that could have gone wrong. That is the usual picture on tabular data, and the honest recommendation for Pinecrest's churn model is gradient boosting. The value of this project is the workflow, which carries over unchanged to images and sequences, where networks do win.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save the model, its settings and its preprocessing <span class="step-time">(5 min)</span></h3>
+                    <p>A model someone else can use needs three things: the weights, the settings to rebuild the class, and the fitted preprocessing. Save all three, rebuild from disk, and check the predictions match.</p>
+                    <pre><code class="language-python">import joblib
+
+torch.save({"settings": settings, "state_dict": churn_mlp.state_dict()}, "churn_mlp.pt")
+joblib.dump(preprocess, "churn_preprocess.joblib")
+
+checkpoint = torch.load("churn_mlp.pt", weights_only=True)
+restored = ChurnMLP(**checkpoint["settings"])
+restored.load_state_dict(checkpoint["state_dict"])
+restored.eval()
+restored_prep = joblib.load("churn_preprocess.joblib")
+
+new_rows = X_test_df.head(3)
+with torch.no_grad():
+    probs = torch.sigmoid(restored(torch.tensor(restored_prep.transform(new_rows), dtype=torch.float32)))
+print(checkpoint["settings"])
+print(pd.DataFrame({"churn_probability": probs.squeeze(1).numpy().round(3), "churned": y_test_s.head(3).to_numpy()},
+                   index=new_rows.index))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output (yours may vary slightly)</h4>
+                        <pre><code>{'n_features': 40, 'n_hidden': 32, 'dropout': 0.2}
+      churn_probability  churned
+2111              0.081        0
+3062              0.357        1
+1158              0.126        0</code></pre>
+                    </div>
+                    <p>From three files, raw customer rows go in and churn probabilities come out. Lesson 12.1 packages this properly (and explains why loading a joblib file, like any pickle, must be limited to files you trust); Lesson 12.2 serves it behind an API.</p>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li><code>cancellation_reason</code>, <code>customer_id</code> and <code>signup_date</code> are not among the features</li>
+                        <li>The preprocessing was fitted on the 3,600 fitting rows only, and the tensors are <code>float32</code></li>
+                        <li>Early stopping chose the epoch using the validation set; the test set was scored once</li>
+                        <li>You compared the network with a baseline, logistic regression and gradient boosting on the same rows</li>
+                        <li><code>churn_mlp.pt</code> (settings and weights) and <code>churn_preprocess.joblib</code> rebuild a working model</li>
+                        <li>You can explain in two sentences which model you would recommend for churn, and why</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue in the project notebook, so <code>customers</code>, <code>X_fit</code>, <code>X_val</code>, <code>loss_fn</code>, <code>train_one_epoch</code>, <code>evaluate</code> and <code>fit</code> exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Tensor Warm-Up</h3>
+                    <p>Make a <code>float32</code> tensor from the <code>spend_12m</code> and <code>orders_12m</code> columns of <code>customers</code> (shape (6000, 2)). Print its column means. Then compute spend divided by orders for every customer with tensor arithmetic and check with <code>torch.allclose(..., atol=0.01)</code> that it equals the <code>avg_order_value</code> column.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>torch.tensor(customers[["spend_12m", "orders_12m"]].to_numpy(), dtype=torch.float32)</code>; then <code>pair[:, 0] / pair[:, 1]</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">pair = torch.tensor(customers[["spend_12m", "orders_12m"]].to_numpy(), dtype=torch.float32)
+print(pair.shape, pair.mean(dim=0))
+
+aov = pair[:, 0] / pair[:, 1]
+recorded = torch.tensor(customers["avg_order_value"].to_numpy(), dtype=torch.float32)
+print(torch.allclose(aov, recorded, atol=0.01))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>torch.Size([6000, 2]) tensor([598.2503,   5.0113])
+True</code></pre>
+                        </div>
+                        <p>The means match the data dictionary (spend about $598, about 5 orders). The check confirms what Lesson 2.4 found: <code>avg_order_value</code> is exactly spend divided by orders, rounded to the cent, so it adds no information. <code>atol=0.01</code> allows for that rounding.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: SGD Versus Adam</h3>
+                    <p>Train two copies of <code>ChurnMLP(**settings)</code> for 10 epochs each (no early stopping: call <code>train_one_epoch</code> in a loop), one with <code>torch.optim.SGD(..., lr=0.01)</code> and one with <code>torch.optim.Adam(..., lr=0.003)</code>. Seed with <code>torch.manual_seed(42)</code> before creating each model and its loader. Print the validation loss and AUC after epochs 1, 5 and 10.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Loop over a list of <code>(name, optimizer_class, lr)</code> tuples and create the optimizer with <code>optimizer_class(model.parameters(), lr=lr)</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for opt_name, opt_class, lr in [("SGD", torch.optim.SGD, 0.01), ("Adam", torch.optim.Adam, 0.003)]:
+    torch.manual_seed(42)
+    net = ChurnMLP(**settings)
+    opt = opt_class(net.parameters(), lr=lr)
+    ex_loader = DataLoader(TensorDataset(X_fit, y_fit), batch_size=64, shuffle=True)
+    for epoch in range(1, 11):
+        train_one_epoch(net, ex_loader, loss_fn, opt)
+        if epoch in (1, 5, 10):
+            v_loss, v_auc = evaluate(net, X_val, y_val, loss_fn)
+            print(f"{opt_name:4s} epoch {epoch:2d}  val loss {v_loss:.3f}  val AUC {v_auc:.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output (yours may vary slightly)</h4>
+                            <pre><code>SGD  epoch  1  val loss 0.584  val AUC 0.582
+SGD  epoch  5  val loss 0.436  val AUC 0.737
+SGD  epoch 10  val loss 0.392  val AUC 0.795
+Adam epoch  1  val loss 0.360  val AUC 0.818
+Adam epoch  5  val loss 0.327  val AUC 0.850
+Adam epoch 10  val loss 0.317  val AUC 0.861</code></pre>
+                        </div>
+                        <p>Plain SGD at this learning rate crawls: after ten epochs its validation loss (0.392) is still worse than Adam's after a single epoch (0.360). Adam adapts each parameter's step size from the history of its gradients, so it moves fast without hand-tuning. SGD can catch up with a larger learning rate, momentum and patience; Adam's advantage is that it needs less tuning, which is why it is the common default.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Three Classes with CrossEntropyLoss</h3>
+                    <p>Predict <code>loyalty_tier</code> (Basic, Silver, Gold) from the project's prepared features, minus the tier itself. Map the tiers to integers 0, 1, 2 (<code>torch.long</code>), build a network with 3 outputs, train with <code>nn.CrossEntropyLoss</code> and Adam (lr 0.003) for 15 epochs, and report validation accuracy against the "always Basic" baseline. Tip: the one-hot tier columns sit in <code>preprocess.get_feature_names_out()</code>; drop them with a boolean mask.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Targets for <code>CrossEntropyLoss</code> are a flat tensor of class indices, shape (n,), dtype <code>torch.long</code>. Predictions are <code>logits.argmax(dim=1)</code>. Write the loop inline, since <code>evaluate</code> computes AUC for one output.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">tiers = {"Basic": 0, "Silver": 1, "Gold": 2}
+keep = ~pd.Series(preprocess.get_feature_names_out()).str.contains("loyalty_tier").to_numpy()
+Xt_fit, Xt_val = X_fit[:, keep], X_val[:, keep]
+yt_fit = torch.tensor(X_fit_df["loyalty_tier"].map(tiers).to_numpy(), dtype=torch.long)
+yt_val = torch.tensor(X_val_df["loyalty_tier"].map(tiers).to_numpy(), dtype=torch.long)
+
+torch.manual_seed(42)
+tier_net = nn.Sequential(nn.Linear(Xt_fit.shape[1], 32), nn.ReLU(), nn.Linear(32, 3))
+tier_opt = torch.optim.Adam(tier_net.parameters(), lr=0.003)
+tier_loss = nn.CrossEntropyLoss()
+tier_loader = DataLoader(TensorDataset(Xt_fit, yt_fit), batch_size=64, shuffle=True)
+for epoch in range(15):
+    tier_net.train()
+    for xb, yb in tier_loader:
+        tier_opt.zero_grad()
+        tier_loss(tier_net(xb), yb).backward()
+        tier_opt.step()
+
+tier_net.eval()
+with torch.no_grad():
+    val_pred = tier_net(Xt_val).argmax(dim=1)
+print(f"validation accuracy {(val_pred == yt_val).float().mean().item():.3f}")
+print(f"always 'Basic'      {(yt_val == 0).float().mean().item():.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output (yours may vary slightly)</h4>
+                            <pre><code>validation accuracy 0.898
+always 'Basic'      0.482</code></pre>
+                        </div>
+                        <p>Far better than the baseline, and for a simple reason: the tier is calculated from spend and tenure, both among the features, so the network only has to rediscover the rule. Most of its mistakes are customers sitting right at a tier boundary; more epochs would shrink them. The mechanics are what transfer: k output logits, integer targets, <code>CrossEntropyLoss</code>, and <code>argmax</code> for the prediction. Lesson 10.3 uses exactly this with 10 clothing classes.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: A Regression Network for Weekly Demand (Stretch)</h3>
+                    <p>Load <code>data/weekly_demand.csv</code>. Train on 2024 and test on 2025. Features: one-hot <code>product_id</code> and <code>store</code>, plus scaled <code>discount_pct</code>, <code>promo</code>, <code>holiday_week</code>, <code>avg_high_temp_f</code> and <code>week_of_year</code>. Predict <code>log1p(units_sold)</code> with a network (64 hidden units, <code>nn.MSELoss</code>, Adam lr 0.003, batch 128, 20 epochs), convert predictions back with <code>expm1</code>, and report the test MAE in units. Compare with <code>HistGradientBoostingRegressor(random_state=42)</code> on the same prepared features and target.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>The only changes from classification: one output with no activation, <code>nn.MSELoss()</code>, float targets of shape (n, 1). Use <code>np.log1p</code> on the target and <code>np.expm1</code> on predictions. Seed before creating the model and the loader.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">import numpy as np
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.metrics import mean_absolute_error
+
+demand = pd.read_csv("data/weekly_demand.csv")
+d_train, d_test = demand[demand["year"] == 2024], demand[demand["year"] == 2025]
+d_prep = ColumnTransformer([
+    ("cat", OneHotEncoder(sparse_output=False, handle_unknown="ignore"), ["product_id", "store"]),
+    ("num", StandardScaler(), ["discount_pct", "promo", "holiday_week", "avg_high_temp_f", "week_of_year"]),
+])
+D_train, D_test = d_prep.fit_transform(d_train), d_prep.transform(d_test)
+t_train = np.log1p(d_train["units_sold"].to_numpy())
+
+torch.manual_seed(42)
+demand_net = nn.Sequential(nn.Linear(D_train.shape[1], 64), nn.ReLU(), nn.Linear(64, 1))
+d_opt = torch.optim.Adam(demand_net.parameters(), lr=0.003)
+mse = nn.MSELoss()
+d_loader = DataLoader(TensorDataset(torch.tensor(D_train, dtype=torch.float32),
+                                    torch.tensor(t_train, dtype=torch.float32).unsqueeze(1)),
+                      batch_size=128, shuffle=True)
+for epoch in range(20):
+    train_one_epoch(demand_net, d_loader, mse, d_opt)
+
+demand_net.eval()
+with torch.no_grad():
+    net_units = np.expm1(demand_net(torch.tensor(D_test, dtype=torch.float32)).squeeze(1).numpy())
+hgb_units = np.expm1(HistGradientBoostingRegressor(random_state=42).fit(D_train, t_train).predict(D_test))
+print(f"network            test MAE {mean_absolute_error(d_test['units_sold'], net_units):.2f} units")
+print(f"gradient boosting  test MAE {mean_absolute_error(d_test['units_sold'], hgb_units):.2f} units")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output (yours may vary slightly)</h4>
+                            <pre><code>network            test MAE 8.09 units
+gradient boosting  test MAE 8.36 units</code></pre>
+                        </div>
+                        <p>This time the network wins, narrowly: 8.09 units against 8.36. With one-hot product and store columns it learns a demand level for every product and store plus shared effects for promotions and holidays, which suits this data well, and boosting here runs on untuned defaults. Neither result is a law: tabular data usually favors boosting, but not always, which is exactly why you measure instead of assuming. Note also that regression in PyTorch is the classification loop with a different last layer and loss, nothing more.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_array = np.array([1.0, 2.0])
+quiz_tensor = torch.from_numpy(quiz_array)
+print(quiz_tensor.dtype)</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="float32 is the default for tensors created from Python numbers. Does from_numpy change the type of the array it wraps?">
+                                A) <code>torch.float32</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="NumPy arrays of floats default to float64, and torch.from_numpy keeps the array's dtype (it even shares its memory). Convert with dtype=torch.float32 or .float() before feeding a model.">
+                                B) <code>torch.float64</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The values 1.0 and 2.0 are floats. What is NumPy's default float precision?">
+                                C) <code>torch.int64</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> Which order of lines inside the batch loop is correct?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="If you step before computing the backward pass, which gradients does the optimizer use?">
+                                A) forward and loss, <code>optimizer.step()</code>, <code>loss.backward()</code>, <code>optimizer.zero_grad()</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Zeroing the gradients right after backward erases them before the optimizer can use them.">
+                                B) forward and loss, <code>loss.backward()</code>, <code>optimizer.zero_grad()</code>, <code>optimizer.step()</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Clear old gradients, compute the loss, fill in fresh gradients with backward, then let the optimizer update the parameters from them. Zeroing at the start of each step is the standard pattern.">
+                                C) <code>optimizer.zero_grad()</code>, forward and loss, <code>loss.backward()</code>, <code>optimizer.step()</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> Your churn model ends with <code>nn.Linear(32, 1)</code> and you train it with <code>nn.BCEWithLogitsLoss()</code>. How do you get churn probabilities for a report?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="The model outputs logits; the loss applies the sigmoid internally during training. For probabilities, apply torch.sigmoid to the outputs yourself, in eval mode and under torch.no_grad().">
+                                A) Apply <code>torch.sigmoid</code> to the model's outputs
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Adding a sigmoid layer would make the loss apply a second sigmoid during training. Where does the sigmoid already happen?">
+                                B) Add <code>nn.Sigmoid()</code> as the model's last layer and retrain
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Logits can be any real number, including negative ones and numbers above 1. What turns a logit into a probability?">
+                                C) The outputs already are probabilities
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> A model with dropout gives a slightly different churn probability for the same customer every time you call it inside <code>with torch.no_grad():</code>. Why?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="no_grad only switches off gradient tracking. Which call switches dropout off?">
+                                A) <code>torch.no_grad()</code> is not enough to stop gradients
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Dropout is active in training mode and randomly zeroes hidden units on every call. model.eval() switches it off; torch.no_grad() does not change the mode.">
+                                B) The model is still in training mode; call <code>model.eval()</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Seeds control random draws, but with dropout active each call makes a new draw anyway. What turns the random draws off?">
+                                C) The seed was not set before predicting
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> Early stopping picked epoch 12 because its validation loss was lowest. Which number should you report as the model's expected performance on new customers?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The validation set helped choose the epoch. Can a number used for choosing also be an unbiased estimate?">
+                                A) The validation AUC at epoch 12
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The model learned from the training rows. What does a score on data the model has seen tell you about new data?">
+                                B) The training AUC at epoch 12
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The validation set was used to make a decision, so its score is slightly optimistic. The test set, scored once at the end, is the honest estimate for new customers.">
+                                C) The test AUC, computed once after training is finished
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Why PyTorch and not TensorFlow or Keras?</summary>
+                    <p>Both are mature and capable. This course uses PyTorch because its code reads like ordinary Python (you write the training loop yourself, so nothing is hidden), it dominates research and is widely used in industry, and the skills transfer: tensors, layers, losses, optimizers and the training loop exist under similar names in every framework. Keras 3 can even run on top of PyTorch.</p>
+                </details>
+                <details>
+                    <summary>How do I choose the batch size and learning rate?</summary>
+                    <p>Start with common defaults: batch size 32 to 256, Adam with a learning rate of 0.001 to 0.003. If the loss is noisy or explodes, lower the learning rate; if it crawls, raise it. Larger batches give smoother but fewer steps per epoch and often tolerate a larger learning rate. Then treat both as hyperparameters and compare settings on the validation set, never the test set (Lesson 6.2's tools apply).</p>
+                </details>
+                <details>
+                    <summary>Why are my numbers slightly different from the page?</summary>
+                    <p>PyTorch training is repeatable on one machine with a fixed seed and thread count, but different processors, operating systems and library builds can round differently in the last digits, and those tiny differences grow over many steps. If your loss and AUC are close and the trends match, all is well. Very different numbers usually mean a missing seed or a different split.</p>
+                </details>
+                <details>
+                    <summary>When should I use a neural network instead of gradient boosting?</summary>
+                    <p>When the input has structure a network can exploit: images (Lessons 10.3 and 10.5), sequences and time series (10.4), text and audio, or when you need to combine such data with a table. For an ordinary table of features, start with gradient boosting; try a network only if you have a lot of data and time to tune, and keep it if it beats boosting on the validation set. Many tabular projects end up using both in an ensemble (Lesson 5.4).</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Pinecrest's churners are only 16.5% of customers. <code>BCEWithLogitsLoss(pos_weight=torch.tensor([w]))</code> makes mistakes on churners count <code>w</code> times as much, like <code>class_weight</code> in Lesson 2.5. Retrain the project model with <code>w = 5.0</code> (about the ratio of stayers to churners). Does the test AUC change? Does the share of customers with a probability above 0.5 change? Explain why weighting moves the probabilities much more than the ranking, and what that means for a team that uses a 0.5 cut-off.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> For each line of the training loop (<code>zero_grad</code>, forward, loss, <code>backward</code>, <code>step</code>), write which part of your Lesson 10.1 code it replaces. Then write the recommendation you would give Pinecrest about the churn model, with the two test AUCs that support it.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Tensors are arrays with a shape, a dtype and a device; models use <code>float32</code>, so convert NumPy's <code>float64</code></li>
+                        <li><code>nn.Module</code> classes create layers in <code>__init__</code> and wire them in <code>forward</code>; call <code>model(x)</code></li>
+                        <li>Output logits and let the loss apply the sigmoid or softmax: <code>BCEWithLogitsLoss</code>, <code>CrossEntropyLoss</code>; <code>MSELoss</code> for numbers</li>
+                        <li>The loop: <code>zero_grad</code>, forward, loss, <code>backward</code>, <code>step</code>, over mini-batches from a <code>DataLoader</code></li>
+                        <li><code>model.train()</code> / <code>model.eval()</code> switch dropout; <code>torch.no_grad()</code> switches off gradient tracking; they are different things</li>
+                        <li>A validation set decides when to stop (early stopping restores the best <code>state_dict</code>); the test set is scored once</li>
+                        <li>Save <code>state_dict</code> plus the settings and the preprocessing; load with <code>weights_only=True</code></li>
+                        <li>On tabular data like churn, a network beats logistic regression but gradient boosting is usually the better choice</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You translated your hand-made network into idiomatic PyTorch, piece by piece</li>
+                        <li>You wrote reusable training, evaluation and early-stopping functions</li>
+                        <li>You trained a churn network on every usable feature and compared it fairly with three other models</li>
+                        <li>You saved a model so that someone else can rebuild it from three files</li>
+                        <li>You met six PyTorch mistakes, three loud and three silent, and know the fix for each</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="deep_learning_cnn.html"><strong>Lesson 10.3: Convolutional Neural Networks</strong></a> the data finally plays to a network's strengths: photos of clothing from Fashion-MNIST. You will reuse today's loop unchanged, swap dense layers for convolutional ones that look at small patches of an image, and watch the architecture, not the training code, make the difference.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Save <code>train_one_epoch</code>, <code>evaluate</code> and <code>fit</code> in a file such as <code>training.py</code>; you will reuse the pattern.</li>
+                    <li>Lesson 10.3 uses Fashion-MNIST, which is already in <code>data/</code> if you ran Lesson 9.3 (otherwise about 26 MB downloads the first time). Run <code>from torchvision import datasets</code> now to check torchvision is installed.</li>
+                    <li>Change the project's <code>n_hidden</code> to 8 and to 128. Which validation loss is lowest? Keep the test set closed while you decide.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You now write PyTorch the way practitioners do, and you understand every line, because you built each piece by hand first. Just as valuable, you did not let a new, impressive tool talk you into a worse model: you measured it against a strong baseline and told the truth about the result. That judgment is rarer than PyTorch skills. Next up: data where networks really shine.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="deep_learning_basics.html" class="prev-lesson">← Previous: Neural Networks from Scratch</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="deep_learning_cnn.html" class="next-lesson">Next: Convolutional Neural Networks →</a>
+            </nav>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
+        <div class="footer-links">
+            <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+            <a href="https://rays-home.netlify.app/contact">Contact</a>
+            <a href="#" id="print-button">Print Page</a>
+        </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
+    </footer>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
+</body>
+</html>

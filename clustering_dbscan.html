@@ -3,1069 +3,974 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about DBSCAN Clustering in this comprehensive Python Machine Learning course lesson.">
-    <title>DBSCAN Clustering - Python Machine Learning</title>
+    <meta name="description" content="Find clusters of any shape and flag the points that fit nowhere with DBSCAN, OPTICS and HDBSCAN, then use HDBSCAN to find the dense cores among Pinecrest Outfitters customers. Python Machine Learning Lesson 8.4.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Density-Based Clustering - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#clustering">Clustering</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#clustering">Clustering</a></li>
-            <li aria-current="page">DBSCAN: Density-Based Clustering</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>🎯 DBSCAN: Density-Based Clustering</h1>
+        <div class="container">
+            <header>
+                <h1>🌃 Lesson 8.4: Density-Based Clustering</h1>
+                <p class="lead">Let the data decide how many clusters there are and what shape they take, and get an honest "fits nowhere" label for the points that belong to no group.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Explain DBSCAN's core concepts: core points, border points, noise, and density reachability</li>
-                <li>Describe the roles of the <code>eps</code> and <code>min_samples</code> parameters and how to tune them (e.g. the k-distance plot)</li>
-                <li>Run DBSCAN with scikit-learn and interpret its cluster labels and noise points</li>
-                <li>Explain why DBSCAN finds arbitrarily shaped clusters and needs no preset cluster count, unlike K-means</li>
-                <li>Apply DBSCAN to real tasks such as anomaly detection and spatial data, and know its limitations with varying density</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Cluster a dataset with non-spherical shapes and noise using DBSCAN, then tune <code>eps</code> with a k-distance plot and identify the outliers.</p>
-        </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>DBSCAN (Density-Based Spatial Clustering of Applications with Noise) is a powerful clustering algorithm that groups together points that are closely packed together. Unlike K-means, it can find clusters of arbitrary shapes and automatically identifies outliers.</p>
-        </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain core, border and noise points, and what <code>eps</code> and <code>min_samples</code> control in DBSCAN</li>
+                        <li>Choose a starting <code>eps</code> from a k-distance plot and read the effect of changing it</li>
+                        <li>Read an OPTICS reachability plot and explain why one <code>eps</code> fails when clusters have different densities</li>
+                        <li>Cluster with <code>HDBSCAN</code>, count clusters and noise correctly, and profile the result</li>
+                        <li>Judge whether a density-based clustering found real structure or an artifact of the features</li>
+                    </ul>
+                </div>
 
-        </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 100 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="clustering_hierarchical.html">Lesson 8.3: Hierarchical Clustering</a> (and K-Means with scaled features from <a href="clustering_kmeans_optimization.html">Lesson 8.2</a>)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A density map of Pinecrest customers: the dense core segments, their churn rates, and the customers who fit no segment</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code>, plus small generated data sets to see the geometry</li>
+                </ul>
+            </header>
 
-        <h2>Core Concepts</h2>
-        
-        <pre class="language-python"><code>import numpy as np
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Clusters as Crowded Places</a></li>
+                        <li><a href="#dbscan" class="toc-link">DBSCAN: Core, Border and Noise</a></li>
+                        <li><a href="#eps" class="toc-link">Choosing eps</a></li>
+                        <li><a href="#density" class="toc-link">When Density Varies</a></li>
+                        <li><a href="#optics" class="toc-link">OPTICS: Every eps at Once</a></li>
+                        <li><a href="#hdbscan" class="toc-link">HDBSCAN: The Practical Default</a></li>
+                        <li><a href="#compare" class="toc-link">Which Clustering Method When</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: Core Segments and Misfits</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Clusters as Crowded Places</h2>
+
+                <p>K-Means and hierarchical clustering share a quiet assumption: every point belongs to some cluster, and clusters are roughly round blobs around a center. Real data often breaks both halves. Groups can be long, curved or irregular, and some points are simply odd ones that belong nowhere. Forcing those points into a cluster drags the cluster's center toward them and muddies its profile.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: A City at Night from a Plane</h4>
+                    <p>Look down at a region at night. Towns are places where the lights are packed close together; their shapes follow rivers and valleys, not circles. Between the towns are dark fields with a scattered farmhouse here and there. You did not need to be told how many towns there are: you counted the bright patches. And you would not call a lone farmhouse a town.</p>
+                    <p>Density-based clustering works the same way. A <strong>cluster</strong> is a region where points are crowded together, separated from other clusters by sparser space. Points in the sparse space are labeled <strong>noise</strong>, with the label <code>-1</code>. The number of clusters comes out of the data instead of going in as a setting.</p>
+                </div>
+
+                <p>This lesson covers three related algorithms in <code>sklearn.cluster</code>. <strong>DBSCAN</strong> is the original and the easiest to reason about. <strong>OPTICS</strong> runs DBSCAN's idea at every density level at once and draws a picture of the result. <strong>HDBSCAN</strong> builds on both and picks the clusters that are most stable across density levels; it is the one to reach for in practice.</p>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>A marketing team that receives "five segments" from K-Means receives every customer assigned somewhere, including the strange ones. A density method answers a different question: where are the tight, well-defined groups, and who does not fit any of them? For Pinecrest the misfits matter, because, as you will see in the project, they churn more than the average customer.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="dbscan" class="lesson-section">
+                <h2>🔵 DBSCAN: Core, Border and Noise</h2>
+
+                <p>DBSCAN (Density-Based Spatial Clustering of Applications with Noise) needs two settings. <code>eps</code> is a radius: two points closer than <code>eps</code> are neighbors. <code>min_samples</code> is how many points (the point itself included) a neighborhood needs to count as crowded. With those two numbers, every point gets one of three roles:</p>
+
+                <div class="mermaid">
+graph TD
+    A["Count points within eps"] --> B{"At least min_samples?"}
+    B -->|"yes"| C["Core point"]
+    B -->|"no"| D{"Within eps of a core point?"}
+    D -->|"yes"| E["Border point"]
+    D -->|"no"| F["Noise: label -1"]
+                </div>
+
+                <p>Core points that are within <code>eps</code> of each other are chained together into one cluster, and each border point joins the cluster of a nearby core point. A cluster can therefore snake along any shape, as long as the crowd never thins out below <code>min_samples</code> per neighborhood.</p>
+
+                <p>The classic demonstration is two interleaving half-moons. K-Means cannot separate them, because it can only draw straight boundaries between centers. Scale the features first: <code>eps</code> is a distance, and distances only make sense when the columns are on comparable scales.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.cluster import DBSCAN
+from sklearn.datasets import make_moons
 from sklearn.preprocessing import StandardScaler
-from sklearn.datasets import make_moons, make_circles
-from sklearn.metrics import silhouette_score
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.metrics import adjusted_rand_score
 
-print("="*60)
-print("DBSCAN CLUSTERING")
-print("="*60)
 
-# Key parameters explained
-dbscan_params = """
-DBSCAN PARAMETERS:
-1. eps (ε): Maximum distance between two samples for them to be neighbors
-2. min_samples: Minimum points in a neighborhood to form a dense region
+def label_counts(labels):
+    """Cluster sizes as a dict; the key -1 is noise."""
+    return pd.Series(labels).value_counts().sort_index().to_dict()
 
-POINT CLASSIFICATIONS:
-• Core Point: Has at least min_samples points within eps distance
-• Border Point: Within eps of a core point but has fewer than min_samples neighbors
-• Noise Point: Not a core point and not within eps of any core point
-"""
 
-print(dbscan_params)</code></pre>
+X_moons, y_moons = make_moons(n_samples=400, noise=0.08, random_state=42)
+Z_moons = StandardScaler().fit_transform(X_moons)
 
-        <h2>Basic Implementation</h2>
-        
-        <pre class="language-python"><code># Generate sample data with non-convex shapes
-X_moons, y_moons = make_moons(n_samples=300, noise=0.1, random_state=42)
-X_circles, y_circles = make_circles(n_samples=300, noise=0.05, 
-                                     factor=0.5, random_state=42)
+km_labels = KMeans(n_clusters=2, n_init=10, random_state=42).fit_predict(Z_moons)
+db = DBSCAN(eps=0.3, min_samples=5).fit(Z_moons)
 
-# Standardize features (important for DBSCAN)
-scaler = StandardScaler()
-X_moons_scaled = scaler.fit_transform(X_moons)
-X_circles_scaled = scaler.fit_transform(X_circles)
+print("K-Means:", label_counts(km_labels), " ARI", round(adjusted_rand_score(y_moons, km_labels), 3))
+print("DBSCAN :", label_counts(db.labels_), " ARI", round(adjusted_rand_score(y_moons, db.labels_), 3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>K-Means: {0: 200, 1: 200}  ARI 0.475
+DBSCAN : {-1: 1, 0: 200, 1: 199}  ARI 0.995</code></pre>
+                </div>
 
-# Apply DBSCAN
-dbscan_moons = DBSCAN(eps=0.3, min_samples=5)
-clusters_moons = dbscan_moons.fit_predict(X_moons_scaled)
+                <p>Because this toy data comes with the true moon of every point, you can score each clustering with the <strong>adjusted Rand index</strong> (ARI) from Lesson 8.2: 1 means the clusters match the truth exactly, 0 means no better than chance. K-Means cuts the moons in half the wrong way (ARI under 0.5). DBSCAN recovers both moons almost perfectly and labels a single stray point as noise. Notice that you never told DBSCAN "two clusters".</p>
 
-dbscan_circles = DBSCAN(eps=0.3, min_samples=5)
-clusters_circles = dbscan_circles.fit_predict(X_circles_scaled)
-
-# Visualize results
-fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-
-# Moons dataset
-axes[0, 0].scatter(X_moons[:, 0], X_moons[:, 1], c=y_moons, 
-                   cmap='viridis', alpha=0.6)
-axes[0, 0].set_title('Moons: Original Labels')
-axes[0, 0].grid(True, alpha=0.3)
-
-axes[0, 1].scatter(X_moons[:, 0], X_moons[:, 1], c=clusters_moons, 
-                   cmap='viridis', alpha=0.6)
-axes[0, 1].set_title(f'DBSCAN Results (eps=0.3, min_samples=5)')
-axes[0, 1].grid(True, alpha=0.3)
-
-# Circles dataset
-axes[1, 0].scatter(X_circles[:, 0], X_circles[:, 1], c=y_circles, 
-                   cmap='plasma', alpha=0.6)
-axes[1, 0].set_title('Circles: Original Labels')
-axes[1, 0].grid(True, alpha=0.3)
-
-axes[1, 1].scatter(X_circles[:, 0], X_circles[:, 1], c=clusters_circles, 
-                   cmap='plasma', alpha=0.6)
-axes[1, 1].set_title(f'DBSCAN Results (eps=0.3, min_samples=5)')
-axes[1, 1].grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.show()
-
-# Analyze results
-n_clusters_moons = len(set(clusters_moons)) - (1 if -1 in clusters_moons else 0)
-n_noise_moons = list(clusters_moons).count(-1)
-
-n_clusters_circles = len(set(clusters_circles)) - (1 if -1 in clusters_circles else 0)
-n_noise_circles = list(clusters_circles).count(-1)
-
-print(f"\nMoons Dataset:")
-print(f"  Clusters found: {n_clusters_moons}")
-print(f"  Noise points: {n_noise_moons}")
-
-print(f"\nCircles Dataset:")
-print(f"  Clusters found: {n_clusters_circles}")
-print(f"  Noise points: {n_noise_circles}")</code></pre>
-
-        <h2>Parameter Tuning</h2>
-        
-        <pre class="language-python"><code>class DBSCANTuner:
-    def __init__(self, X):
-        self.X = StandardScaler().fit_transform(X)
-    
-    def find_optimal_eps(self, min_samples=5):
-        """Use k-distance graph to find optimal eps"""
-        from sklearn.neighbors import NearestNeighbors
-        
-        # Calculate distances to k-th nearest neighbor
-        nbrs = NearestNeighbors(n_neighbors=min_samples).fit(self.X)
-        distances, indices = nbrs.kneighbors(self.X)
-        
-        # Sort distances
-        k_distances = np.sort(distances[:, min_samples-1])
-        
-        # Plot k-distance graph
-        plt.figure(figsize=(10, 6))
-        plt.plot(k_distances)
-        plt.ylabel(f'{min_samples}-NN Distance')
-        plt.xlabel('Points sorted by distance')
-        plt.title('K-distance Graph for Optimal Eps')
-        plt.grid(True, alpha=0.3)
-        
-        # Find elbow point (simplified)
-        # In practice, you might want more sophisticated elbow detection
-        gradients = np.gradient(k_distances)
-        elbow_idx = np.argmax(gradients)
-        optimal_eps = k_distances[elbow_idx]
-        
-        plt.axhline(y=optimal_eps, color='r', linestyle='--', 
-                   label=f'Suggested eps = {optimal_eps:.3f}')
-        plt.legend()
-        plt.show()
-        
-        return optimal_eps
-    
-    def grid_search(self, eps_range, min_samples_range):
-        """Grid search for best parameters"""
-        results = []
-        
-        for eps in eps_range:
-            for min_samples in min_samples_range:
-                dbscan = DBSCAN(eps=eps, min_samples=min_samples)
-                clusters = dbscan.fit_predict(self.X)
-                
-                n_clusters = len(set(clusters)) - (1 if -1 in clusters else 0)
-                n_noise = list(clusters).count(-1)
-                
-                # Only calculate silhouette if we have clusters
-                if n_clusters > 1:
-                    # Exclude noise points for silhouette calculation
-                    mask = clusters != -1
-                    if np.sum(mask) > 1:
-                        score = silhouette_score(self.X[mask], clusters[mask])
-                    else:
-                        score = -1
-                else:
-                    score = -1
-                
-                results.append({
-                    'eps': eps,
-                    'min_samples': min_samples,
-                    'n_clusters': n_clusters,
-                    'n_noise': n_noise,
-                    'silhouette': score
-                })
-        
-        results_df = pd.DataFrame(results)
-        
-        # Find best parameters based on silhouette score
-        best_idx = results_df['silhouette'].idxmax()
-        best_params = results_df.iloc[best_idx]
-        
-        print("\nParameter Grid Search Results:")
-        print("-" * 40)
-        print(f"Best Parameters:")
-        print(f"  eps: {best_params['eps']}")
-        print(f"  min_samples: {best_params['min_samples']}")
-        print(f"  Clusters: {best_params['n_clusters']:.0f}")
-        print(f"  Noise points: {best_params['n_noise']:.0f}")
-        print(f"  Silhouette Score: {best_params['silhouette']:.3f}")
-        
-        return results_df, best_params
-
-# Example usage
-X_test, _ = make_moons(n_samples=200, noise=0.1, random_state=42)
-tuner = DBSCANTuner(X_test)
-
-# Find optimal eps
-optimal_eps = tuner.find_optimal_eps(min_samples=5)
-print(f"\nSuggested eps: {optimal_eps:.3f}")
-
-# Grid search
-eps_range = np.arange(0.1, 0.6, 0.1)
-min_samples_range = [3, 5, 7, 10]
-results, best = tuner.grid_search(eps_range, min_samples_range)</code></pre>
-
-        <h2>Handling Different Data Patterns</h2>
-        
-        <pre class="language-python"><code># Create datasets with different characteristics
-np.random.seed(42)
-
-# 1. Varying density clusters
-cluster1 = np.random.randn(100, 2) * 0.3 + [0, 0]
-cluster2 = np.random.randn(100, 2) * 0.8 + [5, 5]
-cluster3 = np.random.randn(50, 2) * 0.2 + [8, 2]
-noise = np.random.uniform(-2, 10, (20, 2))
-
-X_varying = np.vstack([cluster1, cluster2, cluster3, noise])
-
-# 2. High-dimensional data
-X_high_dim = np.random.randn(200, 10)  # 10 dimensions
-
-# 3. Data with outliers
-from sklearn.datasets import make_blobs
-X_blobs, _ = make_blobs(n_samples=200, centers=3, n_features=2, 
-                        cluster_std=0.5, random_state=42)
-# Add outliers
-outliers = np.random.uniform(X_blobs.min(), X_blobs.max(), (20, 2))
-X_with_outliers = np.vstack([X_blobs, outliers])
-
-# Compare DBSCAN performance
-datasets = {
-    'Varying Density': X_varying,
-    'High Dimensional': X_high_dim[:, :2],  # Project to 2D for visualization
-    'With Outliers': X_with_outliers
-}
-
-fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-for idx, (name, X) in enumerate(datasets.items()):
-    # Standardize
-    X_scaled = StandardScaler().fit_transform(X)
-    
-    # Apply DBSCAN with adaptive parameters
-    if name == 'High Dimensional':
-        dbscan = DBSCAN(eps=1.5, min_samples=10)
-    elif name == 'Varying Density':
-        dbscan = DBSCAN(eps=0.5, min_samples=5)
-    else:
-        dbscan = DBSCAN(eps=0.3, min_samples=5)
-    
-    clusters = dbscan.fit_predict(X_scaled)
-    
-    # Visualize
-    axes[idx].scatter(X[:, 0], X[:, 1], c=clusters, cmap='viridis', 
-                     alpha=0.6, edgecolors='black', linewidth=0.5)
-    axes[idx].set_title(f'{name}')
-    
-    # Mark noise points
-    noise_mask = clusters == -1
-    if np.any(noise_mask):
-        axes[idx].scatter(X[noise_mask, 0], X[noise_mask, 1], 
-                         c='red', marker='x', s=50, label='Noise')
-    
-    n_clusters = len(set(clusters)) - (1 if -1 in clusters else 0)
-    n_noise = list(clusters).count(-1)
-    axes[idx].set_xlabel(f'Clusters: {n_clusters}, Noise: {n_noise}')
-    axes[idx].grid(True, alpha=0.3)
-    
-    if np.any(noise_mask):
-        axes[idx].legend()
-
-plt.tight_layout()
+                <pre><code class="language-python">fig, axes = plt.subplots(1, 2, figsize=(9, 3.8), layout="constrained")
+for ax, labels, title in [(axes[0], km_labels, "K-Means, k=2"), (axes[1], db.labels_, "DBSCAN, eps=0.3, min_samples=5")]:
+    clustered = labels != -1
+    ax.scatter(Z_moons[clustered, 0], Z_moons[clustered, 1], c=labels[clustered], cmap="viridis", s=12)
+    ax.scatter(Z_moons[~clustered, 0], Z_moons[~clustered, 1], c="red", marker="x", s=40, label="noise (-1)")
+    ax.set_title(title)
+axes[1].legend(loc="lower left")
 plt.show()</code></pre>
 
-        <h2>Applications</h2>
-        
-        <pre class="language-python"><code>class DBSCANApplications:
-    
-    def anomaly_detection(self):
-        """Use DBSCAN for anomaly detection"""
-        # Generate normal data with anomalies
-        np.random.seed(42)
-        normal_data = np.random.randn(200, 2)
-        anomalies = np.random.uniform(-4, 4, (10, 2))
-        X = np.vstack([normal_data, anomalies])
-        
-        # Apply DBSCAN
-        dbscan = DBSCAN(eps=0.5, min_samples=5)
-        clusters = dbscan.fit_predict(X)
-        
-        # Noise points are anomalies
-        anomaly_mask = clusters == -1
-        
-        plt.figure(figsize=(10, 6))
-        plt.scatter(X[~anomaly_mask, 0], X[~anomaly_mask, 1], 
-                   c='blue', alpha=0.6, label='Normal')
-        plt.scatter(X[anomaly_mask, 0], X[anomaly_mask, 1], 
-                   c='red', marker='x', s=100, label='Anomalies')
-        plt.title('Anomaly Detection with DBSCAN')
-        plt.xlabel('Feature 1')
-        plt.ylabel('Feature 2')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.show()
-        
-        print(f"Detected {np.sum(anomaly_mask)} anomalies out of {len(X)} points")
-        return anomaly_mask
-    
-    def spatial_clustering(self):
-        """Geographical/spatial data clustering"""
-        # Simulate GPS coordinates (latitude, longitude)
-        np.random.seed(42)
-        
-        # City centers
-        cities = {
-            'City A': [37.7749, -122.4194],
-            'City B': [37.3382, -121.8863],
-            'City C': [37.8716, -122.2727]
-        }
-        
-        points = []
-        true_labels = []
-        
-        for i, (city, center) in enumerate(cities.items()):
-            # Generate points around each city
-            n_points = np.random.poisson(50)
-            city_points = np.random.randn(n_points, 2) * 0.05 + center
-            points.extend(city_points)
-            true_labels.extend([i] * n_points)
-        
-        X = np.array(points)
-        
-        # Apply DBSCAN with haversine metric for geographical data
-        from sklearn.metrics.pairwise import haversine_distances
-        
-        # Convert to radians
-        X_rad = np.radians(X)
-        
-        # DBSCAN with custom metric
-        dbscan = DBSCAN(eps=0.01, min_samples=5, metric='haversine')
-        clusters = dbscan.fit_predict(X_rad)
-        
-        # Visualize
-        plt.figure(figsize=(10, 8))
-        scatter = plt.scatter(X[:, 1], X[:, 0], c=clusters, 
-                            cmap='viridis', alpha=0.6, s=30)
-        plt.colorbar(scatter, label='Cluster')
-        plt.xlabel('Longitude')
-        plt.ylabel('Latitude')
-        plt.title('Spatial Clustering with DBSCAN')
-        plt.grid(True, alpha=0.3)
-        
-        # Mark cluster centers
-        for cluster_id in set(clusters):
-            if cluster_id != -1:
-                cluster_points = X[clusters == cluster_id]
-                center = cluster_points.mean(axis=0)
-                plt.plot(center[1], center[0], 'r*', markersize=15)
-        
-        plt.show()
-        
-        n_clusters = len(set(clusters)) - (1 if -1 in clusters else 0)
-        print(f"Found {n_clusters} spatial clusters")
-        
-        return clusters
-    
-    def customer_segmentation(self):
-        """Customer behavior segmentation"""
-        # Simulate customer data
-        np.random.seed(42)
-        
-        # Features: [purchase_frequency, avg_purchase_value, recency_days]
-        segments = {
-            'High Value': {'mean': [30, 500, 5], 'std': [5, 100, 2]},
-            'Regular': {'mean': [15, 150, 15], 'std': [3, 30, 5]},
-            'Occasional': {'mean': [3, 50, 60], 'std': [1, 20, 20]}
-        }
-        
-        data = []
-        true_segments = []
-        
-        for segment_name, params in segments.items():
-            n_customers = np.random.poisson(100)
-            segment_data = np.random.randn(n_customers, 3) * params['std'] + params['mean']
-            data.extend(segment_data)
-            true_segments.extend([segment_name] * n_customers)
-        
-        X = np.array(data)
-        
-        # Standardize features (important for different scales)
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        
-        # Apply DBSCAN
-        dbscan = DBSCAN(eps=0.5, min_samples=10)
-        clusters = dbscan.fit_predict(X_scaled)
-        
-        # Analyze segments
-        results = pd.DataFrame(X, columns=['Frequency', 'Avg_Value', 'Recency'])
-        results['Cluster'] = clusters
-        
-        print("\nCustomer Segments Found:")
-        print("-" * 50)
-        
-        for cluster_id in sorted(set(clusters)):
-            if cluster_id == -1:
-                print(f"\nNoise/Outlier Customers: {sum(clusters == -1)}")
-            else:
-                segment = results[results['Cluster'] == cluster_id]
-                print(f"\nSegment {cluster_id}:")
-                print(f"  Size: {len(segment)} customers")
-                print(f"  Avg Frequency: {segment['Frequency'].mean():.1f}")
-                print(f"  Avg Purchase Value: ${segment['Avg_Value'].mean():.2f}")
-                print(f"  Avg Recency: {segment['Recency'].mean():.1f} days")
-        
-        return results
+                <figure>
+                    <img src="images/clustering_dbscan_moons.png" alt="Two scatter plots of the same two interleaving half-moons. On the left, K-Means splits the points with a straight diagonal cut, so each cluster contains half of each moon. On the right, DBSCAN colors each moon as its own cluster and marks one stray point with a red cross as noise." width="990" height="418" loading="lazy">
+                    <figcaption>K-Means can only split space with straight boundaries between two centers. DBSCAN follows the crowd, so each moon becomes one cluster.</figcaption>
+                </figure>
 
-# Run applications
-apps = DBSCANApplications()
+                <p>A fitted DBSCAN also tells you which points were core points, through <code>core_sample_indices_</code>. Everything that is clustered but not core is a border point.</p>
 
-print("\n" + "="*60)
-print("DBSCAN APPLICATIONS")
-print("="*60)
+                <pre><code class="language-python">is_core = np.zeros(len(Z_moons), dtype=bool)
+is_core[db.core_sample_indices_] = True
+is_noise = db.labels_ == -1
 
-print("\n1. Anomaly Detection:")
-print("-" * 30)
-anomalies = apps.anomaly_detection()
+print("core  :", is_core.sum())
+print("border:", (~is_core &amp; ~is_noise).sum())
+print("noise :", is_noise.sum())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>core  : 398
+border: 1
+noise : 1</code></pre>
+                </div>
 
-print("\n2. Spatial Clustering:")
-print("-" * 30)
-spatial_clusters = apps.spatial_clustering()
+                <div class="card card-accent">
+                    <h4>🔑 Key Terms</h4>
+                    <p><strong>eps</strong>: the neighborhood radius. <strong>min_samples</strong>: the number of points, itself included, that makes a neighborhood dense. <strong>Core point</strong>: a point with a dense neighborhood. <strong>Border point</strong>: not dense itself, but within <code>eps</code> of a core point. <strong>Noise</strong>: neither; scikit-learn gives it the label <code>-1</code>. <strong>Density-reachable</strong>: connected to a core point through a chain of core points, each within <code>eps</code> of the next.</p>
+                </div>
+            </section>
 
-print("\n3. Customer Segmentation:")
-print("-" * 30)
-customer_segments = apps.customer_segmentation()</code></pre>
+            <!-- ============================================================ -->
+            <section id="eps" class="lesson-section">
+                <h2>📏 Choosing eps</h2>
 
-        <h2>DBSCAN vs Other Algorithms</h2>
-        
-        <pre class="language-python"><code># Compare clustering algorithms
-from sklearn.cluster import KMeans, AgglomerativeClustering
-from sklearn.mixture import GaussianMixture
-import time
+                <p><code>eps</code> is the setting that matters most, and it is unforgiving. Too small, and almost nothing is dense enough: the data shatters into crumbs and noise. Too large, and everything is everyone's neighbor: the clusters merge into one. Sweep a few values on the moons to see both failures:</p>
 
-# Generate complex dataset
-X_complex, y_complex = make_moons(n_samples=300, noise=0.1, random_state=42)
-X_complex = StandardScaler().fit_transform(X_complex)
+                <pre><code class="language-python">for eps in [0.1, 0.2, 0.3, 0.5, 1.0]:
+    labels = DBSCAN(eps=eps, min_samples=5).fit_predict(Z_moons)
+    n_clusters = len(set(labels) - {-1})
+    print(f"eps={eps:&lt;4} clusters={n_clusters:&lt;3} noise={(labels == -1).sum():&lt;4} ARI={adjusted_rand_score(y_moons, labels):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>eps=0.1  clusters=29  noise=157  ARI=0.031
+eps=0.2  clusters=5   noise=5    ARI=0.886
+eps=0.3  clusters=2   noise=1    ARI=0.995
+eps=0.5  clusters=2   noise=0    ARI=1.000
+eps=1.0  clusters=1   noise=0    ARI=0.000</code></pre>
+                </div>
 
-# Define algorithms
-algorithms = {
-    'DBSCAN': DBSCAN(eps=0.3, min_samples=5),
-    'K-Means': KMeans(n_clusters=2, random_state=42),
-    'Hierarchical': AgglomerativeClustering(n_clusters=2),
-    'GMM': GaussianMixture(n_components=2, random_state=42)
-}
+                <p>At <code>eps=0.1</code> the moons shatter into 29 crumbs and 157 noise points. At <code>eps=1.0</code> one giant cluster swallows both moons. The useful range here is roughly 0.3 to 0.5. On real data you cannot compute an ARI (there is no answer key), so you need a way to pick <code>eps</code> from the data alone.</p>
 
-# Compare performance
-fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-axes = axes.ravel()
+                <h3>📈 The k-distance plot</h3>
+                <p>For every point, measure the distance to its <code>min_samples</code>-th nearest neighbor, counting the point itself as the first. That distance is the smallest <code>eps</code> that would make the point a core point. Sort those distances and plot them. Points inside clusters have small distances; noise points have large ones. Where the curve bends sharply upward, the "knee", is a sensible starting <code>eps</code>.</p>
 
-results_comparison = []
+                <pre><code class="language-python">from sklearn.neighbors import NearestNeighbors
 
-for idx, (name, algorithm) in enumerate(algorithms.items()):
-    start_time = time.time()
-    
-    if name == 'GMM':
-        algorithm.fit(X_complex)
-        clusters = algorithm.predict(X_complex)
-    else:
-        clusters = algorithm.fit_predict(X_complex)
-    
-    elapsed_time = time.time() - start_time
-    
-    # Calculate metrics
-    n_clusters = len(set(clusters)) - (1 if -1 in clusters else 0)
-    
-    # Silhouette score (exclude noise for DBSCAN)
-    if -1 in clusters:
-        mask = clusters != -1
-        if np.sum(mask) > 1:
-            score = silhouette_score(X_complex[mask], clusters[mask])
-        else:
-            score = -1
-    else:
-        score = silhouette_score(X_complex, clusters)
-    
-    results_comparison.append({
-        'Algorithm': name,
-        'Clusters': n_clusters,
-        'Silhouette': score,
-        'Time (s)': elapsed_time
-    })
-    
-    # Visualize
-    axes[idx].scatter(X_complex[:, 0], X_complex[:, 1], 
-                     c=clusters, cmap='viridis', alpha=0.6)
-    axes[idx].set_title(f'{name}')
-    axes[idx].set_xlabel(f'Clusters: {n_clusters}, Score: {score:.3f}')
-    axes[idx].grid(True, alpha=0.3)
+min_samples = 5
+nn = NearestNeighbors(n_neighbors=min_samples).fit(Z_moons)
+distances, _ = nn.kneighbors(Z_moons)        # column 0 is each point itself, at distance 0
+k_dist = np.sort(distances[:, -1])
 
-plt.tight_layout()
+print("k-distance percentiles (50, 90, 99):", np.percentile(k_dist, [50, 90, 99]).round(3))
+print("share that would be core at eps=0.3:", (k_dist &lt;= 0.3).mean())
+
+fig, ax = plt.subplots(figsize=(9, 3.6), layout="constrained")
+ax.plot(k_dist, color="#667eea", label=f"distance to neighbor {min_samples} (self included)")
+ax.axhline(0.3, color="black", linestyle="--", linewidth=1, label="eps = 0.3")
+ax.set_xlabel("Points, sorted by that distance")
+ax.set_ylabel("Distance (scaled units)")
+ax.set_title("k-distance plot: the knee suggests eps")
+ax.legend()
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>k-distance percentiles (50, 90, 99): [0.112 0.186 0.278]
+share that would be core at eps=0.3: 0.995</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/clustering_dbscan_kdistance.png" alt="Line chart of 400 sorted k-distances. The curve rises slowly from about 0.05 to about 0.2 for almost all points, then shoots up steeply for the last few points. A dashed line at 0.3 sits just above the bend." width="990" height="396" loading="lazy">
+                    <figcaption>The curve stays flat while it passes through crowded points and bends upward at the few isolated ones. An <code>eps</code> just above the bend makes nearly every point a core point.</figcaption>
+                </figure>
+
+                <p>For <code>min_samples</code>, a common rule of thumb is about twice the number of features, and never below 3. Larger values make the method more conservative: fewer, denser clusters and more noise. With thousands of points, values from 10 to 50 are normal. Choose <code>min_samples</code> first, then read <code>eps</code> from that plot, because the k-distance depends on it.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ The Knee Is a Starting Point</h4>
+                    <p>On clean toy data the knee is obvious. On real data it is often a gentle curve, and two people would put it in different places. Treat it as the center of a short sweep: try a few values around it and look at the cluster sizes, the noise share and the profiles. That is still you making a judgment call, which is exactly why the next two algorithms were invented.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="density" class="lesson-section">
+                <h2>🏙️ When Density Varies</h2>
+
+                <p>Back to the night flight. A big city's suburbs are much less dense than a small town's center, but they are still part of a town. DBSCAN uses one radius for the whole map, so it has to treat "dense" the same everywhere. Build a data set that makes this a problem: two tight groups close together, and one wide, loose group further away, plus a sprinkle of random points.</p>
+
+                <pre><code class="language-python">from sklearn.datasets import make_blobs
+
+rng = np.random.default_rng(42)
+X_blobs, y_blobs = make_blobs(n_samples=[200, 200, 300], centers=[[0, 0], [2, 0], [6, 4]],
+                              cluster_std=[0.3, 0.3, 1.3], random_state=42)
+X_var = np.vstack([X_blobs, rng.uniform(-3, 10, size=(30, 2))])
+y_var = np.concatenate([y_blobs, np.full(30, -1)])     # -1 marks the sprinkled points
+
+for eps in [0.2, 0.4, 0.6, 1.0]:
+    labels = DBSCAN(eps=eps, min_samples=10).fit_predict(X_var)
+    print(f"eps={eps:&lt;4} {label_counts(labels)}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>eps=0.2  {-1: 361, 0: 189, 1: 180}
+eps=0.4  {-1: 180, 0: 199, 1: 202, 2: 149}
+eps=0.6  {-1: 60, 0: 403, 1: 267}
+eps=1.0  {-1: 20, 0: 403, 1: 307}</code></pre>
+                </div>
+
+                <p>The true groups have 200, 200 and 300 points. No single <code>eps</code> gets them. With <code>eps</code> at 0.4 or below, the two tight groups are found, but much of the loose group is called noise (all of it at 0.2, half of it at 0.4). With <code>eps</code> at 0.6 or above, the loose group is found, but the two tight groups merge into one cluster of about 400. (These points were not scaled: both columns are already in the same units, which is the one situation where skipping the scaler is fine.)</p>
+
+                <div class="card card-info">
+                    <h4>💡 Why One Radius Cannot Work</h4>
+                    <p>The gap between the two tight groups is narrower than the typical spacing inside the loose group. Any radius big enough to connect the loose group's points also bridges that gap. The fix is not a cleverer <code>eps</code>; it is an algorithm that lets "dense" mean different things in different places.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="optics" class="lesson-section">
+                <h2>🔭 OPTICS: Every eps at Once</h2>
+
+                <p>OPTICS (Ordering Points To Identify the Clustering Structure) walks through the data from dense regions outward, always stepping next to the closest unvisited point, and records for each point its <strong>reachability distance</strong>: roughly, the smallest <code>eps</code> at which it would have been reached from the points already visited. Plot those distances in the visiting order and you get a <strong>reachability plot</strong>: every cluster is a valley, and the walls between valleys are the sparse gaps between clusters.</p>
+
+                <pre><code class="language-python">from sklearn.cluster import OPTICS
+
+optics = OPTICS(min_samples=10, xi=0.1, min_cluster_size=0.05).fit(X_var)
+print("OPTICS:", label_counts(optics.labels_), " ARI", round(adjusted_rand_score(y_var, optics.labels_), 3))
+
+reach = optics.reachability_[optics.ordering_]
+ordered_labels = optics.labels_[optics.ordering_]
+print("first point's reachability:", reach[0])     # nothing was visited before it
+reach = np.where(np.isfinite(reach), reach, np.nan)  # leave that bar out of the plot
+
+fig, ax = plt.subplots(figsize=(9, 3.6), layout="constrained")
+positions = np.arange(len(reach))
+for label in sorted(set(ordered_labels)):
+    mask = ordered_labels == label
+    name = "noise" if label == -1 else f"cluster {label}"
+    ax.bar(positions[mask], reach[mask], width=1.0, label=name, color="lightgray" if label == -1 else None)
+ax.set_xlabel("Points in OPTICS order")
+ax.set_ylabel("Reachability distance")
+ax.set_title("Reachability plot: valleys are clusters")
+ax.legend(ncols=4)
+plt.show()</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>OPTICS: {-1: 18, 0: 200, 1: 203, 2: 309}  ARI 0.959
+first point's reachability: inf</code></pre>
+                </div>
+
+                <figure>
+                    <img src="images/clustering_dbscan_reachability.png" alt="Bar chart of reachability distance for every point in OPTICS order. There are three valleys: two narrow, deep valleys with reachability near 0.1 for the tight groups, and one wide, shallower valley with reachability around 0.3 to 0.7 for the loose group. Tall gray bars between and after the valleys are noise." width="990" height="396" loading="lazy">
+                    <figcaption>Three valleys, three clusters. The loose group's valley sits higher than the tight groups' valleys, which is exactly why one horizontal cut (one <code>eps</code>) could not capture all three.</figcaption>
+                </figure>
+
+                <p>The very first point in the order has an infinite reachability, because no point was visited before it to reach it from; the code turns that value into a gap in the plot. The <code>xi</code> setting tells OPTICS how steep a wall must be to separate two valleys: here a 10% drop in reachability. <code>min_cluster_size=0.05</code> ignores valleys holding less than 5% of the points, which stops tiny dips from becoming clusters. OPTICS finds all three groups, with an ARI near 0.96.</p>
+
+                <p>Running DBSCAN with some <code>eps</code> is the same as drawing a horizontal line across this plot: everything below the line in one valley is one cluster. That is why OPTICS can also give you a DBSCAN-style result for any <code>eps</code> without refitting, with <code>cluster_optics_dbscan</code> (Exercise 2).</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ OPTICS Is Sensitive and Slow</h4>
+                    <p>OPTICS has its own knobs: with the default <code>xi=0.05</code> and no <code>min_cluster_size</code>, this same data comes out as one real cluster and a pile of fragments. It is also slower than DBSCAN on large data. Its real strength is the reachability plot itself, a picture of the density structure that you can read like a dendrogram from Lesson 8.3.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="hdbscan" class="lesson-section">
+                <h2>🌳 HDBSCAN: The Practical Default</h2>
+
+                <p>HDBSCAN (Hierarchical DBSCAN) builds the full hierarchy of clusterings for every possible <code>eps</code>, like a dendrogram, then keeps the clusters that survive longest as the density threshold changes. A cluster that only exists for a narrow range of <code>eps</code> is unstable and is dropped; one that persists is kept. The main setting is the one you can actually reason about: <code>min_cluster_size</code>, the smallest group you would care about.</p>
+
+                <pre><code class="language-python">from sklearn.cluster import HDBSCAN
+
+hdb = HDBSCAN(min_cluster_size=20, copy=True).fit(X_var)
+print("HDBSCAN:", label_counts(hdb.labels_), " ARI", round(adjusted_rand_score(y_var, hdb.labels_), 3))
+print("membership strength of the first 5 points:", hdb.probabilities_[:5].round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>HDBSCAN: {-1: 30, 0: 302, 1: 197, 2: 201}  ARI 0.95
+membership strength of the first 5 points: [1.   0.55 0.36 0.93 0.65]</code></pre>
+                </div>
+
+                <p>Three clusters of about the right sizes (302, 197 and 201) plus 30 noise points, with no <code>eps</code> to tune. Each clustered point also gets a <code>probabilities_</code> value between 0 and 1: how firmly it sits in its cluster's dense core (1) or out on the fringe (closer to 0). Noise points get 0.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Why copy=True?</h4>
+                    <p><code>HDBSCAN</code> has a <code>copy</code> setting that decides whether it may modify your input array in place. scikit-learn 1.9 warns that the default is changing from <code>False</code> to <code>True</code>, so pass <code>copy=True</code> to get the safe behavior and a quiet notebook.</p>
+                </div>
+
+                <p>The other settings worth knowing: <code>min_samples</code> (defaults to <code>min_cluster_size</code>) controls how conservative the density estimate is, so larger values push more points into noise; <code>cluster_selection_epsilon</code> merges clusters closer than a distance you choose; and <code>cluster_selection_method="leaf"</code> prefers many small, fine-grained clusters over the default <code>"eom"</code> (excess of mass), which prefers fewer, larger ones.</p>
+
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="compare" class="lesson-section">
+                <h2>🧰 Which Clustering Method When</h2>
+
+                <pre><code class="language-python">fig, axes = plt.subplots(1, 3, figsize=(10, 3.6), layout="constrained")
+results = [("DBSCAN, eps=0.4", DBSCAN(eps=0.4, min_samples=10).fit_predict(X_var)),
+           ("DBSCAN, eps=0.6", DBSCAN(eps=0.6, min_samples=10).fit_predict(X_var)),
+           ("HDBSCAN, min_cluster_size=20", hdb.labels_)]
+for ax, (title, labels) in zip(axes, results):
+    clustered = labels != -1
+    ax.scatter(X_var[clustered, 0], X_var[clustered, 1], c=labels[clustered], cmap="viridis", s=8)
+    ax.scatter(X_var[~clustered, 0], X_var[~clustered, 1], c="lightgray", s=8, label="noise")
+    ax.set_title(f"{title}\n{len(set(labels) - {-1})} clusters, {(~clustered).sum()} noise", fontsize=10)
+axes[0].legend(loc="upper left")
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/clustering_dbscan_varying.png" alt="Three scatter plots of the same data: two tight groups on the left and one loose group upper right. DBSCAN with eps 0.4 finds the two tight groups but greys out most of the loose group as noise. DBSCAN with eps 0.6 finds the loose group but merges the two tight groups into one color. HDBSCAN colors all three groups separately with only a few scattered gray noise points." width="1100" height="396" loading="lazy">
+                    <figcaption>With one radius, DBSCAN either loses the loose group or merges the tight ones. HDBSCAN gets all three because it allows different densities in different places.</figcaption>
+                </figure>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Method</th><th>You choose</th><th>Cluster shape</th><th>Noise label</th><th>Labels new data?</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>K-Means</td><td>k</td><td>round, similar size</td><td>no</td><td>yes, <code>predict</code></td></tr>
+                            <tr><td>Agglomerative</td><td>k or a cut height, linkage</td><td>depends on linkage</td><td>no</td><td>no</td></tr>
+                            <tr><td>DBSCAN</td><td><code>eps</code>, <code>min_samples</code></td><td>any, one density</td><td>yes</td><td>no</td></tr>
+                            <tr><td>OPTICS</td><td><code>min_samples</code>, <code>xi</code></td><td>any, varying density</td><td>yes</td><td>no</td></tr>
+                            <tr><td>HDBSCAN</td><td><code>min_cluster_size</code></td><td>any, varying density</td><td>yes</td><td>no</td></tr>
+                            <tr><td>Gaussian mixture (8.5)</td><td>number of components</td><td>ellipses</td><td>no (but gives probabilities)</td><td>yes, <code>predict</code></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card card-success">
+                    <h4>✅ A Sensible Default</h4>
+                    <p>Exploring unlabeled data with irregular groups and possible outliers: start with HDBSCAN and a <code>min_cluster_size</code> that reflects the smallest group you would act on. Need a fixed number of round segments that you can apply to next month's customers: K-Means or a Gaussian mixture. Need a picture of the density structure: OPTICS's reachability plot.</p>
+                </div>
+
+                <p>One more practical point: density methods suffer in many dimensions. With dozens of features, distances between points become similar to each other, so "crowded" loses its meaning. Keep the feature set small and meaningful, or reduce dimensions first (Module 9).</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Density-based clustering fails quietly more often than loudly. Most of these produce no error at all.</p>
+
+                <h3>1. Counting Noise as a Cluster</h3>
+
+                <pre><code class="language-python">labels_04 = DBSCAN(eps=0.4, min_samples=10).fit_predict(X_var)
+
+print("len(set(labels)):", len(set(labels_04)))
+print("real clusters    :", len(set(labels_04) - {-1}))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>len(set(labels)): 4
+real clusters    : 3</code></pre>
+                </div>
+                <p><strong>What happened:</strong> <code>-1</code> is not a cluster id; it is the noise label. Counting distinct labels adds one phantom cluster whenever there is noise. <strong>Fix:</strong> remove <code>-1</code> before counting (<code>len(set(labels) - {-1})</code>), and report the noise count separately. It is a result, not a nuisance.</p>
+
+                <h3>2. Asking DBSCAN to Label New Points</h3>
+
+                <pre data-raises="AttributeError"><code class="language-python">db.predict(Z_moons[:3])</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>AttributeError: 'DBSCAN' object has no attribute 'predict'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> DBSCAN, OPTICS and HDBSCAN describe the data they were fitted on; they have <code>fit_predict</code> but no <code>predict</code>. A new point could even change the clusters (it might bridge two of them). <strong>Fix:</strong> refit on the new data, or assign new points to the cluster of their nearest clustered neighbor with a k-nearest-neighbors classifier (the stretch exercise), and call them noise when they are too far from everyone.</p>
+
+                <h3>3. Forgetting to Scale</h3>
+
+                <pre><code class="language-python">customers_raw = pd.read_csv("data/customers_churn.csv")
+raw = customers_raw[["orders_12m", "avg_order_value", "discount_share", "return_rate"]]
+
+raw_labels = DBSCAN(eps=0.5, min_samples=10).fit_predict(raw)
+print("clusters:", len(set(raw_labels) - {-1}), " noise share:", round((raw_labels == -1).mean(), 3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>clusters: 57  noise share: 0.776</code></pre>
+                </div>
+                <p><strong>What happened:</strong> <code>avg_order_value</code> is measured in dollars and <code>discount_share</code> in fractions, so a radius of 0.5 means "within 50 cents of order value" and ignores the share columns almost completely. The result is dozens of tiny clusters and most customers as noise. <strong>Fix:</strong> scale the features (and consider a log for skewed amounts) before any distance-based method. The only exception is when every column is already in the same units, as in the generated <code>X_var</code>.</p>
+
+                <h3>4. Scoring a Clustering That Is All Noise</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">from sklearn.metrics import silhouette_score
+
+tiny_eps = DBSCAN(eps=0.01, min_samples=5).fit_predict(Z_moons)
+silhouette_score(Z_moons, tiny_eps)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Number of labels is 1. Valid values are 2 to n_samples - 1 (inclusive)</code></pre>
+                </div>
+                <p><strong>What it means:</strong> with a tiny <code>eps</code> every point is noise, so there is one label and the silhouette is undefined. The quieter version of this mistake is worse: computing a silhouette with the noise points included treats <code>-1</code> as one big, scattered cluster and drags the score down. <strong>Fix:</strong> check the label counts first, and score only the clustered points (<code>mask = labels != -1</code>). Remember that the silhouette favors round, well-separated clusters, so it can undersell a correct density-based result such as the moons.</p>
+
+                <h3>5. Trusting a Cluster That the Features Created</h3>
+                <p>Count features such as <code>orders_12m</code> only take whole values. Thousands of customers with exactly one order sit on the same value, which looks like a very dense ridge to a density method, so it can become a "segment" of its own even when nothing about those customers is special. You will meet this in the project. <strong>Fix:</strong> profile every cluster, and be suspicious when two clusters differ only in a single integer value. Merge them, or treat the split as an artifact, unless the business has a reason to care about the difference.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: Core Segments and Misfits</h2>
+
+                <p>In Lesson 8.2 you segmented Pinecrest's customers with K-Means, which put every customer in a segment. The marketing team now asks two different questions: which segments are tight and well-defined enough to build campaigns around, and which customers do not fit any segment at all? Answer both with density-based clustering on the same four behavior features. Work in a new notebook called <code>lesson_8_4_project</code>. Allow about 45 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load and prepare the features <span class="step-time">(5 min)</span></h3>
+                    <p>Use the four behavior features: order count, average order value, the share of spend that was discounted, and the share that was returned. Order count and order value are skewed, so take their logs first (every customer has at least one order, so the log is defined). Then scale.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+
+pd.set_option("display.width", 150)
+
+customers = pd.read_csv("data/customers_churn.csv")
+behavior = pd.DataFrame({
+    "log_orders": np.log(customers["orders_12m"]),
+    "log_aov": np.log(customers["avg_order_value"]),
+    "discount_share": customers["discount_share"],
+    "return_rate": customers["return_rate"],
+})
+scaler = StandardScaler().set_output(transform="pandas")
+Z = scaler.fit_transform(behavior)
+
+print(Z.shape)
+print(Z.describe().loc[["mean", "std"]].round(2))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(6000, 4)
+      log_orders  log_aov  discount_share  return_rate
+mean        -0.0      0.0            -0.0         -0.0
+std          1.0      1.0             1.0          1.0</code></pre>
+                    </div>
+                    <p>There is no train/test split here: clustering has no target to leak, and the goal is to describe these 6,000 customers. The <code>churned</code> column stays out of the features; you will only use it afterwards to profile the clusters.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Try DBSCAN first <span class="step-time">(10 min)</span></h3>
+                    <p>Pick <code>min_samples=8</code> (twice the number of features), look at the k-distances, and sweep <code>eps</code> around them.</p>
+                    <pre><code class="language-python">from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import DBSCAN
+
+distances, _ = NearestNeighbors(n_neighbors=8).fit(Z).kneighbors(Z)
+k_dist = distances[:, -1]
+print("k-distance percentiles (50, 80, 95):", np.percentile(k_dist, [50, 80, 95]).round(2))
+
+for eps in [0.3, 0.4, 0.5, 0.6]:
+    labels = DBSCAN(eps=eps, min_samples=8).fit_predict(Z)
+    sizes = pd.Series(labels[labels != -1]).value_counts()
+    print(f"eps={eps}: {len(sizes):2d} clusters, largest {sizes.iloc[0]:5d}, noise {(labels == -1).mean():.1%}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>k-distance percentiles (50, 80, 95): [0.28 0.41 0.6 ]
+eps=0.3: 19 clusters, largest  1139, noise 31.3%
+eps=0.4: 11 clusters, largest  2375, noise 10.8%
+eps=0.5:  5 clusters, largest  3876, noise 3.8%
+eps=0.6:  2 clusters, largest  5528, noise 1.5%</code></pre>
+                    </div>
+                    <p>None of these is usable. A small radius leaves almost a third of the customers as noise and produces 19 clusters, many of them tiny. By <code>eps=0.5</code> one cluster has swallowed almost two-thirds of the customers, and at 0.6 nearly all of them. The k-distance percentiles climb steadily with no sharp knee. Customer segments have different densities, which is the situation where DBSCAN struggles.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Cluster with HDBSCAN <span class="step-time">(10 min)</span></h3>
+                    <p>Ask for segments of at least 100 customers (a group smaller than that is not worth a campaign), and set <code>min_samples=25</code> so that the density estimate looks past small random clumps.</p>
+                    <pre><code class="language-python">from sklearn.cluster import HDBSCAN
+
+hdb = HDBSCAN(min_cluster_size=100, min_samples=25, copy=True).fit(Z)
+customers["cluster"] = hdb.labels_
+customers["strength"] = hdb.probabilities_
+
+print("clusters:", len(set(hdb.labels_) - {-1}))
+print(customers["cluster"].value_counts().sort_index())
+print(f"noise share: {(hdb.labels_ == -1).mean():.1%}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>clusters: 7
+cluster
+-1    1937
+ 0     372
+ 1     389
+ 2     804
+ 3     506
+ 4     350
+ 5    1088
+ 6     554
+Name: count, dtype: int64
+noise share: 32.3%</code></pre>
+                    </div>
+                    <p>Seven clusters and about a third of the customers labeled noise. That is a lot of noise, and it is information: a third of Pinecrest's customers do not sit in any dense crowd.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Profile the clusters <span class="step-time">(10 min)</span></h3>
+                    <p>Describe each cluster in the original units, and add the churn rate you held back.</p>
+                    <pre><code class="language-python">profile = customers.groupby("cluster").agg(
+    customers=("customer_id", "size"),
+    orders=("orders_12m", "mean"),
+    order_value=("avg_order_value", "mean"),
+    discount=("discount_share", "mean"),
+    returns=("return_rate", "mean"),
+    churn=("churned", "mean"),
+).round(2)
+print(profile)
+print(f"\noverall churn rate: {customers['churned'].mean():.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>         customers  orders  order_value  discount  returns  churn
+cluster
+-1            1937    5.65       123.94      0.30     0.14   0.20
+ 0             372    1.00       123.72      0.13     0.05   0.26
+ 1             389    3.22       334.34      0.11     0.04   0.12
+ 2             804    2.00        95.10      0.13     0.05   0.17
+ 3             506    2.00       331.59      0.10     0.04   0.17
+ 4             350    6.62       160.54      0.16     0.25   0.07
+ 5            1088    8.82        86.64      0.09     0.03   0.04
+ 6             554    5.34        62.61      0.49     0.06   0.29
+
+overall churn rate: 0.165</code></pre>
+                    </div>
+                    <p>Read the table like a marketer. Cluster 5 buys often at low value with few discounts (churn 4%): the Trail Regulars of Lesson 8.2. Cluster 6 lives on discounts (about half of spend) and churns at 29%: Deal Hunters. Cluster 4 returns a quarter of what it buys: Gear Testers. Clusters 1 and 3 spend over $330 per order a couple of times a year: Big-Trip Planners. Clusters 0 and 2 are occasional buyers: Casual Campers. The same five segments that K-Means found, now as dense cores.</p>
+                    <p>Now apply Mistake 5. Look at the <code>orders</code> column: cluster 0 averages exactly 1.00 orders, cluster 2 exactly 2.00, cluster 3 exactly 2.00 and cluster 1 just over 3. Those are customers stacked on a single whole-number value of <code>orders_12m</code>, which looks extremely dense. Clusters 1 and 3 have nearly identical profiles apart from the order count, and so do clusters 0 and 2. A sensible reading is five real segments, two of them split by the integer artifact.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Merge the artifacts and look at the misfits <span class="step-time">(5 min)</span></h3>
+                    <p>Give the clusters the segment names from Lesson 8.2, merging the two pairs that differ only by the integer order count, and compare the misfits with everyone else.</p>
+                    <pre><code class="language-python">names = {0: "Casual Campers", 2: "Casual Campers", 1: "Big-Trip Planners", 3: "Big-Trip Planners",
+         4: "Gear Testers", 5: "Trail Regulars", 6: "Deal Hunters", -1: "misfit"}
+customers["segment"] = customers["cluster"].map(names)
+
+summary = customers.groupby("segment").agg(
+    customers=("customer_id", "size"),
+    churn=("churned", "mean"),
+    discount=("discount_share", "mean"),
+    returns=("return_rate", "mean"),
+).sort_values("churn").round(3)
+print(summary)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>                   customers  churn  discount  returns
+segment
+Trail Regulars          1088  0.040     0.093    0.032
+Gear Testers             350  0.071     0.161    0.253
+Big-Trip Planners        895  0.149     0.103    0.039
+Casual Campers          1176  0.199     0.129    0.050
+misfit                  1937  0.203     0.296    0.138
+Deal Hunters             554  0.292     0.492    0.061</code></pre>
+                    </div>
+                    <p>The misfits are about a third of the customer base, churn at about 20% (above the 16.5% average), and carry higher discount and return shares than most segments. They are not a segment in the marketing sense; they are customers who mix behaviors, such as a discount shopper who also returns a lot. A density method shows you they exist instead of quietly spreading them over the five neat groups.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Draw the map and save the labels <span class="step-time">(5 min)</span></h3>
+                    <p>Plot two of the four features with the merged segments, misfits in gray, and save the labels for the marketing team.</p>
+                    <pre><code class="language-python">fig, ax = plt.subplots(figsize=(9, 4.5), layout="constrained")
+misfit = customers["segment"] == "misfit"
+ax.scatter(customers.loc[misfit, "avg_order_value"], customers.loc[misfit, "discount_share"],
+           c="lightgray", s=6, label="misfit")
+for name, group in customers[~misfit].groupby("segment"):
+    ax.scatter(group["avg_order_value"], group["discount_share"], s=6, label=name)
+ax.set_xscale("log")
+ax.set_xlabel("Average order value ($, log scale)")
+ax.set_ylabel("Discount share of spend")
+ax.set_title("HDBSCAN segments of Pinecrest customers (gray = fits no segment)")
+ax.legend(markerscale=3, ncols=2)
 plt.show()
 
-# Display comparison table
-comparison_df = pd.DataFrame(results_comparison)
-print("\nAlgorithm Comparison:")
-print(comparison_df.to_string(index=False))
+out = customers[["customer_id", "segment", "strength"]].round(3)
+out.to_csv("customer_density_segments.csv", index=False)
+print(len(out), "rows saved;", out["segment"].nunique(), "segment names including misfit")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>6000 rows saved; 6 segment names including misfit</code></pre>
+                    </div>
+                    <figure>
+                        <img src="images/clustering_dbscan_segments.png" alt="Scatter plot of 6,000 customers with average order value on a log x axis and discount share on the y axis. Colored clusters: Deal Hunters form a band high on the discount axis at low order values, Big-Trip Planners sit at the right above 300 dollars, Gear Testers sit in between, and Trail Regulars and Casual Campers sit at low discount and low order value. Gray misfits are scattered across the whole plot, especially between the clusters and at high discount shares." width="990" height="495" loading="lazy">
+                        <figcaption>The colored groups are the dense cores. The gray misfits fill the space between them: customers whose behavior mixes two segments or sits at an extreme.</figcaption>
+                    </figure>
+                </div>
 
-# Advantages and disadvantages
-print("\n" + "="*60)
-print("DBSCAN CHARACTERISTICS")
-print("="*60)
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>The four behavior features are log-transformed where skewed and scaled, and <code>churned</code> is not among them</li>
+                        <li>You tried DBSCAN and can say why no single <code>eps</code> worked on these customers</li>
+                        <li>HDBSCAN found 7 clusters and labeled about a third of the customers as noise, and you counted clusters without the <code>-1</code> label</li>
+                        <li>Your profile table shows each cluster's size, behavior and churn rate in original units</li>
+                        <li>You identified the two cluster pairs that differ only by a whole-number order count and merged them</li>
+                        <li><code>customer_density_segments.csv</code> holds 6,000 rows with a segment name and membership strength</li>
+                    </ul>
+                </div>
+            </section>
 
-characteristics = """
-ADVANTAGES:
-✓ No need to specify number of clusters
-✓ Can find arbitrarily shaped clusters
-✓ Robust to outliers (identifies them as noise)
-✓ Only two parameters (eps and min_samples)
-✓ Deterministic (same results each run)
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
 
-DISADVANTAGES:
-✗ Sensitive to parameter selection
-✗ Struggles with clusters of varying densities
-✗ Performance degrades in high dimensions
-✗ Not suitable for datasets with large differences in densities
-✗ Border points can be assigned to multiple clusters
+                <p>Exercises 1 and 2 use the generated data from the lesson (<code>Z_moons</code>, <code>X_var</code>); Exercises 3 and 4 continue from the project notebook (<code>Z</code>, <code>customers</code>).</p>
 
-WHEN TO USE DBSCAN:
-• Non-convex cluster shapes expected
-• Presence of noise and outliers
-• Unknown number of clusters
-• Spatial/geographical data
-• Anomaly detection tasks
-"""
+                <div class="card">
+                    <h3>🏋️ Exercise 1: The Other Knob</h3>
+                    <p>Keep <code>eps=0.3</code> on the moons and try <code>min_samples</code> of 3, 5, 10, 20 and 40. Print the number of clusters, the number of noise points and the ARI. Which way does a larger <code>min_samples</code> push the result?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>A larger <code>min_samples</code> asks for a more crowded neighborhood before a point counts as core. What happens to points on the thin tips of each moon?</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for m in [3, 5, 10, 20, 40]:
+    labels = DBSCAN(eps=0.3, min_samples=m).fit_predict(Z_moons)
+    print(f"min_samples={m:&lt;3} clusters={len(set(labels) - {-1})} noise={(labels == -1).sum():&lt;4} "
+          f"ARI={adjusted_rand_score(y_moons, labels):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>min_samples=3   clusters=2 noise=1    ARI=0.995
+min_samples=5   clusters=2 noise=1    ARI=0.995
+min_samples=10  clusters=2 noise=5    ARI=0.975
+min_samples=20  clusters=5 noise=42   ARI=0.544
+min_samples=40  clusters=0 noise=400  ARI=0.000</code></pre>
+                        </div>
+                        <p>Raising <code>min_samples</code> makes DBSCAN stricter: more points become noise. Up to about 10 the two moons survive. At 20 the neighborhoods are no longer crowded enough along parts of each moon, so the moons break into pieces, and at 40 no neighborhood within 0.3 holds 40 points, so every point is noise. <code>eps</code> and <code>min_samples</code> work together: a stricter <code>min_samples</code> needs a larger <code>eps</code>.</p>
+                    </details>
+                </div>
 
-print(characteristics)</code></pre>
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Many DBSCANs from One OPTICS Fit</h3>
+                    <p>Use <code>cluster_optics_dbscan</code> (from <code>sklearn.cluster</code>) with the fitted <code>optics</code> model to extract DBSCAN-style labels at <code>eps</code> of 0.4 and 0.6 from <code>X_var</code>, without refitting. Compare the label counts with the DBSCAN results from the "When Density Varies" section.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>The function takes <code>reachability=optics.reachability_</code>, <code>core_distances=optics.core_distances_</code>, <code>ordering=optics.ordering_</code> and <code>eps=...</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.cluster import cluster_optics_dbscan
 
-        <h2>Advanced Techniques</h2>
-        
-        <pre class="language-python"><code>class AdvancedDBSCAN:
-    
-    def adaptive_dbscan(self, X, k=5):
-        """DBSCAN with adaptive eps based on local density"""
-        from sklearn.neighbors import NearestNeighbors
-        
-        # Calculate k-nearest neighbor distances for each point
-        nbrs = NearestNeighbors(n_neighbors=k).fit(X)
-        distances, indices = nbrs.kneighbors(X)
-        
-        # Use median of k-th neighbor distance as adaptive eps
-        eps_values = distances[:, k-1]
-        adaptive_eps = np.median(eps_values)
-        
-        print(f"Adaptive eps calculated: {adaptive_eps:.3f}")
-        
-        # Apply DBSCAN with adaptive eps
-        dbscan = DBSCAN(eps=adaptive_eps, min_samples=k)
-        clusters = dbscan.fit_predict(X)
-        
-        return clusters, adaptive_eps
-    
-    def hierarchical_dbscan(self, X):
-        """Use HDBSCAN for hierarchical density-based clustering"""
-        try:
-            import hdbscan
-            
-            # Apply HDBSCAN
-            clusterer = hdbscan.HDBSCAN(min_cluster_size=5)
-            clusters = clusterer.fit_predict(X)
-            
-            # Get cluster persistence (stability)
-            persistence = clusterer.cluster_persistence_
-            
-            print("HDBSCAN Results:")
-            print(f"Number of clusters: {len(set(clusters)) - 1}")
-            print(f"Cluster persistence: {persistence}")
-            
-            return clusters
-        except ImportError:
-            print("HDBSCAN not installed. Using standard DBSCAN.")
-            dbscan = DBSCAN(eps=0.3, min_samples=5)
-            return dbscan.fit_predict(X)
-    
-    def incremental_dbscan(self, X_initial, X_new):
-        """Incremental DBSCAN for streaming data"""
-        # Fit initial model
-        dbscan = DBSCAN(eps=0.3, min_samples=5)
-        initial_clusters = dbscan.fit_predict(X_initial)
-        
-        # For new points, find their cluster assignments
-        from sklearn.neighbors import NearestNeighbors
-        
-        nbrs = NearestNeighbors(radius=0.3).fit(X_initial)
-        distances, indices = nbrs.radius_neighbors(X_new)
-        
-        new_clusters = np.full(len(X_new), -1)  # Initialize as noise
-        
-        for i, neighbors in enumerate(indices):
-            if len(neighbors) >= 5:
-                # Assign to majority cluster of neighbors
-                neighbor_clusters = initial_clusters[neighbors]
-                neighbor_clusters = neighbor_clusters[neighbor_clusters != -1]
-                if len(neighbor_clusters) > 0:
-                    unique, counts = np.unique(neighbor_clusters, return_counts=True)
-                    new_clusters[i] = unique[np.argmax(counts)]
-        
-        return new_clusters
-    
-    def multi_density_clustering(self, X):
-        """Handle varying density clusters using OPTICS"""
-        from sklearn.cluster import OPTICS
-        
-        # OPTICS can handle varying densities better than DBSCAN
-        optics = OPTICS(min_samples=5, xi=0.05, min_cluster_size=0.1)
-        clusters = optics.fit_predict(X)
-        
-        # Get reachability plot
-        reachability = optics.reachability_[optics.ordering_]
-        
-        plt.figure(figsize=(12, 5))
-        
-        plt.subplot(1, 2, 1)
-        plt.scatter(X[:, 0], X[:, 1], c=clusters, cmap='viridis', alpha=0.6)
-        plt.title('OPTICS Clustering (Varying Densities)')
-        plt.xlabel('Feature 1')
-        plt.ylabel('Feature 2')
-        plt.grid(True, alpha=0.3)
-        
-        plt.subplot(1, 2, 2)
-        plt.plot(reachability)
-        plt.ylabel('Reachability Distance')
-        plt.xlabel('Order of Points')
-        plt.title('Reachability Plot')
-        plt.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        plt.show()
-        
-        return clusters
+for eps in [0.4, 0.6]:
+    cut = cluster_optics_dbscan(reachability=optics.reachability_, core_distances=optics.core_distances_,
+                                ordering=optics.ordering_, eps=eps)
+    print(f"OPTICS cut eps={eps}: {label_counts(cut)}")
+    print(f"DBSCAN     eps={eps}: {label_counts(DBSCAN(eps=eps, min_samples=10).fit_predict(X_var))}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>OPTICS cut eps=0.4: {-1: 182, 0: 199, 1: 202, 2: 147}
+DBSCAN     eps=0.4: {-1: 180, 0: 199, 1: 202, 2: 149}
+OPTICS cut eps=0.6: {-1: 62, 0: 403, 1: 265}
+DBSCAN     eps=0.6: {-1: 60, 0: 403, 1: 267}</code></pre>
+                        </div>
+                        <p>The cuts reproduce DBSCAN's results almost exactly (a few border points can land differently, because a border point within reach of two clusters can go either way). One OPTICS fit is a whole family of DBSCAN results: each <code>eps</code> is a horizontal line across the reachability plot.</p>
+                    </details>
+                </div>
 
-# Demonstrate advanced techniques
-X_test, _ = make_moons(n_samples=300, noise=0.1, random_state=42)
-X_test = StandardScaler().fit_transform(X_test)
+                <div class="card">
+                    <h3>🏋️ Exercise 3: How Big Is a Segment?</h3>
+                    <p>Refit HDBSCAN on the project's <code>Z</code> with <code>min_samples=25</code> and <code>min_cluster_size</code> of 50, 100, 400 and 1000. For each, print the number of clusters and the noise share. Which settings give an answer you could present, and what does that tell you about how much the result depends on this choice?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Loop over the sizes and reuse the counting pattern from Step 3. Pass <code>copy=True</code> each time.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for size in [50, 100, 400, 1000]:
+    labels = HDBSCAN(min_cluster_size=size, min_samples=25, copy=True).fit_predict(Z)
+    print(f"min_cluster_size={size:&lt;5} clusters={len(set(labels) - {-1})}  noise={(labels == -1).mean():.1%}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>min_cluster_size=50    clusters=7  noise=32.3%
+min_cluster_size=100   clusters=7  noise=32.3%
+min_cluster_size=400   clusters=3  noise=31.8%
+min_cluster_size=1000  clusters=2  noise=24.1%</code></pre>
+                        </div>
+                        <p>50 and 100 give the same seven clusters and the same noise, which is reassuring: the structure does not hinge on the exact number. At 400, groups such as the 350 high-return customers are no longer allowed to stand alone, so they merge or dissolve and only three clusters remain; at 1000, two coarse clusters tell you little. Pick the size from the business question (the smallest group worth a campaign), then check that nearby values give the same answer. Stability across reasonable settings is one of the best checks you have when there is no answer key.</p>
+                    </details>
+                </div>
 
-advanced = AdvancedDBSCAN()
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Labeling New Customers (Stretch)</h3>
+                    <p>HDBSCAN cannot <code>predict</code>. Build a workaround: train a <code>KNeighborsClassifier(n_neighbors=15)</code> on the clustered customers only (features <code>Z</code>, target <code>segment</code>), and call a customer a misfit if the distance to their nearest clustered customer is larger than the 95th percentile of that distance among the clustered customers themselves. Test it on the first five customers, and check how often it agrees with HDBSCAN's own labels on all 6,000.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>knn.kneighbors(X, n_neighbors=2)</code> on the training points returns each point itself first, so use the second column for the "nearest other clustered customer" distance. For new customers, use <code>n_neighbors=1</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.neighbors import KNeighborsClassifier
 
-print("\n" + "="*60)
-print("ADVANCED DBSCAN TECHNIQUES")
-print("="*60)
+clustered = customers["segment"] != "misfit"
+knn = KNeighborsClassifier(n_neighbors=15).fit(Z[clustered], customers.loc[clustered, "segment"])
 
-print("\n1. Adaptive DBSCAN:")
-print("-" * 30)
-adaptive_clusters, adaptive_eps = advanced.adaptive_dbscan(X_test)
+own_dist, _ = knn.kneighbors(Z[clustered], n_neighbors=2)
+cutoff = np.percentile(own_dist[:, 1], 95)
 
-print("\n2. Hierarchical DBSCAN:")
-print("-" * 30)
-hierarchical_clusters = advanced.hierarchical_dbscan(X_test)
 
-print("\n3. Multi-Density Clustering (OPTICS):")
-print("-" * 30)
-optics_clusters = advanced.multi_density_clustering(X_test)</code></pre>
+def assign_segment(rows):
+    dist, _ = knn.kneighbors(rows, n_neighbors=1)
+    return np.where(dist[:, 0] &gt; cutoff, "misfit", knn.predict(rows))
 
-        <h2>Best Practices and Tips</h2>
-        
-        <pre class="language-python"><code>print("\n" + "="*60)
-print("DBSCAN BEST PRACTICES")
-print("="*60)
 
-best_practices = """
-KEY GUIDELINES:
+print(f"distance cutoff: {cutoff:.3f}")
+print(pd.DataFrame({"hdbscan": customers["segment"][:5], "assigned": assign_segment(Z[:5])}))
+matches = pd.Series(assign_segment(Z) == customers["segment"].to_numpy(), index=customers.index)
+print(f"agreement, clustered customers: {matches[clustered].mean():.1%}")
+print(f"agreement, misfits            : {matches[~clustered].mean():.1%}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>distance cutoff: 0.244
+             hdbscan           assigned
+0             misfit             misfit
+1     Trail Regulars     Trail Regulars
+2  Big-Trip Planners  Big-Trip Planners
+3             misfit             misfit
+4     Trail Regulars     Trail Regulars
+agreement, clustered customers: 100.0%
+agreement, misfits            : 86.9%</code></pre>
+                        </div>
+                        <p>Clustered customers get their own segment back every time. The misfits are the weak spot: most are recognized, but some sit close enough to a clustered customer that the rule pulls them into a segment. That is the honest limit of the workaround, and the cutoff is one more judgment call. For scoring new customers every month, either refit the density model on the new population or use a model that has a real <code>predict</code> (K-Means or the Gaussian mixture in the next lesson) for the segment and a separate outlier detector (Lesson 8.6) for the misfits.</p>
+                    </details>
+                </div>
+            </section>
 
-1. DATA PREPROCESSING:
-   • ALWAYS standardize/normalize features
-   • Remove or impute missing values
-   • Consider dimensionality reduction for high-D data
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
 
-2. PARAMETER SELECTION:
-   • eps: Use k-distance graph or domain knowledge
-   • min_samples: Usually 2*dimensions or at least 3-5
-   • Start with min_samples = 4 for 2D data
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_points = np.array([[0.0], [0.1], [0.2], [5.0]])
+print(DBSCAN(eps=0.15, min_samples=2).fit_predict(quiz_points))</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="DBSCAN does not give a lone point its own cluster. How many neighbors does the point at 5.0 have within 0.15?">
+                                A) <code>[0 0 0 1]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The first three points are each within 0.15 of a neighbor, so with min_samples=2 (the point itself plus one) they are core points chained into cluster 0. The point at 5.0 has no neighbor within 0.15, so it is noise, labeled -1.">
+                                B) <code>[ 0  0  0 -1]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Core points within eps of each other are chained into one cluster. Are 0.0 and 0.1 within 0.15 of each other?">
+                                C) <code>[ 0  1  2 -1]</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-3. EVALUATION:
-   • Check number of noise points (shouldn't be too high)
-   • Validate with domain knowledge
-   • Use silhouette score for compact clusters
-   • Consider stability across parameter variations
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> You run DBSCAN and get one giant cluster containing 97% of the points. What is the most likely fix?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="A bigger radius makes even more points neighbors. Which direction merges clusters?">
+                                A) Increase <code>eps</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="DBSCAN has no setting for the number of clusters. The count comes out of the density settings.">
+                                B) Set the number of clusters to 5
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="When eps is too large, everything is everyone's neighbor and the clusters merge through the gaps. A smaller eps, read from the k-distance plot, keeps the sparse gaps between clusters as gaps.">
+                                C) Decrease <code>eps</code>, using a k-distance plot as a guide
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-4. OPTIMIZATION:
-   • Use spatial indexing for large datasets
-   • Consider OPTICS for varying densities
-   • Use HDBSCAN for hierarchical approach
-   
-5. COMMON PITFALLS:
-   ⚠ Forgetting to scale features
-   ⚠ Using same eps for varying density data
-   ⚠ Ignoring curse of dimensionality
-   ⚠ Not handling categorical variables properly
-"""
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> Your data has a few very tight groups and one wide, loose group. Which method is the best first choice?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="HDBSCAN keeps the clusters that are stable across all density levels, so a tight group and a loose group can both be found in the same run. DBSCAN uses one radius for the whole space, and K-Means assumes round clusters of similar spread.">
+                                A) HDBSCAN
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="DBSCAN uses one eps everywhere. In the lesson, what happened to the loose group or to the tight groups at each eps?">
+                                B) DBSCAN with a carefully tuned <code>eps</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="K-Means assigns every point and prefers round clusters of similar spread. What would it do with the scattered points?">
+                                C) K-Means with k chosen by the silhouette
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-print(best_practices)
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> In an OPTICS reachability plot, what does a wide valley sitting higher than two narrow, deep valleys tell you?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Valleys are clusters, and the height of a valley floor is a distance. What does a larger typical distance between neighbors mean?">
+                                A) The wide valley is noise
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The x axis is the visiting order, not a position in feature space. What does the height of the valley floor measure?">
+                                B) The wide valley is far away from the others in feature space
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Each valley is a cluster, and the height of its floor is the typical reachability distance inside it. A higher, wider valley is a larger, less dense cluster; deep, narrow valleys are small, dense ones. A single horizontal cut (one eps) cannot capture both well.">
+                                C) It is a larger, less dense cluster than the other two
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-# Implementation checklist
-checklist = """
-IMPLEMENTATION CHECKLIST:
-□ Data cleaned and preprocessed
-□ Features standardized/normalized
-□ Optimal eps determined (k-distance graph)
-□ min_samples selected based on dimensionality
-□ Results validated with domain knowledge
-□ Noise points analyzed
-□ Comparison with other algorithms done
-□ Performance metrics calculated
-"""
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> HDBSCAN returns two customer clusters with almost identical profiles, except that one has exactly 1 order per customer and the other exactly 2. What is the best interpretation?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Many customers share exactly the same whole-number order count, which forms an extremely dense ridge that a density method happily calls a cluster. Unless the business cares about one order versus two, treat the split as an artifact of the feature and merge the clusters.">
+                                A) The whole-number feature created dense ridges; the split is probably an artifact
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="HDBSCAN finds dense regions in the features you give it. What does a column of whole numbers look like to a density method?">
+                                B) HDBSCAN discovered two genuinely different kinds of customer
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Order count was scaled along with the other features. Is the problem the scale, or the fact that the values are whole numbers?">
+                                C) The features were not scaled, so order count dominated
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
 
-print(checklist)</code></pre>
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
 
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Multi-Density DBSCAN</h3>
-            <p>Create a dataset with clusters of varying densities and implement a solution:</p>
-            <ol>
-                <li>Generate 3 clusters with different densities</li>
-                <li>Apply standard DBSCAN and observe limitations</li>
-                <li>Implement adaptive DBSCAN with local density estimation</li>
-                <li>Compare results with OPTICS algorithm</li>
-            </ol>
+                <details>
+                    <summary>Is a third of my customers as "noise" a failure?</summary>
+                    <p>Not necessarily. Noise means "not in a dense crowd", and customer behavior is often a continuum with a few dense cores. A high noise share tells you that a large part of the population is not well described by any segment, which is useful to know before a marketing team builds five campaigns. If you need every customer assigned, use the noise label as its own group or assign misfits with a nearest-neighbor rule, and say so.</p>
+                </details>
+                <details>
+                    <summary>Can I use DBSCAN for outlier detection?</summary>
+                    <p>Yes, the noise points are a crude outlier detector, and it is a fine first look. Its limits are that it gives a yes or no instead of a score, it cannot score new points, and the answer depends on <code>eps</code>. Lesson 8.6 covers detectors built for the job (Isolation Forest, Local Outlier Factor) that give a score for every point, including new ones.</p>
+                </details>
+                <details>
+                    <summary>Why not just use the silhouette score to pick <code>eps</code>?</summary>
+                    <p>The silhouette rewards compact, round, well-separated clusters, which is K-Means' idea of a good clustering. It can rate the correct moons clustering worse than a wrong one, and it has no sensible way to treat noise. Use it as one signal among several, computed on the clustered points only, alongside cluster sizes, noise share, stability across settings and whether the profiles make sense.</p>
+                </details>
+                <details>
+                    <summary>Do these methods work with distances other than Euclidean?</summary>
+                    <p>Yes. All three take a <code>metric</code> argument (for example <code>"manhattan"</code> or <code>"cosine"</code>), and DBSCAN and HDBSCAN accept <code>metric="precomputed"</code> with a distance matrix you computed yourself, for example a geographic distance between store locations. The density ideas do not care how distance is measured, only that it is meaningful.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>The order-count artifact came from whole numbers. Try two fixes and compare: (a) replace <code>log_orders</code> with <code>log(spend_12m)</code>, a continuous column that carries similar information, and (b) keep <code>log_orders</code> but use <code>cluster_selection_method="leaf"</code> and a larger <code>cluster_selection_epsilon</code> such as 0.3. Which version gives clusters you would be happier to present? Write down how you decided, since there is no answer key.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain core, border and noise points with the city-at-night picture. Then write two sentences for Pinecrest's marketing lead about the misfit customers: how many there are, how they behave, and why "they fit no segment" is a finding rather than a failure. Finally, note one decision in this lesson that was a judgment call rather than a calculation.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Density-based clustering defines clusters as crowded regions separated by sparse space; points in sparse space are noise, labeled <code>-1</code></li>
+                        <li>DBSCAN uses a radius <code>eps</code> and a crowd size <code>min_samples</code>; points are core, border or noise, and the number of clusters comes out of the data</li>
+                        <li>The k-distance plot suggests a starting <code>eps</code>, but one radius fails when clusters have different densities</li>
+                        <li>OPTICS orders points by reachability; its plot shows clusters as valleys and is a family of DBSCAN results in one picture</li>
+                        <li>HDBSCAN keeps the clusters that are stable across densities and needs mainly <code>min_cluster_size</code>; it is the practical default (pass <code>copy=True</code>)</li>
+                        <li>Count clusters without <code>-1</code>, scale features first, and remember these models have no <code>predict</code></li>
+                        <li>Profile every cluster: whole-number features can create dense ridges that look like segments</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You separated two half-moons that K-Means could not, without telling the algorithm how many clusters to find</li>
+                        <li>You chose <code>eps</code> from a k-distance plot and saw both ways it can fail</li>
+                        <li>You read a reachability plot and explained why varying density defeats a single radius</li>
+                        <li>You found Pinecrest's dense customer segments with HDBSCAN, spotted and merged an artifact, and quantified the misfits</li>
+                        <li>You saved segment labels with membership strengths that a marketing team can use</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="clustering_gaussian_mixture.html"><strong>Lesson 8.5: Gaussian Mixture Models</strong></a> you will trade hard labels for probabilities. Instead of "this customer is in segment 3 or is noise", a Gaussian mixture says "70% Trail Regular, 30% Deal Hunter", fits elliptical clusters, and can <code>predict</code> for new customers. It is also a density model, which sets up anomaly detection in Lesson 8.6.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>customer_density_segments.csv</code>: you will compare it with the Gaussian mixture segments.</li>
+                    <li>Look at a handful of misfit customers in the raw data. Can you describe, in plain words, why each one fits no segment?</li>
+                    <li>Re-read the K-Means objective from Lesson 8.1: what shape of cluster does "distance to the nearest center" assume?</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>Clustering has no answer key, and this lesson asked you to make several judgment calls: a radius, a minimum segment size, which clusters were artifacts. If that felt uncomfortable, good: that discomfort is what careful unsupervised learning feels like. You checked stability, profiled every group and refused to trust a cluster just because an algorithm produced it. That habit is worth more than any single algorithm.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="clustering_hierarchical.html" class="prev-lesson">← Previous: Hierarchical Clustering</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="clustering_gaussian_mixture.html" class="next-lesson">Next: Gaussian Mixture Models →</a>
+            </nav>
         </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: Real-time Anomaly Detection</h3>
-            <p>Build a streaming anomaly detection system:</p>
-            <ol>
-                <li>Simulate streaming data with periodic anomalies</li>
-                <li>Implement incremental DBSCAN</li>
-                <li>Update cluster assignments for new points</li>
-                <li>Calculate detection accuracy and latency</li>
-            </ol>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 3: Image Segmentation</h3>
-            <p>Use DBSCAN for image segmentation:</p>
-            <ol>
-                <li>Load an image and extract color features</li>
-                <li>Apply DBSCAN in color space</li>
-                <li>Segment image based on color similarity</li>
-                <li>Compare with K-means segmentation</li>
-            </ol>
-        </div>
-
-        <h2>Real-World Application Example</h2>
-        
-        <pre class="language-python"><code># Complete example: Network Intrusion Detection
-class NetworkIntrusionDetector:
-    def __init__(self):
-        self.scaler = StandardScaler()
-        self.dbscan = None
-        
-    def prepare_data(self, n_samples=1000):
-        """Simulate network traffic data"""
-        np.random.seed(42)
-        
-        # Normal traffic (majority)
-        normal_traffic = {
-            'packet_size': np.random.normal(1500, 200, n_samples),
-            'connection_duration': np.random.exponential(10, n_samples),
-            'packets_per_second': np.random.poisson(100, n_samples),
-            'unique_destinations': np.random.poisson(5, n_samples)
-        }
-        
-        # Attack patterns (minority)
-        n_attacks = int(n_samples * 0.05)  # 5% attacks
-        
-        # DDoS attack pattern
-        ddos = {
-            'packet_size': np.random.normal(64, 10, n_attacks//2),
-            'connection_duration': np.random.exponential(0.1, n_attacks//2),
-            'packets_per_second': np.random.poisson(10000, n_attacks//2),
-            'unique_destinations': np.ones(n_attacks//2)
-        }
-        
-        # Port scan pattern
-        port_scan = {
-            'packet_size': np.random.normal(40, 5, n_attacks//2),
-            'connection_duration': np.random.exponential(0.01, n_attacks//2),
-            'packets_per_second': np.random.poisson(500, n_attacks//2),
-            'unique_destinations': np.random.poisson(100, n_attacks//2)
-        }
-        
-        # Combine data
-        features = []
-        labels = []
-        
-        for key in normal_traffic.keys():
-            normal_traffic[key] = list(normal_traffic[key])
-            ddos[key] = list(ddos[key])
-            port_scan[key] = list(port_scan[key])
-        
-        # Add normal traffic
-        for i in range(n_samples):
-            features.append([
-                normal_traffic['packet_size'][i],
-                normal_traffic['connection_duration'][i],
-                normal_traffic['packets_per_second'][i],
-                normal_traffic['unique_destinations'][i]
-            ])
-            labels.append('normal')
-        
-        # Add attacks
-        for i in range(n_attacks//2):
-            features.append([
-                ddos['packet_size'][i],
-                ddos['connection_duration'][i],
-                ddos['packets_per_second'][i],
-                ddos['unique_destinations'][i]
-            ])
-            labels.append('ddos')
-            
-            features.append([
-                port_scan['packet_size'][i],
-                port_scan['connection_duration'][i],
-                port_scan['packets_per_second'][i],
-                port_scan['unique_destinations'][i]
-            ])
-            labels.append('port_scan')
-        
-        return np.array(features), np.array(labels)
-    
-    def train(self, X_train):
-        """Train DBSCAN on normal traffic"""
-        X_scaled = self.scaler.fit_transform(X_train)
-        
-        # Find optimal parameters
-        from sklearn.neighbors import NearestNeighbors
-        nbrs = NearestNeighbors(n_neighbors=5).fit(X_scaled)
-        distances, _ = nbrs.kneighbors(X_scaled)
-        
-        # Use 95th percentile distance as eps
-        eps = np.percentile(distances[:, 4], 95)
-        
-        self.dbscan = DBSCAN(eps=eps, min_samples=5)
-        self.dbscan.fit(X_scaled)
-        
-        print(f"Model trained with eps={eps:.3f}")
-        
-    def detect_intrusions(self, X_test, y_test):
-        """Detect network intrusions"""
-        X_scaled = self.scaler.transform(X_test)
-        
-        # Predict clusters
-        clusters = self.dbscan.fit_predict(X_scaled)
-        
-        # Noise points are potential intrusions
-        intrusions = clusters == -1
-        
-        # Evaluate detection
-        from sklearn.metrics import classification_report, confusion_matrix
-        
-        # Convert labels to binary (normal vs attack)
-        y_binary = (y_test != 'normal').astype(int)
-        
-        print("\nIntrusion Detection Results:")
-        print("-" * 40)
-        print(classification_report(y_binary, intrusions, 
-                                   target_names=['Normal', 'Attack']))
-        
-        # Confusion matrix
-        cm = confusion_matrix(y_binary, intrusions)
-        
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Confusion matrix
-        im = ax1.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-        ax1.figure.colorbar(im, ax=ax1)
-        ax1.set(xticks=np.arange(cm.shape[1]),
-               yticks=np.arange(cm.shape[0]),
-               xticklabels=['Normal', 'Attack'],
-               yticklabels=['Normal', 'Attack'],
-               title='Confusion Matrix',
-               ylabel='True label',
-               xlabel='Predicted label')
-        
-        # Annotate cells
-        for i in range(cm.shape[0]):
-            for j in range(cm.shape[1]):
-                ax1.text(j, i, format(cm[i, j], 'd'),
-                        ha="center", va="center",
-                        color="white" if cm[i, j] > cm.max() / 2. else "black")
-        
-        # Scatter plot of detections
-        ax2.scatter(X_test[~intrusions, 0], X_test[~intrusions, 1], 
-                   c='blue', alpha=0.5, label='Normal', s=20)
-        ax2.scatter(X_test[intrusions, 0], X_test[intrusions, 1], 
-                   c='red', alpha=0.7, label='Intrusion', s=40, marker='^')
-        ax2.set_xlabel('Packet Size')
-        ax2.set_ylabel('Connection Duration')
-        ax2.set_title('Network Traffic Analysis')
-        ax2.legend()
-        ax2.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        plt.show()
-        
-        return intrusions
-
-# Run intrusion detection example
-detector = NetworkIntrusionDetector()
-
-# Prepare data
-X, y = detector.prepare_data(1000)
-
-# Split data
-from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.3, random_state=42
-)
-
-# Train on normal traffic only
-normal_mask = y_train == 'normal'
-detector.train(X_train[normal_mask])
-
-# Detect intrusions
-print("\n" + "="*60)
-print("NETWORK INTRUSION DETECTION SYSTEM")
-print("="*60)
-intrusions = detector.detect_intrusions(X_test, y_test)</code></pre>
-
-        <h2>Summary and Key Takeaways</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 Key Points to Remember</h3>
-            <ul>
-                <li><strong>Density-Based:</strong> DBSCAN groups points based on density, not distance to centroids</li>
-                <li><strong>Arbitrary Shapes:</strong> Can find clusters of any shape, unlike K-means</li>
-                <li><strong>Automatic Outlier Detection:</strong> Identifies noise points automatically</li>
-                <li><strong>No K Required:</strong> Doesn't need number of clusters specified in advance</li>
-                <li><strong>Parameter Sensitivity:</strong> Performance heavily depends on eps and min_samples</li>
-                <li><strong>Scaling Important:</strong> Always standardize features before applying DBSCAN</li>
-            </ul>
-        </div>
-
-        
-    
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> DBSCAN defines clusters by density rather than by a fixed count.
-            Picture a map of a city at night — where do the "dense clusters" of lights appear, and how would you set
-            <code>eps</code> and <code>min_samples</code> to separate neighborhoods from empty space?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>DBSCAN groups points by density: core points have many neighbors within <code>eps</code>, and clusters grow through density-connected points.</li>
-                <li>It discovers arbitrarily shaped clusters and labels low-density points as noise (<code>-1</code>) — no need to pre-specify the number of clusters.</li>
-                <li>Performance hinges on two parameters, <code>eps</code> and <code>min_samples</code>; a k-distance plot helps choose <code>eps</code>.</li>
-                <li>DBSCAN struggles when clusters have very different densities, which is where variants like HDBSCAN help.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now run and tune DBSCAN, interpret its core/border/noise labels, and explain when density-based
-        clustering beats centroid-based methods like K-means — including using it to surface outliers.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>How do I choose <code>eps</code> and <code>min_samples</code>?</summary>
-            <p>Set <code>min_samples</code> around the data's dimensionality (often 2×features as a start), then use a
-            k-distance plot: sort each point's distance to its k-th neighbor and pick <code>eps</code> at the "elbow" where the curve rises sharply.</p>
-        </details>
-        <details>
-            <summary>When should I prefer DBSCAN over K-means?</summary>
-            <p>Choose DBSCAN when clusters are non-spherical, you don't know how many there are, or you need to identify
-            noise/outliers. K-means is better for roughly spherical, similarly sized clusters when you can specify k.</p>
-        </details>
-        <details>
-            <summary>Why are some points labeled -1?</summary>
-            <p>The label <code>-1</code> marks noise — points that don't have enough nearby neighbors to belong to any dense
-            region. This built-in outlier handling is a key advantage of DBSCAN.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>DBSCAN assigns every point to one cluster or to noise. Next you'll meet Gaussian Mixture Models, which take a
-        probabilistic view and give each point a soft membership across clusters.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Run DBSCAN on the two-moons dataset and compare its clusters against K-means on the same data.</li>
-            <li>Build a k-distance plot and use its elbow to pick <code>eps</code>, then see how the clustering changes.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>DBSCAN shows that clustering doesn't need to know the answer in advance — it lets the data's own density
-            reveal the groups. That's a beautiful idea, and you now know how to wield it. Keep exploring.</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="clustering_hierarchical.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="clustering_gaussian_mixture.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1073,6 +978,7 @@ intrusions = detector.detect_intrusions(X_test, y_test)</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>

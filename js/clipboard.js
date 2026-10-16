@@ -1,136 +1,71 @@
 /**
- * Copy to Clipboard functionality for code blocks
- * Adds a copy button to all code blocks and handles the copy action
+ * Python Machine Learning — clipboard.js
+ * Adds a "Copy" button and a small language label to every code block.
+ * Output blocks (.card-output) and blocks marked data-nocopy are left alone.
+ * Styles live in styles/main.css. No syntax highlighter is involved.
  */
-
-(function() {
+(function () {
     'use strict';
-    
-    // Wait for DOM to be fully loaded
-    document.addEventListener('DOMContentLoaded', function() {
-        
-        // Find all code blocks
-        const codeBlocks = document.querySelectorAll('pre code');
-        
-        codeBlocks.forEach(function(codeBlock) {
-            // Create wrapper div for positioning
-            const wrapper = document.createElement('div');
+
+    var LABELS = { python: 'Python', bash: 'Terminal', powershell: 'PowerShell', sql: 'SQL', text: 'Text', json: 'JSON', html: 'HTML', css: 'CSS', javascript: 'JavaScript' };
+
+    function feedback(btn, ok) {
+        btn.textContent = ok ? '✓ Copied' : '✗ Failed';
+        btn.classList.add(ok ? 'copy-ok' : 'copy-fail');
+        window.setTimeout(function () {
+            btn.textContent = 'Copy';
+            btn.classList.remove('copy-ok', 'copy-fail');
+        }, 1800);
+    }
+
+    function fallbackCopy(text, btn) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;';
+        document.body.appendChild(ta);
+        ta.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        document.body.removeChild(ta);
+        feedback(btn, ok);
+    }
+
+    function init() {
+        document.querySelectorAll('pre > code').forEach(function (code) {
+            var pre = code.parentElement;
+            if (pre.closest('.card-output') || pre.hasAttribute('data-nocopy') || pre.closest('.code-block-wrapper')) return;
+            var wrapper = document.createElement('div');
             wrapper.className = 'code-block-wrapper';
-            wrapper.style.position = 'relative';
-            
-            // Wrap the pre element
-            const preElement = codeBlock.parentElement;
-            preElement.parentNode.insertBefore(wrapper, preElement);
-            wrapper.appendChild(preElement);
-            
-            // Create copy button
-            const copyButton = document.createElement('button');
-            copyButton.className = 'copy-button';
-            copyButton.textContent = 'Copy';
-            copyButton.setAttribute('aria-label', 'Copy code to clipboard');
-            
-            // Style the button
-            copyButton.style.cssText = `
-                position: absolute;
-                top: 8px;
-                right: 8px;
-                padding: 6px 12px;
-                background-color: #4a5568;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-size: 12px;
-                cursor: pointer;
-                opacity: 0.8;
-                transition: opacity 0.2s, background-color 0.2s;
-                z-index: 10;
-            `;
-            
-            // Add hover effect
-            copyButton.addEventListener('mouseenter', function() {
-                this.style.opacity = '1';
-                this.style.backgroundColor = '#2d3748';
-            });
-            
-            copyButton.addEventListener('mouseleave', function() {
-                this.style.opacity = '0.8';
-                this.style.backgroundColor = '#4a5568';
-            });
-            
-            // Add copy functionality
-            copyButton.addEventListener('click', function() {
-                const textToCopy = codeBlock.textContent || codeBlock.innerText;
-                
-                // Modern clipboard API
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(pre);
+
+            var lang = (code.className.match(/language-([\w-]+)/) || [])[1];
+            if (lang) {
+                var tag = document.createElement('span');
+                tag.className = 'code-lang';
+                tag.setAttribute('aria-hidden', 'true');
+                tag.textContent = LABELS[lang] || lang;
+                wrapper.appendChild(tag);
+            }
+
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'copy-button';
+            btn.textContent = 'Copy';
+            btn.setAttribute('aria-label', 'Copy code to clipboard');
+            wrapper.appendChild(btn);
+            btn.addEventListener('click', function () {
+                var text = code.textContent;
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(textToCopy).then(function() {
-                        // Success feedback
-                        showCopyFeedback(copyButton, true);
-                    }).catch(function(err) {
-                        // Fallback to older method
-                        fallbackCopyTextToClipboard(textToCopy, copyButton);
-                    });
+                    navigator.clipboard.writeText(text).then(function () { feedback(btn, true); }, function () { fallbackCopy(text, btn); });
                 } else {
-                    // Fallback for older browsers
-                    fallbackCopyTextToClipboard(textToCopy, copyButton);
+                    fallbackCopy(text, btn);
                 }
             });
-            
-            // Add button to wrapper
-            wrapper.appendChild(copyButton);
         });
-    });
-    
-    // Fallback copy method for older browsers
-    function fallbackCopyTextToClipboard(text, button) {
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        
-        // Avoid scrolling to bottom
-        textArea.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 2em;
-            height: 2em;
-            padding: 0;
-            border: none;
-            outline: none;
-            box-shadow: none;
-            background: transparent;
-        `;
-        
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        
-        try {
-            const successful = document.execCommand('copy');
-            showCopyFeedback(button, successful);
-        } catch (err) {
-            showCopyFeedback(button, false);
-        }
-        
-        document.body.removeChild(textArea);
     }
-    
-    // Show feedback when copy is complete
-    function showCopyFeedback(button, success) {
-        const originalText = button.textContent;
-        
-        if (success) {
-            button.textContent = '✓ Copied!';
-            button.style.backgroundColor = '#48bb78';
-        } else {
-            button.textContent = '✗ Failed';
-            button.style.backgroundColor = '#f56565';
-        }
-        
-        // Reset button after 2 seconds
-        setTimeout(function() {
-            button.textContent = originalText;
-            button.style.backgroundColor = '#4a5568';
-        }, 2000);
-    }
-    
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
 })();

@@ -3,1395 +3,1046 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Master cross-validation techniques in machine learning. Learn k-fold, stratified, leave-one-out, and advanced validation methods for robust model evaluation.">
-    <title>Cross-validation Path - Python Machine Learning</title>
+    <meta name="description" content="Use k-fold cross-validation to get a trustworthy estimate of model performance, compare models fairly, and respect time and group structure in your data. Python Machine Learning Lesson 1.3.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Cross-Validation - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
-    <main id="main-content">
-    <header role="banner">
-        <h1>Cross-validation</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Fundamentals</a>
-        <span class="separator">›</span>
-        <span class="current">Cross-validation</span>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
     </nav>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Explain why a single train/test split gives a noisy, high-variance estimate of performance</li>
-            <li>Apply k-fold, stratified k-fold, and leave-one-out cross-validation</li>
-            <li>Use <code>cross_val_score</code> and <code>cross_validate</code> correctly</li>
-            <li>Prevent data leakage by cross-validating whole pipelines rather than pre-fitted data</li>
-            <li>Choose the right CV strategy for imbalanced data, grouped data, and time series</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Estimate a model's performance with k-fold cross-validation and report the mean and standard deviation of scores across the folds.</p>
-    </div>
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>🔄 Lesson 1.3: Cross-Validation</h1>
+                <p class="lead">Stop trusting a single lucky (or unlucky) split: grade every model on several rotating validation folds, and get a score you can defend.</p>
 
-    <h2>Robust Model Evaluation! 🔄</h2>
-    
-    <blockquote>
-        <p>Cross-validation is the gold standard for assessing model performance. By training and testing on multiple data splits, it provides a more reliable estimate of how your model will perform on unseen data. From simple k-fold to sophisticated nested cross-validation, these techniques ensure your models generalize well beyond the training data.</p>
-    </blockquote>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain why one train/validation split gives a noisy score, and how k-fold cross-validation averages that noise away</li>
+                        <li>Run <code>cross_val_score</code> and <code>cross_validate</code> with a stratified, shuffled splitter, and report a mean with its spread</li>
+                        <li>Keep preprocessing inside the folds by cross-validating a <code>make_pipeline</code> instead of pre-scaled data</li>
+                        <li>Compare two models fold by fold on identical folds, and get out-of-fold predictions with <code>cross_val_predict</code></li>
+                        <li>Choose <code>TimeSeriesSplit</code> or <code>GroupKFold</code> when rows are related by time or by group</li>
+                    </ul>
+                </div>
 
-    <h2>Understanding Cross-validation</h2>
-    
-    <div class="mermaid">
-    graph LR
-        A[Dataset] --> B[Cross-validation]
-        
-        B --> C[K-Fold CV]
-        B --> D[Stratified K-Fold]
-        B --> E[Leave-One-Out]
-        B --> F[Leave-P-Out]
-        B --> G[Time Series CV]
-        B --> H[Group K-Fold]
-        
-        C --> I[Fold 1: Train on 2-5, Test on 1]
-        C --> J[Fold 2: Train on 1,3-5, Test on 2]
-        C --> K[Fold 3: Train on 1-2,4-5, Test on 3]
-        C --> L[Fold 4: Train on 1-3,5, Test on 4]
-        C --> M[Fold 5: Train on 1-4, Test on 5]
-        
-        I --> N[Score 1]
-        J --> N[Score 2]
-        K --> N[Score 3]
-        L --> N[Score 4]
-        M --> N[Score 5]
-        
-        N --> O[Mean Score ± Std]
-    </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 95 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="evaluation_train_test_split.html">Lesson 1.2: Splits, Baselines and Leakage</a></li>
+                    <li><span class="meta-label">🛠️ You will build</span> A fair bake-off of four churn models on repeated folds, with one final test-set check</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code> and <code>data/weekly_demand.csv</code></li>
+                </ul>
+            </header>
 
-    <h2>K-Fold Cross-validation</h2>
-    
-    <h3>Standard K-Fold Implementation</h3>
-    <pre class="language-python"><code>import numpy as np
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#one-split" class="toc-link">One Split Is One Opinion</a></li>
+                        <li><a href="#kfold" class="toc-link">K-Fold Cross-Validation</a></li>
+                        <li><a href="#folds" class="toc-link">Stratified and Shuffled Folds</a></li>
+                        <li><a href="#inside" class="toc-link">Preprocessing Inside the Folds</a></li>
+                        <li><a href="#cross-validate" class="toc-link">More Than One Score</a></li>
+                        <li><a href="#compare" class="toc-link">Comparing Models Fairly</a></li>
+                        <li><a href="#oof" class="toc-link">Out-of-Fold Predictions</a></li>
+                        <li><a href="#related" class="toc-link">When Rows Are Related</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: A Fair Model Bake-Off</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="one-split" class="lesson-section">
+                <h2>🎲 One Split Is One Opinion</h2>
+
+                <p>In Lesson 1.2 you saw that a test score wobbles: a different shuffle puts different customers in the held-out pile, some easy to predict and some hard, so the grade depends partly on luck. A validation set has the same problem, and it also takes rows away from training. Here is a quick reminder of the size of the wobble, this time for a depth-4 tree and ten seeds.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
-from sklearn.model_selection import KFold, cross_val_score, cross_validate
-from sklearn.datasets import make_classification, make_regression
-from sklearn.linear_model import LogisticRegression, LinearRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
-
-# Generate sample data
-X_class, y_class = make_classification(n_samples=1000, n_features=20, 
-                                       n_informative=15, n_redundant=5,
-                                       n_classes=2, random_state=42)
-
-X_reg, y_reg = make_regression(n_samples=1000, n_features=20,
-                               n_informative=15, noise=10, random_state=42)
-
-# Basic K-Fold Cross-validation
-def demonstrate_kfold(X, y, n_splits=5):
-    """Demonstrate K-Fold cross-validation"""
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-    
-    print(f"K-Fold Cross-validation with {n_splits} folds")
-    print("=" * 50)
-    
-    fold_info = []
-    for fold, (train_idx, val_idx) in enumerate(kf.split(X), 1):
-        fold_info.append({
-            'Fold': fold,
-            'Train Size': len(train_idx),
-            'Validation Size': len(val_idx),
-            'Train %': f"{len(train_idx)/len(X):.1%}",
-            'Val %': f"{len(val_idx)/len(X):.1%}"
-        })
-        
-        # Show first few indices
-        if fold == 1:
-            print(f"Fold {fold} indices:")
-            print(f"  Train (first 10): {train_idx[:10]}")
-            print(f"  Val (first 10): {val_idx[:10]}")
-    
-    fold_df = pd.DataFrame(fold_info)
-    print("\nFold Statistics:")
-    print(fold_df.to_string(index=False))
-    
-    return kf
-
-kf = demonstrate_kfold(X_class, y_class)
-
-# Using cross_val_score for quick evaluation
-model = LogisticRegression(random_state=42, max_iter=1000)
-scores = cross_val_score(model, X_class, y_class, cv=5, scoring='accuracy')
-
-print(f"\nCross-validation scores: {scores}")
-print(f"Mean accuracy: {scores.mean():.3f} (+/- {scores.std() * 2:.3f})")
-
-# Visualize K-Fold splits
-def visualize_kfold_splits(X, n_splits=5):
-    """Visualize how K-Fold splits the data"""
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-    
-    fig, ax = plt.subplots(figsize=(12, 6))
-    
-    # Create a matrix to show train/test splits
-    n_samples = len(X)
-    split_matrix = np.zeros((n_splits, n_samples))
-    
-    for fold, (train_idx, test_idx) in enumerate(kf.split(X)):
-        split_matrix[fold, train_idx] = 1  # Training samples
-        split_matrix[fold, test_idx] = 2   # Test samples
-    
-    # Plot
-    cmap = plt.cm.coolwarm
-    im = ax.imshow(split_matrix, aspect='auto', cmap=cmap, vmin=0, vmax=2)
-    
-    ax.set_yticks(range(n_splits))
-    ax.set_yticklabels([f'Fold {i+1}' for i in range(n_splits)])
-    ax.set_xlabel('Sample Index')
-    ax.set_ylabel('Fold')
-    ax.set_title(f'{n_splits}-Fold Cross-validation Data Split')
-    
-    # Add colorbar
-    cbar = plt.colorbar(im, ax=ax, ticks=[0, 1, 2])
-    cbar.set_label('Dataset')
-    cbar.ax.set_yticklabels(['Not Used', 'Training', 'Validation'])
-    
-    plt.tight_layout()
-    plt.show()
-
-visualize_kfold_splits(X_class[:100], n_splits=5)
-
-# Multiple metrics with cross_validate
-def evaluate_with_multiple_metrics(X, y, model, cv=5):
-    """Evaluate model with multiple metrics"""
-    
-    # Define scoring metrics
-    scoring = {
-        'accuracy': 'accuracy',
-        'precision': 'precision_weighted',
-        'recall': 'recall_weighted',
-        'f1': 'f1_weighted',
-        'roc_auc': 'roc_auc'
-    }
-    
-    # Perform cross-validation
-    cv_results = cross_validate(model, X, y, cv=cv, scoring=scoring,
-                                return_train_score=True, return_estimator=False)
-    
-    # Create results dataframe
-    results_df = pd.DataFrame({
-        'Metric': [],
-        'Train Mean': [],
-        'Train Std': [],
-        'Val Mean': [],
-        'Val Std': []
-    })
-    
-    for metric in scoring.keys():
-        train_key = f'train_{metric}'
-        test_key = f'test_{metric}'
-        
-        results_df = pd.concat([results_df, pd.DataFrame({
-            'Metric': [metric],
-            'Train Mean': [cv_results[train_key].mean()],
-            'Train Std': [cv_results[train_key].std()],
-            'Val Mean': [cv_results[test_key].mean()],
-            'Val Std': [cv_results[test_key].std()]
-        })], ignore_index=True)
-    
-    print("\nCross-validation Results (Multiple Metrics):")
-    print(results_df.to_string(index=False))
-    
-    # Plot results
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    
-    # Means comparison
-    x = np.arange(len(results_df))
-    width = 0.35
-    
-    axes[0].bar(x - width/2, results_df['Train Mean'], width, 
-                label='Train', alpha=0.7)
-    axes[0].bar(x + width/2, results_df['Val Mean'], width, 
-                label='Validation', alpha=0.7)
-    axes[0].set_xlabel('Metric')
-    axes[0].set_ylabel('Score')
-    axes[0].set_title('Cross-validation: Train vs Validation Scores')
-    axes[0].set_xticks(x)
-    axes[0].set_xticklabels(results_df['Metric'], rotation=45)
-    axes[0].legend()
-    axes[0].grid(True, alpha=0.3)
-    
-    # Fold-by-fold scores for accuracy
-    fold_scores = cv_results['test_accuracy']
-    axes[1].plot(range(1, len(fold_scores) + 1), fold_scores, 'o-', markersize=8)
-    axes[1].axhline(y=fold_scores.mean(), color='r', linestyle='--', 
-                   label=f'Mean: {fold_scores.mean():.3f}')
-    axes[1].fill_between(range(1, len(fold_scores) + 1),
-                        fold_scores.mean() - fold_scores.std(),
-                        fold_scores.mean() + fold_scores.std(),
-                        alpha=0.2, color='red')
-    axes[1].set_xlabel('Fold')
-    axes[1].set_ylabel('Accuracy')
-    axes[1].set_title('Accuracy Across Folds')
-    axes[1].legend()
-    axes[1].grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.show()
-    
-    return cv_results
-
-# Evaluate with multiple metrics
-model = LogisticRegression(random_state=42, max_iter=1000)
-cv_results = evaluate_with_multiple_metrics(X_class, y_class, model)</code></pre>
-
-    <h2>Stratified Cross-validation</h2>
-    
-    <h3>Maintaining Class Balance Across Folds</h3>
-    <pre class="language-python"><code>from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
-import numpy as np
-import pandas as pd
-
-# Create imbalanced dataset
-np.random.seed(42)
-X_imbalanced = np.vstack([
-    np.random.randn(900, 10),  # Class 0 (majority)
-    np.random.randn(100, 10) + 2  # Class 1 (minority)
-])
-y_imbalanced = np.array([0] * 900 + [1] * 100)
-
-print("Dataset Class Distribution:")
-print(pd.Series(y_imbalanced).value_counts())
-print(f"Class 1 ratio: {(y_imbalanced == 1).mean():.1%}")
-
-# Compare KFold vs StratifiedKFold
-def compare_fold_strategies(X, y, n_splits=5):
-    """Compare regular K-Fold with Stratified K-Fold"""
-    
-    # Regular K-Fold
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-    
-    # Stratified K-Fold
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
-    
-    fig, axes = plt.subplots(2, n_splits, figsize=(15, 6))
-    
-    # Regular K-Fold
-    for fold, (train_idx, val_idx) in enumerate(kf.split(X, y)):
-        y_val = y[val_idx]
-        class_dist = pd.Series(y_val).value_counts(normalize=True).sort_index()
-        
-        axes[0, fold].bar(class_dist.index, class_dist.values, alpha=0.7)
-        axes[0, fold].set_title(f'Fold {fold + 1}')
-        axes[0, fold].set_ylim([0, 1])
-        axes[0, fold].set_xlabel('Class')
-        if fold == 0:
-            axes[0, fold].set_ylabel('K-Fold\nProportion')
-    
-    # Stratified K-Fold
-    for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
-        y_val = y[val_idx]
-        class_dist = pd.Series(y_val).value_counts(normalize=True).sort_index()
-        
-        axes[1, fold].bar(class_dist.index, class_dist.values, alpha=0.7, color='green')
-        axes[1, fold].set_ylim([0, 1])
-        axes[1, fold].set_xlabel('Class')
-        if fold == 0:
-            axes[1, fold].set_ylabel('Stratified\nProportion')
-    
-    # Add reference line for original distribution
-    original_ratio = (y == 1).mean()
-    for ax in axes.flatten():
-        ax.axhline(y=original_ratio, color='red', linestyle='--', 
-                  alpha=0.5, label=f'Original: {original_ratio:.1%}')
-    
-    plt.suptitle('Class Distribution: K-Fold vs Stratified K-Fold', fontsize=14)
-    plt.tight_layout()
-    plt.show()
-
-compare_fold_strategies(X_imbalanced, y_imbalanced)
-
-# Stratified Shuffle Split (for multiple random splits)
-def demonstrate_stratified_shuffle_split(X, y, n_splits=5, test_size=0.2):
-    """Demonstrate StratifiedShuffleSplit"""
-    
-    sss = StratifiedShuffleSplit(n_splits=n_splits, test_size=test_size, 
-                                 random_state=42)
-    
-    split_info = []
-    
-    for split, (train_idx, val_idx) in enumerate(sss.split(X, y), 1):
-        y_train = y[train_idx]
-        y_val = y[val_idx]
-        
-        split_info.append({
-            'Split': split,
-            'Train Size': len(train_idx),
-            'Val Size': len(val_idx),
-            'Train Class 1': f"{(y_train == 1).mean():.1%}",
-            'Val Class 1': f"{(y_val == 1).mean():.1%}"
-        })
-    
-    split_df = pd.DataFrame(split_info)
-    print("\nStratified Shuffle Split Results:")
-    print(split_df.to_string(index=False))
-    
-    return sss
-
-sss = demonstrate_stratified_shuffle_split(X_imbalanced, y_imbalanced)
-
-# Performance comparison on imbalanced data
+from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+X = customers[features]
+y = customers["churned"]
+
+scores = []
+for seed in range(10):
+    X_a, X_b, y_a, y_b = train_test_split(X, y, test_size=0.25, stratify=y, random_state=seed)
+    tree = DecisionTreeClassifier(max_depth=4, random_state=42).fit(X_a, y_a)
+    scores.append(tree.score(X_b, y_b))
+
+print(np.round(scores, 3))
+print(f"lowest {min(scores):.3f}   highest {max(scores):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>[0.859 0.862 0.879 0.868 0.869 0.867 0.863 0.866 0.874 0.858]
+lowest 0.858   highest 0.879</code></pre>
+                </div>
+
+                <p>Same model, same settings, same data: only the shuffle changed, and the accuracy moved by about two points. Now imagine comparing two models whose true difference is one point. On a single split, luck alone could crown either one. (This loop splits the whole table ten times, which is fine for a thought experiment. In real work you never touch the test set this way.)</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: One Exam or Five Quizzes</h4>
+                    <p>A teacher who grades a student on one exam learns something, but a bad night's sleep or a lucky choice of questions can swing the result. Five shorter quizzes, each covering different material, give a steadier picture, and the spread of the five grades tells the teacher how much to trust the average. Cross-validation gives your model five quizzes instead of one exam, and it does so without using the final exam (the test set) at all.</p>
+                </div>
+
+                <p>For the rest of this lesson, use the course's standard split and keep the 1,500 test customers locked away. Everything below happens inside the 4,500 training customers.</p>
+
+                <pre><code class="language-python">X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, stratify=y, random_state=42
+)
+print(X_train.shape, X_test.shape)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(4500, 10) (1500, 10)</code></pre>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="kfold" class="lesson-section">
+                <h2>🔄 K-Fold Cross-Validation</h2>
+
+                <p><strong>K-fold cross-validation</strong> cuts the training rows into <em>k</em> equal parts called <strong>folds</strong>. It then trains <em>k</em> times. Each time, one fold is held out for validation and the model is trained on the other <em>k</em> - 1 folds. Every training row is used for validation exactly once, and you get <em>k</em> scores instead of one.</p>
+
+                <div class="diagram">
+                    <svg viewBox="0 0 440 262" width="440" height="262" role="img" aria-label="Five-fold cross-validation: five rows, one per round. In each round a different fifth of the training rows is the validation fold and the other four fifths are used for training. The test set sits apart and is not used.">
+                        <text x="235" y="16" text-anchor="middle" class="svg-text">4,500 training rows in 5 folds; one round per row</text>
+                        <text x="8" y="47" class="svg-muted">1</text>
+                        <rect x="30" y="30" width="78" height="26" rx="4" class="svg-solid"/>
+                        <text x="69" y="47" text-anchor="middle" class="svg-on-color">validate</text>
+                        <rect x="112" y="30" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="151" y="47" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="194" y="30" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="233" y="47" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="276" y="30" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="315" y="47" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="358" y="30" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="397" y="47" text-anchor="middle" class="svg-text">train</text>
+                        <text x="8" y="81" class="svg-muted">2</text>
+                        <rect x="30" y="64" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="69" y="81" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="112" y="64" width="78" height="26" rx="4" class="svg-solid"/>
+                        <text x="151" y="81" text-anchor="middle" class="svg-on-color">validate</text>
+                        <rect x="194" y="64" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="233" y="81" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="276" y="64" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="315" y="81" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="358" y="64" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="397" y="81" text-anchor="middle" class="svg-text">train</text>
+                        <text x="8" y="115" class="svg-muted">3</text>
+                        <rect x="30" y="98" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="69" y="115" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="112" y="98" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="151" y="115" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="194" y="98" width="78" height="26" rx="4" class="svg-solid"/>
+                        <text x="233" y="115" text-anchor="middle" class="svg-on-color">validate</text>
+                        <rect x="276" y="98" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="315" y="115" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="358" y="98" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="397" y="115" text-anchor="middle" class="svg-text">train</text>
+                        <text x="8" y="149" class="svg-muted">4</text>
+                        <rect x="30" y="132" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="69" y="149" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="112" y="132" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="151" y="149" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="194" y="132" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="233" y="149" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="276" y="132" width="78" height="26" rx="4" class="svg-solid"/>
+                        <text x="315" y="149" text-anchor="middle" class="svg-on-color">validate</text>
+                        <rect x="358" y="132" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="397" y="149" text-anchor="middle" class="svg-text">train</text>
+                        <text x="8" y="183" class="svg-muted">5</text>
+                        <rect x="30" y="166" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="69" y="183" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="112" y="166" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="151" y="183" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="194" y="166" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="233" y="183" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="276" y="166" width="78" height="26" rx="4" class="svg-box"/>
+                        <text x="315" y="183" text-anchor="middle" class="svg-text">train</text>
+                        <rect x="358" y="166" width="78" height="26" rx="4" class="svg-solid"/>
+                        <text x="397" y="183" text-anchor="middle" class="svg-on-color">validate</text>
+                        <text x="235" y="212" text-anchor="middle" class="svg-muted">5 scores: report their mean and spread</text>
+                        <rect x="30" y="224" width="406" height="30" rx="4" class="svg-box-4"/>
+                        <text x="233" y="244" text-anchor="middle" class="svg-text">Test set, 1,500 rows: locked away</text>
+                    </svg>
+                </div>
+
+                <p>The way to make folds in scikit-learn is a <strong>splitter</strong> object. Its <code>split</code> method yields, for each round, the row positions to train on and the row positions to validate on. Write the loop by hand once, so that nothing about cross-validation is magic:</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import StratifiedKFold
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+fold_scores = []
+for fold, (train_idx, val_idx) in enumerate(cv.split(X_train, y_train), start=1):
+    tree = DecisionTreeClassifier(max_depth=4, random_state=42)
+    tree.fit(X_train.iloc[train_idx], y_train.iloc[train_idx])
+    score = tree.score(X_train.iloc[val_idx], y_train.iloc[val_idx])
+    fold_scores.append(score)
+    print(f"fold {fold}: train {len(train_idx)}, validate {len(val_idx)}, "
+          f"churn rate {y_train.iloc[val_idx].mean():.3f}, accuracy {score:.3f}")
+
+print(f"mean {np.mean(fold_scores):.3f}, std {np.std(fold_scores):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>fold 1: train 3600, validate 900, churn rate 0.164, accuracy 0.859
+fold 2: train 3600, validate 900, churn rate 0.166, accuracy 0.866
+fold 3: train 3600, validate 900, churn rate 0.166, accuracy 0.866
+fold 4: train 3600, validate 900, churn rate 0.166, accuracy 0.873
+fold 5: train 3600, validate 900, churn rate 0.166, accuracy 0.850
+mean 0.863, std 0.008</code></pre>
+                </div>
+
+                <p>Five models, each trained on 3,600 customers and graded on a different 900. <code>train_idx</code> and <code>val_idx</code> are positions (0, 1, 2, ...), not index labels, which is why the loop uses <code>.iloc</code>. A fresh tree is created in every round: reusing a fitted model across folds would let one round's training leak into the next.</p>
+
+                <p>You will rarely write that loop again, because <code>cross_val_score</code> does the same thing in one line. It clones the estimator for every fold (so you never hand it a fitted model by accident), fits, scores and returns the scores as an array.</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import cross_val_score
+
+tree = DecisionTreeClassifier(max_depth=4, random_state=42)
+scores = cross_val_score(tree, X_train, y_train, cv=cv)
+
+print(scores.round(3))
+print(f"accuracy {scores.mean():.3f} +/- {scores.std():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>[0.859 0.866 0.866 0.873 0.85 ]
+accuracy 0.863 +/- 0.008</code></pre>
+                </div>
+
+                <p>The same five numbers as the hand-written loop, because the same splitter object with the same <code>random_state</code> produced the same folds. Report the result as a mean plus or minus the standard deviation of the fold scores. The mean is your estimate; the spread tells the reader how much the estimate depends on which customers were in the fold.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Cross-Validation Evaluates a Recipe, Not a Model</h4>
+                    <p><code>cross_val_score</code> fits five models and then throws them all away. What it scores is the <em>recipe</em>: "a depth-4 tree trained on about 3,600 Pinecrest customers". When you are happy with the recipe, you fit it once more on all 4,500 training rows, and that model is the one you test and use. Nothing from the five fold models carries over.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="folds" class="lesson-section">
+                <h2>⚖️ Stratified and Shuffled Folds</h2>
+
+                <p>You can also pass a plain number, <code>cv=5</code>. For a classifier, scikit-learn then uses <code>StratifiedKFold(5)</code>, which keeps the churn rate the same in every fold, but <strong>without shuffling</strong>: fold 1 is drawn from the first rows of the table, fold 5 from the last. For a regressor, <code>cv=5</code> means plain <code>KFold(5)</code>, also unshuffled. That is fine when the rows are in random order, and dangerous when they are not. Watch what happens when the training table happens to be sorted by the target, as exports from some databases are:</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import KFold
+
+sorted_train = X_train.assign(churned=y_train).sort_values("churned")
+X_sorted, y_sorted = sorted_train[features], sorted_train["churned"]
+
+for name, splitter in [("KFold(5)", KFold(5)),
+                       ("StratifiedKFold", StratifiedKFold(5, shuffle=True, random_state=42))]:
+    rates = [y_sorted.iloc[val].mean() for _, val in splitter.split(X_sorted, y_sorted)]
+    acc = cross_val_score(tree, X_sorted, y_sorted, cv=splitter)
+    print(f"{name:16s} churn rate per fold {np.round(rates, 2)}  accuracy {acc.mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>KFold(5)         churn rate per fold [0.   0.   0.   0.   0.83]  accuracy 0.796
+StratifiedKFold  churn rate per fold [0.16 0.17 0.17 0.17 0.17]  accuracy 0.863</code></pre>
+                </div>
+
+                <p>Unshuffled <code>KFold</code> on sorted rows produces folds with no churners at all and one fold made mostly of churners. Every round trains on a distorted world, and the "accuracy" is meaningless. A stratified, shuffled splitter does not care about row order. The course habit: <strong>build the splitter yourself</strong>, <code>StratifiedKFold(n_splits=5, shuffle=True, random_state=42)</code> for classification and <code>KFold(n_splits=5, shuffle=True, random_state=42)</code> for regression, unless the rows are related (the last section of this lesson).</p>
+
+                <div class="card card-info">
+                    <h4>💡 How Many Folds?</h4>
+                    <p>Five or ten. More folds mean each model trains on more data (closer to the final model) but take longer, and the fold scores, computed on smaller validation folds, get noisier. With 4,500 rows, five folds give 900 validation rows each, plenty for a stable accuracy. With a few hundred rows, use ten folds, or repeat five folds several times (coming up below).</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="inside" class="lesson-section">
+                <h2>🧪 Preprocessing Inside the Folds</h2>
+
+                <p>Logistic regression needs scaled features. In Lesson 1.1 you fitted a <code>StandardScaler</code> on <code>X_train</code> and then trained the model. If you cross-validate on that pre-scaled data, every validation fold has already been seen by the scaler: its mean and standard deviation were computed with the validation rows included. That is the same leak as fitting the scaler on the test set, just smaller and better hidden.</p>
+
+                <p>The fix is to hand <code>cross_val_score</code> the scaler and the model together, so that both are fitted inside every round on the training folds only. <code>make_pipeline</code> glues them into one estimator. Lesson 2.2 is all about pipelines; for now, all you need is that a pipeline behaves like a single model with <code>fit</code> and <code>predict</code>, and that it fits its steps in order.</p>
+
+                <pre><code class="language-python">from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+
+logreg = make_pipeline(StandardScaler(), LogisticRegression())
+print(logreg)
+
+scores = cross_val_score(logreg, X_train, y_train, cv=cv)
+print(f"logistic regression accuracy {scores.mean():.3f} +/- {scores.std():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>Pipeline(steps=[('standardscaler', StandardScaler()),
+                ('logisticregression', LogisticRegression())])
+logistic regression accuracy 0.852 +/- 0.009</code></pre>
+                </div>
+
+                <div class="mermaid">
+graph TD
+    A["One round of cross-validation"] --> B["Training folds"]
+    A --> C["Validation fold"]
+    B --> D["Scaler learns mean and std"]
+    D --> E["Model learns weights"]
+    C --> F["Scaled with those numbers"]
+    E --> G["Score on the validation fold"]
+    F --> G
+                </div>
+
+                <p>Here the leak from pre-scaling is tiny, because a mean and a standard deviation computed from 3,600 rows hardly change when 900 more are added. But the habit matters more than this instance: when the preprocessing <em>learns more</em> from the data (picking the best features, filling gaps with group averages, encoding categories by their churn rate), the leak can make a useless model look excellent. Common mistake 1 below shows a dramatic case.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="cross-validate" class="lesson-section">
+                <h2>📋 More Than One Score</h2>
+
+                <p><code>cross_val_score</code> returns one metric. Its bigger sibling, <code>cross_validate</code>, can compute several metrics in the same rounds and also score each model on its own training folds. Here it compares an unlimited-depth tree with the depth-4 tree. Besides accuracy it asks for <code>"roc_auc"</code>, a measure of how well the model <em>ranks</em> churners above non-churners (0.5 is random, 1.0 is perfect). Lesson 1.4 explains it properly.</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import cross_validate
+
+for depth in [4, None]:
+    results = cross_validate(
+        DecisionTreeClassifier(max_depth=depth, random_state=42), X_train, y_train, cv=cv,
+        scoring=["accuracy", "roc_auc"], return_train_score=True,
+    )
+    summary = pd.DataFrame(results).drop(columns=["fit_time", "score_time"]).mean()
+    print(f"max_depth={depth}")
+    print(summary.round(3).to_string())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>max_depth=4
+test_accuracy     0.863
+train_accuracy    0.875
+test_roc_auc      0.839
+train_roc_auc     0.857
+max_depth=None
+test_accuracy     0.815
+train_accuracy    1.000
+test_roc_auc      0.663
+train_roc_auc     1.000</code></pre>
+                </div>
+
+                <p><code>cross_validate</code> returns a dictionary of arrays: <code>test_accuracy</code>, <code>train_accuracy</code> and so on, plus <code>fit_time</code> and <code>score_time</code> (dropped here because timings differ on every computer). In scikit-learn's naming, "test" in these keys means the validation fold; your real test set is still untouched.</p>
+
+                <p>The unlimited tree scores a perfect 1.000 on its own training folds and much worse on the validation folds: it memorizes. The depth-4 tree's train and validation scores are close, which is what a model that generalizes looks like. Comparing the two columns is the quickest overfitting check you have, and it costs one argument.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="compare" class="lesson-section">
+                <h2>📊 Comparing Models Fairly</h2>
+
+                <p>The point of all this is to choose between models without spending the test set. Two rules make a comparison fair:</p>
+                <ul>
+                    <li><strong>Same folds for every model.</strong> Pass the same splitter object (same <code>random_state</code>), so each model is graded on exactly the same customers in each round. Then the scores are <em>paired</em>, and you can compare round by round.</li>
+                    <li><strong>Enough rounds to see the noise.</strong> <code>RepeatedStratifiedKFold</code> runs 5-fold cross-validation several times with different shuffles. Three repeats of five folds give 15 paired scores per model.</li>
+                </ul>
+
+                <pre><code class="language-python">from sklearn.model_selection import RepeatedStratifiedKFold
+
+rcv = RepeatedStratifiedKFold(n_splits=5, n_repeats=3, random_state=42)
+
 models = {
-    'Logistic Regression': LogisticRegression(random_state=42, max_iter=1000),
-    'Decision Tree': DecisionTreeClassifier(random_state=42, max_depth=5),
-    'Random Forest': RandomForestClassifier(n_estimators=50, random_state=42)
+    "tree (depth 4)": DecisionTreeClassifier(max_depth=4, random_state=42),
+    "logistic regression": logreg,
 }
+auc = pd.DataFrame({name: cross_val_score(model, X_train, y_train, cv=rcv, scoring="roc_auc")
+                    for name, model in models.items()})
 
-cv_strategies = {
-    'KFold': KFold(n_splits=5, shuffle=True, random_state=42),
-    'StratifiedKFold': StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-}
+print(auc.agg(["mean", "std"]).round(3))
+diff = auc["tree (depth 4)"] - auc["logistic regression"]
+print(f"tree better in {(diff > 0).sum()} of {len(diff)} rounds; mean difference {diff.mean():+.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>      tree (depth 4)  logistic regression
+mean           0.834                 0.83
+std            0.017                 0.02
+tree better in 12 of 15 rounds; mean difference +0.004</code></pre>
+                </div>
 
-results = []
+                <p>The tree wins 12 of the 15 rounds, which sounds convincing, but its average lead is 0.004, while a single model's score moves by 0.02 from fold to fold (the standard deviation) and by about 0.07 between its best and worst folds. On one unlucky split, logistic regression could easily have come out on top. The honest summary: these two models rank customers about equally well. The chart makes the point visually.</p>
 
-for model_name, model in models.items():
-    for cv_name, cv in cv_strategies.items():
-        scores = cross_val_score(model, X_imbalanced, y_imbalanced, 
-                                cv=cv, scoring='f1')
-        
-        results.append({
-            'Model': model_name,
-            'CV Strategy': cv_name,
-            'Mean F1': scores.mean(),
-            'Std F1': scores.std(),
-            'Min F1': scores.min(),
-            'Max F1': scores.max()
-        })
+                <pre><code class="language-python">import matplotlib.pyplot as plt
 
-results_df = pd.DataFrame(results)
-print("\nPerformance Comparison on Imbalanced Data:")
-print(results_df.to_string(index=False))
-
-# Visualize results
-fig, ax = plt.subplots(figsize=(10, 6))
-
-models_list = results_df['Model'].unique()
-x = np.arange(len(models_list))
-width = 0.35
-
-for i, cv_strategy in enumerate(cv_strategies.keys()):
-    subset = results_df[results_df['CV Strategy'] == cv_strategy]
-    means = subset['Mean F1'].values
-    stds = subset['Std F1'].values
-    
-    ax.bar(x + i * width, means, width, label=cv_strategy, 
-           yerr=stds, capsize=5, alpha=0.7)
-
-ax.set_xlabel('Model')
-ax.set_ylabel('F1 Score')
-ax.set_title('Impact of CV Strategy on Imbalanced Data')
-ax.set_xticks(x + width / 2)
-ax.set_xticklabels(models_list, rotation=45)
-ax.legend()
-ax.grid(True, alpha=0.3)
-
-plt.tight_layout()
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+for i, name in enumerate(auc.columns):
+    ax.scatter(auc[name], np.full(len(auc), i), color="#667eea", alpha=0.7, label="one fold" if i == 0 else None)
+    ax.plot([auc[name].mean()] * 2, [i - 0.25, i + 0.25], color="black", linewidth=2,
+            label="mean of 15 folds" if i == 0 else None)
+ax.set_yticks(range(len(auc.columns)), auc.columns)
+ax.set_ylim(-0.6, len(auc.columns) - 0.4)
+ax.set_xlabel("ROC AUC on the validation fold")
+ax.set_title("The fold-to-fold spread dwarfs the gap between the two models")
+ax.legend(loc="lower right")
 plt.show()</code></pre>
 
-    <h2>Leave-One-Out and Leave-P-Out</h2>
-    
-    <h3>Exhaustive Cross-validation Methods</h3>
-    <pre class="language-python"><code>from sklearn.model_selection import LeaveOneOut, LeavePOut
-from sklearn.datasets import load_iris
-import time
+                <figure>
+                    <img src="images/evaluation_cross_validation_fold_scores.png" alt="Strip chart of 15 validation-fold ROC AUC scores for each of two models. Logistic regression's folds range from about 0.79 to 0.86 with a mean of 0.830; the depth-4 tree's folds range from about 0.81 to 0.86 with a mean of 0.834. The two clouds of points overlap almost completely." width="990" height="440" loading="lazy">
+                    <figcaption>Each dot is one validation fold. The two means differ by 0.004, while the folds of either model spread over about 0.05 to 0.07.</figcaption>
+                </figure>
 
-# Load small dataset for LOO demonstration
-iris = load_iris()
-X_small = iris.data[:30]  # Use subset for speed
-y_small = iris.target[:30]
+                <div class="card card-warning">
+                    <h4>⚠️ The "+/-" Is a Rough Guide</h4>
+                    <p>The folds share most of their training rows, so the 15 scores are not independent measurements, and textbook confidence intervals built from them come out too narrow. Treat the spread as a sense of scale, look at the paired differences, and be suspicious of any winner whose lead is smaller than the fold-to-fold wobble. When two models are that close, prefer the simpler or cheaper one.</p>
+                </div>
+            </section>
 
-print(f"Dataset size: {len(X_small)} samples")
+            <!-- ============================================================ -->
+            <section id="oof" class="lesson-section">
+                <h2>🔁 Out-of-Fold Predictions</h2>
 
-# Leave-One-Out Cross-validation
-def demonstrate_loo(X, y):
-    """Demonstrate Leave-One-Out cross-validation"""
-    loo = LeaveOneOut()
-    
-    print(f"\nLeave-One-Out Cross-validation")
-    print(f"Number of splits: {loo.get_n_splits(X)}")
-    print("=" * 50)
-    
-    # Show first few splits
-    for i, (train_idx, test_idx) in enumerate(loo.split(X)):
-        if i < 3:  # Show first 3 splits
-            print(f"Split {i+1}:")
-            print(f"  Train size: {len(train_idx)}")
-            print(f"  Test size: {len(test_idx)}")
-            print(f"  Test index: {test_idx[0]}")
-    
-    # Evaluate model
-    model = LogisticRegression(random_state=42, max_iter=1000)
-    
-    start_time = time.time()
-    scores = cross_val_score(model, X, y, cv=loo, scoring='accuracy')
-    end_time = time.time()
-    
-    print(f"\nLOO Results:")
-    print(f"Scores (first 10): {scores[:10]}")
-    print(f"Mean accuracy: {scores.mean():.3f}")
-    print(f"Std accuracy: {scores.std():.3f}")
-    print(f"Time taken: {end_time - start_time:.2f} seconds")
-    
-    return scores
+                <p>Sometimes you want predictions, not scores: to draw a chart, to pick a decision threshold, or to look at the customers the model gets wrong. <code>cross_val_predict</code> returns, for every training row, the prediction made by the fold model that did <em>not</em> train on that row. These <strong>out-of-fold</strong> predictions are honest in the same way validation scores are.</p>
 
-loo_scores = demonstrate_loo(X_small, y_small)
+                <pre><code class="language-python">from sklearn.model_selection import cross_val_predict
 
-# Leave-P-Out Cross-validation
-def demonstrate_lpo(X, y, p=2):
-    """Demonstrate Leave-P-Out cross-validation"""
-    lpo = LeavePOut(p)
-    
-    n_splits = lpo.get_n_splits(X)
-    print(f"\nLeave-{p}-Out Cross-validation")
-    print(f"Number of splits: {n_splits}")
-    print("=" * 50)
-    
-    if n_splits > 100:
-        print("Warning: Too many splits! Showing limited evaluation.")
-        return None
-    
-    # Show first few splits
-    for i, (train_idx, test_idx) in enumerate(lpo.split(X)):
-        if i < 3:  # Show first 3 splits
-            print(f"Split {i+1}:")
-            print(f"  Train size: {len(train_idx)}")
-            print(f"  Test size: {len(test_idx)}")
-            print(f"  Test indices: {test_idx}")
-    
-    # Evaluate model (only if reasonable number of splits)
-    if n_splits <= 100:
-        model = LogisticRegression(random_state=42, max_iter=1000)
-        
-        start_time = time.time()
-        scores = cross_val_score(model, X, y, cv=lpo, scoring='accuracy')
-        end_time = time.time()
-        
-        print(f"\nLPO Results:")
-        print(f"Mean accuracy: {scores.mean():.3f}")
-        print(f"Std accuracy: {scores.std():.3f}")
-        print(f"Time taken: {end_time - start_time:.2f} seconds")
-        
-        return scores
-    
-    return None
+oof_proba = cross_val_predict(logreg, X_train, y_train, cv=cv, method="predict_proba")[:, 1]
+print(oof_proba.shape)
 
-# Demonstrate with p=2
-lpo_scores = demonstrate_lpo(X_small[:20], y_small[:20], p=2)
+oof = pd.DataFrame({"churn_probability": oof_proba, "churned": y_train.to_numpy()})
+oof["risk_decile"] = pd.qcut(oof["churn_probability"].rank(method="first"), 10, labels=range(1, 11))
+print(oof.groupby("risk_decile", observed=True)["churned"].mean().round(3).to_string())</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(4500,)
+risk_decile
+1     0.022
+2     0.033
+3     0.033
+4     0.040
+5     0.056
+6     0.089
+7     0.167
+8     0.258
+9     0.380
+10    0.576</code></pre>
+                </div>
 
-# Comparison of CV methods on computation time
-def compare_cv_computational_cost(X, y):
-    """Compare computational cost of different CV methods"""
-    
-    cv_methods = {
-        '5-Fold': KFold(n_splits=5, shuffle=True, random_state=42),
-        '10-Fold': KFold(n_splits=10, shuffle=True, random_state=42),
-        'LOO': LeaveOneOut()
-    }
-    
-    model = LogisticRegression(random_state=42, max_iter=1000)
-    
-    timing_results = []
-    
-    for cv_name, cv in cv_methods.items():
-        start_time = time.time()
-        scores = cross_val_score(model, X, y, cv=cv, scoring='accuracy')
-        end_time = time.time()
-        
-        timing_results.append({
-            'Method': cv_name,
-            'N Splits': cv.get_n_splits(X) if hasattr(cv, 'get_n_splits') else 'N/A',
-            'Time (s)': end_time - start_time,
-            'Mean Score': scores.mean(),
-            'Std Score': scores.std()
-        })
-    
-    timing_df = pd.DataFrame(timing_results)
-    print("\nComputational Cost Comparison:")
-    print(timing_df.to_string(index=False))
-    
-    # Visualize
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    
-    # Time comparison
-    axes[0].bar(timing_df['Method'], timing_df['Time (s)'], alpha=0.7)
-    axes[0].set_xlabel('CV Method')
-    axes[0].set_ylabel('Time (seconds)')
-    axes[0].set_title('Computational Time Comparison')
-    axes[0].grid(True, alpha=0.3)
-    
-    # Accuracy comparison
-    axes[1].bar(timing_df['Method'], timing_df['Mean Score'], 
-               yerr=timing_df['Std Score'], capsize=5, alpha=0.7)
-    axes[1].set_xlabel('CV Method')
-    axes[1].set_ylabel('Accuracy')
-    axes[1].set_title('Accuracy Comparison')
-    axes[1].grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.show()
-    
-    return timing_df
+                <p>You now have one honest churn probability for each of the 4,500 training customers, and the deciles tell the same story as the test-set chart in Lesson 1.1, without touching the test set. Lesson 1.4 uses exactly these out-of-fold probabilities to choose a decision threshold.</p>
 
-timing_comparison = compare_cv_computational_cost(X_small, y_small)</code></pre>
+                <div class="card card-info">
+                    <h4>💡 Scores from Pooled Predictions Are Not the Same Thing</h4>
+                    <p>A metric computed on all out-of-fold predictions at once is close to, but not the same as, the mean of the per-fold scores, because the five fold models are slightly different. Use <code>cross_val_score</code> or <code>cross_validate</code> for the performance estimate, and <code>cross_val_predict</code> for analysis and plots.</p>
+                </div>
+            </section>
 
-    <h2>Time Series Cross-validation</h2>
-    
-    <h3>Special Methods for Temporal Data</h3>
-    <pre class="language-python"><code>from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import mean_squared_error
-import pandas as pd
-import numpy as np
+            <!-- ============================================================ -->
+            <section id="related" class="lesson-section">
+                <h2>⏳ When Rows Are Related</h2>
 
-# Generate time series data
-np.random.seed(42)
-n_samples = 365
-dates = pd.date_range('2023-01-01', periods=n_samples, freq='D')
+                <p>Shuffled k-fold assumes every row is an independent sample, like customers drawn at random from a population. Lesson 1.2 showed two situations that break that assumption with single splits: time and groups. Both are present in <code>weekly_demand.csv</code>, which has one row per product, store and week, and both have cross-validation versions.</p>
 
-# Create features with lag
-trend = np.linspace(100, 200, n_samples)
-seasonal = 20 * np.sin(np.arange(n_samples) * 2 * np.pi / 30)
-noise = np.random.normal(0, 10, n_samples)
-y_ts = trend + seasonal + noise
+                <ul>
+                    <li><strong>Time.</strong> Pinecrest wants to forecast <em>next</em> season's demand. A shuffled fold lets the model train on November 2025 and validate on March 2025: it sees the future. <code>TimeSeriesSplit</code> always trains on the past and validates on the period right after it.</li>
+                    <li><strong>Groups.</strong> If the question is "how well will we predict a product we have never sold?", every row of the same product must sit on the same side of the split. <code>GroupKFold</code> keeps each group together.</li>
+                </ul>
 
-# Create lagged features
-X_ts = pd.DataFrame({
-    'lag_1': np.roll(y_ts, 1),
-    'lag_7': np.roll(y_ts, 7),
-    'lag_30': np.roll(y_ts, 30),
-    'day_of_week': dates.dayofweek,
-    'month': dates.month,
-    'trend': np.arange(n_samples)
-})
+                <p>First, the time-aware version. The table has 96 rows per week, so split by <em>week</em>, not by row: <code>TimeSeriesSplit</code> works on the sorted list of 104 weeks, and the loop turns each pair of week lists into row positions. A list of <code>(train, validation)</code> pairs is a perfectly good <code>cv=</code> argument.</p>
 
-# Remove NaN values from rolling
-X_ts = X_ts[30:]
-y_ts = y_ts[30:]
-dates = dates[30:]
+                <pre><code class="language-python">from sklearn.model_selection import TimeSeriesSplit
+from sklearn.ensemble import HistGradientBoostingRegressor
 
-print(f"Time series data: {len(X_ts)} samples")
-print(f"Date range: {dates[0]} to {dates[-1]}")
+demand = pd.read_csv("data/weekly_demand.csv")
+demand_features = ["price", "list_price", "discount_pct", "promo", "holiday_week",
+                   "avg_high_temp_f", "store_sqft", "week_of_year"]
+X_d, y_d = demand[demand_features], demand["units_sold"]
 
-# Time Series Split
-def demonstrate_time_series_cv(X, y, dates, n_splits=5):
-    """Demonstrate time series cross-validation"""
-    
-    tscv = TimeSeriesSplit(n_splits=n_splits)
-    
-    fig, axes = plt.subplots(n_splits, 2, figsize=(14, n_splits * 3))
-    
-    fold_results = []
-    
-    for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
-        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
-        y_train, y_test = y[train_idx], y[test_idx]
-        dates_train = dates[train_idx]
-        dates_test = dates[test_idx]
-        
-        # Train model
-        model = LinearRegression()
-        model.fit(X_train, y_train)
-        
-        # Predict
-        y_pred = model.predict(X_test)
-        mse = mean_squared_error(y_test, y_pred)
-        
-        fold_results.append({
-            'Fold': fold + 1,
-            'Train Start': dates_train[0],
-            'Train End': dates_train[-1],
-            'Test Start': dates_test[0],
-            'Test End': dates_test[-1],
-            'Train Size': len(train_idx),
-            'Test Size': len(test_idx),
-            'MSE': mse
-        })
-        
-        # Plot actual vs predicted
-        axes[fold, 0].plot(dates_train, y_train, label='Train', alpha=0.7)
-        axes[fold, 0].plot(dates_test, y_test, label='Test Actual', alpha=0.7)
-        axes[fold, 0].plot(dates_test, y_pred, label='Test Predicted', 
-                          linestyle='--', alpha=0.7)
-        axes[fold, 0].set_title(f'Fold {fold + 1} - MSE: {mse:.2f}')
-        axes[fold, 0].legend()
-        axes[fold, 0].grid(True, alpha=0.3)
-        
-        # Plot residuals
-        residuals = y_test - y_pred
-        axes[fold, 1].scatter(dates_test, residuals, alpha=0.5, s=10)
-        axes[fold, 1].axhline(y=0, color='red', linestyle='--', alpha=0.5)
-        axes[fold, 1].set_title(f'Fold {fold + 1} Residuals')
-        axes[fold, 1].set_ylabel('Residual')
-        axes[fold, 1].grid(True, alpha=0.3)
-    
-    plt.suptitle('Time Series Cross-validation', fontsize=14, y=1.02)
-    plt.tight_layout()
-    plt.show()
-    
-    fold_df = pd.DataFrame(fold_results)
-    print("\nTime Series CV Results:")
-    print(fold_df.to_string(index=False))
-    
-    return tscv, fold_df
+weeks = np.sort(demand["week_start"].unique())
+time_folds = []
+for train_w, val_w in TimeSeriesSplit(n_splits=4, test_size=13).split(weeks):
+    train_rows = np.flatnonzero(demand["week_start"].isin(weeks[train_w]))
+    val_rows = np.flatnonzero(demand["week_start"].isin(weeks[val_w]))
+    time_folds.append((train_rows, val_rows))
+    print(f"train {weeks[train_w][0]}..{weeks[train_w][-1]}  validate {weeks[val_w][0]}..{weeks[val_w][-1]}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>train 2024-01-01..2024-12-23  validate 2024-12-30..2025-03-24
+train 2024-01-01..2025-03-24  validate 2025-03-31..2025-06-23
+train 2024-01-01..2025-06-23  validate 2025-06-30..2025-09-22
+train 2024-01-01..2025-09-22  validate 2025-09-29..2025-12-22</code></pre>
+                </div>
 
-tscv, fold_results = demonstrate_time_series_cv(X_ts, y_ts, dates)
+                <p>Four rounds, each validating on the next quarter (13 weeks) and training on everything before it. The training window grows from round to round, exactly like a forecaster who refits every quarter. Now score the same model three ways. The scorer is <code>"neg_mean_absolute_error"</code>: scikit-learn scorers always treat higher as better, so error metrics come back negative. The minus sign in front of <code>cross_val_score</code> turns them back into "units per week off, on average".</p>
 
-# Custom expanding window cross-validation
-class ExpandingWindowCV:
-    """Expanding window for time series"""
-    
-    def __init__(self, initial_train_size, step_size=1, max_train_size=None):
-        self.initial_train_size = initial_train_size
-        self.step_size = step_size
-        self.max_train_size = max_train_size
-    
-    def split(self, X, y=None):
-        n_samples = len(X)
-        
-        train_start = 0
-        train_end = self.initial_train_size
-        
-        while train_end < n_samples:
-            # Apply max_train_size if specified
-            if self.max_train_size and train_end > self.max_train_size:
-                train_start = train_end - self.max_train_size
-            
-            train_idx = np.arange(train_start, train_end)
-            test_idx = np.arange(train_end, min(train_end + self.step_size, n_samples))
-            
-            if len(test_idx) > 0:
-                yield train_idx, test_idx
-            
-            train_end += self.step_size
+                <pre><code class="language-python">from sklearn.model_selection import GroupKFold
 
-# Blocked time series cross-validation
-class BlockedTimeSeriesCV:
-    """Blocked CV with gap between train and test"""
-    
-    def __init__(self, n_splits, gap_size=0):
-        self.n_splits = n_splits
-        self.gap_size = gap_size
-    
-    def split(self, X, y=None):
-        n_samples = len(X)
-        test_size = n_samples // (self.n_splits + 1)
-        
-        for i in range(self.n_splits):
-            test_start = (i + 1) * test_size
-            test_end = min(test_start + test_size, n_samples)
-            
-            if self.gap_size > 0:
-                train_end = test_start - self.gap_size
-            else:
-                train_end = test_start
-            
-            train_idx = np.arange(0, train_end)
-            test_idx = np.arange(test_start, test_end)
-            
-            if len(train_idx) > 0 and len(test_idx) > 0:
-                yield train_idx, test_idx
-
-# Compare different time series CV strategies
-def compare_ts_cv_strategies(X, y):
-    """Compare different time series CV strategies"""
-    
-    strategies = {
-        'TimeSeriesSplit': TimeSeriesSplit(n_splits=5),
-        'ExpandingWindow': ExpandingWindowCV(initial_train_size=100, step_size=50),
-        'BlockedTS': BlockedTimeSeriesCV(n_splits=5, gap_size=10)
-    }
-    
-    fig, axes = plt.subplots(len(strategies), 1, figsize=(14, len(strategies) * 2))
-    
-    for ax, (name, cv) in zip(axes, strategies.items()):
-        # Visualize splits
-        for fold, (train_idx, test_idx) in enumerate(cv.split(X)):
-            # Plot as horizontal bars
-            ax.barh(fold, len(train_idx), left=train_idx[0], 
-                   color='blue', alpha=0.5, label='Train' if fold == 0 else '')
-            ax.barh(fold, len(test_idx), left=test_idx[0], 
-                   color='red', alpha=0.5, label='Test' if fold == 0 else '')
-        
-        ax.set_xlabel('Sample Index')
-        ax.set_ylabel('Fold')
-        ax.set_title(f'{name} Strategy')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.show()
-
-compare_ts_cv_strategies(X_ts, y_ts)</code></pre>
-
-    <h2>Nested Cross-validation</h2>
-    
-    <h3>For Model Selection and Evaluation</h3>
-    <pre class="language-python"><code>from sklearn.model_selection import GridSearchCV, cross_val_score
-from sklearn.svm import SVC
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
-
-# Generate data
-X, y = make_classification(n_samples=200, n_features=10, n_informative=5,
-                          n_redundant=5, n_classes=2, random_state=42)
-
-# Nested cross-validation implementation
-def nested_cross_validation(X, y, model, param_grid, outer_cv=5, inner_cv=3):
-    """
-    Perform nested cross-validation
-    Outer loop: Model evaluation
-    Inner loop: Hyperparameter tuning
-    """
-    
-    outer_scores = []
-    best_params_list = []
-    
-    # Outer CV
-    outer_kf = KFold(n_splits=outer_cv, shuffle=True, random_state=42)
-    
-    for fold, (train_val_idx, test_idx) in enumerate(outer_kf.split(X), 1):
-        print(f"Outer Fold {fold}/{outer_cv}")
-        
-        X_train_val, X_test = X[train_val_idx], X[test_idx]
-        y_train_val, y_test = y[train_val_idx], y[test_idx]
-        
-        # Inner CV for hyperparameter tuning
-        inner_kf = KFold(n_splits=inner_cv, shuffle=True, random_state=42)
-        
-        grid_search = GridSearchCV(
-            estimator=model,
-            param_grid=param_grid,
-            cv=inner_kf,
-            scoring='accuracy',
-            n_jobs=-1
-        )
-        
-        # Fit on train+val, find best params
-        grid_search.fit(X_train_val, y_train_val)
-        
-        # Evaluate on test set with best model
-        best_model = grid_search.best_estimator_
-        test_score = best_model.score(X_test, y_test)
-        
-        outer_scores.append(test_score)
-        best_params_list.append(grid_search.best_params_)
-        
-        print(f"  Best params: {grid_search.best_params_}")
-        print(f"  Inner CV score: {grid_search.best_score_:.3f}")
-        print(f"  Outer test score: {test_score:.3f}")
-    
-    print("\n" + "="*50)
-    print("Nested CV Results:")
-    print(f"Outer scores: {outer_scores}")
-    print(f"Mean: {np.mean(outer_scores):.3f} (+/- {np.std(outer_scores) * 2:.3f})")
-    
-    return outer_scores, best_params_list
-
-# Example with SVM
-svm_param_grid = {
-    'C': [0.1, 1, 10],
-    'kernel': ['linear', 'rbf'],
-    'gamma': ['scale', 'auto']
+hgb = HistGradientBoostingRegressor(random_state=42)
+splitters = {
+    "shuffled KFold": dict(cv=KFold(5, shuffle=True, random_state=42)),
+    "time-ordered": dict(cv=time_folds),
+    "new products": dict(cv=GroupKFold(n_splits=4), groups=demand["product_id"]),
 }
+for name, kwargs in splitters.items():
+    mae = -cross_val_score(hgb, X_d, y_d, scoring="neg_mean_absolute_error", **kwargs)
+    print(f"{name:15s} MAE per fold {mae.round(1)}  mean {mae.mean():.2f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>shuffled KFold  MAE per fold [ 9.7  9.9  9.9 10.   9.6]  mean 9.84
+time-ordered    MAE per fold [ 7.5 10.9 11.7 10.5]  mean 10.17
+new products    MAE per fold [18.7 15.  10.7 19.9]  mean 16.07</code></pre>
+                </div>
 
-print("SVM Nested Cross-validation:")
-svm_scores, svm_params = nested_cross_validation(
-    X, y, 
-    SVC(random_state=42),
-    svm_param_grid,
-    outer_cv=5,
-    inner_cv=3
+                <p>Three different questions, three different answers. Shuffled folds (9.84 units per week) are only slightly more optimistic than time-ordered folds (10.17) on this data, because, beyond the season and the trend, these weekly sales do not carry much memory from one week to the next; on data where this week strongly resembles last week, the gap can be much larger. The time-ordered folds also reveal something the shuffled ones hide: error depends on the season (the winter quarter, with low sales, has the smallest error). The real surprise is the last line. For a product the model has never seen, the error jumps to about 16 units per week, because much of what the model learned is product-specific. If Pinecrest plans to launch new products, 16 is the number to plan around, not 10.</p>
+
+                <div class="card card-success">
+                    <h4>✅ Match the Folds to the Question</h4>
+                    <p>Ask: "when this model is used for real, what will be new to it?" New customers drawn from the same population: shuffled stratified k-fold. Next month or next season: time-ordered folds. A new product, store, patient or user: group folds. The right splitter is the one whose validation fold looks like the future the model will face. There is also <code>StratifiedGroupKFold</code> for groups plus class balance.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Cross-validation mistakes rarely crash. Most of them produce a score that is quietly too good, which is worse.</p>
+
+                <h3>1. Choosing Features Before Cross-Validating</h3>
+
+                <p>This experiment uses pure noise: 200 "customers" with 5,000 random features and a random yes-or-no label. No model can honestly beat 50% on it. The leaky version picks the 20 features most related to the label using all 200 rows, then cross-validates. The honest version puts the selection inside a pipeline. (<code>SelectKBest</code> is covered in Lesson 2.4; here it is just "keep the 20 columns that look most related to y".)</p>
+
+                <pre><code class="language-python">from sklearn.feature_selection import SelectKBest
+
+rng = np.random.default_rng(42)
+X_noise = rng.normal(size=(200, 5000))
+y_noise = rng.integers(0, 2, size=200)
+noise_cv = StratifiedKFold(5, shuffle=True, random_state=42)
+
+X_picked = SelectKBest(k=20).fit_transform(X_noise, y_noise)
+leaky = cross_val_score(LogisticRegression(), X_picked, y_noise, cv=noise_cv)
+honest = cross_val_score(make_pipeline(SelectKBest(k=20), LogisticRegression()), X_noise, y_noise, cv=noise_cv)
+print(f"leaky  {leaky.mean():.3f}")
+print(f"honest {honest.mean():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>leaky  0.825
+honest 0.595</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the honest estimate, 0.595, is not exactly 0.5, because with only 200 rows a cross-validated score on random labels can land anywhere from about 0.4 to 0.6 by luck. The leaky 0.825 is far outside that range. With 5,000 random columns, some will match the random labels well by pure chance, <em>including on the rows that later become validation folds</em>. Selecting them with all the rows hands the model the answers. <strong>Fix:</strong> every step that learns from data goes inside the pipeline that you cross-validate, so it is refitted on the training folds of each round.</p>
+
+                <h3>2. A Seed Without a Shuffle</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">KFold(n_splits=5, random_state=42)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Setting a random_state has no effect since shuffle is False. You should leave random_state to its default (None), or set shuffle=True.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> an unshuffled splitter is not random, so a seed has nothing to control, and scikit-learn refuses rather than let you believe the folds are shuffled. <strong>Fix:</strong> add <code>shuffle=True</code>, or drop <code>random_state</code> if you really want the rows in their original order (time-ordered data uses <code>TimeSeriesSplit</code> instead).</p>
+
+                <h3>3. Misspelling a Scorer Name</h3>
+
+                <p>The real message lists every valid scorer name (about 60 of them), so this block prints just its beginning and end:</p>
+
+                <pre><code class="language-python">try:
+    cross_val_score(hgb, X_d, y_d, cv=time_folds, scoring="mean_absolute_error")
+except ValueError as err:
+    message = str(err)
+    print(type(err).__name__)
+    print(message.split(" among ")[0], "...")
+    print("...", message.split("}, ")[-1])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>InvalidParameterError
+The 'scoring' parameter of cross_val_score must be a str ...
+... a callable or None. Got 'mean_absolute_error' instead.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> <code>InvalidParameterError</code> is scikit-learn's kind of <code>ValueError</code> for a bad argument, raised before any model is fitted. Error metrics exist only as negated scorers (<code>"neg_mean_absolute_error"</code>, <code>"neg_root_mean_squared_error"</code>), because scorers must be "higher is better". <strong>Fix:</strong> use the <code>neg_</code> name and flip the sign when you print. <code>sklearn.metrics.get_scorer_names()</code> lists every valid name.</p>
+
+                <h3>4. Reporting the Best Fold</h3>
+
+                <pre><code class="language-python">scores = cross_val_score(tree, X_train, y_train, cv=cv)
+print(f"best fold {scores.max():.3f}   honest estimate {scores.mean():.3f} +/- {scores.std():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>best fold 0.873   honest estimate 0.863 +/- 0.008</code></pre>
+                </div>
+                <p><strong>What happened:</strong> picking the luckiest fold (or the luckiest seed, or the luckiest of many experiments) and reporting it alone is the single-split problem again, with extra steps. <strong>Fix:</strong> report the mean and the spread of all folds, and say how the folds were made.</p>
+
+                <h3>5. Using the Test Set Inside Cross-Validation</h3>
+                <p>Cross-validating on all 6,000 rows (training plus test) and then "confirming" on the test set is not a confirmation: the test rows already took part in every comparison you made. There is no error message for this one. <strong>Fix:</strong> cross-validate on <code>X_train</code> only, choose your model, fit it on all of <code>X_train</code>, and score the test set once, at the end. The project does exactly this.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: A Fair Model Bake-Off</h2>
+
+                <p>Pinecrest's analytics lead asks you to recommend one of four churn models, with evidence that will survive a skeptical review. You will compare a baseline, logistic regression, a depth-4 tree and a random forest on identical repeated folds, pick a winner on the training data alone, and then open the test set once to confirm. Work in a fresh notebook, <code>lesson_1_3_project</code>. Allow about 35 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load, split and lock the test set <span class="step-time">(5 min)</span></h3>
+                    <p>Start fresh with the course's standard split.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split, RepeatedStratifiedKFold, cross_validate
+
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+X_train, X_test, y_train, y_test = train_test_split(
+    customers[features], customers["churned"], test_size=0.25, stratify=customers["churned"], random_state=42
 )
+print(len(X_train), len(X_test))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>4500 1500</code></pre>
+                    </div>
+                </div>
 
-# Compare nested CV vs simple CV
-def compare_nested_vs_simple_cv(X, y):
-    """Compare nested CV with simple CV to show overfitting risk"""
-    
-    # Models and parameters
-    models = {
-        'SVM': (SVC(random_state=42), {
-            'C': [0.1, 1, 10],
-            'kernel': ['linear', 'rbf']
-        }),
-        'Random Forest': (RandomForestClassifier(random_state=42), {
-            'n_estimators': [10, 50, 100],
-            'max_depth': [3, 5, None]
-        })
-    }
-    
-    results = []
-    
-    for model_name, (model, param_grid) in models.items():
-        print(f"\nEvaluating {model_name}...")
-        
-        # Simple CV (biased)
-        grid_search = GridSearchCV(model, param_grid, cv=5, scoring='accuracy')
-        grid_search.fit(X, y)
-        simple_score = grid_search.best_score_
-        
-        # Nested CV (unbiased)
-        nested_scores, _ = nested_cross_validation(
-            X, y, model, param_grid, outer_cv=5, inner_cv=3
-        )
-        nested_score = np.mean(nested_scores)
-        
-        results.append({
-            'Model': model_name,
-            'Simple CV': simple_score,
-            'Nested CV': nested_score,
-            'Difference': simple_score - nested_score
-        })
-    
-    results_df = pd.DataFrame(results)
-    print("\n" + "="*50)
-    print("Comparison: Simple CV vs Nested CV")
-    print(results_df.to_string(index=False))
-    print("\nNote: Simple CV typically overestimates performance!")
-    
-    # Visualize
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    x = np.arange(len(results_df))
-    width = 0.35
-    
-    ax.bar(x - width/2, results_df['Simple CV'], width, 
-           label='Simple CV', alpha=0.7)
-    ax.bar(x + width/2, results_df['Nested CV'], width, 
-           label='Nested CV', alpha=0.7)
-    
-    ax.set_xlabel('Model')
-    ax.set_ylabel('Accuracy')
-    ax.set_title('Simple CV vs Nested CV: Overfitting in Model Selection')
-    ax.set_xticks(x)
-    ax.set_xticklabels(results_df['Model'])
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    
-    # Add difference annotations
-    for i, diff in enumerate(results_df['Difference']):
-        ax.annotate(f'Δ={diff:.3f}', 
-                   xy=(i, max(results_df['Simple CV'][i], results_df['Nested CV'][i])),
-                   xytext=(0, 5), textcoords='offset points',
-                   ha='center', fontsize=9)
-    
-    plt.tight_layout()
-    plt.show()
-    
-    return results_df
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Define the candidates <span class="step-time">(5 min)</span></h3>
+                    <p>Logistic regression gets its scaler inside a pipeline; the trees do not need scaling.</p>
+                    <pre><code class="language-python">from sklearn.dummy import DummyClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
 
-comparison_results = compare_nested_vs_simple_cv(X, y)</code></pre>
+candidates = {
+    "baseline": DummyClassifier(strategy="prior"),
+    "logistic regression": make_pipeline(StandardScaler(), LogisticRegression()),
+    "tree (depth 4)": DecisionTreeClassifier(max_depth=4, random_state=42),
+    "random forest": RandomForestClassifier(n_estimators=200, min_samples_leaf=5, random_state=42, n_jobs=-1),
+}
+print(list(candidates))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>['baseline', 'logistic regression', 'tree (depth 4)', 'random forest']</code></pre>
+                    </div>
+                    <p><code>strategy="prior"</code> predicts "stays" for everyone, like <code>"most_frequent"</code>, but its <code>predict_proba</code> returns the churn rate for everyone, which gives an AUC of exactly 0.5: the "knows nothing" yardstick for ranking.</p>
+                </div>
 
-    <h2>Custom Cross-validation Strategies</h2>
-    
-    <h3>Building Your Own CV Splitters</h3>
-    <pre class="language-python"><code># Custom cross-validation implementations
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Cross-validate every candidate on the same folds <span class="step-time">(10 min)</span></h3>
+                    <p>One splitter, three repeats of five folds, two metrics. Keep every fold score: you need them in Step 4.</p>
+                    <pre><code class="language-python">rcv = RepeatedStratifiedKFold(n_splits=5, n_repeats=3, random_state=42)
 
-from sklearn.model_selection import BaseCrossValidator
-from sklearn.utils.validation import check_array
+fold_auc = {}
+rows = []
+for name, model in candidates.items():
+    res = cross_validate(model, X_train, y_train, cv=rcv, scoring=["accuracy", "roc_auc"])
+    fold_auc[name] = res["test_roc_auc"]
+    rows.append({"model": name,
+                 "accuracy": res["test_accuracy"].mean(), "acc_std": res["test_accuracy"].std(),
+                 "roc_auc": res["test_roc_auc"].mean(), "auc_std": res["test_roc_auc"].std()})
 
-class MonteCarloCV(BaseCrossValidator):
-    """Monte Carlo (random) cross-validation"""
-    
-    def __init__(self, n_splits=10, test_size=0.2, random_state=None):
-        self.n_splits = n_splits
-        self.test_size = test_size
-        self.random_state = random_state
-    
-    def split(self, X, y=None, groups=None):
-        X = check_array(X)
-        n_samples = len(X)
-        n_test = int(n_samples * self.test_size)
-        
-        rng = np.random.RandomState(self.random_state)
-        
-        for _ in range(self.n_splits):
-            # Random permutation
-            indices = rng.permutation(n_samples)
-            test_idx = indices[:n_test]
-            train_idx = indices[n_test:]
-            
-            yield train_idx, test_idx
-    
-    def get_n_splits(self, X=None, y=None, groups=None):
-        return self.n_splits
+board = pd.DataFrame(rows).set_index("model").sort_values("roc_auc", ascending=False)
+print(board.round(3))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>                     accuracy  acc_std  roc_auc  auc_std
+model
+random forest           0.871    0.008    0.867    0.018
+tree (depth 4)          0.864    0.008    0.834    0.017
+logistic regression     0.852    0.008    0.830    0.020
+baseline                0.835    0.000    0.500    0.000</code></pre>
+                    </div>
+                </div>
 
-# Test custom CV
-mccv = MonteCarloCV(n_splits=5, test_size=0.3, random_state=42)
-model = LogisticRegression(random_state=42, max_iter=1000)
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Check the lead fold by fold <span class="step-time">(5 min)</span></h3>
+                    <p>Is the top model's lead bigger than the noise? Compare it with the runner-up on the 15 paired folds.</p>
+                    <pre><code class="language-python">best, second = board.index[0], board.index[1]
+diff = fold_auc[best] - fold_auc[second]
+print(f"{best} vs {second}: ahead in {(diff > 0).sum()} of {len(diff)} folds, "
+      f"mean lead {diff.mean():+.3f} (smallest {diff.min():+.3f}, largest {diff.max():+.3f})")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>random forest vs tree (depth 4): ahead in 15 of 15 folds, mean lead +0.033 (smallest +0.013, largest +0.063)</code></pre>
+                    </div>
+                    <p>The forest beats the depth-4 tree in every one of the 15 paired folds, by at least 0.013. Unlike the tree-versus-logistic-regression comparison earlier, this lead is consistent, so it is safe to call it real for this data.</p>
+                </div>
 
-scores = cross_val_score(model, X, y, cv=mccv, scoring='accuracy')
-print(f"Monte Carlo CV scores: {scores}")
-print(f"Mean: {scores.mean():.3f} (+/- {scores.std() * 2:.3f})")
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Open the test set, once <span class="step-time">(5 min)</span></h3>
+                    <p>Fit the chosen recipe on all 4,500 training rows and score it on the locked test set. Also score the runner-up, purely to see whether the test set agrees with the cross-validation ranking. Do not change your choice based on this step.</p>
+                    <pre><code class="language-python">from sklearn.metrics import roc_auc_score
 
-# Stratified Group K-Fold (custom implementation)
-class CustomStratifiedGroupKFold:
-    """Stratified K-Fold that respects group boundaries"""
-    
-    def __init__(self, n_splits=5):
-        self.n_splits = n_splits
-    
-    def split(self, X, y, groups):
-        """Generate indices to split data while keeping groups and stratification"""
-        # Group by groups and get class distribution per group
-        unique_groups = np.unique(groups)
-        n_groups = len(unique_groups)
-        
-        # Calculate class distribution for each group
-        group_classes = {}
-        for group in unique_groups:
-            group_mask = groups == group
-            group_y = y[group_mask]
-            # Get majority class for this group
-            unique, counts = np.unique(group_y, return_counts=True)
-            majority_class = unique[np.argmax(counts)]
-            group_classes[group] = majority_class
-        
-        # Split groups based on their majority class
-        groups_per_class = {}
-        for group, cls in group_classes.items():
-            if cls not in groups_per_class:
-                groups_per_class[cls] = []
-            groups_per_class[cls].append(group)
-        
-        # Create folds maintaining class balance
-        fold_groups = [[] for _ in range(self.n_splits)]
-        
-        for cls, class_groups in groups_per_class.items():
-            # Distribute groups of this class across folds
-            n_groups_in_class = len(class_groups)
-            for i, group in enumerate(class_groups):
-                fold_idx = i % self.n_splits
-                fold_groups[fold_idx].append(group)
-        
-        # Generate train/test indices for each fold
-        for fold in range(self.n_splits):
-            test_groups = fold_groups[fold]
-            train_groups = []
-            for f in range(self.n_splits):
-                if f != fold:
-                    train_groups.extend(fold_groups[f])
-            
-            # Get indices for train and test
-            train_idx = [i for i, g in enumerate(groups) if g in train_groups]
-            test_idx = [i for i, g in enumerate(groups) if g in test_groups]
-            
-            yield np.array(train_idx), np.array(test_idx)
+for name in [best, second]:
+    final = candidates[name].fit(X_train, y_train)
+    test_auc = roc_auc_score(y_test, final.predict_proba(X_test)[:, 1])
+    print(f"{name:20s} CV AUC {board.loc[name, 'roc_auc']:.3f} +/- {board.loc[name, 'auc_std']:.3f}   test AUC {test_auc:.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>random forest        CV AUC 0.867 +/- 0.018   test AUC 0.865
+tree (depth 4)       CV AUC 0.834 +/- 0.017   test AUC 0.841</code></pre>
+                    </div>
+                    <p>The test AUC of the forest (0.865) lands well within the cross-validation estimate (0.867 +/- 0.018), and the ranking of the two models is the same. That is what a trustworthy estimate looks like: the single number on the locked test set holds no surprise. If it had been far outside the range, you would suspect a leak or a difference between the training and test populations, not a reason to switch models.</p>
+                </div>
 
-# Visualization of different CV strategies
-def visualize_cv_comparison():
-    """Compare different CV strategies visually"""
-    
-    n_samples = 100
-    n_features = 2
-    
-    # Create data with structure
-    X = np.random.randn(n_samples, n_features)
-    y = np.array([0] * 70 + [1] * 30)  # Imbalanced
-    groups = np.repeat(np.arange(20), 5)  # 20 groups, 5 samples each
-    
-    cv_strategies = {
-        'KFold': KFold(n_splits=5, shuffle=True, random_state=42),
-        'StratifiedKFold': StratifiedKFold(n_splits=5, shuffle=True, random_state=42),
-        'GroupKFold': GroupKFold(n_splits=5),
-        'TimeSeriesSplit': TimeSeriesSplit(n_splits=5),
-        'MonteCarloCV': MonteCarloCV(n_splits=5, test_size=0.2, random_state=42)
-    }
-    
-    fig, axes = plt.subplots(len(cv_strategies), 1, figsize=(14, 2 * len(cv_strategies)))
-    
-    for ax, (name, cv) in zip(axes, cv_strategies.items()):
-        # Create visualization matrix
-        if name == 'GroupKFold':
-            splits = list(cv.split(X, y, groups))
-        elif name in ['StratifiedKFold']:
-            splits = list(cv.split(X, y))
-        else:
-            splits = list(cv.split(X))
-        
-        n_splits = len(splits)
-        split_matrix = np.zeros((n_splits, n_samples))
-        
-        for fold, (train_idx, test_idx) in enumerate(splits):
-            split_matrix[fold, train_idx] = 1
-            split_matrix[fold, test_idx] = 2
-        
-        im = ax.imshow(split_matrix, aspect='auto', cmap='coolwarm')
-        ax.set_title(f'{name} Strategy')
-        ax.set_xlabel('Sample Index')
-        ax.set_ylabel('Fold')
-        ax.set_yticks(range(n_splits))
-        ax.set_yticklabels([f'Fold {i+1}' for i in range(n_splits)])
-    
-    plt.suptitle('Comparison of Cross-validation Strategies', fontsize=14, y=1.01)
-    plt.tight_layout()
-    plt.show()
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save the evidence <span class="step-time">(5 min)</span></h3>
+                    <p>Save the leaderboard and print a two-line recommendation built from your variables.</p>
+                    <pre><code class="language-python">board.round(4).to_csv("cv_leaderboard.csv")
 
-visualize_cv_comparison()</code></pre>
+print(f"Recommendation: {best} (CV ROC AUC {board.loc[best, 'roc_auc']:.3f} +/- {board.loc[best, 'auc_std']:.3f}, "
+      f"15 folds; baseline {board.loc['baseline', 'roc_auc']:.3f}).")
+print(f"Evidence: ahead of {second} in {(diff > 0).sum()} of 15 paired folds. Saved cv_leaderboard.csv.")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>Recommendation: random forest (CV ROC AUC 0.867 +/- 0.018, 15 folds; baseline 0.500).
+Evidence: ahead of tree (depth 4) in 15 of 15 paired folds. Saved cv_leaderboard.csv.</code></pre>
+                    </div>
+                </div>
 
-    <h2>Best Practices and Guidelines</h2>
-    
-    <pre class="language-python"><code># Cross-validation best practices
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>All cross-validation ran on the 4,500 training rows; the test set was used once, in Step 5</li>
+                        <li>Every candidate was scored on the same 15 folds from one <code>RepeatedStratifiedKFold</code></li>
+                        <li>Logistic regression's scaler sits inside a pipeline, so it is refitted in every fold</li>
+                        <li>Your leaderboard shows a mean and a spread for both accuracy and ROC AUC</li>
+                        <li>You checked the winner's lead fold by fold before recommending it</li>
+                        <li><code>cv_leaderboard.csv</code> is saved next to your notebook</li>
+                    </ul>
+                </div>
+            </section>
 
-class CVBestPractices:
-    """Guidelines for choosing and using cross-validation"""
-    
-    @staticmethod
-    def choose_cv_strategy(data_type, n_samples, characteristics):
-        """Recommend CV strategy based on data characteristics"""
-        
-        recommendations = {
-            'small_balanced': {
-                'strategy': 'LeaveOneOut or 10-Fold',
-                'reason': 'Maximum use of limited data'
-            },
-            'small_imbalanced': {
-                'strategy': 'StratifiedKFold',
-                'reason': 'Maintains class distribution in small samples'
-            },
-            'large_balanced': {
-                'strategy': '5-Fold or 10-Fold',
-                'reason': 'Good balance of bias-variance and computation'
-            },
-            'large_imbalanced': {
-                'strategy': 'StratifiedKFold',
-                'reason': 'Maintains class distribution'
-            },
-            'time_series': {
-                'strategy': 'TimeSeriesSplit',
-                'reason': 'Respects temporal order'
-            },
-            'grouped': {
-                'strategy': 'GroupKFold',
-                'reason': 'Prevents data leakage between groups'
-            },
-            'model_selection': {
-                'strategy': 'Nested CV',
-                'reason': 'Unbiased performance estimation'
-            }
-        }
-        
-        # Determine recommendation
-        if 'time' in characteristics:
-            key = 'time_series'
-        elif 'groups' in characteristics:
-            key = 'grouped'
-        elif 'model_selection' in characteristics:
-            key = 'model_selection'
-        elif n_samples < 100:
-            key = 'small_imbalanced' if 'imbalanced' in characteristics else 'small_balanced'
-        else:
-            key = 'large_imbalanced' if 'imbalanced' in characteristics else 'large_balanced'
-        
-        return recommendations[key]
-    
-    @staticmethod
-    def common_mistakes():
-        """List common cross-validation mistakes"""
-        
-        mistakes = [
-            {
-                'mistake': 'Using test set for any decision making',
-                'consequence': 'Overfitting to test set',
-                'solution': 'Use validation set or cross-validation for model selection'
-            },
-            {
-                'mistake': 'Not stratifying with imbalanced data',
-                'consequence': 'Some folds may have no minority class samples',
-                'solution': 'Always use StratifiedKFold for imbalanced data'
-            },
-            {
-                'mistake': 'Data leakage in preprocessing',
-                'consequence': 'Overoptimistic performance estimates',
-                'solution': 'Always preprocess within CV folds using pipelines'
-            },
-            {
-                'mistake': 'Using standard k-fold for time series',
-                'consequence': 'Future data leaks into training',
-                'solution': 'Use TimeSeriesSplit or custom time-aware CV'
-            },
-            {
-                'mistake': 'Not considering computational cost',
-                'consequence': 'Extremely long training times',
-                'solution': 'Balance k with computational resources'
-            }
-        ]
-        
-        return mistakes
-    
-    @staticmethod
-    def cv_checklist():
-        """Cross-validation checklist"""
-        
-        checklist = """
-        Cross-validation Checklist:
-        ✓ 1. Choose appropriate CV strategy for your data
-        ✓ 2. Use stratification for imbalanced classification
-        ✓ 3. Respect temporal order for time series
-        ✓ 4. Keep groups together if data is grouped
-        ✓ 5. Use pipelines to prevent preprocessing leakage
-        ✓ 6. Set random_state for reproducibility
-        ✓ 7. Use nested CV for model selection + evaluation
-        ✓ 8. Consider computational cost vs statistical benefit
-        ✓ 9. Report mean and standard deviation of scores
-        ✓ 10. Visualize results across folds to spot issues
-        """
-        
-        return checklist
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
 
-# Print best practices
-practices = CVBestPractices()
+                <p>These continue in the project notebook, so <code>X_train</code>, <code>y_train</code> and <code>candidates</code> already exist.</p>
 
-print("Common Cross-validation Mistakes:")
-print("="*50)
-for mistake in practices.common_mistakes():
-    print(f"\n❌ Mistake: {mistake['mistake']}")
-    print(f"   Consequence: {mistake['consequence']}")
-    print(f"   ✓ Solution: {mistake['solution']}")
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Three, Five or Ten Folds</h3>
+                    <p>Cross-validate the depth-4 tree with <code>StratifiedKFold(k, shuffle=True, random_state=42)</code> for <code>k</code> in 3, 5 and 10. Print the size of each validation fold, the mean accuracy and the standard deviation. What happens to the spread as <em>k</em> grows, and why?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>The validation fold holds about 4,500 / k rows. Accuracy measured on fewer rows is a noisier number.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.model_selection import StratifiedKFold, cross_val_score
 
-print("\n" + practices.cv_checklist())
+for k in [3, 5, 10]:
+    s = cross_val_score(candidates["tree (depth 4)"], X_train, y_train,
+                        cv=StratifiedKFold(k, shuffle=True, random_state=42))
+    print(f"k={k:2d}  fold size {len(X_train) // k:4d}  mean {s.mean():.3f}  std {s.std():.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>k= 3  fold size 1500  mean 0.861  std 0.007
+k= 5  fold size  900  mean 0.863  std 0.008
+k=10  fold size  450  mean 0.864  std 0.017</code></pre>
+                        </div>
+                        <p>The mean barely moves, but the spread doubles at k = 10: each validation fold holds only 450 customers (about 74 churners), so each fold's accuracy is a noisier measurement. A bigger spread with more folds is not a worse model, just smaller exams. That is why the spread must always be read together with the fold size.</p>
+                    </details>
+                </div>
 
-# Example: Complete CV workflow
-def complete_cv_workflow(X, y):
-    """Demonstrate complete cross-validation workflow"""
-    
-    print("Complete Cross-validation Workflow")
-    print("="*50)
-    
-    # 1. Analyze data
-    n_samples = len(X)
-    n_features = X.shape[1]
-    n_classes = len(np.unique(y))
-    class_balance = np.bincount(y) / len(y)
-    
-    print(f"Dataset: {n_samples} samples, {n_features} features, {n_classes} classes")
-    print(f"Class distribution: {class_balance}")
-    
-    # 2. Choose CV strategy
-    if min(class_balance) < 0.2:
-        cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-        cv_name = "StratifiedKFold"
-    else:
-        cv = KFold(n_splits=5, shuffle=True, random_state=42)
-        cv_name = "KFold"
-    
-    print(f"Selected CV: {cv_name}")
-    
-    # 3. Create pipeline to prevent leakage
-    pipeline = Pipeline([
-        ('scaler', StandardScaler()),
-        ('classifier', LogisticRegression(random_state=42, max_iter=1000))
-    ])
-    
-    # 4. Perform cross-validation with multiple metrics
-    scoring = ['accuracy', 'precision_weighted', 'recall_weighted', 'f1_weighted']
-    
-    cv_results = cross_validate(
-        pipeline, X, y, cv=cv, 
-        scoring=scoring,
-        return_train_score=True,
-        n_jobs=-1
-    )
-    
-    # 5. Analyze results
-    results_summary = {}
-    for metric in scoring:
-        train_key = f'train_{metric}'
-        test_key = f'test_{metric}'
-        
-        results_summary[metric] = {
-            'train_mean': cv_results[train_key].mean(),
-            'train_std': cv_results[train_key].std(),
-            'test_mean': cv_results[test_key].mean(),
-            'test_std': cv_results[test_key].std(),
-            'overfit': cv_results[train_key].mean() - cv_results[test_key].mean()
-        }
-    
-    # 6. Display results
-    print("\nResults Summary:")
-    for metric, scores in results_summary.items():
-        print(f"\n{metric.upper()}:")
-        print(f"  Train: {scores['train_mean']:.3f} ± {scores['train_std']:.3f}")
-        print(f"  Test:  {scores['test_mean']:.3f} ± {scores['test_std']:.3f}")
-        print(f"  Overfit: {scores['overfit']:.3f}")
-    
-    return cv_results
+                <div class="card">
+                    <h3>🏋️ Exercise 2: The Overfitting Curve, Cross-Validated</h3>
+                    <p>In Lesson 1.1 you compared tree depths on one test set. Redo it properly: for <code>max_depth</code> in 2, 4, 6, 8, 12 and <code>None</code>, use <code>cross_validate</code> with <code>scoring="roc_auc"</code> and <code>return_train_score=True</code> on 5 stratified shuffled folds. Print the mean train and validation AUC. Which depth would you pick?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>The keys you need are <code>train_score</code> and <code>test_score</code> (with a single metric, the names have no suffix).</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.tree import DecisionTreeClassifier
 
-# Run complete workflow
-X_demo, y_demo = make_classification(n_samples=500, n_features=10,
-                                     n_classes=3, weights=[0.7, 0.2, 0.1],
-                                     random_state=42)
+cv5 = StratifiedKFold(5, shuffle=True, random_state=42)
+for depth in [2, 4, 6, 8, 12, None]:
+    r = cross_validate(DecisionTreeClassifier(max_depth=depth, random_state=42), X_train, y_train,
+                       cv=cv5, scoring="roc_auc", return_train_score=True)
+    print(f"max_depth={str(depth):4s}  train {r['train_score'].mean():.3f}  validation {r['test_score'].mean():.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>max_depth=2     train 0.791  validation 0.783
+max_depth=4     train 0.857  validation 0.839
+max_depth=6     train 0.897  validation 0.834
+max_depth=8     train 0.938  validation 0.744
+max_depth=12    train 0.992  validation 0.635
+max_depth=None  train 1.000  validation 0.663</code></pre>
+                        </div>
+                        <p>Training AUC climbs all the way to 1.000 while validation AUC peaks at depth 4 (0.839) and then falls: by depth 12 (0.635) the tree ranks new customers far worse than even the depth-2 stump. Depth 4 is the choice, and you made it without touching the test set. This is a validation curve; Lesson 6.1 draws it with <code>ValidationCurveDisplay</code>.</p>
+                    </details>
+                </div>
 
-cv_results_demo = complete_cv_workflow(X_demo, y_demo)</code></pre>
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Will It Work in a New Store?</h3>
+                    <p>Pinecrest is thinking about a fifth store. Using the weekly demand data and the gradient-boosting regressor from the lesson, estimate the error for a store the model has never seen: use <code>GroupKFold(n_splits=4)</code> with <code>groups=demand["store"]</code>. Print the MAE for each held-out store. Which store is hardest to predict from the other three?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>With four stores and four folds, each fold holds out exactly one store. <code>GroupKFold(4).split(X, y, groups)</code> lets you look up which store is in each validation fold.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.model_selection import GroupKFold
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.metrics import mean_absolute_error
 
-    <h2>Practice Exercises</h2>
-    
-    <h3>Exercise 1: Custom Time-Aware CV</h3>
-    <p>Create a cross-validation strategy that:</p>
-    <ol>
-        <li>Handles time series with seasonal patterns</li>
-        <li>Ensures test sets are always in the future</li>
-        <li>Maintains minimum training size</li>
-        <li>Allows for gaps between train and test</li>
-        <li>Provides walk-forward analysis</li>
-    </ol>
+demand = pd.read_csv("data/weekly_demand.csv")
+demand_features = ["price", "list_price", "discount_pct", "promo", "holiday_week",
+                   "avg_high_temp_f", "store_sqft", "week_of_year"]
+X_d, y_d = demand[demand_features], demand["units_sold"]
 
-    <h3>Exercise 2: Adaptive CV Selection</h3>
-    <p>Build a system that:</p>
-    <ol>
-        <li>Automatically analyzes dataset characteristics</li>
-        <li>Recommends optimal CV strategy</li>
-        <li>Detects potential issues (imbalance, groups, time)</li>
-        <li>Runs appropriate cross-validation</li>
-        <li>Generates comprehensive report</li>
-    </ol>
+for train_rows, val_rows in GroupKFold(n_splits=4).split(X_d, y_d, groups=demand["store"]):
+    model = HistGradientBoostingRegressor(random_state=42).fit(X_d.iloc[train_rows], y_d.iloc[train_rows])
+    mae = mean_absolute_error(y_d.iloc[val_rows], model.predict(X_d.iloc[val_rows]))
+    print(f"held-out store {demand['store'].iloc[val_rows].iloc[0]:10s} MAE {mae:.2f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>held-out store Flagstaff  MAE 9.05
+held-out store Boise      MAE 12.77
+held-out store Bend       MAE 9.59
+held-out store Asheville  MAE 9.46</code></pre>
+                        </div>
+                        <p>Boise is the hardest store to predict from the others (MAE 12.77, against about 9 to 9.6 for the rest). It is the biggest store by far, 18,000 square feet against 9,500 to 12,500, so the model has to extrapolate beyond anything it saw in training. A fifth store that resembles the existing ones should come in around 9 to 10 units per week; a much larger one would be riskier.</p>
+                    </details>
+                </div>
 
-    <h3>Exercise 3: CV Performance Analysis</h3>
-    <p>Develop a framework that:</p>
-    <ol>
-        <li>Performs multiple CV strategies</li>
-        <li>Compares computational cost</li>
-        <li>Analyzes variance across folds</li>
-        <li>Detects overfitting</li>
-        <li>Visualizes results comprehensively</li>
-    </ol>
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Nested Cross-Validation (Stretch)</h3>
+                    <p>If you use cross-validation to <em>choose</em> a setting (such as the tree depth), the best CV score is slightly optimistic: you picked the maximum of several noisy numbers. Nested cross-validation measures the whole "choose the depth, then train" procedure honestly. Wrap a <code>GridSearchCV</code> over <code>max_depth</code> in 2, 4, 6 and 8 (inner 3-fold) inside <code>cross_val_score</code> (outer 5-fold), and compare the outer mean with the inner search's best score on all of <code>X_train</code>. Lesson 6.2 covers <code>GridSearchCV</code> in depth.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>GridSearchCV(estimator, {"max_depth": [...]}, cv=inner, scoring="roc_auc")</code> is itself an estimator, so it can be passed to <code>cross_val_score</code> like any model.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.model_selection import GridSearchCV
 
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>🔄 Cross-validation provides robust performance estimates</li>
-        <li>📊 K-Fold is standard, but choose k based on dataset size</li>
-        <li>⚖️ Use StratifiedKFold for imbalanced classification</li>
-        <li>📅 TimeSeriesSplit preserves temporal order</li>
-        <li>👥 GroupKFold prevents leakage between groups</li>
-        <li>🎯 LOO maximizes training data but is computationally expensive</li>
-        <li>🔨 Nested CV prevents overfitting in model selection</li>
-        <li>⚠️ Always use pipelines to prevent preprocessing leakage</li>
-        <li>📈 Report mean and standard deviation of CV scores</li>
-    </ul>
+inner = StratifiedKFold(3, shuffle=True, random_state=42)
+outer = StratifiedKFold(5, shuffle=True, random_state=42)
+search = GridSearchCV(DecisionTreeClassifier(random_state=42), {"max_depth": [2, 4, 6, 8]},
+                      cv=inner, scoring="roc_auc")
 
-    <h2>Further Resources</h2>
-    <ul>
-        <li><a href="https://scikit-learn.org/stable/modules/cross_validation.html">Scikit-learn Cross-validation Documentation</a></li>
-        <li><a href="https://www.cs.cmu.edu/~schneide/tut5/node42.html">Cross-validation Tutorial (CMU)</a></li>
-        <li><a href="https://arxiv.org/abs/1811.12808">Nested Cross-validation Paper</a></li>
-        <li><a href="https://stats.stackexchange.com/questions/65128/nested-cross-validation">Nested CV Discussion</a></li>
-        <li><a href="https://machinelearningmastery.com/k-fold-cross-validation/">K-Fold Cross-validation Guide</a></li>
-    </ul>
+nested = cross_val_score(search, X_train, y_train, cv=outer, scoring="roc_auc")
+search.fit(X_train, y_train)
+print(f"best inner score {search.best_score_:.3f} with {search.best_params_}")
+print(f"nested estimate  {nested.mean():.3f} +/- {nested.std():.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>best inner score 0.838 with {'max_depth': 4}
+nested estimate  0.839 +/- 0.015</code></pre>
+                        </div>
+                        <p>Here the two numbers agree (0.838 and 0.839): with only four candidate depths and 4,500 rows, the optimism of picking the best is tiny. It grows when you search over many settings or have little data, which is exactly when nested cross-validation earns its cost (here 5 × (4 × 3 + 1) = 65 fits for the nested estimate, against 13 for the search alone).</p>
+                    </details>
+                </div>
+            </section>
 
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Cross-validation gives you a range of scores, not a single number. How
-            did seeing the variation across folds change your confidence in the model?</p>
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> How many times does this call fit a model?</p>
+                        <pre><code class="language-python">quiz_scores = cross_val_score(DecisionTreeClassifier(max_depth=2, random_state=42), X_train, y_train, cv=5)</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Cross-validation produces one score per fold. Where does each score come from?">
+                                A) Once
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="One fresh model per fold, five folds, five fits. cross_val_score does not fit a sixth, final model on all the data: that is your job once you are happy with the recipe.">
+                                B) Five times
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Does cross_val_score hand you back a fitted model at the end? Look at what it returns.">
+                                C) Six times: five folds plus a final fit on all rows
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_kf = KFold(n_splits=4)
+print([len(val) for _, val in quiz_kf.split(np.zeros((10, 1)))])</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="10 rows do not divide evenly into 4 folds, so KFold gives the first 10 % 4 = 2 folds one extra row: sizes 3, 3, 2, 2. Every row is in exactly one validation fold.">
+                                A) <code>[3, 3, 2, 2]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The sizes must add up to 10, and KFold hands out the leftover rows starting from the first fold.">
+                                B) <code>[2, 2, 3, 3]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="KFold spreads the leftover rows instead of piling them into one fold. Each fold gets 10 // 4 rows plus at most one more.">
+                                C) <code>[2, 2, 2, 4]</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> A colleague runs <code>X_scaled = StandardScaler().fit_transform(X_train)</code> and then <code>cross_val_score(LogisticRegression(), X_scaled, y_train, cv=cv)</code>. What is the problem?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Logistic regression does need scaled features. The question is when and on which rows the scaler learned its numbers.">
+                                A) Logistic regression should not be used with scaled data
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="cross_val_score accepts NumPy arrays and DataFrames alike. Think about which rows the scaler saw.">
+                                B) <code>cross_val_score</code> cannot take a NumPy array
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The scaler learned its means and standard deviations from all training rows, including each future validation fold. Putting the scaler in a pipeline refits it inside every fold, on the training folds only.">
+                                C) The scaler saw the validation folds; scale inside a pipeline instead
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> You are building a model to forecast next quarter's weekly demand. Which validation scheme matches how the model will be used?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Shuffling mixes future weeks into training. Will the real model ever train on weeks after the ones it predicts?">
+                                A) <code>KFold(5, shuffle=True, random_state=42)</code> on all rows
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Stratification balances a class label. What is the structure that matters most for a forecast?">
+                                B) <code>StratifiedKFold</code> on the units sold
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Time-ordered folds always train on the past and validate on the period right after it, which is exactly the situation the forecast will face.">
+                                C) Time-ordered folds: train on earlier weeks, validate on the next quarter
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> Model P scores ROC AUC 0.826 +/- 0.014 and model Q scores 0.822 +/- 0.015 on the same 15 repeated folds. What should you conclude?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="The gap is far smaller than the fold-to-fold spread, so it may be noise. Look at the paired fold differences, and if the models stay this close, prefer the simpler or cheaper one.">
+                                A) The gap is within the noise; check the paired folds and prefer the simpler model if it stays close
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Compare the size of the gap with the size of the spread. Would a different shuffle surely keep P ahead?">
+                                B) P is better, because its mean is higher
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The test set is for confirming one final choice, not for breaking ties. What happens to the test set if you use it for every decision?">
+                                C) Break the tie by scoring both on the test set and picking the higher one
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>If cross-validation is so good, why keep a test set at all?</summary>
+                    <p>Because you use the cross-validation scores to make decisions (which model, which settings), and every decision bends the scores a little in your favor. The test set is never used for a decision, so it stays an unbiased final check. On very small datasets, people sometimes skip the test set and use nested cross-validation (Exercise 4) instead.</p>
+                </details>
+                <details>
+                    <summary>What about leave-one-out cross-validation?</summary>
+                    <p><code>LeaveOneOut</code> is k-fold with <em>k</em> equal to the number of rows: 4,500 fits here, each validated on a single customer. It is expensive, its estimate is no more reliable than 10-fold in practice, and accuracy on one row is either 0 or 1. It is mainly useful for tiny datasets with very cheap models.</p>
+                </details>
+                <details>
+                    <summary>Can I speed cross-validation up?</summary>
+                    <p>Yes: pass <code>n_jobs=-1</code> to <code>cross_val_score</code>, <code>cross_validate</code> or <code>cross_val_predict</code> to fit the folds in parallel on all your CPU cores. The results are identical; only the wall-clock time changes. With large data, fewer folds or a single validation split (Lesson 1.2) are reasonable trade-offs, as long as you say what you did.</p>
+                </details>
+                <details>
+                    <summary>Why is the standard deviation of my fold scores different from the page?</summary>
+                    <p>It should not be, if your split, splitter and seeds match: the folds are fully determined by <code>random_state</code>. If you used <code>cv=5</code> instead of the shuffled splitter, or ran the project in a notebook where <code>X_train</code> came from a different split, the folds differ. Compare <code>len(X_train)</code> and the first few fold scores.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Is the random forest's lead over logistic regression real? Run the project's comparison with <code>n_repeats=10</code> (50 paired folds) and plot a histogram of the paired AUC differences. Then repeat the whole comparison with a different <code>random_state</code> in <code>RepeatedStratifiedKFold</code>. Does the winner change? Write two sentences you would put in front of the skeptical reviewer.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain the "one exam or five quizzes" idea to a colleague who has never heard of cross-validation. Then write down the question you would ask before choosing a splitter ("what will be new to the model?") and answer it for a project you care about: shuffled folds, time-ordered folds or group folds?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>A single split gives a noisy score; k-fold cross-validation trains <em>k</em> times and validates every training row once</li>
+                        <li>Cross-validation evaluates a recipe; afterward you fit the chosen recipe once on all training rows</li>
+                        <li>Build the splitter yourself: <code>StratifiedKFold(5, shuffle=True, random_state=42)</code> for classification, <code>KFold(..., shuffle=True)</code> for regression</li>
+                        <li>Cross-validate a pipeline, so preprocessing is refitted on the training folds of every round</li>
+                        <li><code>cross_validate</code> gives several metrics plus training scores; a large train-validation gap means overfitting</li>
+                        <li>Compare models on identical folds, look at paired differences, and distrust leads smaller than the fold-to-fold spread</li>
+                        <li><code>cross_val_predict</code> gives honest out-of-fold predictions for analysis and threshold choice</li>
+                        <li>Related rows need related folds: time-ordered folds for forecasts, <code>GroupKFold</code> for new groups</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You measured how much a single split's score wobbles, and replaced it with a mean and a spread</li>
+                        <li>You wrote the cross-validation loop by hand, then with one function call</li>
+                        <li>You saw a leaky feature selection turn pure noise into an impressive-looking model, and fixed it</li>
+                        <li>You estimated forecast error honestly with time-ordered folds, and for unseen products with group folds</li>
+                        <li>You ran a fair four-model bake-off and confirmed the winner with a single look at the test set</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="evaluation_metrics.html"><strong>Lesson 1.4: Metrics for Classification and Regression</strong></a> you will open up the scores you have been using on trust. You will build a confusion matrix, trade precision against recall by moving the decision threshold, read ROC and precision-recall curves, choose a threshold that maximizes Pinecrest's retention profit using out-of-fold probabilities, and learn which regression error to report for the demand forecast.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook: Lesson 1.4 starts from the same split and models.</li>
+                    <li>Rerun the bake-off with <code>scoring=["accuracy", "roc_auc", "f1"]</code>. Write down how the baseline's F1 compares with its accuracy, and guess why before the next lesson tells you.</li>
+                    <li>Think of one dataset from your own work or life where rows are related (by time, person or place). Which splitter would you use?</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You now evaluate models the way careful practitioners do: many folds instead of one lucky split, preprocessing kept inside the folds, and a test set opened once. That habit protects you from the most common way machine learning goes wrong, which is not a bad algorithm but a score that was too good to be true. If the different splitters still blur together, that is completely normal; the question "what will be new to the model?" will sort them out for you every time.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="evaluation_train_test_split.html" class="prev-lesson">← Previous: Splits, Baselines and Leakage</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="evaluation_metrics.html" class="next-lesson">Next: Metrics for Classification and Regression →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Cross-validation gives a more reliable, lower-variance estimate of performance than a single train/test split.</li>
-                <li>Stratified k-fold preserves class proportions in every fold — use it for classification, especially with imbalance.</li>
-                <li>Always put preprocessing inside the CV loop (via a <code>Pipeline</code>) so no test information leaks into training.</li>
-                <li>Report both the mean and the spread (standard deviation) of the fold scores, not just the average.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now produce trustworthy performance estimates and quantify how much they might vary — the difference between
-        guessing and actually knowing how good your model is.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>How many folds should I use?</summary>
-            <p>5 or 10 are the common defaults. More folds reduce bias in the estimate but cost more compute and can increase
-            variance per fold — 5–10 is a good balance for most datasets.</p>
-        </details>
-        <details>
-            <summary>Why cross-validate the whole pipeline instead of just the model?</summary>
-            <p>Fitting scalers or feature selectors on all the data before CV leaks test information into training. Wrapping them
-            in a <code>Pipeline</code> keeps every fold honest.</p>
-        </details>
-        <details>
-            <summary>What cross-validation should I use for time series?</summary>
-            <p>Use <code>TimeSeriesSplit</code> so training always precedes validation in time. Never shuffle temporal data — that
-            would let the model "see the future."</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Next you'll put cross-validation to work comparing models and tuning hyperparameters systematically, so your choices
-        rest on solid evidence.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Compare a single split's score to a 10-fold CV mean ± standard deviation on the same model.</li>
-            <li>Wrap a scaler and a model in a <code>Pipeline</code> and cross-validate the whole thing.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Cross-validation is how professionals earn the right to trust their numbers. You now evaluate models the way the
-            field expects — a genuine mark of rigor. Keep it up!</p>
-        </div>
-    </section>
-
-    <!-- Navigation at the bottom -->
-    <nav class="lesson-nav" aria-label="Lesson navigation">
-        <a href="ml_train_test_split.html" class="prev-lesson" aria-label="Previous lesson">Previous: Train/Test Splits</a>
-        <a href="index.html" class="home-link" aria-label="Course home">Course Home</a>
-        <a href="ml_feature_engineering.html" class="next-lesson" aria-label="Next lesson">Next: Feature Engineering</a>
-    </nav>
-    
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1399,8 +1050,10 @@ cv_results_demo = complete_cv_workflow(X_demo, y_demo)</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>

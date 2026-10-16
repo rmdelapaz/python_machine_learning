@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Predict churn from lookalike customers with k-nearest neighbors: distances, why scaling decides everything, choosing k, and the curse of dimensionality. Python Machine Learning Lesson 4.1.">
+    <meta name="author" content="Ray de la Paz">
+    <title>k-Nearest Neighbors - Python Machine Learning</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
+</head>
+<body>
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+
+    <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
+        <div class="progress-bar"></div>
+    </div>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
+    </nav>
+
+    <main id="main-content">
+        <div class="container">
+            <header>
+                <h1>🏘️ Lesson 4.1: k-Nearest Neighbors</h1>
+                <p class="lead">Predict what a customer will do by finding the past customers most like them, and learn why "most like" is the whole game.</p>
+
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain how k-nearest neighbors classifies a row, and compute Euclidean and Manhattan distances by hand</li>
+                        <li>Show why unscaled features wreck distances, and fix it with a scaler inside a pipeline</li>
+                        <li>Choose <code>k</code> with cross-validation and connect small and large <code>k</code> to variance and bias</li>
+                        <li>Recognize the curse of dimensionality and why irrelevant features hurt kNN more than a linear model</li>
+                        <li>Use <code>kneighbors</code> to show the lookalike customers behind a prediction</li>
+                    </ul>
+                </div>
+
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 95 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="regression_regularization.html">Lesson 3.2: Regularization and the Bias-Variance Trade-off</a> (also uses ROC AUC from <a href="evaluation_metrics.html">Lesson 1.4</a> and pipelines from <a href="pipelines_composite.html">Lesson 2.2</a>)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A lookalike churn model whose every prediction comes with the real customers that justify it</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code> (exercise 3 also uses <code>data/weekly_demand.csv</code>)</li>
+                </ul>
+            </header>
+
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Ask the Lookalikes</a></li>
+                        <li><a href="#distance" class="toc-link">Measuring "Similar"</a></li>
+                        <li><a href="#scaling" class="toc-link">Scaling Decides Everything</a></li>
+                        <li><a href="#first-model" class="toc-link">A First kNN Model</a></li>
+                        <li><a href="#choosing-k" class="toc-link">Choosing k</a></li>
+                        <li><a href="#dimensions" class="toc-link">The Curse of Dimensionality</a></li>
+                        <li><a href="#practice" class="toc-link">kNN in Practice</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: Lookalike Churn Scoring</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
+
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Ask the Lookalikes</h2>
+
+                <p>Every model so far has learned weights: numbers that summarize the training data, after which the data itself could be thrown away. k-nearest neighbors (kNN) takes the opposite approach. It keeps every training row, and when a new customer arrives it looks for the <code>k</code> past customers most similar to them. If 9 of their 25 closest lookalikes churned, it predicts a churn probability of 9/25 = 0.36.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Real-Estate Agent's Comps</h4>
+                    <p>Ask an experienced agent what a house will sell for and they will not reach for a formula. They pull up "comps": the five or six recently sold homes most like this one, with similar size, age and neighborhood, and average their prices. That is kNN. Two questions decide whether the estimate is any good: <strong>what counts as similar</strong> (is one extra bedroom a bigger difference than ten years of age?) and <strong>how many comps</strong> to use (one comp is a gamble; fifty comps drag in houses that are not really alike). Those are exactly the two dials of this lesson: the distance and <code>k</code>.</p>
+                </div>
+
+                <div class="mermaid">
+graph TD
+    A["New customer"] --> B["Scale the features"]
+    B --> C["Distance to every training row"]
+    C --> D["Keep the k closest"]
+    D --> E["Share of them who churned"]
+                </div>
+
+                <p>Because nothing is learned in advance, kNN is called a <strong>lazy learner</strong>: <code>fit</code> just stores the training table (in a structure that makes searching fast), and all the work happens at <code>predict</code> time.</p>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>kNN is rarely the most accurate model on a big table, but the idea at its heart, <em>distance as similarity</em>, runs through the rest of the course. Clustering (Module 8) groups customers by distance, anomaly detection flags rows far from everyone, recommendation systems (Lesson 11.2) find similar products, and <code>KNNImputer</code> fills gaps from lookalikes. kNN also has a rare strength: every prediction comes with real examples you can show to a person. "These 25 customers looked like her, and 9 of them left" is an explanation a retention team understands immediately.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="distance" class="lesson-section">
+                <h2>📏 Measuring "Similar"</h2>
+
+                <p>Start with the churn table and the ten numeric features from Lesson 1.1, split exactly as before.</p>
+
+                <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+            "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+X = customers[features]
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
+print(X_train.shape, X_test.shape)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>(4500, 10) (1500, 10)</code></pre>
+                </div>
+
+                <p>The everyday distance between two points is the straight-line, or <strong>Euclidean</strong>, distance: subtract feature by feature, square the differences, add them up and take the square root.</p>
+                <p class="text-center"><strong>Euclidean distance = √( (a₁ − b₁)² + (a₂ − b₂)² + ... + (aₚ − bₚ)² )</strong></p>
+                <p>Compute it by hand for the first two training customers, and look at where the distance comes from:</p>
+
+                <pre><code class="language-python">a, b = X_train.iloc[0], X_train.iloc[1]
+diff = a - b
+parts = pd.DataFrame({"customer A": a, "customer B": b, "squared diff": diff ** 2})
+parts["share of total"] = parts["squared diff"] / parts["squared diff"].sum()
+print(parts.round(3))
+print(f"Euclidean distance: {np.sqrt((diff ** 2).sum()):.2f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>                       customer A  customer B  squared diff  share of total
+tenure_months               1.000      44.000      1849.000           0.026
+orders_12m                  2.000      10.000        64.000           0.001
+spend_12m                 630.300     578.820      2650.190           0.037
+avg_order_value           315.150      57.880     66187.853           0.935
+days_since_last_order      56.000      56.000         0.000           0.000
+returns_12m                 1.000       0.000         1.000           0.000
+return_rate                 0.017       0.024         0.000           0.000
+support_tickets_12m         3.000       2.000         1.000           0.000
+discount_share              0.080       0.088         0.000           0.000
+app_user                    0.000       1.000         1.000           0.000
+Euclidean distance: 266.00</code></pre>
+                </div>
+
+                <p>94% of the distance comes from one column, <code>avg_order_value</code>, where the two customers differ by about $257. Yet look at what else differs: customer A joined one month ago and placed 2 orders without the app; customer B has been with Pinecrest for 44 months, placed 10 orders and uses the app. Those differences are measured in months, orders and 0/1 flags, so next to hundreds of dollars they barely register. As far as this distance is concerned, "similar customers" means "customers with about the same order value", and almost nothing else.</p>
+
+                <p>A second common choice is the <strong>Manhattan</strong> distance: add up the absolute differences, like walking a city grid instead of flying straight. It is a little less dominated by one large difference, but it has the same units problem. In scikit-learn both are the Minkowski distance with a power <code>p</code>: <code>p=2</code> is Euclidean (the default) and <code>p=1</code> is Manhattan.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="scaling" class="lesson-section">
+                <h2>⚖️ Scaling Decides Everything</h2>
+
+                <p>For Ridge in Lesson 3.2, scaling made the penalty fair. For kNN it is more fundamental: <em>the scaled features are the definition of similarity</em>. After <code>StandardScaler</code>, a difference of one standard deviation in recency counts the same as one standard deviation in spend.</p>
+
+                <pre><code class="language-python">from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler().set_output(transform="pandas").fit(X_train)
+a_s, b_s = scaler.transform(X_train.iloc[[0, 1]]).to_numpy()
+share = pd.Series((a_s - b_s) ** 2, index=features)
+print((share / share.sum()).round(3).sort_values(ascending=False).head(4))
+print(f"Euclidean distance (scaled): {np.sqrt(((a_s - b_s) ** 2).sum()):.2f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>avg_order_value    0.306
+orders_12m         0.301
+app_user           0.205
+tenure_months      0.097
+dtype: float64
+Euclidean distance (scaled): 4.52</code></pre>
+                </div>
+
+                <p>Now order count, order value, the app and tenure all have a say, which matches what a person would notice first: a brand-new customer with two big orders versus a long-standing app user with ten small ones. Does it matter for predictions? Compare the same model with and without scaling, judged by ROC AUC (Lesson 1.4), because the goal is ranking customers by risk:</p>
+
+                <pre><code class="language-python">from sklearn.metrics import roc_auc_score
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+
+for name, model in [("unscaled", KNeighborsClassifier(n_neighbors=15)),
+                    ("scaled", make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=15)))]:
+    model.fit(X_train, y_train)
+    auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+    print(f"{name:9s} accuracy {model.score(X_test, y_test):.3f}   ROC AUC {auc:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>unscaled  accuracy 0.851   ROC AUC 0.774
+scaled    accuracy 0.858   ROC AUC 0.836</code></pre>
+                </div>
+
+                <p>Same algorithm, same <code>k</code>, same data: the AUC jumps from 0.774 to 0.836 just by making the features comparable. (Accuracy barely moves, a reminder from Lesson 1.4 that accuracy is a blunt tool when only one customer in six churns.)</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Scaling Is a Modeling Choice, Not a Formality</h4>
+                    <p>Standard scaling says "every feature matters equally to begin with". That is a reasonable default, not a law. <code>MinMaxScaler</code> gives slightly different neighbors; dropping a feature removes it from the notion of similarity entirely; a binary column like <code>app_user</code> becomes a big jump of about two standard deviations. Try alternatives with cross-validation instead of assuming one is right. And as always, fit the scaler on training data only, which a pipeline guarantees.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="first-model" class="lesson-section">
+                <h2>🚀 A First kNN Model</h2>
+
+                <p>Build the scaled model as a pipeline and look inside one prediction. <code>predict_proba</code> for kNN is simply the share of the <code>k</code> neighbors in each class.</p>
+
+                <pre><code class="language-python">knn = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=15)).fit(X_train, y_train)
+
+proba = knn.predict_proba(X_test)[:, 1]
+print("first five churn probabilities:", proba[:5].round(3))
+print("as counts out of 15:", (proba[:5] * 15).round().astype(int))
+print("distinct probability values:", np.unique(proba).size)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>first five churn probabilities: [0.133 0.467 0.133 0.067 0.133]
+as counts out of 15: [2 7 2 1 2]
+distinct probability values: 15</code></pre>
+                </div>
+
+                <p>With 15 neighbors there are only 16 possible probabilities: 0/15, 1/15, ..., 15/15 (15 of them occur in this test set). That coarseness matters later. Now ask the model <em>who</em> the neighbors are. <code>kneighbors</code> lives on the classifier, so first transform the customer with the pipeline's scaler (<code>knn[:-1]</code> is every step except the last):</p>
+
+                <pre><code class="language-python">riskiest = int(np.argmax(proba))
+customer = X_test.iloc[[riskiest]]
+distances, positions = knn[-1].kneighbors(knn[:-1].transform(customer))
+
+lookalikes = X_train.iloc[positions[0]].assign(churned=y_train.iloc[positions[0]].to_numpy(),
+                                              distance=distances[0].round(2))
+print(customer[["tenure_months", "days_since_last_order", "discount_share", "support_tickets_12m", "app_user"]])
+print(lookalikes[["days_since_last_order", "discount_share", "app_user", "churned", "distance"]].head(6))
+print(f"lookalikes who churned: {lookalikes['churned'].sum()} of 15 -> probability {proba[riskiest]:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>      tenure_months  days_since_last_order  discount_share  support_tickets_12m  app_user
+4050             65                    364           0.432                    3         0
+      days_since_last_order  discount_share  app_user  churned  distance
+4799                    364           0.231         0        1      1.70
+4997                    220           0.484         0        1      2.00
+2361                    254           0.558         0        1      2.09
+2385                    364           0.110         0        1      2.10
+4828                    226           0.281         0        1      2.10
+824                     364           0.436         0        1      2.11
+lookalikes who churned: 14 of 15 -&gt; probability 0.933</code></pre>
+                </div>
+
+                <p>This is kNN's party trick. The prediction is not an opaque score; it is a list of real past customers who look like this one, along with what happened to them. You can see what they share: a long gap since the last order and no app. (A caveat for later: showing someone's lookalikes means showing other customers' data. In a real system you would summarize them, not print them, which is what the project does.)</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="choosing-k" class="lesson-section">
+                <h2>🎚️ Choosing k</h2>
+
+                <p><code>k</code> is kNN's flexibility dial, and it works backwards from what you might expect. With <code>k=1</code>, every prediction copies a single neighbor: the model can draw a boundary around every individual training customer. That is maximum flexibility and maximum variance. With a huge <code>k</code>, every prediction averages so many customers that it drifts toward the overall churn rate: high bias. Watch the training and test scores:</p>
+
+                <pre><code class="language-python">for k in [1, 5, 15, 51, 151, 501]:
+    m = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=k)).fit(X_train, y_train)
+    train_auc = roc_auc_score(y_train, m.predict_proba(X_train)[:, 1])
+    test_auc = roc_auc_score(y_test, m.predict_proba(X_test)[:, 1])
+    print(f"k={k:3d}   train AUC {train_auc:.3f}   test AUC {test_auc:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>k=  1   train AUC 1.000   test AUC 0.645
+k=  5   train AUC 0.932   test AUC 0.789
+k= 15   train AUC 0.893   test AUC 0.836
+k= 51   train AUC 0.865   test AUC 0.842
+k=151   train AUC 0.848   test AUC 0.837
+k=501   train AUC 0.833   test AUC 0.823</code></pre>
+                </div>
+
+                <p>At <code>k=1</code> the training AUC is a perfect 1.000, because every training customer's nearest neighbor is themselves. That number is meaningless, and the test AUC shows it. The test AUC climbs quickly, levels off somewhere around 50 to 150 neighbors, and slowly sags after that: the bias-variance U from Lesson 3.2, upside down because higher AUC is better. To see what the dial does, use just two features so the model can be drawn:</p>
+
+                <pre><code class="language-python">import matplotlib.pyplot as plt
+from sklearn.inspection import DecisionBoundaryDisplay
+
+two = ["days_since_last_order", "discount_share"]
+shown = X_train.sample(400, random_state=42)
+
+fig, axes = plt.subplots(1, 3, figsize=(10, 3.6), sharey=True, layout="constrained")
+for ax, k in zip(axes, [1, 25, 301]):
+    m = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=k)).fit(X_train[two], y_train)
+    display = DecisionBoundaryDisplay.from_estimator(
+        m, X_train[two], response_method="predict_proba", grid_resolution=150, eps=0,
+        ax=ax, cmap="RdBu_r", levels=np.linspace(0, 1, 11), alpha=0.8)
+    ax.scatter(shown[two[0]], shown[two[1]], c=y_train.loc[shown.index], cmap="RdBu_r",
+               edgecolor="black", linewidth=0.3, s=10)
+    auc = roc_auc_score(y_test, m.predict_proba(X_test[two])[:, 1])
+    ax.set_title(f"k = {k}   (test AUC {auc:.3f})")
+    ax.set_xlabel("days since last order")
+    ax.set_ylabel("")
+axes[0].set_ylabel("discount share")
+fig.colorbar(display.surface_, ax=axes, label="predicted churn probability", shrink=0.9)
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/classification_knn_boundaries.png" alt="Three maps of predicted churn probability over days since last order (horizontal) and discount share (vertical), with sample customers as dots, red for churned and blue for stayed. With k equal to 1 the map is a patchwork of solid red and blue islands around individual customers. With k equal to 25 the map is smoother: churn risk rises to the right, past about 150 days, and toward the top, with some ragged patches. With k equal to 301 the map is a smooth gradient from dark blue at the bottom left to pale red on the right." width="1100" height="396" loading="lazy">
+                    <figcaption>k = 1 draws an island around every customer (variance); k = 301 paints in broad strokes (more bias, but here still the best on test data with only two features).</figcaption>
+                </figure>
+
+                <p>The <code>k=1</code> map is a patchwork: one churner deep in loyal territory gets their own red island. With <code>k=25</code> the real pattern appears: churn risk rises sharply once a customer has been away for about 150 days, and rises with discount reliance. With <code>k=301</code> the picture is smooth. Notice that kNN found the 150-day threshold without being told it exists, something a straight-line model cannot express.</p>
+
+                <h3>🔁 Choose k with Cross-Validation</h3>
+                <p>As with <code>alpha</code> in Lesson 3.2, pick <code>k</code> on the training data only. <code>StratifiedKFold</code> keeps the churn rate the same in every fold:</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import StratifiedKFold, cross_val_score
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+for k in [5, 15, 25, 51, 101, 151]:
+    scores = cross_val_score(make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=k)),
+                             X_train, y_train, cv=cv, scoring="roc_auc")
+    print(f"k={k:3d}   CV AUC {scores.mean():.3f} ± {scores.std():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>k=  5   CV AUC 0.778 ± 0.012
+k= 15   CV AUC 0.826 ± 0.016
+k= 25   CV AUC 0.834 ± 0.023
+k= 51   CV AUC 0.839 ± 0.018
+k=101   CV AUC 0.838 ± 0.021
+k=151   CV AUC 0.835 ± 0.021</code></pre>
+                </div>
+
+                <p>Cross-validation points to about 51 neighbors, and the plateau is flat: anything from 25 to 151 is within one standard deviation. When a plateau is that flat, prefer the middle of it; you are choosing a range, not a magic number.</p>
+
+                <div class="card card-success">
+                    <h4>✅ A Surprise Worth Noticing</h4>
+                    <p>Tuned kNN reaches a test AUC of about 0.84 on these ten features, ahead of logistic regression's 0.823 on the same columns (the noise-column experiment below measures both). kNN has no idea what a threshold or an interaction is, but by asking lookalikes it can pick up both kinds of pattern, such as the 150-day recency cliff in the figure, which a weighted sum of features cannot draw. Simple local averaging is a surprisingly strong baseline whenever effects are nonlinear and the number of features is small.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="dimensions" class="lesson-section">
+                <h2>🌌 The Curse of Dimensionality</h2>
+
+                <p>kNN has a weakness that grows with every column you add. In a few dimensions, "nearest" means something: your 25 closest lookalikes really are much closer than a random customer. In many dimensions, almost every point is about equally far from every other, and "nearest" stops meaning "similar". You can measure this with random points: compare each point's nearest distance with its farthest.</p>
+
+                <pre><code class="language-python">from sklearn.metrics import pairwise_distances
+
+rng = np.random.default_rng(42)
+for n_dims in [2, 10, 100, 1000]:
+    points = rng.uniform(size=(1000, n_dims))
+    d = pairwise_distances(points[:1], points[1:])[0]
+    print(f"{n_dims:4d} dimensions: nearest / farthest distance = {d.min() / d.max():.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>   2 dimensions: nearest / farthest distance = 0.010
+  10 dimensions: nearest / farthest distance = 0.317
+ 100 dimensions: nearest / farthest distance = 0.715
+1000 dimensions: nearest / farthest distance = 0.890</code></pre>
+                </div>
+
+                <p>In 2 dimensions the nearest point is a hundred times closer than the farthest. In 1,000 dimensions it is only about 10% closer: the neighborhood has dissolved. Real data is rarely this bad, because real features are correlated and the data lies near a lower-dimensional surface. But every <em>irrelevant</em> feature adds noise to every distance. Test it: add columns of pure random noise to the churn features and compare kNN with logistic regression.</p>
+
+                <pre><code class="language-python">from sklearn.linear_model import LogisticRegression
+
+for n_noise in [0, 5, 20, 50]:
+    noise = pd.DataFrame(rng.normal(size=(len(X), n_noise)), index=X.index).add_prefix("noise_")
+    X_noisy = pd.concat([X, noise], axis=1)
+    Xn_train, Xn_test = X_noisy.loc[X_train.index], X_noisy.loc[X_test.index]
+    aucs = []
+    for clf in [KNeighborsClassifier(n_neighbors=51), LogisticRegression()]:
+        m = make_pipeline(StandardScaler(), clf).fit(Xn_train, y_train)
+        aucs.append(roc_auc_score(y_test, m.predict_proba(Xn_test)[:, 1]))
+    print(f"{n_noise:2d} noise columns   kNN AUC {aucs[0]:.3f}   logistic AUC {aucs[1]:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code> 0 noise columns   kNN AUC 0.842   logistic AUC 0.823
+ 5 noise columns   kNN AUC 0.823   logistic AUC 0.824
+20 noise columns   kNN AUC 0.790   logistic AUC 0.820
+50 noise columns   kNN AUC 0.755   logistic AUC 0.816</code></pre>
+                </div>
+
+                <p>Logistic regression learns a weight for each column and simply gives the noise weights near zero, so it barely notices. kNN has no weights: after scaling, every column has an equal say in the distance, so 50 noise columns drown the 10 real ones and the AUC falls to about 0.75. For kNN, <strong>feature selection is part of the model</strong>. The same logic applies to redundant features: <code>spend_12m</code> is almost exactly <code>orders_12m</code> times <code>avg_order_value</code>, so spending effectively gets counted twice in every distance. The project tests a smaller feature set for exactly this reason.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="practice" class="lesson-section">
+                <h2>🧰 kNN in Practice</h2>
+
+                <p>A few settings and facts round out the picture:</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Setting</th><th>What it does</th><th>When to change it</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>n_neighbors</code></td><td>How many lookalikes vote (default 5, usually too few)</td><td>Always tune it by cross-validation</td></tr>
+                            <tr><td><code>weights="distance"</code></td><td>Closer neighbors get a bigger vote (weight 1/distance)</td><td>Try it; often a small gain with a large <code>k</code></td></tr>
+                            <tr><td><code>p=1</code> or <code>metric=...</code></td><td>Manhattan instead of Euclidean, or another metric such as <code>"cosine"</code></td><td>Try <code>p=1</code>; cosine for text and ratings (Lesson 11.2)</td></tr>
+                            <tr><td><code>algorithm</code></td><td>How neighbors are searched: <code>"auto"</code>, <code>"kd_tree"</code>, <code>"ball_tree"</code>, <code>"brute"</code></td><td>Rarely; <code>"auto"</code> picks well. Results are the same, only speed differs</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p><strong>Speed.</strong> Training is nearly free and prediction is the expensive part, the reverse of most models. Every prediction searches the stored training rows, so prediction time grows with the size of the training set, and the whole training set must ship with the model. Time it on your machine:</p>
+
+                <pre><code class="language-python">import time
+
+for name, model in [("kNN, k=51", make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=51))),
+                    ("logistic regression", make_pipeline(StandardScaler(), LogisticRegression()))]:
+    start = time.perf_counter()
+    model.fit(X_train, y_train)
+    fit_ms = (time.perf_counter() - start) * 1000
+    start = time.perf_counter()
+    model.predict_proba(X_test)
+    predict_ms = (time.perf_counter() - start) * 1000
+    print(f"{name:20s} fit {fit_ms:6.1f} ms   predict 1,500 rows {predict_ms:6.1f} ms")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (your numbers will differ)</h4>
+                    <pre><code>kNN, k=51            fit   21.2 ms   predict 1,500 rows  232.9 ms
+logistic regression  fit  206.4 ms   predict 1,500 rows    1.2 ms</code></pre>
+                </div>
+
+                <p>For thousands of rows both are instant. For millions of rows and many queries per second, kNN needs approximate nearest-neighbor indexes, a topic for production systems rather than this course.</p>
+
+                <p><strong>Regression too.</strong> <code>KNeighborsRegressor</code> predicts the average target of the <code>k</code> neighbors instead of a vote. Exercise 3 uses it to forecast snowshoe sales from the weather.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Where You Will Meet Neighbors Again</h4>
+                    <p><code>sklearn.neighbors.NearestNeighbors</code> is kNN without the prediction: just "find the closest rows". K-Means (Lesson 8.1) assigns each customer to the nearest cluster center; DBSCAN (Lesson 8.4) defines clusters by how many neighbors lie within a radius; item-based recommendations (Lesson 11.2) find the products nearest to the ones a customer bought. Everything you learned here about scaling and dimensions carries over directly.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Forgetting to scale is the classic kNN mistake, and you have already seen its cost (AUC 0.774 instead of 0.836). Here are four more.</p>
+
+                <h3>1. Asking for More Neighbors Than Rows</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">tiny_train = X_train.head(10)
+KNeighborsClassifier(n_neighbors=15).fit(tiny_train, y_train.head(10)).predict(X_test.head(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Expected n_neighbors &lt;= n_samples_fit, but n_neighbors = 15, n_samples_fit = 10, n_samples = 3</code></pre>
+                </div>
+                <p><strong>What it means:</strong> <code>fit</code> happily stored 10 rows, and <code>predict</code> then failed because it cannot find 15 neighbors among them. It bites when you tune <code>k</code> on small groups or cross-validation folds. <strong>Fix:</strong> keep <code>k</code> well below the number of training rows in the smallest fold.</p>
+
+                <h3>2. Missing Values in the Features</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">with_gaps = customers[["days_since_last_order", "email_opens_90d"]]
+KNeighborsClassifier(n_neighbors=15).fit(with_gaps, y)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Input X contains NaN.
+KNeighborsClassifier does not accept missing values encoded as NaN natively. For supervised learning, you might want to consider sklearn.ensemble.HistGradientBoostingClassifier and Regressor which accept missing values encoded as NaNs natively. Alternatively, it is possible to preprocess the data, for instance by using an imputer transformer in a pipeline or drop samples with missing values. See https://scikit-learn.org/stable/modules/impute.html You can find a list of all estimators that handle NaN values at the following page: https://scikit-learn.org/stable/modules/impute.html#estimators-that-handle-nan-values</code></pre>
+                </div>
+                <p><strong>What it means:</strong> a distance cannot be computed when one of the numbers is missing. <strong>Fix:</strong> impute inside the pipeline (Lesson 2.1), for example <code>make_pipeline(SimpleImputer(strategy="median"), StandardScaler(), KNeighborsClassifier(...))</code>. <code>KNNImputer</code> fills each gap from the row's nearest neighbors, the same idea used for filling instead of predicting.</p>
+
+                <h3>3. Ranking With a Tiny k</h3>
+
+                <pre><code class="language-python">knn5 = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=5)).fit(X_train, y_train)
+p5 = knn5.predict_proba(X_test)[:, 1]
+print("distinct probabilities:", np.unique(p5))
+print("customers tied at the top value:", (p5 == p5.max()).sum())</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>distinct probabilities: [0.  0.2 0.4 0.6 0.8 1. ]
+customers tied at the top value: 22</code></pre>
+                </div>
+                <p><strong>What happened:</strong> with <code>k=5</code> every probability is 0, 0.2, 0.4, 0.6, 0.8 or 1.0. Twenty-two customers tie at 1.0, so a top-50 shortlist is partly decided by row order, not by risk, and the AUC suffers because ties cannot be ranked. <strong>Fix:</strong> use a larger <code>k</code> (chosen by cross-validation) or <code>weights="distance"</code>, both of which spread the probabilities out.</p>
+
+                <h3>4. Scaling Before Cross-Validation</h3>
+
+                <pre><code class="language-python">X_train_scaled_all = StandardScaler().fit_transform(X_train)   # fitted on every fold at once
+leaky = cross_val_score(KNeighborsClassifier(n_neighbors=51), X_train_scaled_all, y_train, cv=cv, scoring="roc_auc")
+honest = cross_val_score(make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=51)),
+                         X_train, y_train, cv=cv, scoring="roc_auc")
+print(f"scaled outside the folds {leaky.mean():.4f}   pipeline {honest.mean():.4f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>scaled outside the folds 0.8390   pipeline 0.8391</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the scaler saw each validation fold's rows before that fold was scored, so the scores are not a fair simulation of new data. Here the difference is tiny because means and standard deviations of 4,500 customers are stable; with smaller data, or with imputation and feature selection done outside the folds, the leak can be large. <strong>Fix:</strong> put every preprocessing step in the pipeline and cross-validate the whole pipeline (Lesson 2.2).</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: Lookalike Churn Scoring</h2>
+
+                <p>Pinecrest's retention team likes the churn shortlist from Lesson 1.1, but they keep asking "why this customer?". Build a kNN model whose shortlist answers that question with lookalikes: choose the features and <code>k</code> by cross-validation, test once, and save a shortlist with a plain-language reason for every name. Start a fresh notebook, <code>lesson_4_1_project</code>. Allow about 40 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load and split <span class="step-time">(5 min)</span></h3>
+                    <p>Split the whole table so the IDs stay attached to the test rows, as in Lesson 1.1.</p>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+customers = pd.read_csv("data/customers_churn.csv")
+all_features = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+                "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user"]
+train, test = train_test_split(customers, test_size=0.25, stratify=customers["churned"], random_state=42)
+y_train, y_test = train["churned"], test["churned"]
+print(len(train), len(test), f"test churn rate {y_test.mean():.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>4500 1500 test churn rate 0.165</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Reference scores <span class="step-time">(5 min)</span></h3>
+                    <p>A ranking model must beat a random ranking (AUC 0.5) and should be compared with the simple model you already know.</p>
+                    <pre><code class="language-python">from sklearn.dummy import DummyClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_auc_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+references = {
+    "baseline": DummyClassifier(strategy="prior"),
+    "logistic regression": make_pipeline(StandardScaler(), LogisticRegression()),
+}
+for name, model in references.items():
+    model.fit(train[all_features], y_train)
+    print(f"{name:20s} test AUC {roc_auc_score(y_test, model.predict_proba(test[all_features])[:, 1]):.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>baseline             test AUC 0.500
+logistic regression  test AUC 0.823</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Choose features and k by cross-validation <span class="step-time">(10 min)</span></h3>
+                    <p>Compare all ten features with a leaner set that drops the redundant spending columns and the returns columns, for several values of <code>k</code> and both vote weightings. Only the training rows are used.</p>
+                    <pre><code class="language-python">from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.neighbors import KNeighborsClassifier
+
+lean_features = ["tenure_months", "orders_12m", "days_since_last_order",
+                 "support_tickets_12m", "discount_share", "app_user"]
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+rows = []
+for set_name, cols in [("all 10", all_features), ("lean 6", lean_features)]:
+    for k in [25, 51, 101]:
+        for weights in ["uniform", "distance"]:
+            model = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=k, weights=weights))
+            scores = cross_val_score(model, train[cols], y_train, cv=cv, scoring="roc_auc")
+            rows.append({"features": set_name, "k": k, "weights": weights, "cv_auc": scores.mean()})
+search = pd.DataFrame(rows).sort_values("cv_auc", ascending=False)
+print(search.head(5).round(4).to_string(index=False))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>features   k  weights  cv_auc
+  lean 6  51 distance  0.8552
+  lean 6 101 distance  0.8529
+  lean 6  25 distance  0.8511
+  lean 6  51  uniform  0.8492
+  lean 6  25  uniform  0.8461</code></pre>
+                    </div>
+                    <p>The lean set wins at every setting you can see: removing columns that only add noise or double-count spending makes the neighborhoods more meaningful. The top settings are within a few thousandths of each other, so any of them is a sound choice; take the best.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Fit the winner and test once <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">best = search.iloc[0]
+chosen_cols = lean_features if best["features"] == "lean 6" else all_features
+knn = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=int(best["k"]), weights=best["weights"]))
+knn.fit(train[chosen_cols], y_train)
+
+scored = test[["customer_id", "churned"]].copy()
+scored["churn_probability"] = knn.predict_proba(test[chosen_cols])[:, 1]
+top50 = scored.nlargest(50, "churn_probability")
+print(f"chosen: {best['features']}, k={int(best['k'])}, weights={best['weights']}")
+print(f"test AUC {roc_auc_score(y_test, scored['churn_probability']):.3f}")
+print(f"real churners in the top 50: {top50['churned'].sum()} (random list: {50 * y_test.mean():.1f})")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>chosen: lean 6, k=51, weights=distance
+test AUC 0.855
+real churners in the top 50: 31 (random list: 8.3)</code></pre>
+                    </div>
+                    <p>The test AUC lands right on the cross-validated estimate, which is the sign of an honest process, and clearly ahead of logistic regression's 0.823. The top 50 tells a more modest story: 31 real churners, against 33 for logistic regression and 41 for the random forest in Lesson 1.1. AUC grades the whole ranking of 1,500 customers; the top 50 is a thin slice of it. If the team will only ever call 50 people, that slice is the number to optimize (Lesson 1.4's precision at a cutoff), and a better AUC does not guarantee it.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Explain each shortlisted customer by their lookalikes <span class="step-time">(10 min)</span></h3>
+                    <p>For every customer on the list, find their neighbors among the training customers and summarize them: how many churned, and what they typically look like. Summaries, not raw rows, keep other customers' details private.</p>
+                    <pre><code class="language-python">k = int(best["k"])
+_, positions = knn[-1].kneighbors(knn[:-1].transform(test.loc[top50.index, chosen_cols]))
+
+reasons = []
+for row in positions:
+    group = train.iloc[row]
+    reasons.append(f"{group['churned'].sum()} of {k} lookalikes churned; typical lookalike: "
+                   f"{group['days_since_last_order'].median():.0f} days since last order, "
+                   f"{group['app_user'].mean():.0%} app users")
+top50 = top50.assign(reason=reasons)
+pd.set_option("display.max_colwidth", 100)
+print(top50[["customer_id", "churn_probability", "reason"]].head(3).round(3).to_string(index=False))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>customer_id  churn_probability                                                                                   reason
+    C104051              0.833 42 of 51 lookalikes churned; typical lookalike: 296 days since last order, 10% app users
+    C101041              0.807  36 of 51 lookalikes churned; typical lookalike: 364 days since last order, 0% app users
+    C101171              0.806  38 of 51 lookalikes churned; typical lookalike: 364 days since last order, 0% app users</code></pre>
+                    </div>
+                    <p>With <code>weights="distance"</code> the probability is a weighted share, so it does not equal the plain count exactly, but the count is what a person can check. Every reason is grounded in real, comparable customers.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save the shortlist <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">shortlist = top50[["customer_id", "churn_probability", "reason"]].round(3)
+shortlist.to_csv("lookalike_shortlist.csv", index=False)
+print(f"saved {len(shortlist)} customers to lookalike_shortlist.csv")
+print(f"model: kNN on {len(chosen_cols)} scaled features, k={k}; "
+      f"test AUC {roc_auc_score(y_test, scored['churn_probability']):.3f} vs logistic regression "
+      f"{roc_auc_score(y_test, references['logistic regression'].predict_proba(test[all_features])[:, 1]):.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>saved 50 customers to lookalike_shortlist.csv
+model: kNN on 6 scaled features, k=51; test AUC 0.855 vs logistic regression 0.823</code></pre>
+                    </div>
+                </div>
+
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>Scaling happens inside the pipeline, and every cross-validation score comes from the training rows only</li>
+                        <li>You compared at least two feature sets, several values of <code>k</code> and both weightings, and chose by CV AUC</li>
+                        <li>The test set was scored once, your kNN beats the baseline (0.5) and logistic regression (0.823) on AUC, and you also counted the real churners in its top 50</li>
+                        <li>Every shortlisted customer has a reason built from a summary of their lookalikes, not from raw rows</li>
+                        <li><code>lookalike_shortlist.csv</code> holds 50 customers with probability and reason, and no outcome column</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>Try each one before opening the solution. They continue in the project notebook, so <code>train</code>, <code>test</code>, <code>lean_features</code>, <code>cv</code> and <code>knn</code> already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Distances by Hand</h3>
+                    <p>Take the scaled lean features of the first two test customers (use <code>knn[:-1].transform(...)</code>). Compute their Euclidean and Manhattan distances with NumPy, then check both with <code>pairwise_distances</code> from <code>sklearn.metrics</code> (its <code>metric</code> argument accepts <code>"euclidean"</code> and <code>"manhattan"</code>).</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Euclidean: <code>np.sqrt(((a - b) ** 2).sum())</code>. Manhattan: <code>np.abs(a - b).sum()</code>. Convert the two rows to NumPy arrays first.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.metrics import pairwise_distances
+
+pair = np.asarray(knn[:-1].transform(test[lean_features].head(2)))
+a, b = pair[0], pair[1]
+print(f"by hand   euclidean {np.sqrt(((a - b) ** 2).sum()):.4f}   manhattan {np.abs(a - b).sum():.4f}")
+print(f"sklearn   euclidean {pairwise_distances(pair, metric='euclidean')[0, 1]:.4f}   "
+      f"manhattan {pairwise_distances(pair, metric='manhattan')[0, 1]:.4f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>by hand   euclidean 3.9822   manhattan 7.0279
+sklearn   euclidean 3.9822   manhattan 7.0279</code></pre>
+                        </div>
+                        <p>The Manhattan distance is always at least as large as the Euclidean one: walking the grid is never shorter than the straight line. Which one gives better neighbors is an empirical question, which Exercise 2 answers.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Manhattan or Euclidean?</h3>
+                    <p>Using the lean features and <code>k=101</code>, compare the cross-validated AUC of <code>p=2</code> (Euclidean) and <code>p=1</code> (Manhattan), each with uniform and distance weights. Is the difference worth caring about?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Two nested loops over <code>p</code> and <code>weights</code>, each calling <code>cross_val_score</code> with the project's <code>cv</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for p in [2, 1]:
+    for weights in ["uniform", "distance"]:
+        model = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=101, p=p, weights=weights))
+        scores = cross_val_score(model, train[lean_features], y_train, cv=cv, scoring="roc_auc")
+        print(f"p={p}  {weights:8s}  CV AUC {scores.mean():.4f} ± {scores.std():.4f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>p=2  uniform   CV AUC 0.8461 ± 0.0232
+p=2  distance  CV AUC 0.8529 ± 0.0217
+p=1  uniform   CV AUC 0.8510 ± 0.0216
+p=1  distance  CV AUC 0.8560 ± 0.0202</code></pre>
+                        </div>
+                        <p>All four are within about 0.01 of each other, well inside one standard deviation (about 0.02). Here the distance metric is a detail; the features and their scaling are what matter. That is a common outcome, and a good reason to tune the important dials first.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: kNN for Regression</h3>
+                    <p>Forecast weekly sales of the Tundra Snowshoes (<code>product_id == "SNW-2001"</code>, all four stores) with <code>KNeighborsRegressor</code>. Use <code>["avg_high_temp_f", "holiday_week", "promo", "discount_pct"]</code>, train on 2024 and test on 2025. Compare the MAE of <code>DummyRegressor()</code> with kNN for <code>k</code> in <code>[1, 5, 20]</code>.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Filter <code>pd.read_csv("data/weekly_demand.csv")</code> to the product, then split on the <code>year</code> column. The regressor averages the neighbors' <code>units_sold</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.dummy import DummyRegressor
+from sklearn.metrics import mean_absolute_error
+from sklearn.neighbors import KNeighborsRegressor
+
+demand = pd.read_csv("data/weekly_demand.csv")
+snowshoes = demand[demand["product_id"] == "SNW-2001"]
+print(snowshoes["product_name"].iloc[0])
+cols = ["avg_high_temp_f", "holiday_week", "promo", "discount_pct"]
+s_train, s_test = snowshoes[snowshoes["year"] == 2024], snowshoes[snowshoes["year"] == 2025]
+
+dummy = DummyRegressor().fit(s_train[cols], s_train["units_sold"])
+print(f"mean baseline  MAE {mean_absolute_error(s_test['units_sold'], dummy.predict(s_test[cols])):.2f}")
+for k in [1, 5, 20]:
+    reg = make_pipeline(StandardScaler(), KNeighborsRegressor(n_neighbors=k)).fit(s_train[cols], s_train["units_sold"])
+    print(f"kNN k={k:2d}      MAE {mean_absolute_error(s_test['units_sold'], reg.predict(s_test[cols])):.2f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>Tundra Snowshoes
+mean baseline  MAE 11.54
+kNN k= 1      MAE 7.51
+kNN k= 5      MAE 6.34
+kNN k=20      MAE 6.50</code></pre>
+                        </div>
+                        <p>Looking up "weeks with similar weather" cuts the error almost in half, because snowshoe sales follow temperature closely. <code>k=1</code> copies a single noisy week and does worst of the three; a handful of neighbors averages the noise away. The same bias-variance dial, now for regression.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Backward Feature Elimination (Stretch)</h3>
+                    <p>Start from all ten features. Remove each feature in turn and record the cross-validated AUC of <code>KNeighborsClassifier(n_neighbors=101)</code> (scaled) without it. Which single feature's removal helps most, and which hurts most? Lesson 2.4 automates this search with <code>SequentialFeatureSelector</code>.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Loop over <code>all_features</code>, build <code>[f for f in all_features if f != dropped]</code>, and store the scores in a Series indexed by the dropped feature.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">model = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=101))
+full = cross_val_score(model, train[all_features], y_train, cv=cv, scoring="roc_auc").mean()
+without = pd.Series({
+    dropped: cross_val_score(model, train[[f for f in all_features if f != dropped]], y_train,
+                             cv=cv, scoring="roc_auc").mean()
+    for dropped in all_features
+})
+print(f"all ten features: {full:.4f}")
+print((without - full).sort_values(ascending=False).round(4))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>all ten features: 0.8384
+returns_12m              0.0022
+avg_order_value          0.0019
+orders_12m               0.0014
+spend_12m                0.0010
+return_rate             -0.0000
+app_user                -0.0059
+support_tickets_12m     -0.0084
+tenure_months           -0.0097
+discount_share          -0.0137
+days_since_last_order   -0.0798
+dtype: float64</code></pre>
+                        </div>
+                        <p>Positive numbers mean the model got <em>better</em> without that feature. Dropping the returns and spending columns helps; dropping <code>orders_12m</code> also nudges the score up, but by an amount inside the fold-to-fold wobble, so the project keeps it as a plain, easy-to-explain signal; dropping recency hurts badly, because it is the strongest churn signal. Repeating the step (drop the best candidate, then search again) is backward elimination, and it would lead you toward the lean feature set the project used.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_X = [[0], [1], [2], [10], [11]]
+quiz_y = [0, 0, 1, 1, 1]
+quiz_knn = KNeighborsClassifier(n_neighbors=3).fit(quiz_X, quiz_y)
+print(quiz_knn.predict_proba([[1.4]]))</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Find the three training points closest to 1.4. Is 10 one of them?">
+                                A) <code>[[0.333 0.667]]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The three nearest points to 1.4 are 1, 2 and 0 (distances 0.4, 0.6 and 1.4). Their labels are 0, 1 and 0, so the probabilities are 2/3 for class 0 and 1/3 for class 1.">
+                                B) <code>[[0.667 0.333]]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="kNN's probabilities are shares of the k neighbors. With k=3, which values are possible?">
+                                C) <code>[[0.5 0.5]]</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> A kNN model with <code>k=1</code> has training AUC 1.000 and test AUC 0.645. What is going on?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Each training row is its own nearest neighbor, so the training score is perfect by construction. One neighbor is a very noisy vote: the model has high variance, and a larger k chosen by cross-validation will generalize better.">
+                                A) Overfitting: each training customer is its own nearest neighbor, and one neighbor is a noisy vote
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Underfitting shows up as poor training scores too. Is that the case here?">
+                                B) Underfitting: one neighbor is too simple a model to capture the pattern
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Scaling changes which rows are neighbors, but would it make the training score drop below perfect with k=1?">
+                                C) The features were not scaled, which a scaler would fix
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> Two customers differ by $300 in <code>spend_12m</code> and by 120 days in <code>days_since_last_order</code>. With unscaled features, which difference dominates their Euclidean distance?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Without scaling, the raw numbers are squared and added. Compare 300 squared with 120 squared.">
+                                A) Recency, because it is the stronger churn signal
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The distance formula treats every unit the same. Which raw number is larger?">
+                                B) Neither: Euclidean distance treats every feature equally
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="300 squared is 90,000 and 120 squared is 14,400, so spend contributes about 86% of the squared distance, purely because of its units. The distance knows nothing about which feature predicts churn.">
+                                C) Spend, simply because its numbers are bigger
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> You add 50 columns of random noise to a dataset. Why does kNN's AUC drop much more than logistic regression's?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Both models in the lesson used the same scaled data. What does logistic regression learn that kNN does not?">
+                                A) kNN cannot handle scaled noise, while logistic regression scales its own inputs
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Logistic regression learns a weight per column and gives noise columns weights near zero. kNN gives every scaled column an equal say in the distance, so noise blurs who the true neighbors are.">
+                                B) kNN gives every column an equal say in the distance, while logistic regression can learn to ignore useless columns
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="kNN does not train by iterating at all. Its fit only stores the data.">
+                                C) kNN needs more training iterations when there are more columns
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> Compared with logistic regression on the same data, which statement about kNN's cost is true?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="What does kNN's fit actually do with the training rows?">
+                                A) kNN is slow to train but fast to predict
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Where does kNN find the neighbors when a new customer arrives?">
+                                B) A fitted kNN model can discard the training data, like a fitted logistic regression
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="kNN's fit only stores (and indexes) the training rows. Every prediction searches them, so prediction cost grows with the training set, and the model must carry all the training data with it.">
+                                C) kNN trains almost instantly but must keep and search all the training rows at prediction time
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Should I use an odd <code>k</code> to avoid ties?</summary>
+                    <p>For a two-class vote with uniform weights, an odd <code>k</code> avoids 50/50 ties in <code>predict</code>, which is why this lesson uses 15, 25, 51 and 101. It matters little in practice: with a large <code>k</code> exact ties are rare, <code>weights="distance"</code> almost never ties, and when you rank customers by <code>predict_proba</code> the vote threshold does not matter at all.</p>
+                </details>
+                <details>
+                    <summary>How do I use category columns like <code>home_store</code> in kNN?</summary>
+                    <p>One-hot encode them (Lesson 2.1) and scale the result along with everything else, inside a <code>ColumnTransformer</code>. Be aware that each category adds columns, and a mismatch on a one-hot column counts as a big jump in distance. Try with and without the categories and let cross-validation decide; for many categorical columns, tree models (Module 5) are usually the better tool.</p>
+                </details>
+                <details>
+                    <summary>Is showing a customer's lookalikes a privacy problem?</summary>
+                    <p>It can be. The explanation for one person's prediction is literally other people's records. Inside the company, a summary ("12 of 51 similar customers left; they had been away about 200 days") is usually enough and safer than raw rows. Never expose neighbors to customers themselves, and avoid using sensitive attributes in the distance at all: if the neighbors are chosen partly by age group, the model treats people differently by age, which Lesson 7.3 shows how to check.</p>
+                </details>
+                <details>
+                    <summary>When should I actually pick kNN for a project?</summary>
+                    <p>When the number of useful features is small (roughly under 20), the training set fits in memory, and you value explanations by example. It is also a quick, assumption-light baseline for any tabular problem. With many features, very large data, or a need for fast predictions, gradient boosting (Lesson 5.3) or a linear model is usually the better choice.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>kNN treats every feature equally after scaling, but you could weight them: multiply each scaled column by a factor before the distance, so recency counts double, for instance. Write a small function that applies feature weights (a <code>FunctionTransformer</code> in the pipeline works) and try a few weightings by cross-validation. Can you beat the lean feature set's AUC? You have just reinvented "metric learning", an active research area; <code>NeighborhoodComponentsAnalysis</code> in scikit-learn learns such a transformation automatically.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain the real-estate agent's comps in your own words, and name the two decisions that make or break the estimate. Then write down the unscaled and scaled AUC from this lesson and explain the difference to someone who has never heard of standard deviations. Finally: kNN beat logistic regression on churn but lost badly once noise columns were added. What does that tell you about when to reach for each?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>kNN stores the training rows and predicts from the <code>k</code> most similar ones: a vote share for classification, an average for regression</li>
+                        <li>Distance defines similarity; Euclidean (<code>p=2</code>) and Manhattan (<code>p=1</code>) are the common choices</li>
+                        <li>Unscaled features let the largest units dominate every distance; scaling in a pipeline raised churn AUC from 0.774 to 0.836</li>
+                        <li><code>k</code> is the flexibility dial: small <code>k</code> means high variance, large <code>k</code> high bias; choose it by cross-validation</li>
+                        <li>Irrelevant and redundant features blur distances (the curse of dimensionality), so feature selection is part of a kNN model</li>
+                        <li>kNN trains instantly, predicts slowly, carries its training data, and explains predictions with real examples</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You computed distances by hand and saw a single feature hijack them</li>
+                        <li>You watched <code>k</code> turn a patchwork of islands into a smooth risk map that found the 150-day cliff on its own</li>
+                        <li>You measured how distances concentrate in high dimensions and how noise columns hurt kNN but not logistic regression</li>
+                        <li>You built a churn model that beats logistic regression on AUC and gives a lookalike-based reason for every name on its shortlist</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="classification_naive_bayes.html"><strong>Lesson 4.2: Naive Bayes</strong></a> you will meet a classifier built on probability instead of distance. It counts how often each word appears in positive and negative Pinecrest reviews, assumes (naively) that words are independent, and still classifies text quickly and well. It is the natural partner to kNN: where kNN struggles with thousands of columns, Naive Bayes thrives on them.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook and <code>lookalike_shortlist.csv</code>. Read five of the reasons and ask whether a retention agent would find them convincing.</li>
+                    <li>Try the project with <code>MinMaxScaler</code> instead of <code>StandardScaler</code>. Does the best <code>k</code> change?</li>
+                    <li>Without running code, predict what happens to kNN's AUC if you duplicate <code>days_since_last_order</code> as a second column. Then check.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>Today you built a model with no weights at all and it beat one that has them, and then you found exactly how to break it. That combination, knowing both why a model works and where it fails, is what makes your judgment trustworthy. If distances in many dimensions still feel abstract, come back to the two customers from the start of the lesson: one column was shouting and the others could not be heard. Scaling, choosing features and tuning <code>k</code> are all ways of making sure the right columns get a voice.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="regression_regularization.html" class="prev-lesson">← Previous: Regularization and the Bias-Variance Trade-off</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="classification_naive_bayes.html" class="next-lesson">Next: Naive Bayes →</a>
+            </nav>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
+        <div class="footer-links">
+            <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+            <a href="https://rays-home.netlify.app/contact">Contact</a>
+            <a href="#" id="print-button">Print Page</a>
+        </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
+    </footer>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
+</body>
+</html>

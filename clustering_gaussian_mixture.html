@@ -3,784 +3,936 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Learn about Gaussian Mixture Models (GMM) for probabilistic clustering and density estimation in machine learning.">
+    <meta name="description" content="Cluster with probabilities instead of hard labels: fit Gaussian mixture models, choose covariance types and the number of components with BIC, and build soft customer segments for Pinecrest Outfitters. Python Machine Learning Lesson 8.5.">
+    <meta name="author" content="Ray de la Paz">
     <title>Gaussian Mixture Models - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
+    </script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
 
-    <nav>
-        <a href="index.html" class="logo">Python Machine Learning</a>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="index.html#clustering">Clustering</a>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
         </div>
-    </nav>
-    
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="index.html#clustering">Clustering</a></li>
-            <li aria-current="page">Gaussian Mixture Models</li>
-        </ul>
     </nav>
 
     <main id="main-content">
-    <div class="container">
-        <h1>🔔 Gaussian Mixture Models: Probabilistic Clustering</h1>
+        <div class="container">
+            <header>
+                <h1>🔔 Lesson 8.5: Gaussian Mixture Models</h1>
+                <p class="lead">Replace "this customer is in segment 3" with "this customer is 70% one kind and 30% another", and get a model of the whole data distribution in the bargain.</p>
 
-        <!-- What You'll Learn (learning objectives) -->
-        <div class="card card-info">
-            <h2>📚 What You'll Learn</h2>
-            <p>By the end of this lesson, you will be able to:</p>
-            <ul>
-                <li>Explain how a Gaussian Mixture Model represents data as a weighted blend of Gaussian components</li>
-                <li>Describe how the Expectation-Maximization (EM) algorithm fits a GMM</li>
-                <li>Contrast GMM's soft, probabilistic assignments with K-means' hard cluster assignments</li>
-                <li>Choose an appropriate covariance type and select the number of components using AIC/BIC</li>
-                <li>Use a fitted GMM for density estimation and probabilistic cluster membership</li>
-            </ul>
-            <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-            <p><strong>🎯 Project:</strong> Fit a Gaussian Mixture Model to a dataset, choose the number of components with BIC, and compare its soft clustering against K-means.</p>
-        </div>
-        
-        <div class="lesson-card">
-            <h2>Introduction</h2>
-            <p>Gaussian Mixture Models (GMM) are probabilistic models that assume data points are generated from a mixture of several Gaussian distributions with unknown parameters. Unlike K-means which performs hard clustering, GMM provides soft clustering where each point has a probability of belonging to each cluster. This makes GMM more flexible for handling clusters with different shapes, sizes, and densities.</p>
-        </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain a Gaussian mixture as a weighted blend of bell-shaped components, fitted by the EM algorithm</li>
+                        <li>Fit <code>GaussianMixture</code>, read <code>means_</code>, <code>weights_</code> and <code>predict_proba</code>, and find the customers whose segment is uncertain</li>
+                        <li>Choose a covariance type and explain why full or tied covariances can find stretched clusters that K-Means misses</li>
+                        <li>Use BIC and AIC to choose the number of components, and recognize when their answer needs judgment</li>
+                        <li>Use a fitted mixture as a density model: score how typical a point is, and generate synthetic samples</li>
+                    </ul>
+                </div>
 
-        <h2>GMM vs K-means Comparison</h2>
-        
-        <div class="mermaid">
-        graph TD
-            A[Clustering Task] --> B{Method}
-            
-            B --> C[K-means]
-            C --> C1[Hard Assignment]
-            C --> C2[Spherical Clusters]
-            C --> C3[Equal Variance]
-            C --> C4[Distance Based]
-            
-            B --> D[GMM]
-            D --> D1[Soft Assignment]
-            D --> D2[Elliptical Clusters]
-            D --> D3[Different Variances]
-            D --> D4[Probability Based]
-            
-            C1 --> E[Point belongs to ONE cluster]
-            D1 --> F[Point has probability for EACH cluster]
-            
-            style C fill:#ffebee
-            style D fill:#e8f5e9
-            style E fill:#fff3e0
-            style F fill:#e3f2fd
-        </div>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 95 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="clustering_dbscan.html">Lesson 8.4: Density-Based Clustering</a> (and K-Means from <a href="clustering_kmeans.html">Lesson 8.1</a>)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> Soft customer segments for Pinecrest: a segment and a confidence for every customer, a list of borderline customers, and a model that scores new customers</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code>, plus small generated data sets to see the geometry</li>
+                </ul>
+            </header>
 
-        <h2>How GMM Works</h2>
-        
-        <div class="mermaid">
-        flowchart LR
-            A[Input Data] --> B[Initialize Parameters]
-            B --> B1[Means μ]
-            B --> B2[Covariances Σ]
-            B --> B3[Weights π]
-            
-            B --> C[E-Step]
-            C --> C1[Calculate Responsibilities]
-            C1 --> C2[P(cluster|data point)]
-            
-            C --> D[M-Step]
-            D --> D1[Update μ]
-            D --> D2[Update Σ]
-            D --> D3[Update π]
-            
-            D --> E{Converged?}
-            E -->|No| C
-            E -->|Yes| F[Final Model]
-            
-            F --> G[Soft Clusters]
-            F --> H[Density Estimation]
-            
-            style A fill:#e3f2fd
-            style F fill:#c8e6c9
-        </div>
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">A Blend of Bell Curves</a></li>
+                        <li><a href="#one-d" class="toc-link">A Mixture in One Dimension</a></li>
+                        <li><a href="#em" class="toc-link">How It Is Fitted: EM</a></li>
+                        <li><a href="#shapes" class="toc-link">Ellipses, Not Circles</a></li>
+                        <li><a href="#covariance" class="toc-link">Covariance Types</a></li>
+                        <li><a href="#choose-k" class="toc-link">Choosing the Number of Components</a></li>
+                        <li><a href="#density" class="toc-link">A Mixture Is a Density Model</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: Soft Customer Segments</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
 
-        <h2>Setting Up GMM</h2>
-        
-        <pre class="language-python"><code>import numpy as np
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 A Blend of Bell Curves</h2>
+
+                <p>K-Means gives every customer exactly one segment, even a customer who sits right on the line between two. The density methods of Lesson 8.4 added a third answer, "noise", but they are still all-or-nothing. Real customers are often in between: a regular who has started chasing discounts, or an occasional buyer who just made one large purchase. A <strong>Gaussian mixture model</strong> (GMM) describes that honestly, with a probability for each segment.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: Paint Mixed from a Few Base Colors</h4>
+                    <p>Imagine every customer's behavior is a dab of paint, and all the paint on the palette was mixed from a few base colors. A Gaussian mixture tries to work out the base colors (the <strong>components</strong>), how much of the palette each one supplied (the <strong>weights</strong>), and, for any dab, how likely it is to have come from each base color. A dab right next to a pure base color is almost certainly from it. A dab halfway between two colors gets a split answer, and that split is information, not indecision.</p>
+                </div>
+
+                <p>In the model, each component is a <strong>Gaussian</strong> (a bell curve, or in several dimensions a bell-shaped hill with elliptical contours), described by a center (<code>means_</code>), a spread and orientation (<code>covariances_</code>) and a share of the data (<code>weights_</code>). The model's picture of the data is the sum of these weighted hills.</p>
+
+                <h3>🤔 Why This Matters</h3>
+                <p>Probabilities change what you can do with segments. Marketing can send the Deal Hunter campaign only to customers who are at least 90% likely to be Deal Hunters, and route the borderline ones to a gentler message. The same fitted model also tells you how <em>typical</em> any customer is, which is the bridge to anomaly detection in Lesson 8.6.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="one-d" class="lesson-section">
+                <h2>📊 A Mixture in One Dimension</h2>
+
+                <p>Start with something you can see in full: one feature, two hidden groups that overlap. Generate them so you know the true answer, then ask <code>GaussianMixture</code> to find it without being told which point came from which group.</p>
+
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.mixture import GaussianMixture
+
+rng = np.random.default_rng(42)
+group_a = rng.normal(loc=0.0, scale=1.0, size=600)
+group_b = rng.normal(loc=4.0, scale=1.5, size=400)
+x = np.concatenate([group_a, group_b]).reshape(-1, 1)   # scikit-learn wants a 2-D X
+
+gm_1d = GaussianMixture(n_components=2, random_state=42).fit(x)
+print("means  :", gm_1d.means_.ravel().round(2))
+print("stds   :", np.sqrt(gm_1d.covariances_.ravel()).round(2))
+print("weights:", gm_1d.weights_.round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>means  : [0.03 4.16]
+stds   : [1.01 1.35]
+weights: [0.629 0.371]</code></pre>
+                </div>
+
+                <p>The model recovered the two groups: centers near 0 and 4, spreads near 1 and 1.4 (the true values were 1 and 1.5), and weights of about 63/37 against the true 60/40, from nothing but the mixed-up values. (The order of the components is arbitrary; more on that in the mistakes.) Now ask how a few individual values would be assigned:</p>
+
+                <pre><code class="language-python">probe = np.array([[0.0], [1.5], [2.0], [2.5], [4.0]])
+print(pd.DataFrame(gm_1d.predict_proba(probe).round(3), index=probe.ravel(),
+                   columns=[f"P(component {k})" for k in range(2)]))
+print("predict:", gm_1d.predict(probe))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>     P(component 0)  P(component 1)
+0.0           0.996           0.004
+1.5           0.846           0.154
+2.0           0.550           0.450
+2.5           0.197           0.803
+4.0           0.001           0.999
+predict: [0 0 0 1 1]</code></pre>
+                </div>
+
+                <p><code>predict_proba</code> gives one row per value and one column per component, and each row adds up to 1. A value of 0 is certainly from the first group and 4 certainly from the second; values around 2 get a split answer. <code>predict</code> simply picks the larger probability, which hides exactly the information that makes a mixture useful.</p>
+
+                <pre><code class="language-python">from scipy.stats import norm
+
+grid = np.linspace(-4, 10, 400)
+fig, ax = plt.subplots(figsize=(9, 3.8), layout="constrained")
+ax.hist(x.ravel(), bins=50, density=True, color="lightgray", label="data")
+for k in range(2):
+    mean, std, weight = gm_1d.means_[k, 0], np.sqrt(gm_1d.covariances_[k, 0, 0]), gm_1d.weights_[k]
+    ax.plot(grid, weight * norm.pdf(grid, mean, std), linestyle="--", label=f"component {k} (weight {weight:.2f})")
+ax.plot(grid, np.exp(gm_1d.score_samples(grid.reshape(-1, 1))), color="#667eea", linewidth=2, label="mixture")
+ax.set_xlabel("x")
+ax.set_ylabel("density")
+ax.set_title("Two weighted bell curves add up to the mixture")
+ax.legend()
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/clustering_gaussian_mixture_1d.png" alt="Histogram of 1,000 values with two humps, a taller narrow one around 0 and a lower, wider one around 4. Two dashed bell curves sit on the humps, and a solid purple curve, their sum, traces the outline of the whole histogram." width="990" height="418" loading="lazy">
+                    <figcaption>Each dashed curve is one component, scaled by its weight. Their sum (solid) is the model's description of the whole distribution. Where the dashed curves overlap, membership is shared.</figcaption>
+                </figure>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="em" class="lesson-section">
+                <h2>🔁 How It Is Fitted: EM</h2>
+
+                <p>If you knew which group each point came from, fitting would be easy: compute each group's mean, spread and share. If you knew the groups' means and spreads, assigning points would be easy: compute the probabilities. You know neither, so the <strong>expectation-maximization</strong> (EM) algorithm alternates between the two:</p>
+
+                <div class="mermaid">
+graph TD
+    A["Start: guess components (K-Means)"] --> B["E-step: each point's probabilities"]
+    B --> C["M-step: refit means, covariances, weights"]
+    C --> D{"Log-likelihood still improving?"}
+    D -->|"yes"| B
+    D -->|"no"| E["Done: converged"]
+                </div>
+
+                <p>In the E-step each point is shared out between components according to its probabilities (its <strong>responsibilities</strong>). In the M-step each component is refitted as a weighted average of the points, using those responsibilities as weights. Each round can only improve the <strong>log-likelihood</strong>, the model's measure of how well it explains the data, so the loop stops when the improvement falls below <code>tol</code> or after <code>max_iter</code> rounds.</p>
+
+                <p>For the curious, the model's probability density at a point x is the weighted sum of its components:</p>
+                <p class="text-center"><code>p(x) = w₁·N(x | μ₁, Σ₁) + w₂·N(x | μ₂, Σ₂) + … + wₖ·N(x | μₖ, Σₖ)</code></p>
+                <p>where each N is a Gaussian with mean μ and covariance Σ, and the weights add up to 1. K-Means is close to a special case: tiny, equal, round components and all-or-nothing responsibilities.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ EM Finds a Good Answer, Not Always the Best</h4>
+                    <p>Like K-Means, EM can settle in a local optimum that depends on where it started. scikit-learn starts from a K-Means solution by default (<code>init_params="kmeans"</code>). Set <code>n_init</code> to 3 or more to try several starts and keep the best, and set <code>random_state=42</code> so your run is repeatable.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="shapes" class="lesson-section">
+                <h2>🥚 Ellipses, Not Circles</h2>
+
+                <p>K-Means assigns each point to the nearest center, which implicitly assumes round clusters of similar size. A Gaussian component with a <strong>full covariance</strong> can be a stretched, tilted ellipse. Take three blobs and stretch them all the same way with a matrix multiplication:</p>
+
+                <pre><code class="language-python">from sklearn.datasets import make_blobs
+from sklearn.cluster import KMeans
+from sklearn.metrics import adjusted_rand_score
+
+X_round, y_true = make_blobs(n_samples=600, centers=3, random_state=170)
+X_stretched = X_round @ np.array([[0.6, -0.6], [-0.4, 0.8]])
+
+km_labels = KMeans(n_clusters=3, n_init=10, random_state=42).fit_predict(X_stretched)
+gm_full = GaussianMixture(n_components=3, covariance_type="full", random_state=42).fit(X_stretched)
+gm_labels = gm_full.predict(X_stretched)
+
+print("K-Means ARI:", round(adjusted_rand_score(y_true, km_labels), 3))
+print("GMM ARI    :", round(adjusted_rand_score(y_true, gm_labels), 3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>K-Means ARI: 0.577
+GMM ARI    : 1.0</code></pre>
+                </div>
+
+                <p>The adjusted Rand index from Lesson 8.2 (1 = matches the true groups, 0 = chance) says it all: the mixture recovers the three stretched groups perfectly, while K-Means cuts across them.</p>
+
+                <pre><code class="language-python">fig, axes = plt.subplots(1, 2, figsize=(9, 3.8), layout="constrained")
+for ax, labels, title in [(axes[0], km_labels, "K-Means, k=3"), (axes[1], gm_labels, "Gaussian mixture, full covariance")]:
+    ax.scatter(X_stretched[:, 0], X_stretched[:, 1], c=labels, cmap="viridis", s=8)
+    ax.set_title(title)
+axes[1].scatter(gm_full.means_[:, 0], gm_full.means_[:, 1], c="red", marker="x", s=80, label="component means")
+axes[1].legend(loc="upper right")
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/clustering_gaussian_mixture_stretched.png" alt="Two scatter plots of three parallel, diagonally stretched groups of points. On the left, K-Means colors cut across the stretched groups, mixing parts of neighboring groups. On the right, the Gaussian mixture colors each stretched group as one cluster, with a red cross at each group's center." width="990" height="418" loading="lazy">
+                    <figcaption>K-Means draws its boundaries halfway between centers, so it slices across stretched groups. Full-covariance components bend to the shape of each group.</figcaption>
+                </figure>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="covariance" class="lesson-section">
+                <h2>📐 Covariance Types</h2>
+
+                <p>A full covariance gives each component its own ellipse, which is flexible but costs parameters: with d features, each component needs d(d+1)/2 numbers for its covariance alone. <code>covariance_type</code> trades flexibility for fewer parameters:</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th><code>covariance_type</code></th><th>Shape of each component</th><th>Use when</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>"full"</code> (default)</td><td>its own ellipse, any tilt</td><td>enough data per component; features correlated within clusters</td></tr>
+                            <tr><td><code>"tied"</code></td><td>one ellipse shape shared by all</td><td>clusters look alike but are shifted</td></tr>
+                            <tr><td><code>"diag"</code></td><td>its own ellipse, aligned with the axes</td><td>many features, little data; features roughly independent within clusters</td></tr>
+                            <tr><td><code>"spherical"</code></td><td>its own circle (one spread)</td><td>the closest to K-Means; fewest parameters</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p>How do you pick? Fit each and compare with the <strong>Bayesian information criterion</strong> (BIC). BIC rewards a high likelihood and charges a penalty for every parameter, so a more flexible model has to earn its extra parameters. <strong>Lower BIC is better.</strong></p>
+
+                <pre><code class="language-python">for cov in ["spherical", "diag", "tied", "full"]:
+    gm = GaussianMixture(n_components=3, covariance_type=cov, random_state=42).fit(X_stretched)
+    ari = adjusted_rand_score(y_true, gm.predict(X_stretched))
+    print(f"{cov:10s} BIC {gm.bic(X_stretched):8.1f}   ARI {ari:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>spherical  BIC   4019.6   ARI 0.568
+diag       BIC   3988.1   ARI 0.516
+tied       BIC   3032.8   ARI 1.000
+full       BIC   3061.9   ARI 1.000</code></pre>
+                </div>
+
+                <p>BIC picks <code>"tied"</code>, and it is right: these three groups were made by stretching three identical round blobs with the same matrix, so they really do share one shape. <code>"full"</code> also gets the clusters right but pays for two extra covariance matrices it did not need. The two axis-aligned types cannot tilt, so they fail. BIC knew none of the true labels; it judged only from fit and parameter count.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="choose-k" class="lesson-section">
+                <h2>🔢 Choosing the Number of Components</h2>
+
+                <p>The same tool picks the number of components: fit a range of values and compare BIC. <strong>AIC</strong> (Akaike information criterion) is the same idea with a smaller penalty per parameter, so it tends to prefer more components. On the stretched blobs, with the tied covariance BIC just chose:</p>
+
+                <pre><code class="language-python">for k in range(1, 7):
+    gm = GaussianMixture(n_components=k, covariance_type="tied", random_state=42).fit(X_stretched)
+    print(f"k={k}  BIC {gm.bic(X_stretched):8.1f}   AIC {gm.aic(X_stretched):8.1f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>k=1  BIC   4272.7   AIC   4250.7
+k=2  BIC   3825.1   AIC   3789.9
+k=3  BIC   3032.8   AIC   2984.5
+k=4  BIC   3053.1   AIC   2991.6
+k=5  BIC   3072.4   AIC   2997.6
+k=6  BIC   3087.2   AIC   2999.2</code></pre>
+                </div>
+
+                <p>Both criteria drop steeply to k=3 and then get slightly worse: extra components add parameters without explaining anything new. Both have their minimum at 3, the true number. On real data the picture is rarely this clean: the criteria often keep creeping down as k grows, because real clusters are not perfectly Gaussian and extra components help describe their shapes. You will meet exactly that in the project, and the rule of thumb is the same as for the elbow in Lesson 8.2: look for where the big improvements stop, then check that the extra component means something.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Silhouette or BIC?</h4>
+                    <p>The silhouette from Lesson 8.2 measures how well separated hard clusters are. BIC measures how well a probability model describes the data, given its complexity. For a mixture, BIC is the natural criterion, but neither one replaces looking at the profiles and asking whether a segment is useful.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="density" class="lesson-section">
+                <h2>🗺️ A Mixture Is a Density Model</h2>
+
+                <p>A fitted mixture is more than a clustering. It is a full description of where data is likely to fall, which gives you two extra tools.</p>
+
+                <p><strong>Scoring how typical a point is.</strong> <code>score_samples</code> returns the log of the model's density at each point. Points in the middle of a component score high; points far from every component score very low. That is an anomaly score, and Lesson 8.6 uses the idea directly.</p>
+
+                <pre><code class="language-python">gm_tied = GaussianMixture(n_components=3, covariance_type="tied", random_state=42).fit(X_stretched)
+typical_point = gm_tied.means_[:1]                  # the center of one component
+odd_point = np.array([[0.0, -20.0]])                # far from every group
+print("log-density, center of a component:", gm_tied.score_samples(typical_point).round(2))
+print("log-density, far-away point       :", gm_tied.score_samples(odd_point).round(2))
+print("lowest log-density among the data :", gm_tied.score_samples(X_stretched).min().round(2))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>log-density, center of a component: [-1.47]
+log-density, far-away point       : [-1397.33]
+lowest log-density among the data : -7.94</code></pre>
+                </div>
+
+                <p>The far-away point scores far below even the least typical training point. Log-densities are only meaningful relative to each other, within one model: compare points, never the raw numbers across models.</p>
+
+                <p><strong>Generating new data.</strong> Because the model describes the distribution, it can draw new samples from it with <code>sample</code>, which returns the samples and the component each one came from.</p>
+
+                <pre><code class="language-python">synthetic, components = gm_tied.sample(5)
+print(synthetic.round(2))
+print("from components:", components)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>[[ 0.8  -0.07]
+ [-2.62  2.52]
+ [-3.74  4.39]
+ [-2.34  2.38]
+ [-2.5   2.28]]
+from components: [0 1 1 1 1]</code></pre>
+                </div>
+
+                <p>Synthetic samples are handy for testing a pipeline or explaining a segment ("here are five typical customers of this kind"). They are only as realistic as the Gaussian assumption: a mixture happily produces values that real data never takes, such as a negative share or a fractional order count, as Exercise 3 shows.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <h3>1. More Components Than Rows</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">GaussianMixture(n_components=5, random_state=42).fit(X_stretched[:3])</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Expected n_samples &gt;= n_components but got n_components = 5, n_samples = 3</code></pre>
+                </div>
+                <p><strong>What it means:</strong> every component needs data to estimate its mean and covariance, so you cannot have more components than rows. In practice you need far more than that: a full-covariance component in d dimensions has d + d(d+1)/2 numbers to estimate. <strong>Fix:</strong> fewer components, a simpler <code>covariance_type</code>, or more data. This often appears when someone fits a mixture to a small filtered subset.</p>
+
+                <h3>2. Ignoring a ConvergenceWarning</h3>
+
+                <pre><code class="language-python">import warnings
+
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    GaussianMixture(n_components=3, max_iter=2, random_state=42).fit(X_stretched)
+
+print(caught[0].category.__name__)
+print(caught[0].message)</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>ConvergenceWarning
+Best performing initialization did not converge. Try different init parameters, or increase max_iter, tol, or check for degenerate data.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> EM stopped after <code>max_iter</code> rounds while the log-likelihood was still improving, so the means and probabilities you get are half-finished. <strong>Fix:</strong> raise <code>max_iter</code> (the default is 100), scale the features so the starting K-Means behaves well, and check <code>gm.converged_</code> after fitting. If it still will not converge, a component may be collapsing onto a few identical points: try <code>n_init=3</code>, a larger <code>reg_covar</code> or fewer components.</p>
+
+                <h3>3. Expecting the Component Numbers to Mean Something</h3>
+
+                <pre><code class="language-python">run_a = GaussianMixture(n_components=3, covariance_type="tied", random_state=42).fit(X_stretched)
+run_b = GaussianMixture(n_components=3, covariance_type="tied", random_state=7).fit(X_stretched)
+
+print("first labels, run A:", run_a.predict(X_stretched)[:8])
+print("first labels, run B:", run_b.predict(X_stretched)[:8])
+print("ARI between runs   :", adjusted_rand_score(run_a.predict(X_stretched), run_b.predict(X_stretched)))</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>first labels, run A: [1 1 2 1 1 1 2 1]
+first labels, run B: [0 0 2 0 0 0 2 0]
+ARI between runs   : 1.0</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the two runs found the same clustering (an ARI of 1.0 between them), but the components are numbered differently. Component numbers are arbitrary names; a report that says "segment 2 churns most" breaks the next time someone refits with a different seed or new data. <strong>Fix:</strong> name segments by their profile ("discount-driven"), not their number, and match segments between runs by their means or with a cross-tab.</p>
+
+                <h3>4. A Covariance Type Too Simple for the Shapes</h3>
+
+                <pre><code class="language-python">gm_round = GaussianMixture(n_components=3, covariance_type="spherical", random_state=42).fit(X_stretched)
+print("spherical ARI:", round(adjusted_rand_score(y_true, gm_round.predict(X_stretched)), 3), " converged:", gm_round.converged_)</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>spherical ARI: 0.568  converged: True</code></pre>
+                </div>
+                <p><strong>What happened:</strong> the fit converged, so nothing warns you, but round components cannot follow stretched groups: the result is about as wrong as K-Means. <strong>Fix:</strong> compare covariance types with BIC instead of picking one by habit, and plot or profile the result.</p>
+
+                <h3>5. Treating predict as the Whole Answer</h3>
+                <p>Calling <code>predict</code> and stopping there turns a probabilistic model back into K-Means and throws away its main advantage. A customer with probabilities 0.51 and 0.49 gets the same hard label as one with 0.99. <strong>Fix:</strong> keep <code>predict_proba</code>, store the top probability next to the segment, and treat low-confidence customers as their own group in any decision that matters. The project does exactly this.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: Soft Customer Segments</h2>
+
+                <p>In Lessons 8.2 and 8.4 you gave every Pinecrest customer one hard label. The marketing team now wants confidence: for each customer, the most likely segment and how sure the model is, a list of borderline customers to keep out of narrowly targeted campaigns, and a model that can score new customers next month. Use the same four behavior features. Work in a new notebook called <code>lesson_8_5_project</code>. Allow about 40 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Load and scale the features <span class="step-time">(5 min)</span></h3>
+                    <p>Scale the four features so that no column dominates the K-Means start and the covariance estimates are on comparable scales.</p>
+                    <div class="card card-warning">
+                        <h4>⚠️ Why Not the Logs from Lesson 8.2?</h4>
+                        <p>Lesson 8.2 took the log of order count and order value before K-Means. For a full-covariance mixture that backfires here: 392 customers have exactly one order, so after the log they all sit at exactly the same value, and so do the customers with exactly two. A component can shrink onto such a flat stripe, where the spread of the order feature is zero (only the tiny <code>reg_covar</code> floor of 0.000001 is left) and the likelihood shoots up. In a trial run with the logged features, BIC at 8 components suddenly dropped by about 20,000: two of the components had collapsed onto the one-order and two-order stripes. A "best" model by BIC, describing stripes of identical values rather than segments. Whole-number features are the same trap you met in Lesson 8.4. This lesson therefore scales the raw features; the segments come out the same.</p>
+                    </div>
+                    <pre><code class="language-python">import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
-from sklearn.datasets import make_blobs, make_moons
-from sklearn.model_selection import train_test_split
-from scipy.stats import multivariate_normal
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.mixture import GaussianMixture
 
-# Set style for better visualizations
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
+pd.set_option("display.width", 150)
+pd.set_option("display.max_columns", 20)
 
-# Set random seed
-np.random.seed(42)
+customers = pd.read_csv("data/customers_churn.csv")
+features = ["orders_12m", "avg_order_value", "discount_share", "return_rate"]
+scaler = StandardScaler().set_output(transform="pandas")
+Z = scaler.fit_transform(customers[features])
+print(Z.shape)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(6000, 4)</code></pre>
+                    </div>
+                </div>
 
-print("Gaussian Mixture Models Tutorial")
-print("=" * 50)</code></pre>
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Compare numbers of components with BIC and AIC <span class="step-time">(10 min)</span></h3>
+                    <p>Fit full-covariance mixtures with 1 to 8 components (three starts each) and plot both criteria. This takes a few seconds per model.</p>
+                    <pre><code class="language-python">rows = []
+for k in range(1, 9):
+    gm = GaussianMixture(n_components=k, n_init=3, random_state=42).fit(Z)
+    rows.append({"k": k, "bic": gm.bic(Z), "aic": gm.aic(Z), "converged": gm.converged_})
+criteria = pd.DataFrame(rows).set_index("k")
+criteria["bic_drop"] = -criteria["bic"].diff()
+print(criteria.round(0))
 
-        <h2>Basic GMM Implementation</h2>
-        
-        <pre class="language-python"><code>class GMMDemo:
-    """
-    Demonstrate Gaussian Mixture Models
-    """
-    
-    def __init__(self):
-        self.model = None
-        self.data = None
-        
-    def generate_mixed_data(self, n_samples=1000):
-        """
-        Generate data from multiple Gaussian distributions
-        """
-        # Create data with different cluster properties
-        np.random.seed(42)
-        
-        # Cluster 1: Tight, circular
-        cluster1 = np.random.multivariate_normal(
-            mean=[0, 0],
-            cov=[[0.5, 0], [0, 0.5]],
-            size=n_samples // 3
-        )
-        
-        # Cluster 2: Elongated, diagonal
-        cluster2 = np.random.multivariate_normal(
-            mean=[3, 3],
-            cov=[[1, 0.7], [0.7, 1]],
-            size=n_samples // 3
-        )
-        
-        # Cluster 3: Wide, horizontal
-        cluster3 = np.random.multivariate_normal(
-            mean=[-2, 3],
-            cov=[[2, 0], [0, 0.3]],
-            size=n_samples // 3
-        )
-        
-        # Combine clusters
-        X = np.vstack([cluster1, cluster2, cluster3])
-        
-        # Create labels for visualization
-        y_true = np.hstack([
-            np.zeros(len(cluster1)),
-            np.ones(len(cluster2)),
-            np.ones(len(cluster3)) * 2
-        ])
-        
-        # Shuffle data
-        indices = np.random.permutation(len(X))
-        X = X[indices]
-        y_true = y_true[indices]
-        
-        return X, y_true
-    
-    def fit_gmm(self, X, n_components=3, covariance_type='full'):
-        """
-        Fit Gaussian Mixture Model
-        
-        covariance_type options:
-        - 'full': each component has its own covariance matrix
-        - 'tied': all components share the same covariance matrix
-        - 'diag': diagonal covariance (axes aligned)
-        - 'spherical': single variance per component (like K-means)
-        """
-        self.model = GaussianMixture(
-            n_components=n_components,
-            covariance_type=covariance_type,
-            max_iter=100,
-            random_state=42
-        )
-        
-        self.model.fit(X)
-        
-        # Get cluster assignments
-        labels = self.model.predict(X)
-        
-        # Get soft assignments (probabilities)
-        proba = self.model.predict_proba(X)
-        
-        return labels, proba
-    
-    def visualize_results(self, X, labels, proba, y_true=None):
-        """
-        Visualize GMM clustering results
-        """
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-        
-        # Plot 1: True clusters (if available)
-        if y_true is not None:
-            axes[0, 0].scatter(X[:, 0], X[:, 1], c=y_true, cmap='viridis',
-                             edgecolor='black', linewidth=0.5, s=30)
-            axes[0, 0].set_title('True Clusters')
-        else:
-            axes[0, 0].scatter(X[:, 0], X[:, 1], c='gray',
-                             edgecolor='black', linewidth=0.5, s=30)
-            axes[0, 0].set_title('Input Data')
-        
-        # Plot 2: GMM hard clustering
-        axes[0, 1].scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis',
-                         edgecolor='black', linewidth=0.5, s=30)
-        axes[0, 1].set_title('GMM Hard Clustering')
-        
-        # Plot 3: Probability of dominant cluster
-        max_proba = np.max(proba, axis=1)
-        scatter = axes[1, 0].scatter(X[:, 0], X[:, 1], c=max_proba, 
-                                    cmap='YlOrRd', vmin=0, vmax=1,
-                                    edgecolor='black', linewidth=0.5, s=30)
-        axes[1, 0].set_title('Cluster Confidence\n(Max Probability)')
-        plt.colorbar(scatter, ax=axes[1, 0])
-        
-        # Plot 4: Gaussian ellipses
-        axes[1, 1].scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis',
-                         alpha=0.3, s=20)
-        
-        # Draw ellipses for each component
-        self.draw_ellipses(axes[1, 1], self.model)
-        axes[1, 1].set_title('Gaussian Components')
-        
-        # Set labels
-        for ax in axes.flat:
-            ax.set_xlabel('Feature 1')
-            ax.set_ylabel('Feature 2')
-            ax.grid(True, alpha=0.3)
-        
-        plt.suptitle('Gaussian Mixture Model Results', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-    
-    def draw_ellipses(self, ax, gmm):
-        """
-        Draw ellipses representing Gaussian components
-        """
-        from matplotlib.patches import Ellipse
-        
-        colors = plt.cm.viridis(np.linspace(0, 0.8, gmm.n_components))
-        
-        for i in range(gmm.n_components):
-            # Get mean and covariance
-            mean = gmm.means_[i]
-            
-            if gmm.covariance_type == 'full':
-                cov = gmm.covariances_[i]
-            elif gmm.covariance_type == 'tied':
-                cov = gmm.covariances_
-            elif gmm.covariance_type == 'diag':
-                cov = np.diag(gmm.covariances_[i])
-            elif gmm.covariance_type == 'spherical':
-                cov = np.eye(2) * gmm.covariances_[i]
-            
-            # Compute eigenvalues and eigenvectors
-            eigenvalues, eigenvectors = np.linalg.eig(cov)
-            angle = np.degrees(np.arctan2(eigenvectors[1, 0], eigenvectors[0, 0]))
-            
-            # Draw ellipse at 2 standard deviations
-            width = 2 * np.sqrt(eigenvalues[0]) * 2  # 2 std
-            height = 2 * np.sqrt(eigenvalues[1]) * 2
-            
-            ellipse = Ellipse(mean, width, height, angle=angle,
-                             facecolor=colors[i], alpha=0.3,
-                             edgecolor=colors[i], linewidth=2)
-            ax.add_patch(ellipse)
-            
-            # Mark center
-            ax.scatter(mean[0], mean[1], c='red', s=100, marker='x')
+fig, ax = plt.subplots(figsize=(9, 3.8), layout="constrained")
+ax.plot(criteria.index, criteria["bic"], marker="o", color="#667eea", label="BIC")
+ax.plot(criteria.index, criteria["aic"], marker="s", color="gray", label="AIC")
+ax.axvline(5, color="black", linestyle="--", linewidth=1, label="k = 5")
+ax.set_xlabel("Number of components")
+ax.set_ylabel("Criterion (lower is better)")
+ax.set_title("BIC and AIC: big gains up to 5 components, small ones after")
+ax.legend()
+plt.show()</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>       bic      aic  converged  bic_drop
+k
+1  66641.0  66547.0       True       NaN
+2  52398.0  52204.0       True   14243.0
+3  48267.0  47972.0       True    4131.0
+4  45391.0  44996.0       True    2876.0
+5  43175.0  42679.0       True    2216.0
+6  42990.0  42394.0       True     185.0
+7  42803.0  42107.0       True     187.0
+8  42300.0  41502.0       True     504.0</code></pre>
+                    </div>
+                    <figure>
+                        <img src="images/clustering_gaussian_mixture_bic.png" alt="Line chart of BIC and AIC for 1 to 8 components. Both fall steeply from about 66,000 at one component to about 43,000 at five, then flatten into a slow decline through eight components. A dashed vertical line marks five components." width="990" height="418" loading="lazy">
+                        <figcaption>Each step up to five components cuts BIC by thousands. After five the drops are a few hundred: the extra components are polishing shapes rather than finding new groups.</figcaption>
+                    </figure>
+                    <p>BIC never reaches a minimum in this range: it keeps creeping down. Read the <code>bic_drop</code> column instead. Every step up to 5 components improves BIC by thousands; from 5 to 6 the gain is under 200, and later steps add only a few hundred each. That pattern says five main groups, with real customer data being a little less bell-shaped than the model assumes. Step 5 checks what a sixth component would add.</p>
+                </div>
 
-# Create and demonstrate GMM
-gmm_demo = GMMDemo()
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Fit five components and profile them <span class="step-time">(10 min)</span></h3>
+                    <p>Fit the chosen model, then describe each component in original units with its churn rate, which was not used for fitting.</p>
+                    <pre><code class="language-python">gm5 = GaussianMixture(n_components=5, n_init=3, random_state=42).fit(Z)
+proba = gm5.predict_proba(Z)
+customers["component"] = proba.argmax(axis=1)
+customers["confidence"] = proba.max(axis=1)
 
-# Generate data
-print("Generating mixed Gaussian data...")
-X, y_true = gmm_demo.generate_mixed_data(n_samples=600)
+profile = customers.groupby("component").agg(
+    customers=("customer_id", "size"),
+    orders=("orders_12m", "mean"),
+    order_value=("avg_order_value", "mean"),
+    discount=("discount_share", "mean"),
+    returns=("return_rate", "mean"),
+    churn=("churned", "mean"),
+).round(2)
+profile["weight"] = gm5.weights_.round(3)
+print(profile)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>           customers  orders  order_value  discount  returns  churn  weight
+component
+0               1317    5.42        64.14      0.50     0.08   0.30   0.220
+1               1316    8.82        86.65      0.09     0.04   0.04   0.222
+2               1287    1.81        96.19      0.14     0.06   0.20   0.205
+3                975    6.42       159.79      0.17     0.25   0.11   0.168
+4               1105    2.47       332.52      0.11     0.05   0.16   0.185</code></pre>
+                    </div>
+                    <p>The five components are easy to name: component 0 is the Deal Hunters (half of spend discounted, churn 30%), 1 the frequent, low-value Trail Regulars (churn 4%), 2 the Casual Campers who order once or twice a year, 3 the Gear Testers who return a quarter of what they buy, and 4 the Big-Trip Planners with a couple of large orders a year. These are the five segments of Lesson 8.2 and the dense cores you found with HDBSCAN in Lesson 8.4, but now every customer is assigned, and the weights (the model's share for each component) are close to the actual counts.</p>
+                    <p>Give them names so that nothing depends on the arbitrary numbers:</p>
+                    <pre><code class="language-python">names = {0: "Deal Hunters", 1: "Trail Regulars", 2: "Casual Campers", 3: "Gear Testers", 4: "Big-Trip Planners"}
+customers["segment"] = customers["component"].map(names)
+print(customers["segment"].value_counts())</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>segment
+Deal Hunters         1317
+Trail Regulars       1316
+Casual Campers       1287
+Big-Trip Planners    1105
+Gear Testers          975
+Name: count, dtype: int64</code></pre>
+                    </div>
+                </div>
 
-# Fit GMM
-print("Fitting Gaussian Mixture Model...")
-labels, proba = gmm_demo.fit_gmm(X, n_components=3)
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Find the borderline customers <span class="step-time">(5 min)</span></h3>
+                    <p>How sure is the model? Look at the distribution of the top probability, then at a few of the least certain customers and their two most likely segments.</p>
+                    <pre><code class="language-python">print(customers["confidence"].describe(percentiles=[0.05, 0.1, 0.25, 0.5]).round(3))
+print("customers below 0.8 confidence:", (customers["confidence"] &lt; 0.8).sum())
 
-# Visualize results
-print("Visualizing results...")
-gmm_demo.visualize_results(X, labels, proba, y_true)
+second = np.argsort(proba, axis=1)[:, -2]
+customers["runner_up"] = pd.Series(second, index=customers.index).map(names)
+borderline = customers.nsmallest(5, "confidence")
+print(borderline[["orders_12m", "avg_order_value", "discount_share", "return_rate",
+                  "segment", "runner_up", "confidence"]].round(2))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>count    6000.000
+mean        0.968
+std         0.083
+min         0.376
+5%          0.797
+10%         0.923
+25%         0.980
+50%         0.999
+max         1.000
+Name: confidence, dtype: float64
+customers below 0.8 confidence: 305
+      orders_12m  avg_order_value  discount_share  return_rate         segment          runner_up  confidence
+4920           3           134.96            0.09         0.01  Casual Campers  Big-Trip Planners        0.38
+3540           7            72.70            0.17         0.11  Trail Regulars       Gear Testers        0.39
+2053           6            81.36            0.18         0.11    Gear Testers       Deal Hunters        0.40
+796            2           152.92            0.06         0.12  Casual Campers  Big-Trip Planners        0.43
+2778           6            67.02            0.18         0.09    Deal Hunters     Trail Regulars        0.45</code></pre>
+                    </div>
+                    <p>Most customers are assigned with near certainty (the median confidence rounds to 1.0, and three-quarters are above 0.98), but 305 sit below 0.8. The least certain ones are torn between two segments: a Casual Camper with a fairly large order value looks partly like a Big-Trip Planner, and a Trail Regular with high returns looks partly like a Gear Tester. They mix two behaviors. Those are the customers to leave out of a narrowly targeted campaign.</p>
+                </div>
 
-# Print model parameters
-print("\nModel Parameters:")
-print(f"Means:\n{gmm_demo.model.means_}")
-print(f"\nWeights: {gmm_demo.model.weights_}")
-print(f"\nConverged: {gmm_demo.model.converged_}")</code></pre>
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: What would a sixth component add? <span class="step-time">(5 min)</span></h3>
+                    <p>Fit six components and cross-tabulate them against the five named segments.</p>
+                    <pre><code class="language-python">gm6 = GaussianMixture(n_components=6, n_init=3, random_state=42).fit(Z)
+customers["component6"] = gm6.predict(Z)
+print(pd.crosstab(customers["segment"], customers["component6"]))
+print(customers.groupby("component6")[["discount_share", "return_rate", "churned"]].mean().round(2))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>component6           0     1     2     3    4    5
+segment
+Big-Trip Planners    0     0     0  1105    0    0
+Casual Campers      15  1270     2     0    0    0
+Deal Hunters       660     2     1     0    3  651
+Gear Testers         5     0     0     0  967    3
+Trail Regulars       7     0  1290     0   19    0
+            discount_share  return_rate  churned
+component6
+0                     0.44         0.05     0.26
+1                     0.14         0.06     0.20
+2                     0.09         0.03     0.04
+3                     0.11         0.05     0.16
+4                     0.17         0.25     0.11
+5                     0.55         0.11     0.35</code></pre>
+                    </div>
+                    <p>The sixth component splits the Deal Hunters into two groups: one with a discount share around 0.44 and one around 0.55 that also returns more and churns more (35% against 26%). Is that a new segment or a finer description of one? It is a business question, not a statistical one. If the retention team would treat heavy and very heavy discount users differently, six is useful; if not, five is simpler to explain. Write down which you would choose and why.</p>
+                </div>
 
-        <h2>Covariance Types Comparison</h2>
-        
-        <pre class="language-python"><code>def compare_covariance_types(X):
-    """
-    Compare different covariance types in GMM
-    """
-    covariance_types = ['spherical', 'diag', 'tied', 'full']
-    n_components = 3
-    
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    axes = axes.flatten()
-    
-    for idx, cov_type in enumerate(covariance_types):
-        # Fit GMM
-        gmm = GaussianMixture(
-            n_components=n_components,
-            covariance_type=cov_type,
-            random_state=42
-        )
-        gmm.fit(X)
-        
-        # Predict
-        labels = gmm.predict(X)
-        
-        # Plot
-        axes[idx].scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis',
-                         alpha=0.5, s=30)
-        
-        # Draw ellipses
-        gmm_demo.draw_ellipses(axes[idx], gmm)
-        
-        # Calculate BIC for model selection
-        bic = gmm.bic(X)
-        aic = gmm.aic(X)
-        
-        axes[idx].set_title(f'{cov_type.capitalize()}\nBIC: {bic:.0f}, AIC: {aic:.0f}')
-        axes[idx].set_xlabel('Feature 1')
-        axes[idx].set_ylabel('Feature 2')
-        axes[idx].grid(True, alpha=0.3)
-    
-    plt.suptitle('GMM Covariance Types Comparison', fontsize=14)
-    plt.tight_layout()
-    plt.show()
-    
-    # Print comparison
-    print("\nCovariance Types Explanation:")
-    print("-" * 50)
-    print("Spherical: Each component has single variance (like K-means)")
-    print("Diagonal: Each component has diagonal covariance (axis-aligned)")
-    print("Tied: All components share the same covariance matrix")
-    print("Full: Each component has its own full covariance matrix")
-    print("\nLower BIC/AIC indicates better model fit")
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Score new customers and save <span class="step-time">(5 min)</span></h3>
+                    <p>Unlike the density methods of Lesson 8.4, a mixture can <code>predict</code> for customers it has never seen. Score two made-up new customers through the same scaler, then save the segments.</p>
+                    <pre><code class="language-python">new_customers = pd.DataFrame({
+    "orders_12m": [9, 3],
+    "avg_order_value": [80.0, 150.0],
+    "discount_share": [0.08, 0.35],
+    "return_rate": [0.02, 0.10],
+})
+new_proba = gm5.predict_proba(scaler.transform(new_customers))
+print(pd.DataFrame(new_proba, columns=[names[k] for k in range(5)]).round(3))
 
-# Compare covariance types
-print("\n" + "=" * 50)
-print("COMPARING COVARIANCE TYPES")
-print("=" * 50)
-compare_covariance_types(X)</code></pre>
+out = customers[["customer_id", "segment", "confidence", "runner_up"]].round(3)
+out.to_csv("customer_soft_segments.csv", index=False)
+print(len(out), "rows saved; borderline (below 0.8):", (out["confidence"] &lt; 0.8).sum())</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>   Deal Hunters  Trail Regulars  Casual Campers  Gear Testers  Big-Trip Planners
+0           0.0           0.999           0.000         0.001              0.000
+1           0.0           0.000           0.271         0.700              0.029
+6000 rows saved; borderline (below 0.8): 305</code></pre>
+                    </div>
+                    <p>The first new customer is unmistakably a Trail Regular. The second, with three medium-sized orders, a third of spend discounted and some returns, is most likely a Gear Tester but with a real chance of being a Casual Camper: an honest answer for a customer who looks like nobody's typical member.</p>
+                </div>
 
-        <h2>Model Selection: Finding Optimal Components</h2>
-        
-        <div class="mermaid">
-        flowchart TB
-            A[Dataset] --> B[Try Different K]
-            B --> C[K=2]
-            B --> D[K=3]
-            B --> E[K=4]
-            B --> F[K=5]
-            
-            C --> G[Calculate BIC/AIC]
-            D --> G
-            E --> G
-            F --> G
-            
-            G --> H{Select Best K}
-            H --> I[Lowest BIC]
-            H --> J[Elbow Method]
-            H --> K[Domain Knowledge]
-            
-            I --> L[Final Model]
-            
-            style A fill:#e3f2fd
-            style L fill:#c8e6c9
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>You compared 1 to 8 components with BIC and AIC and can explain why you chose five even though BIC kept falling</li>
+                        <li>Your profile table shows five named segments with sizes, behavior, weights and churn rates</li>
+                        <li>Segments are named by profile, not by component number</li>
+                        <li>You found the borderline customers (confidence below 0.8) and their runner-up segments</li>
+                        <li>You decided whether a sixth component is worth having, and wrote down why</li>
+                        <li><code>customer_soft_segments.csv</code> holds 6,000 rows with segment, confidence and runner-up</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
+
+                <p>These continue from the project notebook, so <code>Z</code>, <code>customers</code>, <code>scaler</code> and <code>gm5</code> already exist.</p>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Covariance Types on Real Customers</h3>
+                    <p>Fit five-component mixtures to <code>Z</code> with each of the four covariance types (one start each to keep it quick) and print the BIC. Which type wins, and what does that tell you about the customer segments' shapes?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Loop over <code>["spherical", "diag", "tied", "full"]</code> as in the Covariance Types section. Ask whether segments with different shapes could share one covariance.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">for cov in ["spherical", "diag", "tied", "full"]:
+    gm = GaussianMixture(n_components=5, covariance_type=cov, random_state=42).fit(Z)
+    print(f"{cov:10s} BIC {gm.bic(Z):9.0f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>spherical  BIC     51144
+diag       BIC     43002
+tied       BIC     51477
+full       BIC     43175</code></pre>
+                        </div>
+                        <p><code>"diag"</code> wins narrowly over <code>"full"</code>, and both beat the shared and round types by thousands. The segments have different spreads (the Deal Hunters vary a lot in discount share, the Trail Regulars hardly at all), so a single tied shape fits badly. Within a segment the four features are nearly independent, so the extra correlation terms of <code>"full"</code> barely pay for themselves. Either is a reasonable choice; the project kept the default.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: How Uncertain Is Each Segment?</h3>
+                    <p>Using the project's <code>customers</code> table, compute for each segment the share of its customers with confidence below 0.8. Which segment has the fuzziest boundary, and does that make sense from the profiles?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Create a boolean column <code>customers["confidence"] &lt; 0.8</code> and take its mean per segment with <code>groupby</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">uncertain = (customers["confidence"] &lt; 0.8).groupby(customers["segment"]).mean()
+print(uncertain.sort_values(ascending=False).round(3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>segment
+Casual Campers       0.075
+Trail Regulars       0.070
+Gear Testers         0.049
+Deal Hunters         0.037
+Big-Trip Planners    0.017
+Name: confidence, dtype: float64</code></pre>
+                        </div>
+                        <p>Casual Campers and Trail Regulars have the fuzziest boundaries. Both have low discounts and low returns and differ mainly in how often they order, so a customer with a middling order count sits between them. Big-Trip Planners are the clearest, because their order value is far from everyone else's. Fuzzy segments are the ones to describe cautiously in a report.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Synthetic Customers</h3>
+                    <p>Draw 2,000 synthetic customers from <code>gm5</code> with <code>sample</code>, convert them back to original units with <code>scaler.inverse_transform</code>, and compare their means with the real customers' means. Then count how many synthetic customers have an impossible value: a discount share or return rate below 0, or fewer than 1 order.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>sample</code> returns a NumPy array; wrap it in a DataFrame with the scaled column names before calling <code>inverse_transform</code>, so the pandas output keeps the names. Seed it through the model: <code>gm5.random_state</code> is 42, so the draw is repeatable.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">fake_scaled, _ = gm5.sample(2000)
+fake = scaler.inverse_transform(pd.DataFrame(fake_scaled, columns=Z.columns))
+fake = pd.DataFrame(fake, columns=features)
+
+print(pd.DataFrame({"real": customers[features].mean(), "synthetic": fake.mean()}).round(3))
+checks = pd.DataFrame({"negative discount": fake["discount_share"] &lt; 0,
+                       "negative returns": fake["return_rate"] &lt; 0,
+                       "under 1 order": fake["orders_12m"] &lt; 1})
+print(checks.sum())
+impossible = checks.any(axis=1)
+print("impossible synthetic customers:", impossible.sum(), f"({impossible.mean():.1%})")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>                    real  synthetic
+orders_12m         5.011      5.095
+avg_order_value  140.922    143.082
+discount_share     0.208      0.207
+return_rate        0.086      0.088
+negative discount     74
+negative returns     161
+under 1 order         38
+dtype: int64
+impossible synthetic customers: 262 (13.1%)</code></pre>
+                        </div>
+                        <p>The averages match closely, because the mixture describes the overall distribution well. But about one synthetic customer in eight is impossible: Gaussians have tails on both sides, while a return rate stops at zero. That is the general caveat for a GMM: it is a good summary, not a faithful simulator, of bounded or whole-number data.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 4: The Least Typical Customers (Stretch)</h3>
+                    <p>Use <code>gm5.score_samples(Z)</code> to find the 1% of customers (60) with the lowest log-density. Profile them against everyone else (the means of the four features and the churn rate). What makes a customer atypical in this model? This is a preview of Lesson 8.6.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Add the scores as a column, flag the 60 lowest with <code>nsmallest</code>, and compare the two groups with <code>groupby</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">customers["log_density"] = gm5.score_samples(Z)
+lowest = customers.nsmallest(60, "log_density").index
+customers["atypical"] = customers.index.isin(lowest)
+
+print(customers.groupby("atypical")[features + ["churned"]].mean().round(3))
+print(customers.loc[lowest, "segment"].value_counts().head(3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>          orders_12m  avg_order_value  discount_share  return_rate  churned
+atypical
+False          4.987          140.187           0.207        0.086    0.165
+True           7.433          213.694           0.312        0.180    0.167
+segment
+Gear Testers         26
+Big-Trip Planners    16
+Deal Hunters         11
+Name: count, dtype: int64</code></pre>
+                        </div>
+                        <p>The least typical customers order more, spend more per order, take more discounts and return about twice as much as everyone else, and most come from the Gear Tester and Big-Trip Planner segments. Yet their churn rate is the same as everyone else's. They are not necessarily bad customers, just unusual ones, which is the key idea of the next lesson: an anomaly score finds the unusual, and a human (or labeled data) decides whether unusual means a problem.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> A fitted three-component mixture gives one customer <code>predict_proba</code> of <code>[0.48, 0.47, 0.05]</code>. What is the best way to use this?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="0.48 is the largest number, but is the model confident? Compare it with the second number.">
+                                A) Assign the customer to component 0, since that is what <code>predict</code> returns
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The numbers come from the fitted model, not from a mistake. What does a near-even split between two components describe?">
+                                B) Refit the model, because the probabilities should be close to 0 or 1
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The customer is almost equally like components 0 and 1, so the hard label is close to a coin flip. Keep the probabilities, flag the customer as borderline, and avoid decisions that depend on the exact segment.">
+                                C) Treat the customer as borderline between components 0 and 1
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> Why can a full-covariance Gaussian mixture separate stretched, tilted clusters that K-Means cuts across?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Each full-covariance component is an ellipse with its own spread and tilt, so the probability boundaries follow the shape of each group. K-Means assigns points to the nearest center, which assumes round clusters of similar size.">
+                                A) Each component can be an ellipse with its own spread and orientation
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="scikit-learn starts EM from K-Means by default. Is the starting point what makes the difference, or the shape each component can take?">
+                                B) It starts from a better initialization than K-Means
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Both methods were given the same number of clusters in the lesson. What can a Gaussian component do that a K-Means center cannot?">
+                                C) It chooses the number of clusters automatically
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> BIC for 1 to 8 components is 66,641, 52,398, 48,267, 45,391, 43,175, 42,990, 42,803, 42,300. What is the most sensible reading?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Lower BIC is better, but look at how big each improvement is. Where do the large drops stop?">
+                                A) Use 8 components, because BIC is lowest there
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The drops are thousands of points up to 5 components and only a few hundred after that. The later components mostly refine the shapes of non-Gaussian clusters. Choose around 5, then check whether a sixth component means something useful.">
+                                B) About 5 components: the big improvements stop there
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="BIC compares models on the same data and is valid here. The question is how to read a curve without a clear minimum.">
+                                C) BIC cannot be used, because it never reaches a minimum
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> What does this print?</p>
+                        <pre><code class="language-python">quiz_gm = GaussianMixture(n_components=2, random_state=42).fit([[0.0], [0.2], [10.0], [10.2]])
+print(quiz_gm.predict_proba([[5.1]]).sum().round(2))</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The point is halfway between the groups, but what do the probabilities in one row always add up to?">
+                                A) <code>0.5</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="predict_proba returns one probability per component, and the probabilities in each row always add up to 1, however far the point is from the components. How typical a point is comes from score_samples, not predict_proba.">
+                                B) <code>1.0</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A point far from both components still gets probabilities. What does predict_proba guarantee about each row?">
+                                C) <code>0.0</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> You want to flag customers who look unlike all of your segments. Which output of a fitted mixture is the right tool?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="A customer far from every component still gets probabilities that add up to 1, possibly 0.99 for the nearest one. Which method measures how typical the point is?">
+                                A) The maximum of <code>predict_proba</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The weights describe each component's share of the whole data set, not anything about an individual customer.">
+                                B) <code>weights_</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="score_samples gives the log-density of each point under the whole mixture. Points far from every component get very low values, even when predict_proba is confident about which component is nearest. That makes it an anomaly score.">
+                                C) <code>score_samples</code>, flagging the lowest log-densities
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>My data is not bell-shaped. Can I still use a Gaussian mixture?</summary>
+                    <p>Often, yes. A mixture of several Gaussians can approximate many shapes, which is why BIC kept asking for more components on the customer data. The cost is that components then describe pieces of a shape rather than meaningful groups. Transformations help: a log for skewed amounts often makes clusters more bell-shaped. For bounded or whole-number features, remember that the model is an approximation (Exercise 3).</p>
+                </details>
+                <details>
+                    <summary>Are the probabilities from <code>predict_proba</code> real-world probabilities?</summary>
+                    <p>They are probabilities <em>under the model</em>: if the data really were a mixture of these Gaussians, this is how likely each component would be. They are excellent for ranking customers by confidence. Do not read "0.8 regular" as "an 80% chance this person behaves like a regular next year" without checking.</p>
+                </details>
+                <details>
+                    <summary>Should I use a mixture or K-Means for segmentation?</summary>
+                    <p>K-Means is simpler, faster and easier to explain, and on well-separated round clusters it gives nearly the same answer. Use a mixture when clusters are stretched or have different spreads, when you want confidence for each customer, or when you want a density for anomaly scoring.</p>
+                </details>
+                <details>
+                    <summary>What is <code>BayesianGaussianMixture</code>?</summary>
+                    <p>A variant in <code>sklearn.mixture</code> that puts a prior on the weights, so it can switch off components it does not need: you give it an upper limit on the number of components and it shrinks the weights of the unnecessary ones toward zero. It is a useful alternative to a BIC sweep, with its own setting (<code>weight_concentration_prior</code>) that influences how many components survive.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Compare your soft segments with the HDBSCAN result from Lesson 8.4. Refit the HDBSCAN project (or load <code>customer_density_segments.csv</code> if you saved it), merge on <code>customer_id</code>, and answer: what share of HDBSCAN's misfits have confidence below 0.8 in the mixture? Are the misfits mostly borderline customers (between two segments) or atypical ones (far from all segments, low <code>score_samples</code>)? Write a short paragraph for the marketing team that explains the difference.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Explain the paint-palette picture in your own words, then describe the difference between a borderline customer (low confidence) and an atypical customer (low density) with one example of each from your project. Which of the two would you want a marketing team to know about, and why?</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>A Gaussian mixture models the data as a weighted sum of Gaussian components, each with a mean, a covariance and a weight</li>
+                        <li>EM alternates between soft assignments (E-step) and refitting the components (M-step); use <code>n_init</code> and <code>random_state</code></li>
+                        <li><code>predict_proba</code> gives each point's membership probabilities; keep the top probability as a confidence instead of stopping at <code>predict</code></li>
+                        <li>Full or tied covariances fit stretched, tilted clusters that K-Means cuts across; compare covariance types with BIC</li>
+                        <li>BIC (lower is better) and AIC choose the number of components; on real data look for where the big drops stop, then judge whether the next component is useful</li>
+                        <li>Component numbers are arbitrary: name segments by profile</li>
+                        <li>A mixture is a density model: <code>score_samples</code> scores how typical a point is, and <code>sample</code> generates synthetic data</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You recovered hidden groups from a one-dimensional mixture and read soft memberships</li>
+                        <li>You showed that a mixture separates stretched clusters K-Means cannot, and let BIC pick the right covariance type</li>
+                        <li>You chose five customer segments from a BIC curve without a minimum, and justified it</li>
+                        <li>You gave every Pinecrest customer a segment, a confidence and a runner-up, and identified the borderline ones</li>
+                        <li>You scored new customers with a model that, unlike HDBSCAN, can <code>predict</code></li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="applications_anomaly_detection.html"><strong>Lesson 8.6: Anomaly Detection</strong></a> you will turn "how typical is this point?" into a tool for catching payment fraud. You will compare simple statistical rules, a Gaussian density, Isolation Forest and Local Outlier Factor on Pinecrest's transactions, and see how far an unsupervised detector gets against a supervised model when only a few frauds are labeled.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>customer_soft_segments.csv</code>; customer segments are one of the problems you can choose for the Lesson 13.2 capstone.</li>
+                    <li>Look at <code>data/transactions.csv</code>: 50,000 payments. How many are labeled fraud, and what do you think a "normal" transaction looks like?</li>
+                    <li>Think of one situation where "unusual" is good news and one where it is bad news.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You just moved from labels to probabilities, which is one of the most important shifts in machine learning. A model that says "I'm not sure about this one" is more useful, and more honest, than one that is always certain. If BIC curves and covariance types still feel slippery, that is fine: you have seen each of them do something concrete today, and they will keep coming back. Well done.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="clustering_dbscan.html" class="prev-lesson">← Previous: Density-Based Clustering</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="applications_anomaly_detection.html" class="next-lesson">Next: Anomaly Detection →</a>
+            </nav>
         </div>
-
-        <pre class="language-python"><code>def find_optimal_components(X, max_components=10):
-    """
-    Find optimal number of components using BIC and AIC
-    """
-    n_components_range = range(1, max_components + 1)
-    bic_scores = []
-    aic_scores = []
-    
-    for n in n_components_range:
-        gmm = GaussianMixture(
-            n_components=n,
-            covariance_type='full',
-            random_state=42
-        )
-        gmm.fit(X)
-        bic_scores.append(gmm.bic(X))
-        aic_scores.append(gmm.aic(X))
-    
-    # Plot scores
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    
-    # BIC scores
-    ax1.plot(n_components_range, bic_scores, 'bo-', linewidth=2, markersize=8)
-    ax1.set_xlabel('Number of Components')
-    ax1.set_ylabel('BIC Score')
-    ax1.set_title('BIC Score vs Number of Components')
-    ax1.grid(True, alpha=0.3)
-    
-    # Mark minimum
-    min_bic_idx = np.argmin(bic_scores)
-    ax1.axvline(x=n_components_range[min_bic_idx], color='red', 
-                linestyle='--', label=f'Best: {n_components_range[min_bic_idx]}')
-    ax1.legend()
-    
-    # AIC scores
-    ax2.plot(n_components_range, aic_scores, 'go-', linewidth=2, markersize=8)
-    ax2.set_xlabel('Number of Components')
-    ax2.set_ylabel('AIC Score')
-    ax2.set_title('AIC Score vs Number of Components')
-    ax2.grid(True, alpha=0.3)
-    
-    # Mark minimum
-    min_aic_idx = np.argmin(aic_scores)
-    ax2.axvline(x=n_components_range[min_aic_idx], color='red',
-                linestyle='--', label=f'Best: {n_components_range[min_aic_idx]}')
-    ax2.legend()
-    
-    plt.suptitle('Model Selection: Optimal Number of Components', fontsize=14)
-    plt.tight_layout()
-    plt.show()
-    
-    print(f"Optimal components by BIC: {n_components_range[min_bic_idx]}")
-    print(f"Optimal components by AIC: {n_components_range[min_aic_idx]}")
-    
-    return n_components_range[min_bic_idx]
-
-# Find optimal number of components
-print("\n" + "=" * 50)
-print("MODEL SELECTION")
-print("=" * 50)
-optimal_k = find_optimal_components(X, max_components=8)</code></pre>
-
-        <h2>GMM for Density Estimation</h2>
-        
-        <pre class="language-python"><code>class DensityEstimation:
-    """
-    Use GMM for probability density estimation
-    """
-    
-    def __init__(self):
-        self.gmm = None
-        
-    def fit_density_model(self, X, n_components):
-        """
-        Fit GMM for density estimation
-        """
-        self.gmm = GaussianMixture(
-            n_components=n_components,
-            covariance_type='full',
-            random_state=42
-        )
-        self.gmm.fit(X)
-        
-    def plot_density_contours(self, X):
-        """
-        Plot density contours from GMM
-        """
-        # Create mesh
-        h = 0.1
-        x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
-        y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
-        xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
-                            np.arange(y_min, y_max, h))
-        
-        # Calculate log probability for each point in mesh
-        mesh_points = np.c_[xx.ravel(), yy.ravel()]
-        log_prob = self.gmm.score_samples(mesh_points)
-        log_prob = log_prob.reshape(xx.shape)
-        
-        # Plot
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Density contours
-        contour = ax1.contourf(xx, yy, np.exp(log_prob), levels=20, cmap='YlOrRd')
-        ax1.scatter(X[:, 0], X[:, 1], c='black', s=10, alpha=0.5)
-        ax1.set_title('Probability Density Estimation')
-        ax1.set_xlabel('Feature 1')
-        ax1.set_ylabel('Feature 2')
-        plt.colorbar(contour, ax=ax1, label='Density')
-        
-        # Log probability
-        contour2 = ax2.contour(xx, yy, log_prob, levels=15, colors='black', alpha=0.4)
-        ax2.scatter(X[:, 0], X[:, 1], c=self.gmm.predict(X), 
-                   cmap='viridis', s=30, alpha=0.7)
-        ax2.set_title('Log Probability Contours')
-        ax2.set_xlabel('Feature 1')
-        ax2.set_ylabel('Feature 2')
-        ax2.clabel(contour2, inline=True, fontsize=8)
-        
-        plt.suptitle('GMM for Density Estimation', fontsize=14)
-        plt.tight_layout()
-        plt.show()
-    
-    def detect_outliers(self, X, threshold_percentile=5):
-        """
-        Detect outliers using GMM density estimation
-        """
-        # Get log probabilities
-        log_prob = self.gmm.score_samples(X)
-        
-        # Set threshold
-        threshold = np.percentile(log_prob, threshold_percentile)
-        
-        # Identify outliers
-        outliers = log_prob < threshold
-        
-        # Visualize
-        plt.figure(figsize=(10, 6))
-        plt.scatter(X[~outliers, 0], X[~outliers, 1], 
-                   c='blue', label='Normal', alpha=0.6, s=30)
-        plt.scatter(X[outliers, 0], X[outliers, 1],
-                   c='red', label='Outliers', s=50, marker='x')
-        plt.xlabel('Feature 1')
-        plt.ylabel('Feature 2')
-        plt.title(f'Outlier Detection using GMM\n({np.sum(outliers)} outliers detected)')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.show()
-        
-        return outliers
-
-# Demonstrate density estimation
-print("\n" + "=" * 50)
-print("DENSITY ESTIMATION WITH GMM")
-print("=" * 50)
-
-density_estimator = DensityEstimation()
-density_estimator.fit_density_model(X, n_components=3)
-
-print("Plotting density contours...")
-density_estimator.plot_density_contours(X)
-
-print("\nDetecting outliers...")
-outliers = density_estimator.detect_outliers(X, threshold_percentile=5)
-print(f"Found {np.sum(outliers)} outliers ({np.sum(outliers)/len(X)*100:.1f}% of data)")</code></pre>
-
-        <h2>GMM vs K-means Practical Comparison</h2>
-        
-        <pre class="language-python"><code>from sklearn.cluster import KMeans
-
-def compare_gmm_kmeans():
-    """
-    Compare GMM and K-means on different datasets
-    """
-    # Generate different types of data
-    datasets = {}
-    
-    # Dataset 1: Well-separated spherical clusters
-    X1, y1 = make_blobs(n_samples=300, centers=3, n_features=2,
-                        cluster_std=0.5, random_state=42)
-    datasets['Well-separated'] = (X1, y1)
-    
-    # Dataset 2: Overlapping clusters
-    X2, y2 = make_blobs(n_samples=300, centers=3, n_features=2,
-                        cluster_std=1.5, random_state=42)
-    datasets['Overlapping'] = (X2, y2)
-    
-    # Dataset 3: Different variances
-    X3 = np.vstack([
-        np.random.multivariate_normal([0, 0], [[0.1, 0], [0, 0.1]], 100),
-        np.random.multivariate_normal([2, 2], [[1, 0], [0, 1]], 100),
-        np.random.multivariate_normal([-2, 2], [[0.5, 0.3], [0.3, 0.5]], 100)
-    ])
-    y3 = np.hstack([np.zeros(100), np.ones(100), np.ones(100)*2])
-    datasets['Different Variances'] = (X3, y3)
-    
-    # Compare on each dataset
-    fig, axes = plt.subplots(3, 3, figsize=(15, 12))
-    
-    for row, (name, (X_data, y_data)) in enumerate(datasets.items()):
-        # Standardize data
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X_data)
-        
-        # True clusters
-        axes[row, 0].scatter(X_scaled[:, 0], X_scaled[:, 1], 
-                           c=y_data, cmap='viridis', s=30, alpha=0.7)
-        axes[row, 0].set_title(f'{name}\nTrue Clusters')
-        
-        # K-means
-        kmeans = KMeans(n_clusters=3, random_state=42)
-        kmeans_labels = kmeans.fit_predict(X_scaled)
-        axes[row, 1].scatter(X_scaled[:, 0], X_scaled[:, 1],
-                           c=kmeans_labels, cmap='viridis', s=30, alpha=0.7)
-        axes[row, 1].set_title('K-means')
-        
-        # GMM
-        gmm = GaussianMixture(n_components=3, covariance_type='full', random_state=42)
-        gmm_labels = gmm.fit_predict(X_scaled)
-        axes[row, 2].scatter(X_scaled[:, 0], X_scaled[:, 1],
-                           c=gmm_labels, cmap='viridis', s=30, alpha=0.7)
-        axes[row, 2].set_title('GMM')
-    
-    # Set labels
-    for ax in axes.flat:
-        ax.set_xlabel('Feature 1')
-        ax.set_ylabel('Feature 2')
-        ax.grid(True, alpha=0.3)
-    
-    plt.suptitle('GMM vs K-means Comparison', fontsize=14)
-    plt.tight_layout()
-    plt.show()
-
-# Run comparison
-print("\n" + "=" * 50)
-print("GMM VS K-MEANS COMPARISON")
-print("=" * 50)
-compare_gmm_kmeans()</code></pre>
-
-        <h2>Best Practices</h2>
-        
-        <div class="summary-box">
-            <h3>🎯 GMM Guidelines</h3>
-            <ul>
-                <li><strong>Feature Scaling:</strong> Standardize features before fitting GMM</li>
-                <li><strong>Initialization:</strong> Use k-means initialization for stability</li>
-                <li><strong>Covariance Type:</strong> Start with 'full', try simpler types for speed</li>
-                <li><strong>Model Selection:</strong> Use BIC/AIC for choosing number of components</li>
-                <li><strong>Convergence:</strong> Check convergence and increase iterations if needed</li>
-                <li><strong>Singularities:</strong> Add regularization if covariance becomes singular</li>
-                <li><strong>Interpretability:</strong> Examine component parameters for insights</li>
-                <li><strong>Outlier Detection:</strong> Use low probability threshold for anomalies</li>
-            </ul>
-        </div>
-
-        <h2>Practice Exercises</h2>
-        
-        <div class="exercise-card">
-            <h3>Exercise 1: Customer Segmentation with GMM</h3>
-            <p>Build a customer segmentation system using GMM:</p>
-            <ul>
-                <li>Load customer purchase data</li>
-                <li>Select optimal number of segments using BIC</li>
-                <li>Compare different covariance types</li>
-                <li>Interpret segment characteristics</li>
-                <li>Calculate customer probability for each segment</li>
-            </ul>
-        </div>
-
-        <div class="exercise-card">
-            <h3>Exercise 2: Image Segmentation</h3>
-            <p>Use GMM for image color segmentation:</p>
-            <ul>
-                <li>Load an image and extract RGB values</li>
-                <li>Fit GMM to color space</li>
-                <li>Segment image into regions</li>
-                <li>Compare with K-means segmentation</li>
-            </ul>
-        </div>
-
-        <h2>Summary</h2>
-        
-        <div class="summary-box">
-            <h3>✅ You've Learned</h3>
-            <ul>
-                <li>GMM fundamentals and probabilistic clustering</li>
-                <li>Difference between hard and soft clustering</li>
-                <li>EM algorithm for parameter estimation</li>
-                <li>Different covariance types and their effects</li>
-                <li>Model selection using BIC and AIC</li>
-                <li>Using GMM for density estimation and outlier detection</li>
-                <li>When to use GMM vs K-means</li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> GMM gives each point a probability of belonging to each cluster
-            rather than a single hard label. When has a "soft" answer ("70% this, 30% that") described reality better than
-            forcing a single category — and why might that matter for clustering?</p>
-        </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>A Gaussian Mixture Model represents data as a weighted sum of Gaussian components, each with its own mean and covariance.</li>
-                <li>It is fit with the Expectation-Maximization (EM) algorithm, which alternates soft assignments and parameter updates.</li>
-                <li>Unlike K-means' hard assignments, GMM gives each point a probability of membership in every cluster, and its covariances allow elliptical clusters.</li>
-                <li>Choose the number of components with information criteria (AIC/BIC) rather than guessing.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now fit a Gaussian Mixture Model, interpret its soft probabilistic assignments, select the right number
-        of components and covariance type, and use the fitted model for both clustering and density estimation.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>How is GMM different from K-means?</summary>
-            <p>K-means makes hard assignments and effectively assumes spherical, equal-size clusters. GMM makes soft,
-            probabilistic assignments and models each cluster's shape via a covariance matrix, so it handles elliptical, overlapping clusters.</p>
-        </details>
-        <details>
-            <summary>How many components should I use?</summary>
-            <p>Fit GMMs across a range of component counts and compare AIC or BIC; the value that minimizes the criterion
-            balances fit against complexity. Domain knowledge and validation on downstream tasks also help.</p>
-        </details>
-        <details>
-            <summary>What does the covariance type control?</summary>
-            <p>It sets how flexible each cluster's shape can be — from <code>spherical</code> (circular) through
-            <code>diag</code> and <code>tied</code> to <code>full</code> (arbitrary ellipses). More flexibility fits complex data but needs more samples and risks overfitting.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>GMM rounds out your clustering toolkit alongside K-means and DBSCAN. With hard, density-based, and probabilistic
-        clustering in hand, you're ready to apply unsupervised learning to real datasets and richer applications.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Fit GMMs with 1–10 components and plot AIC/BIC to pick the best number of components.</li>
-            <li>Compare GMM's soft cluster probabilities against K-means' hard labels on the same overlapping data.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Probabilistic thinking is a superpower in machine learning, and GMM is a beautiful example of it. You've added
-            a flexible, principled clustering method to your toolkit — keep applying it and trust your growing intuition.</p>
-        </div>
-    </section>
-
-    <nav class="lesson-nav" aria-label="Lesson Navigation">
-        <a href="clustering_dbscan.html" class="prev-lesson">← Previous</a>
-        <a href="index.html" class="home-link">🏠 Home</a>
-        <a href="clustering_optics.html" class="next-lesson">Next →</a>
-    </nav>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -788,24 +940,10 @@ compare_gmm_kmeans()</code></pre>
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
 
     <script src="js/clipboard.js"></script>
     <script src="js/course-enhancements.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-        mermaid.initialize({ 
-            startOnLoad: true,
-            theme: 'default',
-            themeVariables: {
-                primaryColor: '#f0f0f0',
-                primaryTextColor: '#333',
-                primaryBorderColor: '#667eea',
-                lineColor: '#667eea',
-                secondaryColor: '#e0e7ff',
-                tertiaryColor: '#fff'
-            }
-        });
-    </script>
 </body>
 </html>

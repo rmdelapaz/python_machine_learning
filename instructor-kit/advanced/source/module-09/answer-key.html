@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Key: Session 9</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">answers &amp; solutions · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Answer Key</div>
+    <h1>Session 9: Transfer Learning and Text Classification</h1>
+    <p class="sub">Answers and reasoning for every Session 9 item: the warm-up, both self-checks, the predict-then-run items, the lab reference outputs and handouts, the lesson pages' own quizzes and the exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Session <b>9</b></span>
+      <span class="chip"><b>12</b> self-check items</span>
+      <span class="chip">Confidential</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<p>Retrieval from Lessons 10.3 and 10.4. The code answers are real output.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">What shape does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+print(nn.Conv2d(<span class="s">1</span>, <span class="s">8</span>, kernel_size=<span class="s">3</span>)(torch.zeros(<span class="s">4</span>, <span class="s">1</span>, <span class="s">28</span>, <span class="s">28</span>)).shape)</pre><div class="opts"><div class="opt correct"><code class="inline">torch.Size([4, 8, 26, 26])</code></div></div><div class="why"><b>Why:</b> A 3 × 3 kernel with no padding loses one pixel on each side: (28 + 0 - 3) / 1 + 1 = 26. Batch 4, 8 output channels.</div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">How many parameters? (This is ResNet-18's first layer; Lesson 10.3's Before the Next Lesson asked the same.)</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> nn.Conv2d(<span class="s">3</span>, <span class="s">64</span>, kernel_size=<span class="s">7</span>, bias=<span class="k">False</span>).parameters()))</pre><div class="opts"><div class="opt correct"><code class="inline">9408</code></div></div><div class="why"><b>Why:</b> 64 filters × 3 channels × 7 × 7 = 9,408, and no bias. Today we borrow those 9,408 numbers, and 11 million more, ready-trained.</div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+lstm = nn.LSTM(input_size=<span class="s">2</span>, hidden_size=<span class="s">8</span>, batch_first=<span class="k">True</span>)
+out, (h, c) = lstm(torch.zeros(<span class="s">5</span>, <span class="s">14</span>, <span class="s">2</span>))
+print(tuple(out.shape), tuple(h.shape))</pre><div class="opts"><div class="opt correct"><code class="inline">(5, 14, 8) (1, 5, 8)</code></div></div><div class="why"><b>Why:</b> batch_first=True: out is (batch, time steps, hidden) = (5, 14, 8); h is (layers, batch, hidden) = (1, 5, 8), the last step only.</div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Why must <code class="inline">model.eval()</code> come before measuring test accuracy of a model with dropout and batch norm?</div><div class="opts"><div class="opt correct">So dropout stops zeroing activations and batch norm uses its stored training statistics (not the test batch's).</div></div><div class="why"><b>Why:</b> This comes straight back in 10.5: features extracted in training mode are silently wrong.</div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">A colleague splits overlapping sales windows with <code class="inline">train_test_split(..., random_state=42)</code> and beats the seasonal naive forecast by a mile. Your first suspicion?</div><div class="opts"><div class="opt correct">Leakage: neighboring windows share days, so test days were in training. Split by time.</div></div><div class="why"><b>Why:</b> Same habit as today's text pipeline: anything learned from data (windows, vocabulary, IDF) must come from the training part only.</div></div>
+
+  <div class="sec"><h2>10.5 · Transfer Learning: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">With a frozen backbone, the lesson computes the 512 features of every tile ONCE and then trains the head on that table. Why is that allowed?</div><div class="opts"><div class="opt correct">A) Frozen weights never change, so each tile's features are the same in every epoch</div><div class="opt">B) Computing features once is required by PyTorch for pretrained models</div><div class="opt">C) The head needs the features as NumPy arrays, not tensors</div><div class="opt">D) Features computed once are more accurate than features computed every epoch</div></div><div class="why"><b>Why:</b> A frozen backbone in eval() mode is a fixed function: the same tile always gives the same 512 numbers. Recomputing them every epoch would cost the full forward pass for nothing. Once you fine-tune (unfreeze layer4), the features change every step and caching no longer works.<br><b>B</b> is wrong: PyTorch has no such rule; the project trains through the frozen backbone every epoch and that works too, just slowly.<br><b>C</b> is wrong: The demo's head is an nn.Linear trained on tensors; NumPy is only needed for scikit-learn.<br><b>D</b> is wrong: Same numbers either way; the gain is speed, not accuracy.</div></div>
+  <div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+<span class="k">from</span> torchvision <span class="k">import</span> models
+m = models.mobilenet_v3_small(weights=<span class="k">None</span>)
+<span class="k">for</span> p <span class="k">in</span> m.parameters():
+    p.requires_grad = <span class="k">False</span>
+m.classifier = nn.Linear(<span class="s">576</span>, <span class="s">3</span>)
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> m.parameters() <span class="k">if</span> p.requires_grad))</pre><div class="opts"><div class="opt correct"><code class="inline">1731</code></div></div><div class="why"><b>Why:</b> Everything existing is frozen first; the new head is created afterwards and new layers are trainable by default: 576 × 3 weights + 3 biases = 1,731.</div></div>
+  <div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">The label curve: frozen features reach 0.755 with 100 labeled tiles and 0.902 with 2,000; the from-scratch CNN reached 0.719 with 2,000. Pinecrest offers to pay for 5,000 more labels for the frozen-feature model. Your advice?</div><div class="opts"><div class="opt">A) Yes: accuracy always keeps growing with more labels</div><div class="opt">B) Yes: the from-scratch CNN would then beat transfer learning</div><div class="opt correct">C) Probably not: the curve has flattened (1,000 to 2,000 added under a point); fine-tuning is the better next step</div><div class="opt">D) No: transfer learning cannot use more than 2,000 labels</div></div><div class="why"><b>Why:</b> Read the curve like a budget: above about 500 tiles each extra label buys very little for a frozen backbone. Letting the features adapt (fine-tuning layer4) moved validation accuracy from 0.876 to 0.924 in the project.<br><b>A</b> is wrong: The curve shows diminishing returns: +0.007 from 1,000 to 2,000.<br><b>B</b> is wrong: Possible in principle with far more data, but nothing on the page suggests it at 7,000 tiles.<br><b>D</b> is wrong: Nothing limits the number of labels; the gain per label is the issue.</div></div>
+  <div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">A learner extracts features with a freshly created ResNet-18 (never called <code class="inline">.eval()</code>) under <code class="inline">torch.no_grad()</code>. What goes wrong?</div><div class="opts"><div class="opt">A) Nothing: no_grad already switches the model to evaluation mode</div><div class="opt correct">B) Batch normalization uses each batch's statistics, so a tile's features depend on its batch, and the stored ImageNet statistics are overwritten</div><div class="opt">C) PyTorch raises an error because the model is in training mode</div><div class="opt">D) The features are computed with dropout, so they are all zero</div></div><div class="why"><b>Why:</b> no_grad stops gradient tracking; eval() changes how layers behave. In training mode batch norm normalizes with the current batch and updates its running averages even without gradients. The demo showed it: same tile, different features in a batch of 8 and a batch of 2.<br><b>A</b> is wrong: no_grad and eval() are independent switches.<br><b>C</b> is wrong: No error at all: that is why this mistake is dangerous.<br><b>D</b> is wrong: ResNet-18 has no dropout; and dropout zeroes some activations, not all.</div></div>
+  <div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torchvision <span class="k">import</span> models
+net = models.resnet18(weights=<span class="k">None</span>).eval()
+net(torch.zeros(<span class="s">1</span>, <span class="s">1</span>, <span class="s">64</span>, <span class="s">64</span>))</pre><div class="opts"><div class="opt">A) It returns 1,000 ImageNet scores for the image</div><div class="opt">B) It returns 512 features because the model is in eval() mode</div><div class="opt">C) <code class="inline">ValueError</code>: the image must be resized to 224 pixels first</div><div class="opt correct">D) <code class="inline">RuntimeError</code>: the first convolution expects 3 channels and the image has 1</div></div><div class="why"><b>Why:</b> The first layer has 64 filters spanning 3 color channels. Fix: repeat the gray channel (<code class="inline">x.repeat(1, 3, 1, 1)</code> or <code class="inline">transforms.Grayscale(num_output_channels=3)</code>). The message: <code class="inline">RuntimeError: Given groups=1, weight of size [64, 3, 7, 7], expected i...</code><br><b>A</b> is wrong: It never gets past the first convolution.<br><b>B</b> is wrong: fc was not replaced, and the channel error comes first anyway.<br><b>C</b> is wrong: ResNet accepts any reasonable size thanks to its average pooling; 64 pixels runs once the channels are right.</div></div>
+  <div class="q" data-sc="6" data-kind="short"><div class="qn">Q6</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> torchvision <span class="k">import</span> models
+print(models.resnet18(weights=<span class="k">None</span>).fc)</pre><div class="opts"><div class="opt correct"><code class="inline">Linear(in_features=512, out_features=1000, bias=True)</code></div></div><div class="why"><b>Why:</b> fc is ResNet-18's head: 512 features in, 1,000 ImageNet class scores out. Transfer learning replaces it, with nn.Identity() for features or nn.Linear(512, 10) for EuroSAT.</div></div>
+
+  <div class="sec"><h2>10.5 · Transfer Learning: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+head = nn.Linear(<span class="s">576</span>, <span class="s">10</span>)
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> head.parameters()))</pre><div class="opts"><div class="opt correct"><code class="inline">5770</code></div></div><div class="why"><b>Why:</b> 576 × 10 weights plus 10 biases = 5,770 trainable numbers: that is all a frozen-feature head learns.</div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torchvision <span class="k">import</span> transforms
+norm = transforms.Normalize(mean=[<span class="s">0.5</span>, <span class="s">0.5</span>, <span class="s">0.5</span>], std=[<span class="s">0.25</span>, <span class="s">0.25</span>, <span class="s">0.25</span>])
+x = torch.full((<span class="s">3</span>, <span class="s">2</span>, <span class="s">2</span>), <span class="s">0.75</span>)
+print(norm(x)[:, <span class="s">0</span>, <span class="s">0</span>])</pre><div class="opts"><div class="opt correct"><code class="inline">tensor([1., 1., 1.])</code></div></div><div class="why"><b>Why:</b> (0.75 - 0.5) / 0.25 = 1 in each channel. ImageNet normalization does exactly this with its own three means and standard deviations.</div></div>
+
+  <div class="sec"><h2>11.1 · Text Classification: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+print(CountVectorizer().build_analyzer()(<span class="s">"I am a 2-person tent fan!"</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">['am', 'person', 'tent', 'fan']</code></div></div><div class="why"><b>Why:</b> The default token pattern keeps runs of two or more word characters, lowercased: one-letter words (I, a) and the digit 2 disappear, and 2-person becomes person. Punctuation is dropped.</div></div>
+  <div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">Why does the lesson put <code class="inline">TfidfVectorizer</code> inside the pipeline instead of vectorizing all 3,095 reviews first?</div><div class="opts"><div class="opt">A) Pipelines make TF-IDF faster on sparse matrices</div><div class="opt">B) A vectorizer outside a pipeline cannot produce bigrams</div><div class="opt correct">C) The vocabulary and IDF values are learned from data, so they must come from the training text only (also inside every CV fold)</div><div class="opt">D) LogisticRegression refuses a sparse matrix that was not produced inside a pipeline</div></div><div class="why"><b>Why:</b> A vectorizer is a fitted transformer like a scaler. Fitted on all reviews, test-only words join the vocabulary and every IDF shifts (334 words instead of 333; idf of leaked 4.17 instead of 4.145): the test score then describes a model that saw the future.<br><b>A</b> is wrong: Speed is the same.<br><b>B</b> is wrong: ngram_range works anywhere.<br><b>D</b> is wrong: Logistic regression accepts any sparse matrix.</div></div>
+  <div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+print(CountVectorizer(stop_words=<span class="s">"english"</span>).build_analyzer()(<span class="s">"Would not buy it again."</span>))</pre><div class="opts"><div class="opt correct">A) <code class="inline">['buy']</code></div><div class="opt">B) <code class="inline">['would', 'not', 'buy', 'again']</code></div><div class="opt">C) <code class="inline">['not', 'buy']</code></div><div class="opt">D) <code class="inline">['would', 'buy', 'again']</code></div></div><div class="why"><b>Why:</b> scikit-learn's English stop-word list contains would, not, it and again; it is gone because it is a stop word too. A review that said Would not buy it again reaches the model as the single word buy: the stop-word trap in one line.<br><b>B</b> is wrong: That is the default analyzer without a stop-word list (it would also keep it).<br><b>C</b> is wrong: not IS on the list: that is the whole problem.<br><b>D</b> is wrong: would and again are on the list as well.</div></div>
+  <div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">The training matrix is 2,321 × 333 with 5.3% of cells filled. Why does scikit-learn return it as a sparse matrix?</div><div class="opts"><div class="opt">A) Sparse matrices make logistic regression more accurate</div><div class="opt">B) So that it can be turned into a pandas DataFrame</div><div class="opt">C) Because TF-IDF values are always between 0 and 1</div><div class="opt correct">D) Almost every cell is zero, so storing only the non-zero values saves memory, which matters with real vocabularies</div></div><div class="why"><b>Why:</b> Each review uses a handful of the vocabulary's words. With 50,000 documents and 100,000 words, a dense table would need about 40 GB; the sparse one fits in a few megabytes. Avoid .toarray() on anything bigger than a toy.<br><b>A</b> is wrong: Accuracy is the same; only memory and speed differ.<br><b>B</b> is wrong: Sparse output cannot become pandas output (SHELL convention: leave text vectorizers sparse).<br><b>C</b> is wrong: True but irrelevant: dense matrices can hold values between 0 and 1 too.</div></div>
+  <div class="q" data-sc="11" data-kind="short"><div class="qn">Q11</div><div class="qt">What does this print? (scikit-learn's default IDF is ln((1 + n) / (1 + df)) + 1.)</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> TfidfVectorizer
+v = TfidfVectorizer().fit([<span class="s">"warm tent"</span>, <span class="s">"warm bag"</span>, <span class="s">"light tent"</span>, <span class="s">"light bag"</span>])
+print(round(v.idf_[v.vocabulary_[<span class="s">"warm"</span>]], <span class="s">3</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">1.511</code></div></div><div class="why"><b>Why:</b> warm appears in 2 of the 4 documents: ln(5 / 3) + 1 = 1.511. A word in every document would get exactly 1, the smallest possible value.</div></div>
+  <div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">In the review-triage project, lowering the flagging threshold for P(negative) from 0.5 to 0.3 does what?</div><div class="opts"><div class="opt">A) Raises both recall and precision for negative reviews</div><div class="opt correct">B) Catches more unhappy customers (recall up) at the cost of more false alarms (precision down)</div><div class="opt">C) Changes the model's coefficients</div><div class="opt">D) Leaks the test set into training</div></div><div class="why"><b>Why:</b> On the training folds recall rose from 0.570 to 0.851 while precision fell from 0.828 to 0.709. The threshold is a business choice made on cross-validated probabilities, then graded once on the test set (0.858 / 0.698).<br><b>A</b> is wrong: They trade against each other.<br><b>C</b> is wrong: The threshold is applied after the model; nothing is refitted.<br><b>D</b> is wrong: Only if you choose it by looking at the test set; the project uses cross_val_predict on training reviews.</div></div>
+
+  <div class="sec"><h2>11.1 · Text Classification: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+print(CountVectorizer(ngram_range=(<span class="s">1</span>, <span class="s">2</span>)).fit([<span class="s">"not warm at all"</span>]).get_feature_names_out())</pre><div class="opts"><div class="opt correct"><code class="inline">['all' 'at' 'at all' 'not' 'not warm' 'warm' 'warm at']</code></div></div><div class="why"><b>Why:</b> Unigrams and bigrams, sorted alphabetically: four words and three pairs. Bigrams such as <code class="inline">not warm</code> are what keep negation.</div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> TfidfVectorizer
+<span class="k">import</span> pandas <span class="k">as</span> pd
+v = TfidfVectorizer().fit([<span class="s">"tent leaked"</span>, <span class="s">"tent warm"</span>, <span class="s">"warm bag"</span>, <span class="s">"warm boots"</span>])
+print(pd.Series(v.idf_, index=v.get_feature_names_out()).round(<span class="s">3</span>).to_dict())</pre><div class="opts"><div class="opt correct"><code class="inline">{'bag': 1.916, 'boots': 1.916, 'leaked': 1.916, 'tent': 1.511, 'warm': 1.223}</code></div></div><div class="why"><b>Why:</b> n = 4. leaked, bag and boots are in 1 document: ln(5/2) + 1 = 1.916; tent in 2: ln(5/3) + 1 = 1.511; warm in 3: ln(5/4) + 1 = 1.223. Rarer means heavier.</div></div>
+
+  <div class="sec"><h2>Lab Reference Solutions</h2><span class="rule"></span></div>
+<div class="blk lab"><div class="h">Fixture: labs/module-09/l10_5-transfer-learning/prepare_eurosat_features.py</div>
+<p>Not an exercise and not run by the checker. It computes frozen ResNet-18 features (128 px, ImageNet-normalized, <code class="inline">eval()</code>, <code class="inline">inference_mode</code>) for positions 3,500 to 6,499 of the seed-42 permutation (2,000 train, 1,000 test: NOT the lesson's tiles) and saves them as float16 to <code class="inline">labs/module-09/_fixtures/eurosat_resnet18_feats.npz</code> (2.4 MB). About 30 seconds on a laptop CPU. Rerun it if the fixture is lost or the image cache changes.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 10.5-A: labs/module-09/l10_5-transfer-learning/feature_table_starter.py → feature_table_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">(2000, 512) (1000, 512)
+majority-class baseline (SeaLake): test accuracy 0.126
+logistic regression         CV accuracy 0.899 ± 0.011
+scaled logistic regression  CV accuracy 0.896 ± 0.009
+test accuracy (logistic regression, used once): 0.903
+ 1-nearest neighbors (cosine): test accuracy 0.850
+ 5-nearest neighbors (cosine): test accuracy 0.866
+15-nearest neighbors (cosine): test accuracy 0.861
+
+weakest classes: {'River': 0.759, 'Highway': 0.835, 'AnnualCrop': 0.86}
+most frequent mix-ups: {'River -&gt; Highway': 11, 'AnnualCrop -&gt; Pasture': 6, 'Forest -&gt; HerbaceousVegetation': 5}
+confidence &lt; 0.6: 3.8% of tiles to a human; accuracy in the queue 0.474, on the rest 0.920
+confidence &lt; 0.8: 10.5% of tiles to a human; accuracy in the queue 0.571, on the rest 0.942
+PCA to  10 components: test accuracy 0.808
+PCA to  50 components: test accuracy 0.870
+PCA to 200 components: test accuracy 0.896</pre><p>Reading it: (1) a cross-validated head on deep-learning features is ordinary Module 1 work, and scaling adds nothing here (the features are already on similar scales); test 0.903 matches the lesson's 0.902 on other tiles; (2) kNN with cosine distance and no training reaches 0.866: the features alone organize the tiles; (3) River and Highway are the weakest classes and River → Highway the top mix-up, the same long-thin-line confusion as the lesson's project; (4) the human queue is a business tool: a tenth of the tiles to a person, 94% accuracy on the rest. Stretch: 50 of the 512 numbers keep most of the accuracy (0.870).</p>
+</div>
+<div class="blk lab"><div class="h">Lab 10.5-B: labs/module-09/l10_5-transfer-learning/freeze_audit_starter.py → freeze_audit_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">freeze, then new head : 5,130 trainable
+new head, then freeze : 0 trainable  &lt;- nothing would ever learn
+head only                     5,130 trainable (0.05% of 11,181,642)
+head + layer4             8,398,858 trainable (75.11% of 11,181,642)
+head + layer3 + layer4   10,498,570 trainable (93.89% of 11,181,642)
+both groups  groups (lr, parameters): [(0.0001, 8393728), (0.001, 5130)]  trainable but NOT in the optimizer: []
+layer4 only  groups (lr, parameters): [(0.0001, 8393728)]  trainable but NOT in the optimizer: ['fc.weight', 'fc.bias']
+
+batch: (16, 3, 128, 128) labels: [4, 2, 0, 1, 4, 6, 7, 1, 9, 6, 0, 9, 1, 3, 6, 7]
+eval() mode, loss 2.341: conv1.weight (frozen) same, layer4 conv (trainable) CHANGED, fc.weight (trainable) CHANGED, bn1.running_mean (frozen stem) same
+train() mode, loss 1.820: conv1.weight (frozen) same, layer4 conv (trainable) CHANGED, fc.weight (trainable) CHANGED, bn1.running_mean (frozen stem) CHANGED
+(gradients flow in eval() mode too: eval() changes layer behavior, not gradient tracking)
+
+tensors that get a gradient: 17 of 62</pre><p>Reading it: attaching the head before freezing leaves 0 trainable parameters (loud at <code class="inline">backward()</code>); an optimizer built without the head's group trains layer4 and leaves the random head untouched (silent: the loss barely moves). One step in eval() mode updates exactly the trainable tensors; in train() mode the frozen stem's batch-norm running mean moves too, because running averages are not gradients. That is the lesson's warning box: with batches under about 16, keep frozen parts in eval().</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-09/l10_5-transfer-learning/debug_transfer.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">RuntimeError: mat1 and mat2 shapes cannot be multiplied (64x1000 and 512x10)</code> → ResNet's head is <code class="inline">fc</code>, not <code class="inline">classifier</code>: <code class="inline">backbone.fc = nn.Identity()</code>. (Setting a <code class="inline">classifier</code> attribute on a ResNet raises nothing and does nothing: the features printed <code class="inline">(400, 1000)</code>.)</li>
+  <li><code class="inline">RuntimeError: element 0 of tensors does not require grad and does not have a grad_fn</code> → the loop freezes the head too: freeze only <code class="inline">backbone.parameters()</code>.</li>
+  <li>Silent: no <code class="inline">backbone.eval()</code>, so features depend on the batch. Silent: no <code class="inline">Normalize(mean=..., std=...)</code> from the weights.</li>
+  <li>Measured on 400 / 200 tiles: loud bugs fixed only 0.800; plus eval() only 0.780; plus Normalize only 0.845; all four fixed 0.895. Two silent bugs together cost almost 10 points, with no message.</li>
+</ol>
+</div>
+<div class="blk lab"><div class="h">Lab 11.1-A: labs/module-09/l11_1-text-classification/recommend_flag_starter.py → recommend_flag_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">(4000, 8) recommended share 0.655
+recommended share by star rating: {1: 0.009, 2: 0.116, 3: 0.448, 4: 0.884, 5: 0.974}
+3000 train, 1000 test; baseline accuracy 0.655
+unigrams                       CV accuracy 0.726 ± 0.008
+unigrams, stop words removed   CV accuracy 0.719 ± 0.015
+unigrams + bigrams, min_df=2   CV accuracy 0.732 ± 0.013
+                 precision    recall  f1-score   support
+
+not recommended      0.716     0.481     0.575       345
+    recommended      0.767     0.899     0.828       655
+
+       accuracy                          0.755      1000
+      macro avg      0.741     0.690     0.702      1000
+   weighted avg      0.749     0.755     0.741      1000
+
+toward NOT recommended: {'not': -2.81, 'not happy': -1.58, 'never again': -1.54, 'would not': -1.5, 'not buy': -1.5, 'very': -1.41}
+toward recommended    : {'really happy': 1.08, 'great': 1.16, 'really': 1.4, 'would buy': 1.41, 'highly': 1.47, 'highly recommend': 1.58}
+test accuracy by star rating: {1: 0.794, 2: 0.543, 3: 0.464, 4: 0.845, 5: 0.963}
+Would buy again.                       P(recommended) 0.82
+Would not buy again.                   P(recommended) 0.22
+Not bad at all, but it runs small.     P(recommended) 0.58
+It leaked on the first night.          P(recommended) 0.66
+Great value. Though the zipper broke.  P(recommended) 0.68</pre><p>Reading it: the checkbox is a noisier target than the stars (45% of 3-star reviewers recommend, 12% of 2-star), so the same pipeline reaches 0.755 against a 0.655 baseline instead of 0.877 against 0.745. Bigrams help a little in CV; stop words hurt again. The model is strong at the extremes and below a coin flip on 3-star reviews: an honest negative result worth reporting. The "leaked" probe at 0.66 shows that loose words appear in mixed reviews that still recommend.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 11.1-B: labs/module-09/l11_1-text-classification/category_router_starter.py → category_router_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">{'Apparel': 948, 'Accessories': 527, 'Paddling': 518, 'Climbing': 410, 'Footwear': 391, 'Packs': 297, 'Running': 292, 'Sleeping': 240, 'Camp Kitchen': 211, 'Tents': 166}
+baseline (always 'Apparel'): test accuracy 0.237
+test accuracy 0.615, macro F1 0.585
+lowest recall: {'Tents': 0.333, 'Camp Kitchen': 0.377, 'Footwear': 0.408}
+highest recall: {'Accessories': 0.803, 'Apparel': 0.911}
+most frequent wrong routes: {'Paddling -&gt; Apparel': 63, 'Footwear -&gt; Apparel': 43, 'Camp Kitchen -&gt; Accessories': 27}
+strongest words for Tents: ['camp canopy', 'canopy', 'camp', 'person', 'tent', 'this camp']
+Apparel      (0.31)  It kept us dry through a storm and the poles went up fast.
+Apparel      (0.30)  Runs half a size small, my toes hit the front on descents.
+Accessories  (0.21)  Arrived quickly. Great purchase.
+confidence &gt;= 0.5: 42.7% of messages routed automatically, accuracy 0.932; the rest go to the general inbox
+class_weight='balanced': accuracy 0.580, macro F1 0.553, Tents recall 0.452, Apparel recall 0.616</pre><p>Reading it: many reviews never name the product, so routing is hard (0.615); large classes (Apparel) absorb small ones (Tents, Camp Kitchen). The probes show it: no product word, Apparel by default. Routing only confident messages (42.7% at 0.932) is the practical design. <code class="inline">class_weight="balanced"</code> trades overall accuracy for small-team recall: a business choice.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-09/l11_1-text-classification/debug_text_pipeline.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">ValueError: Found input variables with inconsistent numbers of samples: [1, 2321]</code> → <code class="inline">labeled["text"]</code> (a Series), not <code class="inline">labeled[["text"]]</code>.</li>
+  <li>Silent: <code class="inline">TfidfVectorizer(stop_words="english")</code> removes not; accuracy 0.864 instead of 0.877.</li>
+  <li>Silent: the threshold is chosen on the TEST set. Fix: <code class="inline">cross_val_predict(model, X_train, y_train, cv=StratifiedKFold(5, shuffle=True, random_state=42), method="predict_proba")</code> and the training labels. On this split both ways give 0.2: the number happens to agree, the method is still a leak (the recall you would report is not an honest estimate).</li>
+  <li><code class="inline">ValueError: np.nan is an invalid document, expected byte or unicode string.</code> → <code class="inline">emails.fillna("")</code>. Fixed output: 0.877, threshold 0.2, P(negative) <code class="inline">[0.05 0.3 0.13]</code>. The refund email scores only 0.13: refund is not in the training vocabulary. Right for the wrong reasons is still worth a sentence in the debrief.</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>The Lesson Pages' Own Quick Quizzes</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Lesson 10.5 · Transfer Learning</div>
+<ol class="steps">
+  <li><b>C</b> So the network outputs its 512 features instead of 1,000 ImageNet class scores (freezing is requires_grad; Identity has no weights).</li>
+  <li><b>A</b> <code class="inline">5130</code>: everything was frozen first, then a new Linear(512, 10) was attached: 5,120 weights + 10 biases.</li>
+  <li><b>B</b> A very large labeled dataset of images that look nothing like everyday photos.</li>
+  <li><b>B</b> The pretrained weights are already good and only need nudging; big steps could destroy them.</li>
+  <li><b>A</b> The pretrained weights were learned on inputs scaled with exactly those numbers.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Lesson 11.1 · Text Classification</div>
+<ol class="steps">
+  <li><b>B</b> <code class="inline">[[0 0 2]]</code>: the vocabulary is light, tent, warm; jacket is unknown and ignored; warm counted twice.</li>
+  <li><b>A</b> The list removes negation words such as not, which carry a lot of sentiment.</li>
+  <li><b>C</b> 1, the smallest possible value: ln((1 + n)/(1 + n)) + 1.</li>
+  <li><b>A</b> The word appears mostly inside "not waterproof", and single words cannot see the not.</li>
+  <li><b>C</b> cross_val_predict probabilities on the training reviews, then grade the chosen threshold once on the test set.</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<ol class="steps">
+  <li><b>Backbone and head:</b> the backbone is every convolutional block (conv1 to layer4 plus pooling), frozen and in eval() mode; the head is <code class="inline">fc</code>, replaced by <code class="inline">nn.Identity()</code> (features) or a new <code class="inline">nn.Linear(512, 10)</code>.</li>
+  <li><b>Bag-of-words failure:</b> Would not buy again. (unigrams 0.21, stop words removed 0.51) or Not bad at all. Fix: bigrams (<code class="inline">ngram_range=(1, 2)</code>): not bad gets +1.46, Would not buy again. drops to 0.11. Typos → character n-grams; synonyms → embeddings.</li>
+  <li><b>Learned from training only:</b> 10.5: the head and anything chosen on validation (stage 1 vs 2); the ImageNet statistics are borrowed, not learned. 11.1: vocabulary and IDF (inside the pipeline), and the threshold (cross-validated probabilities).</li>
+</ol>
+
+  <div class="sec"><h2>Common Wrong Answers and What They Reveal</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li><b>Q1 D ("more accurate").</b> Confuses caching with improving. Same numbers, less time.</li>
+  <li><b>Q2 written as 0.</b> Thinks the freeze loop also covers the new head. Order matters: the head came after the loop.</li>
+  <li><b>Q4 A ("no_grad switches to eval").</b> The most common confusion in Module 10. no_grad = no gradient tracking; eval() = layer behavior.</li>
+  <li><b>Q9 C ("['not', 'buy']").</b> Assumes not is too important to be a stop word. That is exactly the trap.</li>
+  <li><b>Q11 written as 1.0.</b> Remembered the lesson quiz (word in every document) without counting: warm is in 2 of 4.</li>
+  <li><b>Exit ticket 3 citing the ImageNet mean and std as learned from training data.</b> They are the pretrained network's, not ours, and not learned at all here.</li>
+</ul>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 9 · Answer Key · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

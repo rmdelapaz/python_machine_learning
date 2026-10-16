@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Key: Session 2</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">answers &amp; solutions · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Answer Key</div>
+    <h1>Session 2: Splits, Leakage and Cross-Validation</h1>
+    <p class="sub">Answers and reasoning for every Session 2 item: the warm-up, both self-checks, the predict-then-run items, the lab reference outputs and debug handouts, the lesson pages' own quizzes and the exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Session <b>2</b></span>
+      <span class="chip"><b>12</b> self-check items</span>
+      <span class="chip">Confidential</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Warm-up: Retrieval from Session 1</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">W1</div><div class="qt">On the churn table, what does always predicting "stays" score? And "never fraud" on the payments?</div><div class="opts"><div class="opt correct">0.835 on churn (16.5% churn) and 0.9912 on fraud (0.88% fraud). Every score today is read against a do-nothing baseline.</div></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">Which column of <code class="inline">customers_churn.csv</code> must never be a feature, and why?</div><div class="opts"><div class="opt correct"><code class="inline">cancellation_reason</code>: it is filled in only after a customer has left, so on prediction day it is always empty. Today Lesson 1.2 measures what it does to a model (0.848 becomes 0.941).</div></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt"><code class="inline">train_test_split(X, y, ...)</code> returns four things. In which order?</div><div class="opts"><div class="opt correct"><code class="inline">X_train, X_test, y_train, y_test</code>: the X parts, then the y parts. Today's Common Mistake 1 is the wrong order.</div></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Why is the scaler fitted on the training rows only, and then used to transform both sets?</div><div class="opts"><div class="opt correct">The test rows stand in for future customers, whose numbers could not have been seen when the model was built. Today the same rule moves inside every cross-validation fold.</div></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Homework: what did <code class="inline">DummyClassifier(strategy="constant", constant=1)</code> score on the 1.1 test set?</div><div class="opts"><div class="opt correct">0.165 (0.165): it calls everyone a churner, so it is right exactly for the 16.5% who churn. Accuracy rewards the majority class.</div></div></div>
+<p>Homework check, the 1.1 shortlist project rerun with <code class="inline">random_state=7</code> in the split:</p>
+<pre class="out">random_state=42  baseline 0.835  forest 0.873  top-50 hits 41
+random_state= 7  baseline 0.835  forest 0.876  top-50 hits 45</pre><p>The baseline is pinned by stratification; the forest's accuracy and its shortlist move with the split. That is Lesson 1.2's first experiment.</p>
+
+  <div class="sec"><h2>1.2 · Splits, Baselines and Leakage: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">Pinecrest wants to predict how a product it has <b>never sold</b> will sell, from <code class="inline">weekly_demand.csv</code>. Which evaluation matches how the model will be used?</div><div class="opts"><div class="opt">A) A random 75/25 split of the rows with <code class="inline">stratify=demand["units_sold"]</code></div><div class="opt">B) A time split: 2024 for training, 2025 for testing</div><div class="opt correct">C) A group split, <code class="inline">GroupShuffleSplit(..., groups=demand["product_id"])</code>, so that no test product appears in training</div><div class="opt">D) Cross-validate on all the rows, then confirm on the same rows</div></div><div class="why"><b>Why:</b> The dress rehearsal must hold products the model has never seen, so every row of a product goes to one side. In the lesson the forest's error jumps from 10.23 units (random rows) to 17.84 (new products): the honest number for a launch.<br><b>A</b> is wrong: Stratifying on a number crashes (Common Mistake 2), and a random split puts weeks of every product on both sides.<br><b>B</b> is wrong: That answers a different question: next year's sales of the products Pinecrest already sells.<br><b>D</b> is wrong: Grading on rows the model trained on is no evaluation at all.</div></div>
+  <div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+rows = list(range(<span class="s">1000</span>))
+rest, test = train_test_split(rows, test_size=<span class="s">0.20</span>, random_state=<span class="s">42</span>)
+train, val = train_test_split(rest, test_size=<span class="s">0.25</span>, random_state=<span class="s">42</span>)
+print(len(train), len(val), len(test))</pre><div class="opts"><div class="opt correct"><code class="inline">600 200 200</code></div></div><div class="why"><b>Why:</b> The first call keeps 20% (200 rows) as the test set. The second takes 25% of the remaining 800 as validation (200) and leaves 600 for training: a 60/20/20 split from two calls, exactly the lesson's recipe.</div></div>
+  <div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">You forecast tomorrow's sales for each store. Which candidate feature leaks the future?</div><div class="opts"><div class="opt">A) Yesterday's sales, <code class="inline">shift(1)</code> within each store</div><div class="opt correct">B) A 7-day average built with <code class="inline">rolling(7, center=True)</code></div><div class="opt">C) Sales on the same day last week, <code class="inline">shift(7)</code></div><div class="opt">D) The day of the week</div></div><div class="why"><b>Why:</b> A centered window averages the three days AFTER each date too. On opening night those days do not exist. In Common Mistake 5 it makes an honest time split look like a $504 forecast instead of $854.<br><b>A</b> is wrong: Yesterday is known the evening before: a legitimate lag (and a cheap baseline).<br><b>C</b> is wrong: Last week is known: the seasonal-naive baseline is built from exactly this column.<br><b>D</b> is wrong: The calendar is known in advance.</div></div>
+  <div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+<span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+X, y = customers[[<span class="s">"tenure_months"</span>, <span class="s">"orders_12m"</span>]], customers[<span class="s">"churned"</span>]
+X_train, y_train, X_test, y_test = train_test_split(X, y, test_size=<span class="s">0.25</span>, random_state=<span class="s">42</span>)
+LogisticRegression().fit(X_train, y_train)</pre><div class="opts"><div class="opt">A) It fits a model on 4,500 customers</div><div class="opt">B) <code class="inline">KeyError</code>: <code class="inline">'churned'</code></div><div class="opt">C) <code class="inline">NotFittedError</code>: the model was never fitted</div><div class="opt correct">D) <code class="inline">ValueError</code>: <code class="inline">y</code> should be one-dimensional; the second result is the 1,500 test rows of <code class="inline">X</code></div></div><div class="why"><b>Why:</b> <code class="inline">train_test_split</code> returns the X parts first, then the y parts: <code class="inline">X_train, X_test, y_train, y_test</code>. Unpacked in the wrong order, <code class="inline">y_train</code> holds a 1,500 × 2 table. The message: <code class="inline">ValueError: y should be a 1d array, got an array of shape (1500, 2) instead.</code><br><b>A</b> is wrong: It never gets that far.<br><b>B</b> is wrong: The column exists; the order of the results is the problem.<br><b>C</b> is wrong: The error comes from inside fit, before any predict.</div></div>
+  <div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">Depths 3 and 4 tie on validation (0.864). You refit depth 3 on training plus validation rows and it scores 0.858 on the test set. What now?</div><div class="opts"><div class="opt correct">A) Report 0.858 and keep depth 3: the test set has spoken once</div><div class="opt">B) Report 0.864: it is the best number you measured</div><div class="opt">C) Try depth 4 on the test set too and report the better of the two</div><div class="opt">D) Report the average of 0.864 and 0.858</div></div><div class="why"><b>Why:</b> The validation winner is partly the one that got lucky on those 1,200 rows, so a slightly lower test score is normal. The test score is the unbiased number, and only if nothing was chosen with it.<br><b>B</b> is wrong: The best of several validation scores is optimistic: you picked the maximum of noisy numbers.<br><b>C</b> is wrong: Choosing with the test set turns it into a second validation set; its score stops being unbiased.<br><b>D</b> is wrong: Averaging an optimistic number with an honest one gives a number that is neither.</div></div>
+  <div class="q" data-sc="6" data-kind="short"><div class="qn">Q6</div><div class="qt">What does this print? (The "yesterday" forecast's mean absolute error.)</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+sales = pd.Series([<span class="s">100</span>, <span class="s">120</span>, <span class="s">90</span>, <span class="s">130</span>])
+yesterday = sales.shift(<span class="s">1</span>)
+print((sales - yesterday).abs().mean())</pre><div class="opts"><div class="opt correct"><code class="inline">30.0</code></div></div><div class="why"><b>Why:</b> <code class="inline">shift(1)</code> moves every value down a row, so the first day has no forecast (NaN) and is skipped by <code class="inline">mean</code>. The misses are 20, 30 and 40: their mean is 30.0. The naive baseline is that cheap.</div></div>
+
+  <div class="sec"><h2>1.2 · Splits, Baselines and Leakage: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+a, b = train_test_split(list(range(<span class="s">20</span>)), test_size=<span class="s">5</span>, random_state=<span class="s">0</span>)
+print(len(a), len(b))</pre><div class="opts"><div class="opt correct"><code class="inline">15 5</code></div></div><div class="why"><b>Why:</b> An integer <code class="inline">test_size</code> is a COUNT, not a share: 5 rows test, 15 train (1.2 Common Mistake 3).</div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+y = [<span class="s">0</span>] * <span class="s">16</span> + [<span class="s">1</span>] * <span class="s">4</span>
+y_tr, y_te = train_test_split(y, test_size=<span class="s">0.25</span>, stratify=y, random_state=<span class="s">0</span>)
+print(len(y_te), sum(y_te))</pre><div class="opts"><div class="opt correct"><code class="inline">5 1</code></div></div><div class="why"><b>Why:</b> A quarter of 20 is 5 test rows; stratifying keeps the 20% share of ones, so exactly 1 of the 5 is a one.</div></div>
+
+  <div class="sec"><h2>1.3 · Cross-Validation: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> RepeatedStratifiedKFold
+rcv = RepeatedStratifiedKFold(n_splits=<span class="s">4</span>, n_repeats=<span class="s">2</span>, random_state=<span class="s">42</span>)
+print(rcv.get_n_splits())</pre><div class="opts"><div class="opt correct"><code class="inline">8</code></div></div><div class="why"><b>Why:</b> Four folds, repeated twice with different shuffles: eight rounds, so eight fits of every model you cross-validate with it (the lesson's 5 × 3 gives 15).</div></div>
+  <div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">from</span> sklearn.model_selection <span class="k">import</span> KFold
+cv = KFold(n_splits=<span class="s">5</span>, random_state=<span class="s">42</span>)</pre><div class="opts"><div class="opt">A) It makes five shuffled folds with seed 42</div><div class="opt correct">B) <code class="inline">ValueError</code>: setting a <code class="inline">random_state</code> has no effect since <code class="inline">shuffle</code> is False</div><div class="opt">C) It makes five unshuffled folds and silently ignores the seed</div><div class="opt">D) <code class="inline">TypeError</code>: <code class="inline">KFold</code> has no <code class="inline">random_state</code> argument</div></div><div class="why"><b>Why:</b> An unshuffled splitter is not random, so scikit-learn refuses a seed rather than let you believe the folds are shuffled. Add <code class="inline">shuffle=True</code> (and for classification, use <code class="inline">StratifiedKFold</code>).</div></div>
+  <div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">A colleague fills the gaps in <code class="inline">email_opens_90d</code> with the median of all 4,500 training rows, then runs <code class="inline">cross_val_score</code> on the filled table. What is wrong?</div><div class="opts"><div class="opt">A) Nothing: the test set was never used</div><div class="opt">B) <code class="inline">cross_val_score</code> cannot handle a column that once had gaps</div><div class="opt">C) The median should come from all 6,000 rows to be more accurate</div><div class="opt correct">D) Each validation fold helped compute the median that filled it: put the filling step inside a pipeline so it is refitted on the training folds of every round</div></div><div class="why"><b>Why:</b> Same leak as pre-scaling: a step that learns from data saw the validation rows. With a median it is tiny; with steps that learn more (feature selection, encoding by churn rate) it can turn noise into 0.825 accuracy, as in Common Mistake 1.<br><b>A</b> is wrong: The validation folds play the test set's role inside cross-validation; they were seen.<br><b>B</b> is wrong: After filling, the column has no gaps; scikit-learn runs happily, which is the danger.<br><b>C</b> is wrong: That would let the real test set leak in as well.</div></div>
+  <div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt"><code class="inline">interactions.csv</code> has many rows per customer. You want to know how well a model will predict ratings for customers it has never seen. Which splitter?</div><div class="opts"><div class="opt">A) <code class="inline">StratifiedKFold(5, shuffle=True, random_state=42)</code> on the rating</div><div class="opt">B) <code class="inline">TimeSeriesSplit(n_splits=5)</code> on the rows in file order</div><div class="opt correct">C) <code class="inline">GroupKFold(n_splits=5)</code> with <code class="inline">groups=customer_id</code></div><div class="opt">D) <code class="inline">KFold(5)</code> without shuffling</div></div><div class="why"><b>Why:</b> Ask what will be new to the model: a customer. Group folds keep all of a customer's rows on one side, so every validation customer is a stranger. With row folds, nearly every validation customer also has rows in training (the workbook's worked example: 2,641 of 2,649).<br><b>A</b> is wrong: Shuffled row folds put each customer on both sides: an easier exam than reality.<br><b>B</b> is wrong: Time order is a different question (next month), and the file is sorted by customer, not by time.<br><b>D</b> is wrong: Unshuffled blocks of a file sorted by customer happen to keep most customers together, but by accident; and they mix it with whatever order the file has.</div></div>
+  <div class="q" data-sc="11" data-kind="short"><div class="qn">Q11</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.dummy <span class="k">import</span> DummyRegressor
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> KFold, cross_val_score
+X = [[<span class="s">0</span>]] * <span class="s">6</span>
+y = [<span class="s">1</span>, <span class="s">2</span>, <span class="s">3</span>, <span class="s">4</span>, <span class="s">5</span>, <span class="s">6</span>]
+print(cross_val_score(DummyRegressor(), X, y, cv=KFold(<span class="s">3</span>), scoring=<span class="s">"neg_mean_absolute_error"</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">[-3.  -0.5 -3. ]</code></div></div><div class="why"><b>Why:</b> Unshuffled <code class="inline">KFold(3)</code> validates on [1, 2], [3, 4], [5, 6]. The dummy predicts the training mean each time: 4.5, 3.5, 2.5, so the misses average 3.0, 0.5 and 3.0. Scorers are "higher is better", so the errors come back negative: put a minus sign in front to report them.</div></div>
+  <div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">On 15 paired folds the forest beats the depth-4 tree in all 15 (CV AUC 0.867 +/- 0.018). Fitted on all training rows, it then scores 0.865 on the test set. What do you conclude?</div><div class="opts"><div class="opt correct">A) The estimate held: report 0.865 and keep the forest</div><div class="opt">B) The forest got worse on the test set; switch to the tree</div><div class="opt">C) Cross-validation was optimistic; rerun it with the test rows included</div><div class="opt">D) Report 0.867, because it is based on more folds</div></div><div class="why"><b>Why:</b> 0.865 lies well inside 0.867 +/- 0.018, and the lead over the tree was consistent fold by fold. A trustworthy estimate looks exactly like this: the single locked test number holds no surprise.<br><b>B</b> is wrong: A 0.002 dip is far smaller than the fold-to-fold spread, and switching would be choosing with the test set.<br><b>C</b> is wrong: Putting the test rows into cross-validation destroys the only unbiased check (Common Mistake 5).<br><b>D</b> is wrong: The CV mean is the estimate you chose with; the test score is the one you report.</div></div>
+
+  <div class="sec"><h2>1.3 · Cross-Validation: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> StratifiedKFold
+y = np.array([<span class="s">0</span>] * <span class="s">8</span> + [<span class="s">1</span>] * <span class="s">4</span>)
+cv = StratifiedKFold(n_splits=<span class="s">4</span>, shuffle=<span class="k">True</span>, random_state=<span class="s">42</span>)
+print([int(y[val].sum()) <span class="k">for</span> _, val <span class="k">in</span> cv.split(np.zeros((<span class="s">12</span>, <span class="s">1</span>)), y)])</pre><div class="opts"><div class="opt correct"><code class="inline">[1, 1, 1, 1]</code></div></div><div class="why"><b>Why:</b> Stratified folds keep the 1-in-3 share in every fold: each validation fold of 3 rows holds one 1.</div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> TimeSeriesSplit
+<span class="k">for</span> train, val <span class="k">in</span> TimeSeriesSplit(n_splits=<span class="s">3</span>).split(np.zeros((<span class="s">10</span>, <span class="s">1</span>))):
+    print(len(train), val.tolist())</pre><div class="opts"><div class="opt correct"><code class="inline">4 [4, 5]
+6 [6, 7]
+8 [8, 9]</code></div></div><div class="why"><b>Why:</b> <code class="inline">TimeSeriesSplit(3)</code> on 10 rows validates on the last 6 in blocks of 2 and always trains on everything before: 4, 6, 8 training rows.</div></div>
+
+  <div class="sec"><h2>Lab Reference Solutions</h2><span class="rule"></span></div>
+<div class="blk lab"><div class="h">Lab 1.2-A: labs/module-02/l1_2-splits-and-leakage/demand_forecast_starter.py → demand_forecast_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">(9984, 15) 2024-01-01 to 2025-12-22
+time split: 5,088 train rows (last week 2024-12-30), 4,896 test rows (first week 2025-01-06)
+weeks on each side: 53 51
+random split: 5,088 train rows, 50% of them from 2025 (the 'future')
+
+forest MAE, random split: 10.45 units per week
+forest MAE, time split:   10.27 units per week
+the random split does not flatter the forest here (difference +0.18)
+2025 rows without a value 52 weeks back: 0
+
+MAE on 2025, units per week (lower is better):
+forest (time split)            10.27
+each product's 2024 average    12.95
+same week last year            13.81
+training mean                  17.13
+
+strongest free baseline: each product's 2024 average (12.95); the forest beats it
+
+forest MAE by category, 2025:
+category
+Camp Kitchen    13.2
+Footwear        12.7
+Snow            11.0</pre><p>What each TODO teaches: (1) a time split needs a look at where the line falls: 2024-12-30 is a Monday of 2024, so 2024 holds 53 weeks and 2025 only 51; (2) a random split puts half of the training rows in the "future"; (3) on this data that does NOT flatter the forest (10.45 vs 10.27), because weekly demand carries little week-to-week memory once season and price are known, unlike daily sales in the lesson ($613 vs $854): measure, do not assume; (4) and (5) the strongest free baseline is each product's usual level (12.95), not the training mean (17.13) and not the same week last year (13.81, a single noisy week); the forest beats it, so it earns its place. The stretch shows where it misses most (Camp Kitchen, Footwear, Snow).</p>
+</div>
+<div class="blk lab"><div class="h">Lab 1.2-B: labs/module-02/l1_2-splits-and-leakage/fraud_validation_starter.py → fraud_validation_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">train      30,000 rows  263 frauds
+validation 10,000 rows   87 frauds
+test       10,000 rows   88 frauds
+
+random 100 validation payments hold 0.9 frauds on average
+logistic regression  frauds in the validation top 100: 45
+tree (depth 3)       frauds in the validation top 100: 30
+tree (depth 8)       frauds in the validation top 100: 34
+random forest        frauds in the validation top 100: 47
+chosen on validation: random forest
+
+random forest: 41 frauds in the test top 100 (validation said 47; a random 100 holds 0.9)
+for comparison, 'never fraud' is 0.9912 accurate and fills the queue with nobody
+
+Fraud review queue: random forest, chosen on 10,000 validation payments; test top 100 holds 41 frauds, 47x a random 100.</pre><p>Reading it: stratifying twice gives each part its share of the 438 frauds (263 / 87 / 88). Accuracy is useless for a review queue ("never fraud" is 0.9912 accurate), so the candidates are judged by frauds in the 100 riskiest validation payments. The forest wins validation (47) narrowly over logistic regression (45), and the test set then says 41: the validation winner is partly the lucky one, exactly as the depth-3 tree went from 0.864 to 0.858 in the lesson. Going back now to try logistic regression on the test set would turn it into a second validation set. Note for questions: a shallow tree gives many payments the same score, so its top 100 contains ties broken by row order; that is one reason it ranks worse. Expected TODO 4 sentences: the test number is lower because the winner on validation was partly lucky on those 10,000 payments; picking again with the test set would make its score optimistic.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-02/l1_2-splits-and-leakage/debug_leaky_split.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">ValueError: The least populated classes in y have only 1 member ...</code> → stratify on the target: <code class="inline">stratify=y</code> (not <code class="inline">customers["spend_12m"]</code>).</li>
+  <li><code class="inline">ValueError: Found input variables with inconsistent numbers of samples: [5975, 25]</code> → unpack in the standard order: <code class="inline">X_train, X_test, y_train, y_test</code>.</li>
+  <li>No error: <code class="inline">test_size=25</code> is 25 customers, not 25%. With the other silent bug still in, it reports a perfect 1.000; fix: <code class="inline">test_size=0.25</code>.</li>
+  <li>No error: <code class="inline">has_reason</code> in the features is the target leak (0.941 on 1,500 customers). Drop it.</li>
+</ol>
+<p>The two silent bugs, measured:</p>
+<pre class="out">25 test customers, with the leak: 1.000
+1,500 test customers, with the leak: 0.941</pre><p>Fixed, the script prints:</p>
+<pre class="out">test customers: 1500 (churn rate 0.165)
+baseline accuracy 0.835
+logistic regression accuracy 0.848</pre></div>
+<div class="blk lab"><div class="h">Lab 1.3-A: labs/module-02/l1_3-cross-validation/fraud_folds_starter.py → fraud_folds_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">train (Jan-May): 41,738 payments, 374 frauds; June locked: 8,262
+KFold, no shuffle  frauds per validation fold [83, 84, 71, 75, 61]
+StratifiedKFold    frauds per validation fold [75, 75, 75, 74, 75]
+
+baseline             validation AUC 0.500 +/- 0.000   train AUC 0.500
+logistic regression  validation AUC 0.854 +/- 0.023   train AUC 0.857
+tree (depth 5)       validation AUC 0.776 +/- 0.020   train AUC 0.791
+
+tree ahead of logistic regression in 0 of 5 folds, mean difference -0.078
+
+logistic regression, next-month AUC (Feb, Mar, Apr, May): [0.864, 0.844, 0.86, 0.881] mean 0.862
+June AUC 0.874   (shuffled CV said 0.854, time-ordered CV said 0.862)
+
+out-of-fold top 400 of 41,738: 186 frauds (a random 400 would hold 3.6)</pre><p>Reading it: (1) the rows are in time order and the fraud rate drifts down, so unshuffled <code class="inline">KFold</code> puts 83 frauds in the January block and 61 in May's, while stratified folds hold 74 or 75 each; (2) the pipeline keeps the scaler inside the folds; train and validation AUC are close for logistic regression (0.857 vs 0.854), the depth-5 tree is weaker (0.776); (3) the tree loses all 5 paired folds by 0.078 on average: a gap far larger than the spread, so this one is real; (4) next-month folds (train on all earlier months, validate on the next) average 0.862; (5) June scores 0.874, inside one spread of both estimates, a little closer to the time-ordered one. The stretch: 186 frauds among the 400 riskiest out-of-fold payments, against 3.6 for a random 400.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 1.3-B: labs/module-02/l1_3-cross-validation/regularization_check_starter.py → regularization_check_solution.py</div>
+<p>The solution prints:</p>
+<pre class="out">(4500, 10)
+C=0.01 accuracy, pre-scaled: 0.8493   in a pipeline: 0.8491
+C=1.0   accuracy 0.852 +/- 0.008   AUC 0.830 +/- 0.020
+C=0.01  accuracy 0.849 +/- 0.007   AUC 0.830 +/- 0.019
+accuracy  C=0.01 ahead in  2 of 15 folds, behind in 11; mean difference -0.0026
+roc_auc   C=0.01 ahead in  9 of 15 folds, behind in  6; mean difference +0.0006
+
+C=0.001  train AUC 0.827   validation AUC 0.825
+C=0.01   train AUC 0.833   validation AUC 0.830
+C=0.1    train AUC 0.833   validation AUC 0.830
+C=1.0    train AUC 0.833   validation AUC 0.829
+C=10.0   train AUC 0.833   validation AUC 0.829
+
+Verdict: on accuracy C=0.01 is behind C=1.0 by 0.0026 on average (ahead in 2 of 15 folds);
+on AUC the gap is +0.0006, against a fold-to-fold spread of 0.020: a tie. Session 1's 0.853 vs 0.848 was one split's opinion.</pre><p>Reading it: pre-scaling leaks, but for a scaler on 4,500 rows the leak is in the fourth decimal place (0.8493 vs 0.8491); the habit matters for steps that learn more. On 15 identical folds C=0.01 is BEHIND C=1.0 on accuracy in 11 of 15 folds (mean -0.0026), the opposite of Session 1's single test split (0.853 vs 0.848), and tied on AUC (+0.0006 against a spread of 0.020). Only C=0.001 is clearly worse (it underfits); no value of C overfits, since train and validation AUC stay within 0.003. The lesson: one split's opinion, even on the test set, is inside the wobble.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-02/l1_3-cross-validation/debug_cross_validation.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">ValueError: Setting a random_state has no effect since shuffle is False...</code> → <code class="inline">StratifiedKFold(n_splits=5, shuffle=True, random_state=42)</code> (or at least <code class="inline">shuffle=True</code>).</li>
+  <li><code class="inline">InvalidParameterError: The 'scoring' parameter of cross_val_score must be a str among ...</code> → <code class="inline">scoring="roc_auc"</code> (underscore, not hyphen).</li>
+  <li>No error: the scaler is fitted on all of <code class="inline">X</code> before cross-validation → <code class="inline">make_pipeline(StandardScaler(), LogisticRegression())</code> on the raw features.</li>
+  <li>No error: cross-validating <code class="inline">X</code> and <code class="inline">y</code> (6,000 rows, test set included) → <code class="inline">X_train</code>, <code class="inline">y_train</code> only; the message even says "training customers".</li>
+  <li>No error: <code class="inline">scores.max()</code> reports the luckiest fold → <code class="inline">scores.mean()</code>.</li>
+</ol>
+<p>With the two loud bugs fixed (<code class="inline">KFold(5, shuffle=True, random_state=42)</code>, <code class="inline">"roc_auc"</code>) but the three silent ones left in, it reports:</p>
+<pre class="out">cross-validated on 6000 training customers, 5 folds
+ROC AUC 0.850 +/- 0.013</pre><p>Fully fixed with the course splitter:</p>
+<pre class="out">cross-validated on 4500 training customers, 5 folds
+ROC AUC 0.829 +/- 0.025</pre><p>A learner who fixes bug 1 with <code class="inline">KFold(n_splits=5, shuffle=True, random_state=42)</code> instead of <code class="inline">StratifiedKFold</code> gets slightly different folds (AUC about 0.830 ± 0.015 on the training rows); accept it, then ask which splitter the course uses for classification and why.</p>
+</div>
+
+  <div class="sec"><h2>The Lesson Pages' Own Quick Quizzes</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Lesson 1.2 · Splits, Baselines and Leakage</div>
+<ol class="steps">
+  <li><b>B</b> <code class="inline">7 3</code>: <code class="inline">test_size=0.3</code> of 10 items puts 3 in the second result; the first holds the other 7.</li>
+  <li><b>C</b> Train on 2024, test on 2025: the model will forecast the future of products Pinecrest already sells, so the dress rehearsal is a time split.</li>
+  <li><b>A</b> Target leakage: a refund is recorded after the return happens, so it will not exist when the prediction is made (0.97 alone is the alarm).</li>
+  <li><b>B</b> 0.866, the test score: the best of 12 validation scores is optimistic; the test set was not used to choose.</li>
+  <li><b>C</b> When many rows share an entity and the model must work for new entities: every row of a group goes to one side.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Lesson 1.3 · Cross-Validation</div>
+<ol class="steps">
+  <li><b>B</b> Five times: one fit per fold; <code class="inline">cross_val_score</code> does not refit on all rows at the end.</li>
+  <li><b>A</b> <code class="inline">[3, 3, 2, 2]</code>: 10 rows in 4 folds; the first 10 mod 4 = 2 folds get one extra row.</li>
+  <li><b>C</b> The scaler saw the validation folds: scale inside a pipeline so it is refitted on the training folds of each round.</li>
+  <li><b>C</b> Time-ordered folds: train on earlier weeks, validate on the next quarter, as the forecast will be used.</li>
+  <li><b>A</b> The 0.004 gap is within the noise (spread about 0.015): check the paired folds and prefer the simpler model; never break a tie with the test set.</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<ol class="steps">
+  <li><b>Training</b> fits every candidate; <b>validation</b> compares candidates and chooses; <b>test</b> grades the final choice, opened once at the very end (or cross-validation on the training rows replaces the fixed validation set).</li>
+  <li><b>$854</b>, the time split: it is how the forecast will be used (trained on the past, asked about the future). The random split is lower because almost every test day has its neighbors, the day before and the day after, in training, and sales have momentum; tomorrow's neighbors are never available.</li>
+  <li><b>So the scaler is refitted inside every round on the training folds only.</b> Pre-scaling lets every validation fold help compute the mean and standard deviation it is scaled with: a leak, tiny for a scaler and large for steps that learn more (selecting features, encoding categories).</li>
+</ol>
+
+  <div class="sec"><h2>Common Wrong Answers and What They Reveal</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li><b>Q1 B (a time split for never-sold products).</b> Knows "time split" is the honest choice and applies it everywhere. Ask: "What will be new to the model on opening night: a date, or a product?"</li>
+  <li><b>Q3 A or C (yesterday or last week as the leak).</b> Thinks any use of past sales is cheating. Ask: "Is yesterday known the evening before?" Shifted columns that only look backward are legal; the centered window looks forward.</li>
+  <li><b>Q4 A (it fits).</b> Has not internalized the order of the four results. Have them say "X, X, y, y" out loud and print shapes after every split.</li>
+  <li><b>Q5 C (try depth 4 on the test set too).</b> The single most tempting move in the session. Show what the test set becomes: a second validation set with no unbiased number left.</li>
+  <li><b>Q6 written as 22.5 or NaN.</b> Counted the first row (NaN) or divided by 4. <code class="inline">mean</code> skips NaN: three misses.</li>
+  <li><b>Q9 A ("the test set was not used").</b> Thinks leakage only means the test set. Inside cross-validation, the validation folds play the test set's role.</li>
+  <li><b>Q11 written as positive numbers.</b> Forgot that scorers are "higher is better": error metrics come back negated.</li>
+  <li><b>Q12 B (switch to the tree).</b> Reads a 0.002 dip as a verdict and would choose with the test set. Point at the spread, 0.018.</li>
+</ul>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 2 · Answer Key · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

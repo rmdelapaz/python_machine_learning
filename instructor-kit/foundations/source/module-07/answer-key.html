@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Key: Session 7</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Instructor copy —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">answers &amp; solutions · not for students</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Answer Key</div>
+    <h1>Session 7: Nearest Neighbors and Naive Bayes</h1>
+    <p class="sub">Answers and reasoning for every Session 7 item: the warm-up, both self-checks, the predict-then-run items, the lab reference outputs, the debug handout, the lesson pages' own quizzes and the exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Session <b>7</b></span>
+      <span class="chip"><b>12</b> self-check items</span>
+      <span class="chip">Confidential</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Warm-up</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">W1</div><div class="qt">A log-target demand model gives <code class="inline">holiday_week</code> a coefficient of 0.405. In words?</div><div class="opts"><div class="opt correct">A holiday week sells about exp(0.405) − 1 ≈ 50% more, for every product.</div></div><div class="why"><b>Why:</b> Percent effects come back today as likelihood ratios that multiply.</div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">A logistic regression flag has coefficient 0.69. What does this print, and what does it mean?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+print(round(np.exp(<span class="s">0.69</span>), <span class="s">2</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">1.99</code></div></div><div class="why"><b>Why:</b> The odds ratio: the flag about doubles the odds. Naive Bayes today also multiplies odds, one clue at a time.</div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Degree 15 has training MSE 0.016 and test MSE 0.187 (noise floor 0.09). Which problem, and which dial helps?</div><div class="opts"><div class="opt correct">High variance (overfitting); a penalty such as Ridge's alpha, fewer features or more data.</div></div><div class="why"><b>Why:</b> Today's dial is k: k = 1 is the degree-15 model of nearest neighbors.</div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Temperature in °F and °C: Ridge gives [-0.607, -0.607], Lasso [-1.164, 0]. What does Lasso's zero mean?</div><div class="opts"><div class="opt correct">Only that the column was redundant given its twin, not that it has no effect.</div></div><div class="why"><b>Why:</b> Naive Bayes has the opposite problem with twins: it counts both.</div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Why must features be scaled before Ridge or Lasso?</div><div class="opts"><div class="opt correct">The penalty charges for weight size, and a feature's units decide how big its weight must be.</div></div><div class="why"><b>Why:</b> For kNN scaling is even more basic: it defines what "similar" means.</div></div>
+
+  <div class="sec"><h2>4.1 · k-Nearest Neighbors: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="1" data-kind="short"><div class="qn">Q1</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.neighbors <span class="k">import</span> KNeighborsClassifier
+knn = KNeighborsClassifier(n_neighbors=<span class="s">3</span>).fit([[<span class="s">0</span>], [<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">6</span>], [<span class="s">7</span>]], [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>])
+print(knn.predict_proba([[<span class="s">1.2</span>]]).round(<span class="s">3</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">[[0.333 0.667]]</code></div></div><div class="why"><b>Why:</b> The three training points nearest 1.2 are 1 (0.2 away), 2 (0.8) and 0 (1.2), with labels 1, 0 and 1. The probabilities are the vote shares in the order of <code class="inline">classes_</code>: class 0 1/3, class 1 2/3.</div></div>
+  <div class="q" data-sc="2"><div class="qn">Q2</div><div class="qt">As <code class="inline">n_neighbors</code> grows from 1 to 501 on the churn data, what happens?</div><div class="opts"><div class="opt correct">A) Variance falls and bias rises: predictions drift toward the overall churn rate</div><div class="opt">B) Variance rises: more neighbors means more noise in each vote</div><div class="opt">C) Nothing changes once the features are scaled</div><div class="opt">D) The model trains more slowly, because it learns more weights</div></div><div class="why"><b>Why:</b> k = 1 copies one neighbor (training AUC 1.000, test 0.645: variance); a huge k averages so many customers that every prediction approaches 16.5% (bias). The test AUC peaks on a plateau around 50 to 150.<br><b>B</b> is wrong: Averaging more neighbors smooths the vote; noise shrinks.<br><b>C</b> is wrong: Scaling decides who the neighbors are; k decides how many vote. Both matter.<br><b>D</b> is wrong: kNN learns no weights; fit only stores the rows, whatever k is.</div></div>
+  <div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">Unscaled kNN on fraud scored AP 0.056 (scaled: 0.397). The first two training payments' squared distance was 99.7% account age. What went wrong?</div><div class="opts"><div class="opt">A) kNN cannot handle rare classes</div><div class="opt">B) 51 neighbors is too many for fraud</div><div class="opt correct">C) Account age runs up to 7,030 days, so it alone decided who the neighbors were; the flags that signal fraud had no say</div><div class="opt">D) Average precision does not work for kNN</div></div><div class="why"><b>Why:</b> A distance adds up raw differences. Without scaling, the column with the biggest numbers defines similarity. Scaling gives every column an equal say to begin with.<br><b>A</b> is wrong: Scaled kNN on the same rare class reached AP 0.397.<br><b>B</b> is wrong: k was the same in both runs; only scaling changed.<br><b>D</b> is wrong: AP needs only a ranking; kNN's vote shares provide one.</div></div>
+  <div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">Fifty columns of random noise lower kNN's churn AUC from 0.842 to 0.755 but logistic regression's only from 0.823 to 0.816. Why?</div><div class="opts"><div class="opt">A) kNN needs more training iterations when there are more columns</div><div class="opt correct">B) kNN gives every scaled column an equal say in the distance; logistic regression learns near-zero weights for useless columns</div><div class="opt">C) Logistic regression scales its own inputs</div><div class="opt">D) The noise columns were not scaled for kNN</div></div><div class="why"><b>Why:</b> kNN has no weights to switch a column off, so every irrelevant column blurs who the true neighbors are (the curse of dimensionality). For kNN, feature selection is part of the model.<br><b>A</b> is wrong: kNN does not iterate: fit only stores the data.<br><b>C</b> is wrong: Both models had the same StandardScaler in front.<br><b>D</b> is wrong: Both pipelines scaled every column.</div></div>
+  <div class="q" data-sc="5" data-kind="short"><div class="qn">Q5</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> pairwise_distances
+print(pairwise_distances([[<span class="s">1</span>, <span class="s">2</span>, <span class="s">3</span>]], [[<span class="s">4</span>, <span class="s">0</span>, <span class="s">3</span>]], metric=<span class="s">"manhattan"</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">[[5.]]</code></div></div><div class="why"><b>Why:</b> Manhattan distance adds the absolute differences: |1 − 4| + |2 − 0| + |3 − 3| = 3 + 2 + 0 = 5. (Euclidean would be √13 ≈ 3.61.)</div></div>
+  <div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">Pinecrest wants to put the lookalike churn model into a nightly scoring job. What must ship with the fitted kNN model?</div><div class="opts"><div class="opt">A) Only the scaler's means and standard deviations</div><div class="opt">B) One weight per feature, like logistic regression</div><div class="opt">C) Nothing: kNN predicts from the new customer alone</div><div class="opt correct">D) The scaler and every training customer, because each prediction searches them</div></div><div class="why"><b>Why:</b> kNN is a lazy learner: fit stores the training table, and predict searches it. Prediction time grows with the training set, and the explanation by lookalikes is other customers' data, which is also a privacy question.<br><b>A</b> is wrong: The scaler is needed, but so are the rows it scales.<br><b>B</b> is wrong: kNN has no weights.<br><b>C</b> is wrong: A prediction is a vote of stored neighbors.</div></div>
+
+  <div class="sec"><h2>4.1 · k-Nearest Neighbors: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> sklearn.neighbors <span class="k">import</span> KNeighborsRegressor
+reg = KNeighborsRegressor(n_neighbors=<span class="s">2</span>).fit([[<span class="s">1</span>], [<span class="s">2</span>], [<span class="s">4</span>], [<span class="s">8</span>]], [<span class="s">10</span>, <span class="s">20</span>, <span class="s">40</span>, <span class="s">80</span>])
+print(reg.predict([[<span class="s">3</span>]]))</pre><div class="opts"><div class="opt correct"><code class="inline">[30.]</code></div></div><div class="why"><b>Why:</b> 2 and 4 are both 1 away from 3; their targets 20 and 40 average to 30. kNN regression averages the neighbors' targets; it cannot predict outside their range.</div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> pairwise_distances
+pts = [[<span class="s">0</span>, <span class="s">0</span>], [<span class="s">3</span>, <span class="s">4</span>]]
+print(pairwise_distances(pts)[<span class="s">0</span>, <span class="s">1</span>], pairwise_distances(pts, metric=<span class="s">"manhattan"</span>)[<span class="s">0</span>, <span class="s">1</span>])</pre><div class="opts"><div class="opt correct"><code class="inline">5.0 7.0</code></div></div><div class="why"><b>Why:</b> Euclidean: √(3² + 4²) = 5. Manhattan: 3 + 4 = 7, walking the grid. Manhattan is never shorter.</div></div>
+
+  <div class="sec"><h2>4.2 · Naive Bayes: self-check</h2><span class="rule"></span></div>
+  <div class="q" data-sc="7"><div class="qn">Q7</div><div class="qt">20% of reviews are negative. The word "flimsy" appears in 10% of negative reviews and 1% of positive ones. What is P(negative | "flimsy")?</div><div class="opts"><div class="opt">A) 0.10</div><div class="opt">B) 0.20, the prior does not change</div><div class="opt">C) 0.50</div><div class="opt correct">D) About 0.71</div></div><div class="why"><b>Why:</b> Prior odds 0.2 / 0.8 = 0.25; the likelihood ratio 10% / 1% = 10 multiplies them to 2.5; 2.5 / 3.5 ≈ 0.71.<br><b>A</b> is wrong: That is P(word | negative), the likelihood, not the posterior.<br><b>B</b> is wrong: The word appears ten times as often in negative reviews; the belief must move.<br><b>C</b> is wrong: That would need a likelihood ratio of 4.</div></div>
+  <div class="q" data-sc="8" data-kind="short"><div class="qn">Q8</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+v = CountVectorizer()
+print(v.fit_transform([<span class="s">"not bad not"</span>, <span class="s">"bad"</span>]).toarray())</pre><div class="opts"><div class="opt correct"><code class="inline">[[1 2]
+ [1 0]]</code></div></div><div class="why"><b>Why:</b> The vocabulary is sorted alphabetically: bad, not. The first text has bad once and not twice; the second only bad. Counts, not presence (that would need <code class="inline">binary=True</code>).</div></div>
+  <div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">With <code class="inline">MultinomialNB(alpha=1e-10)</code> an angry review that says "leaked", "fell apart" and "returned" but also "love" comes out 100% positive. Why?</div><div class="opts"><div class="opt correct">A) "love" never appeared in a negative training review, so with almost no smoothing its probability in that class is about 0, and one zero factor vetoes everything else</div><div class="opt">B) "love" is the strongest word in the vocabulary</div><div class="opt">C) The model ignores negative words</div><div class="opt">D) Small alpha makes the model prefer the majority class</div></div><div class="why"><b>Why:</b> Naive Bayes multiplies one factor per word. Smoothing (alpha = 1) adds a pretend count to every word in every class, so no word can veto the rest: the same review comes out 97% negative.<br><b>B</b> is wrong: Its log ratio is large, but with smoothing the other words outweigh it.<br><b>C</b> is wrong: The negative words are counted; they are cancelled by a zero factor.<br><b>D</b> is wrong: Alpha smooths word counts, not the class prior.</div></div>
+  <div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt"><code class="inline">make_pipeline(StandardScaler(), MultinomialNB())</code> on the churn columns raises <code class="inline">ValueError: Negative values in data passed to MultinomialNB (input X).</code> What should you use?</div><div class="opts"><div class="opt">A) A MinMaxScaler, so the values are between 0 and 1</div><div class="opt">B) ComplementNB, which accepts negative counts</div><div class="opt correct">C) GaussianNB, unscaled: it models continuous measurements with a bell curve per class</div><div class="opt">D) Take absolute values before MultinomialNB</div></div><div class="why"><b>Why:</b> Multinomial, Complement and Bernoulli NB expect counts or 0/1 flags. Continuous measurements belong in GaussianNB, which needs no scaling because each feature is compared with its own per-class mean and spread.<br><b>A</b> is wrong: It would run, but churn columns are not word counts; the model's assumptions would still be wrong.<br><b>B</b> is wrong: ComplementNB also expects non-negative counts.<br><b>D</b> is wrong: Absolute values would merge customers above and below average: nonsense.</div></div>
+  <div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">GaussianNB on 10 churn columns scores AUC 0.778; on 6 (without spend, average order value and the two returns columns) 0.813. Why does dropping columns help?</div><div class="opts"><div class="opt">A) Six columns train faster</div><div class="opt correct">B) The dropped columns repeat information already present, and Naive Bayes counts each one as a new, independent clue</div><div class="opt">C) The dropped columns had missing values</div><div class="opt">D) GaussianNB can only use six columns</div></div><div class="why"><b>Why:</b> Spend is orders × average order value; returns_12m overlaps return_rate. The naive assumption counts the same evidence two or three times, which distorts the scores. Removing duplicates stops the double counting.<br><b>A</b> is wrong: Speed does not change AUC.<br><b>C</b> is wrong: None of those four columns has gaps.<br><b>D</b> is wrong: It takes any number of columns.</div></div>
+  <div class="q" data-sc="12" data-kind="short"><div class="qn">Q12</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> ENGLISH_STOP_WORDS
+print(<span class="s">"not"</span> <span class="k">in</span> ENGLISH_STOP_WORDS, <span class="s">"boots"</span> <span class="k">in</span> ENGLISH_STOP_WORDS)</pre><div class="opts"><div class="opt correct"><code class="inline">True False</code></div></div><div class="why"><b>Why:</b> scikit-learn's built-in English stop-word list contains "not" (and "no", "never"), the words that carry negative sentiment. Removing stop words cost accuracy in the lesson (0.849 against 0.857).</div></div>
+
+  <div class="sec"><h2>4.2 · Naive Bayes: predict, then run</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it.</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+v = CountVectorizer(binary=<span class="k">True</span>)
+print(v.fit_transform([<span class="s">"warm warm boots"</span>, <span class="s">"boots"</span>]).toarray())</pre><div class="opts"><div class="opt correct"><code class="inline">[[1 1]
+ [1 0]]</code></div></div><div class="why"><b>Why:</b> Vocabulary boots, warm. With <code class="inline">binary=True</code> "warm warm" counts once: presence, the input BernoulliNB expects.</div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it.</div><pre class="code">prior, ratio = <span class="s">0.25</span>, <span class="s">3</span>            <span class="c"># P(negative) and P(word | neg) / P(word | pos)</span>
+odds = prior / (<span class="s">1</span> - prior) * ratio
+print(round(odds / (<span class="s">1</span> + odds), <span class="s">2</span>))</pre><div class="opts"><div class="opt correct"><code class="inline">0.5</code></div></div><div class="why"><b>Why:</b> Prior odds 0.25 / 0.75 = 1/3; times 3 = 1; odds of 1 mean a probability of 0.5.</div></div>
+
+  <div class="sec"><h2>Lab Reference Solutions</h2><span class="rule"></span></div>
+<div class="blk lab"><div class="h">Lab 4.1-A: fraud_neighbors</div>
+<p>Starter and solution in <code class="inline">labs/module-07/l4_1-knn/</code>: <code class="inline">fraud_neighbors_starter.py</code> → <code class="inline">fraud_neighbors_solution.py</code>. The solution prints:</p>
+<pre class="out">(35000, 9) random-ranking AP 0.0087
+
+share of the squared distance, first two payments:
+account_age_days    0.997
+amount              0.003
+hour                0.000
+
+kNN unscaled         ROC AUC 0.659   AP 0.056
+kNN scaled           ROC AUC 0.812   AP 0.397
+logistic regression  ROC AUC 0.848   AP 0.444
+k=  5   CV AP 0.362 +/- 0.065
+k= 51   CV AP 0.448 +/- 0.069
+k=201   CV AP 0.468 +/- 0.066
+k=  5:   6 distinct probabilities; 14,588 test payments at exactly 0; test AP 0.329
+k=201:  43 distinct probabilities; 8,240 test payments at exactly 0; test AP 0.419</pre><p>Reading it: unscaled, account age (up to 7,030 days) is the distance, and AP collapses to 0.056, barely above random (0.0087). Scaled, AP 0.397. A larger k ranks better (0.468 at 201 by CV): with k = 5 almost every payment has 0, 1 or 2 fraud neighbors, so most of the ranking is ties. Tuned kNN (test AP 0.419) still trails logistic regression (0.444): each of nine columns has an equal vote, including weak ones.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 4.1-B: lookalike_days</div>
+<p>Starter and solution in <code class="inline">labs/module-07/l4_1-knn/</code>: <code class="inline">lookalike_days_starter.py</code> → <code class="inline">lookalike_days_solution.py</code>. The solution prints:</p>
+<pre class="out">731 training days, 365 days to forecast
+weekday mean             MAE $1,669
+raw, unscaled            MAE $1,889
+raw, scaled              MAE $1,327
+cycles + events, k= 1   MAE $1,389   mean error (actual - forecast) $+517
+cycles + events, k= 5   MAE $1,244   mean error (actual - forecast) $+921
+cycles + events, k=15   MAE $1,256   mean error (actual - forecast) $+1,016
+
+Boise's mean daily sales: 2023 $6,831, 2024 $7,821, 2025 $8,342
+2024 only, k= 5           MAE $1,202   mean error $+458</pre><p>Reading it: unscaled, day-of-year (1 to 366) swamps the weekday (0 to 6), and kNN is worse than the weekday baseline. Scaling, then cyclical features that put Sunday next to Monday and December next to January, bring the error to $1,244. Every forecast is too low on average: Boise grew about $500 to $1,000 a day each year, and an average of past days cannot reach a level it has never seen. Training on 2024 only halves the bias and lowers the error, at the cost of fewer lookalikes.</p>
+</div>
+<div class="blk lab"><div class="h">Handout: labs/module-07/l4_1-knn/debug_knn.py (deliberately broken)</div>
+<ol class="steps">
+  <li><code class="inline">ValueError: Expected n_neighbors &lt;= n_samples_fit, but n_neighbors = 51, n_samples_fit = 40, n_samples = 3</code> → the smoke test fits 51 neighbors on 40 rows; delete it or use k below 40.</li>
+  <li><code class="inline">ValueError: Input X contains NaN.</code> → <code class="inline">email_opens_90d</code> has gaps; add <code class="inline">SimpleImputer(strategy="median")</code> to the pipeline.</li>
+  <li>No error: no <code class="inline">StandardScaler</code> in the pipeline. CV AUC 0.787 instead of 0.854.</li>
+  <li>No error: <code class="inline">knn[-1].kneighbors(customer)</code> searches with an unscaled row: 39 of 51 lookalikes churned, median 364 days, for a customer at 53 days. Fix: <code class="inline">knn[-1].kneighbors(knn[:-1].transform(customer))</code>. Fixed output: <code class="inline">CV ROC AUC 0.854</code> and <code class="inline">3 of 51 lookalikes churned; ... median ... 46 (the customer's: 53)</code>.</li>
+</ol>
+</div>
+<div class="blk lab"><div class="h">Lab 4.2-A: fraud_flags_bayes</div>
+<p>Starter and solution in <code class="inline">labs/module-07/l4_2-naive-bayes/</code>: <code class="inline">fraud_flags_bayes_starter.py</code> → <code class="inline">fraud_flags_bayes_solution.py</code>. The solution prints:</p>
+<pre class="out">prior P(fraud) = 0.0088
+
+P(country_mismatch | fraud) 0.137   P(country_mismatch | legit) 0.0121
+posterior by Bayes' rule 0.091   by counting 0.091
+
+likelihood ratio P(flag | fraud) / P(flag | legit):
+country_mismatch             11.3
+busy_24h                     10.1
+night                         8.1
+gift_card                     6.5
+multi_attempt                 6.2
+device_new                    5.4
+big_amount                    3.9
+billing_shipping_mismatch     3.7
+new_account                   1.9
+
+night + device_new: naive 0.280   counted 0.425   (193 payments)
+big_amount + gift_card: naive 0.185   counted 0.508   (59 payments)
+
+BernoulliNB          ROC AUC 0.810   AP 0.439   above 0.9: 21 payments, 100% fraud
+logistic regression  ROC AUC 0.810   AP 0.435   above 0.9: 8 payments, 100% fraud</pre><p>Reading it: with one flag, Bayes' rule and counting agree exactly. With two flags the naive product is too low (0.280 against 0.425; 0.185 against 0.508): among frauds, night-time payments come from new devices more often than independence predicts, so the flags reinforce each other. In reviews the naive assumption over-counts; here it under-counts. BernoulliNB on nine flags ranks like logistic regression (AP 0.439 against 0.435) and is more extreme: 21 payments above 0.9 against 8.</p>
+</div>
+<div class="blk lab"><div class="h">Lab 4.2-B: review_category</div>
+<p>Starter and solution in <code class="inline">labs/module-07/l4_2-naive-bayes/</code>: <code class="inline">review_category_starter.py</code> → <code class="inline">review_category_solution.py</code>. The solution prints:</p>
+<pre class="out">3000 train, 1000 test; 10 categories
+{'Apparel': 948, 'Accessories': 527, 'Paddling': 518}
+baseline             accuracy 0.237
+MultinomialNB        accuracy 0.586
+ComplementNB         accuracy 0.592
+logistic regression  accuracy 0.605
+alpha=0.1  CV accuracy 0.583
+alpha=0.3  CV accuracy 0.582
+alpha=1.0  CV accuracy 0.579
+alpha=3.0  CV accuracy 0.580
+Tents     ['canopy', 'camp', 'tent', 'person', 'ultralight']
+Paddling  ['deck', 'paddle', 'leash', 'bag', 'life']
+Footwear  ['hiking', 'socks', 'shoes', 'boots', 'approach']
+
+most frequent mix-ups (true -&gt; predicted):
+Camp Kitchen  Accessories    20
+Apparel       Paddling       20
+Paddling      Apparel        19
+recall by category: {'Packs': 0.39, 'Camp Kitchen': 0.43, 'Footwear': 0.49}</pre><p>Reading it: with ten classes, 58.6% is far above the 23.7% baseline. Category words (canopy, paddle, boots) carry it; generic review phrases (shipping, price, fit) are shared by all categories, which is why accuracy stops near 60%. The mix-ups make sense: Camp Kitchen items look like Accessories, and Apparel and Paddling reviews share the same aspect phrases about fit and waterproofing. ComplementNB helps slightly with the unbalanced classes; alpha hardly matters.</p>
+</div>
+
+  <div class="sec"><h2>The Lesson Pages' Own Quick Quizzes</h2><span class="rule"></span></div>
+<div class="blk"><div class="h">Lesson 4.1 · k-Nearest Neighbors</div>
+<ol class="steps">
+  <li><b>B</b> <code class="inline">[[0.667 0.333]]</code>: the three nearest points to 1.4 are 1, 2 and 0 with labels 0, 1, 0.</li>
+  <li><b>A</b> Overfitting: each training customer is its own nearest neighbor.</li>
+  <li><b>C</b> Spend, simply because its numbers are bigger (90,000 against 14,400 in the squared distance).</li>
+  <li><b>B</b> kNN gives every column an equal say; logistic regression learns to ignore useless columns.</li>
+  <li><b>C</b> kNN trains almost instantly but must keep and search all the training rows at prediction time.</li>
+</ol>
+</div>
+<div class="blk"><div class="h">Lesson 4.2 · Naive Bayes</div>
+<ol class="steps">
+  <li><b>B</b> It rises from 0.25 to about 0.8 (likelihood ratio 12).</li>
+  <li><b>C</b> The model treats the new column as independent evidence and counts the same information twice.</li>
+  <li><b>A</b> <code class="inline">[[0 2 1] [1 0 1]]</code>: vocabulary boots, dry, warm.</li>
+  <li><b>C</b> It pushes toward positive, but other words can still make the review negative.</li>
+  <li><b>B</b> Rank customers with it, but recalibrate before quoting its probabilities.</li>
+</ol>
+</div>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<ol class="steps">
+  <li><b>Scaling:</b> kNN's distance adds raw differences, so without scaling the units decide similarity; MultinomialNB models counts, and scaling creates negative values it refuses.</li>
+  <li><b>k = 1:</b> high variance: every training customer is its own nearest neighbor, so training AUC is meaningless. Choose a larger k (around 50 here) by cross-validation.</li>
+  <li><b>Posterior:</b> prior odds 0.25 / 0.75 = 1/3; likelihood ratio 8 / 2 = 4; posterior odds 4/3; probability 4/7 ≈ 0.57.</li>
+</ol>
+
+  <div class="sec"><h2>Common Wrong Answers and What They Reveal</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li><b>Q1 written with the two numbers swapped</b> (<code class="inline">[[0.667 0.333]]</code>). Reads the columns in the wrong order: they follow <code class="inline">classes_</code>, 0 then 1.</li>
+  <li><b>Q2 B.</b> Thinks more neighbors means more noise; draw 1 neighbor against 50.</li>
+  <li><b>Q4 C or D.</b> Assumes logistic regression is protected by scaling; both were scaled. The difference is weights.</li>
+  <li><b>Q7 A.</b> Gives the likelihood, not the posterior. Write prior × likelihood ratio in odds.</li>
+  <li><b>Q10 A.</b> "Make it positive and it runs": running is not the same as modeling the right thing.</li>
+  <li><b>Exit ticket 3 written as 0.08 or 0.8.</b> Same confusion as Q7.</li>
+</ul>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 7 · Answer Key · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

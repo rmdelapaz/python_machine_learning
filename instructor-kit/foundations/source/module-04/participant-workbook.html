@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 4</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 4: Pipelines and Creating Features</h1>
+    <p class="sub">Your workbook for Session 4: a warm-up from Session 3, the key ideas of Lessons 2.2 and 2.3, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>2.2–2.3</b></span>
+      <span class="chip">Session <b>4</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Build any model that needs preprocessing as ONE pipeline, read and change any setting inside it, and save it to a file.</li>
+  <li>Explain, with a number, why every step that learns from data must be fitted inside the cross-validation folds.</li>
+  <li>Turn what you see in the training rows (a jump, a U-shape, an effect that differs by group) into features a linear model can use.</li>
+  <li>Build date, cycle, lag and rolling features that never look into the future, and measure every idea before keeping it.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-up: from Session 3</h2><span class="rule"></span></div>
+<p>Five questions on Lessons 1.4 and 2.1, no notes. Your instructor reveals the answers.</p>
+<div class="q"><div class="qn">W1</div><div class="qt">Pinecrest's care team calls 150 customers and 103 of them really were about to churn. Which metric is 103 / 150, and what does it answer? <span style="color:var(--muted,#666)">(Lesson 1.4)</span></div><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">What does this print? <span style="color:var(--muted,#666)">(Lesson 1.4)</span></div><pre class="code"><span class="k">from</span> sklearn.metrics <span class="k">import</span> precision_score, recall_score
+y_true = [<span class="s">1</span>, <span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>]
+y_pred = [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>, <span class="s">0</span>]
+print(round(precision_score(y_true, y_pred), <span class="s">3</span>), round(recall_score(y_true, y_pred), <span class="s">3</span>))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">Lesson 1.4's project chose a threshold of 0.26. Why from out-of-fold probabilities on the training rows, and never from the test set? <span style="color:var(--muted,#666)">(Lesson 1.4)</span></div><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">What does this print? <span style="color:var(--muted,#666)">(Lesson 2.1)</span></div><pre class="code"><span class="k">from</span> sklearn.preprocessing <span class="k">import</span> OneHotEncoder
+enc = OneHotEncoder(sparse_output=<span class="k">False</span>, handle_unknown=<span class="s">"ignore"</span>).fit([[<span class="s">"Bend"</span>], [<span class="s">"Boise"</span>], [<span class="s">"Online"</span>]])
+print(enc.transform([[<span class="s">"Reno"</span>], [<span class="s">"Boise"</span>]]))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">Lesson 2.1 asked: to cross-validate its churn model, which objects must be refitted inside every fold, and in which order? <span style="color:var(--muted,#666)">(Lesson 2.1)</span></div><div class="write"></div></div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">2.2</span><h3>Pipelines</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Build a Pipeline with <code class="inline">make_pipeline</code> or with named steps, and explain what <code class="inline">fit</code> and <code class="inline">predict</code> do to each step</li>
+  <li>Reach inside a fitted pipeline (<code class="inline">named_steps</code>, indexing, slicing) to read learned values</li>
+  <li>Cross-validate a whole pipeline, and show with a target-based encoding why preprocessing outside the folds leaks</li>
+  <li>Change any setting with the <code class="inline">step__parameter</code> naming, swap a whole step, and run a first small grid search</li>
+  <li>Add a custom step with <code class="inline">FunctionTransformer</code>, and save and reload a fitted pipeline with joblib</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The coffee machine.</b> A pipeline is transformers in order plus one model at the end, with the same <code class="inline">fit</code>, <code class="inline">predict</code>, <code class="inline">predict_proba</code> and <code class="inline">score</code> as a single model.</li>
+  <li><b>fit vs predict.</b> <code class="inline">fit</code> calls <code class="inline">fit_transform</code> on every step but the last, then <code class="inline">fit</code>; <code class="inline">predict</code> calls only <code class="inline">transform</code>, then <code class="inline">predict</code>. Nothing is refitted on the rows being predicted.</li>
+  <li><b>Looking inside.</b> <code class="inline">pipe.named_steps["prep"]</code>, <code class="inline">pipe[-1]</code> (the model), <code class="inline">pipe[:-1]</code> (everything before it). <code class="inline">named_transformers_</code> holds a ColumnTransformer's fitted branches.</li>
+  <li><b>Leaks.</b> Any step that learns from data must be fitted inside each fold. Steps that learn from y (target encoding, selection, resampling) leak the most: 0.930 leaky vs 0.586 honest for the signup-date rate.</li>
+  <li><b>Names.</b> <code class="inline">step__parameter</code>, deeper <code class="inline">step__branch__substep__parameter</code>, for <code class="inline">set_params</code> and grid searches. <code class="inline">make_pipeline</code> names steps after their classes; <code class="inline">Pipeline([("prep", ...), ("model", ...)])</code> uses yours.</li>
+  <li><b>Swap and search.</b> <code class="inline">clone(pipe).set_params(model=...)</code> swaps a whole step; <code class="inline">GridSearchCV(pipe, param_grid=..., cv=cv)</code> cross-validates every combination without leaks.</li>
+  <li><b>Custom and saved.</b> <code class="inline">FunctionTransformer(func)</code> makes a stateless step; <code class="inline">joblib.dump</code>/<code class="inline">joblib.load</code> save the whole fitted pipeline (load only files you trust).</li>
+  <li><b>What a pipeline cannot do.</b> It separates rows, not columns: a column from the future in your feature list still leaks.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: a pipeline that fills a gap</div>
+<p>A three-column churn model with a gap to fill, as one pipeline with named steps. First, cross-validate the whole thing: the imputer and the scaler are refitted in every fold.</p>
+<pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.impute <span class="k">import</span> SimpleImputer
+<span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> StratifiedKFold, cross_val_score, train_test_split
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> Pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>)
+cols = [<span class="s">"days_since_last_order"</span>, <span class="s">"discount_share"</span>, <span class="s">"email_opens_90d"</span>]
+X_train, X_test, y_train, y_test = train_test_split(
+    customers[cols], customers[<span class="s">"churned"</span>], test_size=<span class="s">0.25</span>, stratify=customers[<span class="s">"churned"</span>], random_state=<span class="s">42</span>)
+pipe = Pipeline([
+    (<span class="s">"fill"</span>, SimpleImputer(strategy=<span class="s">"median"</span>)),
+    (<span class="s">"scale"</span>, StandardScaler()),
+    (<span class="s">"model"</span>, LogisticRegression()),
+])
+cv = StratifiedKFold(n_splits=<span class="s">5</span>, shuffle=<span class="k">True</span>, random_state=<span class="s">42</span>)
+scores = cross_val_score(pipe, X_train, y_train, cv=cv, scoring=<span class="s">"roc_auc"</span>)
+print(<span class="s">f"CV ROC AUC {scores.mean():.3f} +/- {scores.std():.3f}"</span>)</pre>
+<pre class="out">CV ROC AUC 0.813 +/- 0.024</pre><p>Now fit it once on all training rows and score two customers who are in no file, both with an unknown email count.</p>
+<pre class="code">pipe.fit(X_train, y_train)
+print(<span class="s">"medians learned:"</span>, pipe.named_steps[<span class="s">"fill"</span>].statistics_)
+new = pd.DataFrame({<span class="s">"days_since_last_order"</span>: [<span class="s">20</span>, <span class="s">220</span>], <span class="s">"discount_share"</span>: [<span class="s">0.10</span>, <span class="s">0.50</span>],
+                    <span class="s">"email_opens_90d"</span>: [np.nan, np.nan]})
+print(pipe[:-<span class="s">1</span>].transform(new).round(<span class="s">2</span>))
+print(<span class="s">"churn probability:"</span>, pipe.predict_proba(new)[:, <span class="s">1</span>].round(<span class="s">3</span>))</pre>
+<pre class="out">medians learned: [52.     0.141  6.   ]
+[[-0.73 -0.61 -0.22]
+ [ 1.57  1.63 -0.22]]
+churn probability: [0.043 0.669]</pre><p>Read it from the inside out. The imputer learned three medians from the training rows (52 days, a discount share of 0.141, 6 opens). Both new customers have no email count, so both get 6, which scales to -0.22: the same value for both, because nothing is refitted on new rows. <code class="inline">pipe[:-1]</code> shows the data exactly as the model sees it. The first customer (20 days, light discounts) gets 0.043; the second (220 days, half of spend on discount) 0.669.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-04/l2_2-pipelines/fraud_pipeline_starter.py</code>. A pipeline for card fraud: build <code class="inline">prep</code> + <code class="inline">model</code>, compare it with a baseline pipeline by cross-validation (ROC AUC and average precision), reach inside, turn <code class="inline">model__C</code>, test once, save, reload and score three raw payments. Before TODO 2, write down what you think the baseline's average precision will be.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-04/l2_2-pipelines/leak_size_starter.py</code>. Three steps done before cross-validation and inside a pipeline. The one not typing predicts each gap out loud.</li>
+  <li>Done when your numbers match the "Expected when done" lines.</li>
+  <li>Finished early? <code class="inline">labs/module-04/l2_2-pipelines/debug_pipeline.py</code>: three bugs that stop it, one that does not.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (make_pipeline names steps after their classes.)</div><pre class="code"><span class="k">from</span> sklearn.impute <span class="k">import</span> SimpleImputer
+<span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+pipe = make_pipeline(SimpleImputer(), StandardScaler(), LogisticRegression())
+print(list(pipe.named_steps))
+print(len(pipe[:-<span class="s">1</span>]))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (The imputer was fitted on three training values.)</div><pre class="code"><span class="k">from</span> sklearn.impute <span class="k">import</span> SimpleImputer
+imp = SimpleImputer(strategy=<span class="s">"median"</span>).fit([[<span class="s">1.0</span>], [<span class="s">2.0</span>], [<span class="s">9.0</span>]])
+print(imp.transform([[<span class="k">None</span>], [<span class="s">100.0</span>]]).ravel())</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>A deployable churn pipeline</b> (lesson page, "Project: A Deployable Churn Pipeline"). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: load, split, columns, <code class="inline">cv</code>. Check: <code class="inline">(4500, 16) (1500, 16)</code></li>
+  <li>☐ Step 2: one preprocessor, <code class="inline">churn_pipeline(model)</code>, three candidates</li>
+  <li>☐ Step 3: CV baseline 0.500, logistic regression 0.833 ± 0.021, gradient boosting 0.861 ± 0.013; chosen: gradient boosting</li>
+  <li>☐ Step 4: test ROC AUC 0.863; 42 real churners in the top 50 (random list 8.3)</li>
+  <li>☐ Step 5: <code class="inline">churn_pipeline.joblib</code> reloads; 16 columns expected</li>
+  <li>☐ Step 6: two raw records scored (N1 0.866, N2 0.002); <code class="inline">monthly_churn_scores.csv</code></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">A fitted pipeline <code class="inline">make_pipeline(StandardScaler(), LogisticRegression())</code> is asked to <code class="inline">predict_proba(X_new)</code>. What does the scaler step do with <code class="inline">X_new</code>?</div><div class="opts"><div class="opt">A) <code class="inline">fit_transform</code>: the new rows are centered on their own mean</div><div class="opt">B) <code class="inline">transform</code> only, with the means and standard deviations it learned during <code class="inline">fit</code></div><div class="opt">C) Nothing: scaling only happens during fit</div><div class="opt">D) It refits on the training rows and the new rows together</div></div></div>
+<div class="q" data-sc="2"><div class="qn">Q2</div><div class="qt">Which name sets the imputer's strategy in this pipeline?</div><pre class="code">pipe = Pipeline([
+    (<span class="s">"prep"</span>, ColumnTransformer([
+        (<span class="s">"num"</span>, make_pipeline(SimpleImputer(), StandardScaler()), [<span class="s">"email_opens_90d"</span>]),
+    ])),
+    (<span class="s">"model"</span>, LogisticRegression()),
+])</pre><div class="opts"><div class="opt">A) <code class="inline">prep__simpleimputer__strategy</code></div><div class="opt">B) <code class="inline">num__simpleimputer__strategy</code></div><div class="opt">C) <code class="inline">prep_num_simpleimputer_strategy</code></div><div class="opt">D) <code class="inline">prep__num__simpleimputer__strategy</code></div></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">from</span> sklearn.linear_model <span class="k">import</span> LogisticRegression
+<span class="k">from</span> sklearn.pipeline <span class="k">import</span> make_pipeline
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> StandardScaler
+pipe = make_pipeline(StandardScaler(), LogisticRegression())
+pipe.set_params(model__C=<span class="s">0.1</span>)</pre><div class="opts"><div class="opt">A) <code class="inline">ValueError</code>: <code class="inline">Invalid parameter</code> <code class="inline">'model'</code>: make_pipeline named the step <code class="inline">logisticregression</code></div><div class="opt">B) It sets C on the logistic regression</div><div class="opt">C) <code class="inline">TypeError</code>: C can only be set when the model is created</div><div class="opt">D) Nothing: the unknown setting is silently ignored</div></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">Which of these steps could be applied to all training rows BEFORE cross-validation without changing the cross-validated score at all?</div><div class="opts"><div class="opt">A) <code class="inline">SimpleImputer(strategy="median")</code></div><div class="opt">B) <code class="inline">TargetEncoder()</code> on a high-cardinality column</div><div class="opt">C) <code class="inline">FunctionTransformer(np.log1p)</code></div><div class="opt">D) <code class="inline">SelectKBest(k=10)</code> (keeps the columns most related to y)</div></div></div>
+<div class="q" data-sc="5" data-kind="short"><div class="qn">Q5</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+<span class="k">from</span> sklearn.preprocessing <span class="k">import</span> FunctionTransformer
+log = FunctionTransformer(np.log1p).fit([[<span class="s">0.0</span>], [<span class="s">9.0</span>]])
+print(log.transform([[<span class="s">99.0</span>]]).round(<span class="s">3</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="6"><div class="qn">Q6</div><div class="qt">The IT team reloads <code class="inline">churn_pipeline.joblib</code> and sends next month's records, but their export leaves out the <code class="inline">email_opens_90d</code> column. What happens?</div><div class="opts"><div class="opt">A) The imputer fills the whole column with the training median</div><div class="opt">B) The pipeline uses the other 15 columns and ignores the missing one</div><div class="opt">C) It predicts the baseline churn rate for every customer</div><div class="opt">D) <code class="inline">ValueError: columns are missing: {'email_opens_90d'}</code>: send the column, empty (NaN) where unknown</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the signup-date leak to a colleague who has never heard of cross-validation: why did the score look like 0.93, and why was it really about 0.57? Then list two kinds of leak a pipeline prevents and one kind it cannot prevent, with a Pinecrest example of each.</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">2.3</span><h3>Creating Features</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain why a linear model cannot use a threshold, a U-shape or an interaction unless you build it as a feature</li>
+  <li>Create flags, ratios and interaction terms with pandas, choosing them from the training data only</li>
+  <li>Extract calendar parts and cyclical (sine and cosine) features from a date column</li>
+  <li>Build lag and rolling-window features per group with <code class="inline">shift</code>, so no row sees its own future</li>
+  <li>Put feature creation inside a Pipeline with <code class="inline">FunctionTransformer</code> and measure the lift with cross-validation</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The interviewer and the calculator.</b> A linear model only adds weighted columns. A threshold, a U-shape or an interaction exists for it only if you build it as a column.</li>
+  <li><b>Look before you build, on the training rows only.</b> Groupbys by ranges (<code class="inline">pd.cut</code>) and pivot tables reveal jumps (recency near 150 days), U-shapes (tenure) and interactions (tickets without the app).</li>
+  <li><b>Flags, products and ratios.</b> A flag <code class="inline">(x &gt; t).astype(int)</code>, an interaction <code class="inline">a * (1 - b)</code>, a ratio over a column that is never 0. Write them in one pure function (<code class="inline">df.copy()</code>).</li>
+  <li><b>Measure inside a pipeline.</b> <code class="inline">FunctionTransformer(add_features)</code> before the scaler; cross-validate against the plain model. Five churn features: 0.829 → 0.883.</li>
+  <li><b>Dates.</b> <code class="inline">parse_dates</code>, then <code class="inline">.dt.month</code>, <code class="inline">.dt.dayofweek</code>, date differences. Cycles: <code class="inline">sin</code> and <code class="inline">cos</code> of <code class="inline">2π · month / 12</code>, both columns.</li>
+  <li><b>Combined categories.</b> <code class="inline">category + "-" + month</code> gives each category its own season (demand MAE 11.23 → 9.39).</li>
+  <li><b>History.</b> Per series and past only: <code class="inline">groupby(...).shift(1)</code>, <code class="inline">shift(1).rolling(k).mean()</code>. Ask: on the day of the prediction, would this number exist?</li>
+  <li><b>Aggregates.</b> Compute group averages of the target from the training rows only (or per fold, with TargetEncoder). A log target turns multiplicative effects into additive ones.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: a date feature that was already there</div>
+<p>Lesson 2.3 says a column like <code class="inline">tenure_months</code> is usually born from two dates. Check it, then try a calendar feature from <code class="inline">signup_date</code> on the training rows.</p>
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+<span class="k">from</span> sklearn.model_selection <span class="k">import</span> train_test_split
+customers = pd.read_csv(<span class="s">"data/customers_churn.csv"</span>, parse_dates=[<span class="s">"signup_date"</span>])
+train, test = train_test_split(customers, test_size=<span class="s">0.25</span>, stratify=customers[<span class="s">"churned"</span>], random_state=<span class="s">42</span>)
+train = train.copy()
+snapshot = pd.Timestamp(<span class="s">"2025-06-30"</span>)
+train[<span class="s">"days_since_signup"</span>] = (snapshot - train[<span class="s">"signup_date"</span>]).dt.days
+print(train[[<span class="s">"signup_date"</span>, <span class="s">"days_since_signup"</span>, <span class="s">"tenure_months"</span>]].head(<span class="s">3</span>))
+print(<span class="s">"correlation with tenure:"</span>, round(train[<span class="s">"days_since_signup"</span>].corr(train[<span class="s">"tenure_months"</span>]), <span class="s">3</span>))</pre>
+<pre class="out">     signup_date  days_since_signup  tenure_months
+1556  2025-05-11                 50              1
+965   2021-10-28               1341             44
+5145  2025-02-25                125              4
+correlation with tenure: 1.0</pre><p>A correlation of 1.0: the days since signup ARE tenure, in other units. A feature you build may already be in the table. Next, the signup month:</p>
+<pre class="code">train[<span class="s">"signup_month"</span>] = train[<span class="s">"signup_date"</span>].dt.month
+by_month = train.groupby(<span class="s">"signup_month"</span>).agg(
+    churn=(<span class="s">"churned"</span>, <span class="s">"mean"</span>), new_share=(<span class="s">"tenure_months"</span>, <span class="k">lambda</span> t: (t &lt; <span class="s">6</span>).mean()))
+print(by_month.round(<span class="s">2</span>).T)</pre>
+<pre class="out">signup_month    1     2     3     4     5     6     7     8     9     10    11    12
+churn         0.19  0.20  0.20  0.19  0.24  0.11  0.09  0.12  0.14  0.14  0.11  0.15
+new_share     0.40  0.44  0.42  0.40  0.38  0.00  0.00  0.00  0.00  0.00  0.00  0.01</pre><p>Signup month looks like a strong signal: about 20% churn for January to May, 9 to 15% for the other months. But look at <code class="inline">new_share</code>: every customer with under six months of tenure signed up between January and May 2025. Remove them:</p>
+<pre class="code">settled = train[train[<span class="s">"tenure_months"</span>] &gt;= <span class="s">6</span>]
+rates = settled.groupby(<span class="s">"signup_month"</span>)[<span class="s">"churned"</span>].mean()
+print(<span class="s">f"customers with 6+ months: churn by signup month from {rates.min():.3f} to {rates.max():.3f}"</span>)</pre>
+<pre class="out">customers with 6+ months: churn by signup month from 0.091 to 0.153</pre><p>Among customers with six months or more, the spread shrinks to 9 to 15%, close to what chance produces in groups of about 300 to 450 (the 2,000 customers who joined in a given month across eight years). The month was mostly the new-customer effect in disguise. Before you keep a feature, ask what it might be standing in for, and measure it next to the features you already have.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-04/l2_3-creating-features/night_features_starter.py</code>. In Session 1 the fraud model gave <code class="inline">hour</code> a backwards weight. Look at the training rows, build night features, put them in the pipeline, and measure.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">labs/module-04/l2_3-creating-features/daily_sales_features_starter.py</code>. Tomorrow's store sales: day of the week, lags per store, three linear models. Swap the keyboard at TODO 4.</li>
+  <li>Done when your numbers match the "Expected when done" lines.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction on the line first, then run the code. A wrong prediction you can explain afterward is worth more than a right guess.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (An interaction term.)</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+df = pd.DataFrame({<span class="s">"tickets"</span>: [<span class="s">0</span>, <span class="s">2</span>, <span class="s">3</span>, <span class="s">1</span>], <span class="s">"app_user"</span>: [<span class="s">1</span>, <span class="s">1</span>, <span class="s">0</span>, <span class="s">0</span>]})
+df[<span class="s">"tickets_no_app"</span>] = df[<span class="s">"tickets"</span>] * (<span class="s">1</span> - df[<span class="s">"app_user"</span>])
+print(df[<span class="s">"tickets_no_app"</span>].tolist())</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (June 28, 2025 is a Saturday; .dt.dayofweek counts Monday as 0.)</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+days = pd.to_datetime(pd.Series([<span class="s">"2025-06-28"</span>, <span class="s">"2025-06-30"</span>, <span class="s">"2025-07-04"</span>]))
+print(days.dt.dayofweek.tolist(), days.dt.month.tolist())</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>The weekly demand forecaster</b> (lesson page, "Project: The Weekly Demand Forecaster"). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: features on the full table, split by year. Check: <code class="inline">5088 4896 0 missing lags in test</code>, baseline MAE 17.13</li>
+  <li>☐ Step 2: raw columns 11.28; + month 11.23 (why so little?)</li>
+  <li>☐ Step 3: + category × month 9.39</li>
+  <li>☐ Step 4: log target 7.92</li>
+  <li>☐ Step 5: + lags 7.92 (a non-result worth recording)</li>
+  <li>☐ Step 6: boosting on raw columns 8.61; the scoreboard chart; <code class="inline">demand_scoreboard.csv</code></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+df = pd.DataFrame({<span class="s">"store"</span>: [<span class="s">"A"</span>, <span class="s">"A"</span>, <span class="s">"B"</span>, <span class="s">"B"</span>, <span class="s">"A"</span>], <span class="s">"units"</span>: [<span class="s">5</span>, <span class="s">7</span>, <span class="s">9</span>, <span class="s">4</span>, <span class="s">6</span>]})
+print(df.groupby(<span class="s">"store"</span>)[<span class="s">"units"</span>].shift(<span class="s">1</span>).tolist())</pre><div class="write"></div></div>
+<div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">Churn is 32% for customers under 6 months, about 8 to 11% in the middle years and 21.5% above 72 months, yet a logistic regression on the raw columns gives tenure only a small weight. Why?</div><div class="opts"><div class="opt">A) Tenure does not really matter for churn</div><div class="opt">B) Tenure was not scaled</div><div class="opt">C) A straight line through a U-shape is nearly flat; flags such as new_customer and veteran let the model express it</div><div class="opt">D) Tenure is redundant with <code class="inline">signup_date</code></div></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">What does <code class="inline">tickets_no_app = support_tickets_12m * (1 - app_user)</code> let a linear model do?</div><div class="opts"><div class="opt">A) Give support tickets their own weight for customers without the app</div><div class="opt">B) Remove app users from the training data</div><div class="opt">C) Count every app user's tickets twice</div><div class="opt">D) Replace <code class="inline">app_user</code>, which can then be dropped</div></div></div>
+<div class="q" data-sc="10" data-kind="short"><div class="qn">Q10</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> numpy <span class="k">as</span> np
+months = np.array([<span class="s">3</span>, <span class="s">6</span>, <span class="s">12</span>])
+print(np.cos(<span class="s">2</span> * np.pi * months / <span class="s">12</span>).round(<span class="s">2</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="11"><div class="qn">Q11</div><div class="qt">An average of units sold per product, store and month computed from BOTH years forecasts 2025 with MAE 9.87; computed from 2024 only, 11.36. Why is 9.87 not a real improvement?</div><div class="opts"><div class="opt">A) Averages over more rows always overfit</div><div class="opt">B) The 2025 weeks being predicted helped compute their own feature</div><div class="opt">C) MAE rewards forecasts that are too low</div><div class="opt">D) 2025 has fewer weeks than 2024</div></div></div>
+<div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+df = pd.DataFrame({<span class="s">"returns"</span>: [<span class="s">1</span>, <span class="s">0</span>, <span class="s">2</span>], <span class="s">"tickets"</span>: [<span class="s">2</span>, <span class="s">0</span>, <span class="s">0</span>]})
+print((df[<span class="s">"returns"</span>] / df[<span class="s">"tickets"</span>]).tolist())</pre><div class="opts"><div class="opt">A) <code class="inline">[0.5, 0.0, 0.0]</code></div><div class="opt">B) A <code class="inline">ZeroDivisionError</code></div><div class="opt">C) <code class="inline">[0.5, nan, inf]</code></div><div class="opt">D) <code class="inline">[0.5, nan, nan]</code></div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the interviewer and the calculator in your own words, using one churn feature and one demand feature from today as examples. Then copy your project scoreboard and mark the two lines where an idea about the business, not a better algorithm, made the biggest difference. What was the idea in each case?</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<p>Three questions, no notes.</p>
+<div class="q"><div class="qn">E1</div><div class="qt">Name two things a Pipeline does that you had to remember by hand in Lesson 2.1, and one kind of leak it cannot prevent.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">The signup-date churn rate scored 0.930 in cross-validation and 0.571 on the test set. Why, and what fixed the measurement?</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">Give one feature you built today, the shape or interaction it lets a linear model express, and how you knew it helped.</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish the deployable churn pipeline (Steps 4 to 6) and the weekly demand forecaster (Steps 4 to 6)</li>
+  <li>☐ Lesson 2.2 Hands-on Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Lesson 2.3 Hands-on Exercises 1 to 3 (Exercise 4 is a stretch)</li>
+  <li>☐ Both Quick Quizzes on the lesson pages</li>
+  <li>☐ Both journal entries</li>
+  <li>☐ Keep <code class="inline">churn_pipeline.joblib</code>, <code class="inline">demand_scoreboard.csv</code> and both project notebooks</li>
+  <li>☐ Rewrite one Module 1 model as a pipeline: does its score change?</li>
+  <li>☐ Write down three churn columns I suspect carry the same information as another column (for Lesson 2.4)</li>
+  <li>☐ Ten minutes with Lesson 1.4's Key Takeaways (precision, recall, average precision) before Session 5</li>
+  <li>☐ Bring to Session 5: my environment, <code class="inline">pinecrest-ml</code> with <code class="inline">data/</code> and <code class="inline">labs/</code>, my 2.3 notebook (<code class="inline">add_churn_features</code>), my redundancy list, this workbook and my journal</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>pipeline</td><td>Transformers in order plus one final model, used as a single estimator (<code class="inline">Pipeline</code>, <code class="inline">make_pipeline</code>)</td></tr>
+<tr><td>step name</td><td>The label of a step: yours in <code class="inline">Pipeline([...])</code>, the lowercase class name in <code class="inline">make_pipeline</code></td></tr>
+<tr><td><code class="inline">step__parameter</code></td><td>The address of a setting inside a pipeline, levels joined by two underscores</td></tr>
+<tr><td><code class="inline">named_transformers_</code></td><td>A fitted ColumnTransformer's branches, by name</td></tr>
+<tr><td>clone</td><td>An unfitted copy of an estimator with the same settings</td></tr>
+<tr><td>grid search</td><td><code class="inline">GridSearchCV</code>: cross-validate every combination of settings and refit the best</td></tr>
+<tr><td>target encoding</td><td>Replacing a category with the average target for that category; fitted inside the folds (<code class="inline">TargetEncoder</code>)</td></tr>
+<tr><td>stateless / stateful step</td><td>A step that learns nothing (a fixed function) / one that learns from the data and must be fitted in each fold</td></tr>
+<tr><td>engineered feature</td><td>A new column built from existing ones to give the model a question it could not ask</td></tr>
+<tr><td>flag</td><td>A 0/1 column for a condition, such as <code class="inline">lapsed_150</code></td></tr>
+<tr><td>interaction term</td><td>A product of columns whose effect depends on another, such as <code class="inline">tickets_no_app</code></td></tr>
+<tr><td>cyclical encoding</td><td><code class="inline">sin</code> and <code class="inline">cos</code> of a periodic value so December sits next to January</td></tr>
+<tr><td>lag / rolling feature</td><td>A past value of the target / a summary of a window of past values, per series, via <code class="inline">shift</code></td></tr>
+<tr><td>aggregate feature</td><td>A group summary (such as an average) looked up for each row; from training rows only</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Machine Learning Foundations</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 4 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

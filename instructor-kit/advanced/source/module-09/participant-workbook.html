@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participant Workbook: Session 9</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="../../kit.css">
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="lbl">Student workbook —</span>
+  <button type="button" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <span class="hint">write in it · bring it to every session</span>
+</div>
+
+<div class="sheet">
+
+  <header class="mast">
+    <div class="kit-eyebrow">Instructor Kit · Participant Workbook</div>
+    <h1>Session 9: Transfer Learning and Text Classification</h1>
+    <p class="sub">Your workbook for Session 9: a warm-up on CNNs and sequences, the key ideas of Lessons 10.5 and 11.1, worked examples, the guided labs, predict-then-run practice, a self-check for each lesson, and your exit ticket.</p>
+    <div class="meta-row">
+      <span class="chip">Lessons <b>10.5–11.1</b></span>
+      <span class="chip">Session <b>9</b> · 3 hours</span>
+      <span class="chip">Name: ____________________</span>
+    </div>
+  </header>
+
+  <div class="sec"><h2>Session Goals</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>Reuse a pretrained network: cut off its head, freeze its backbone, train a new head on its features, and fine-tune its last block safely.</li>
+  <li>Measure what transfer learning buys against a from-scratch CNN, and how many labels are worth paying for.</li>
+  <li>Turn reviews into a sparse TF-IDF matrix inside a pipeline, train a sentiment classifier and read its words.</li>
+  <li>Spot the stop-word trap and keep negation with bigrams; choose a flagging threshold without touching the test set.</li>
+</ul>
+
+  <div class="sec"><h2>Warm-up: CNNs and Sequences</h2><span class="rule"></span></div>
+<p>Five questions on Lessons 10.3 and 10.4. Answer alone first (2 minutes).</p>
+<div class="q"><div class="qn">W1</div><div class="qt">What shape does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+print(nn.Conv2d(<span class="s">1</span>, <span class="s">8</span>, kernel_size=<span class="s">3</span>)(torch.zeros(<span class="s">4</span>, <span class="s">1</span>, <span class="s">28</span>, <span class="s">28</span>)).shape)</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W2</div><div class="qt">How many parameters? (This is ResNet-18's first layer; Lesson 10.3's Before the Next Lesson asked the same.)</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> nn.Conv2d(<span class="s">3</span>, <span class="s">64</span>, kernel_size=<span class="s">7</span>, bias=<span class="k">False</span>).parameters()))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W3</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+lstm = nn.LSTM(input_size=<span class="s">2</span>, hidden_size=<span class="s">8</span>, batch_first=<span class="k">True</span>)
+out, (h, c) = lstm(torch.zeros(<span class="s">5</span>, <span class="s">14</span>, <span class="s">2</span>))
+print(tuple(out.shape), tuple(h.shape))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">W4</div><div class="qt">Why must <code class="inline">model.eval()</code> come before measuring test accuracy of a model with dropout and batch norm?</div><div class="write"></div></div>
+<div class="q"><div class="qn">W5</div><div class="qt">A colleague splits overlapping sales windows with <code class="inline">train_test_split(..., random_state=42)</code> and beats the seasonal naive forecast by a mile. Your first suspicion?</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Lessons</h2><span class="rule"></span></div>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">10.5</span><h3>Transfer Learning</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Explain why features learned on ImageNet transfer to a new image task, and when they will not</li>
+  <li>Load a pretrained torchvision model with the <code class="inline">weights=</code> API and prepare images the way it expects</li>
+  <li>Use a frozen backbone as a feature extractor and train a small head on its features</li>
+  <li>Fine-tune the last block with a lower learning rate, and compare the result with a CNN trained from scratch</li>
+  <li>Measure how many labeled images a model needs before you pay for labeling more</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The experienced photo editor.</b> A pretrained backbone already sees edges, textures and colors; you teach only the last step, the head.</li>
+  <li><b>Backbone and head.</b> ResNet-18's head is <code class="inline">fc</code> (512 → 1,000 ImageNet classes). <code class="inline">nn.Identity()</code> in its place gives features; <code class="inline">nn.Linear(512, 10)</code> gives your classes.</li>
+  <li><b>Prepare images the model's way.</b> <code class="inline">weights.transforms()</code> holds the recipe; normalize with ImageNet's <code class="inline">mean</code> and <code class="inline">std</code> (not your data's), 3 channels, a sensible size (128 px on a CPU).</li>
+  <li><b>Frozen features are a table.</b> In <code class="inline">eval()</code> mode under <code class="inline">torch.inference_mode()</code>, compute them once; then any classifier (a linear head, logistic regression, kNN) learns from them in seconds.</li>
+  <li><b>The numbers:</b> from scratch 0.719 with 2,000 tiles; frozen + linear head 0.913; 100 labels already beat the from-scratch CNN; fine-tuned layer4 0.928 on test.</li>
+  <li><b>Freeze first, then attach the head.</b> New layers are trainable by default. Check <code class="inline">count_trainable(model)</code> before training.</li>
+  <li><b>Fine-tune in stages.</b> Head first, then unfreeze the last block with a ten times smaller learning rate (parameter groups); keep it only if validation improves.</li>
+  <li><b>Silent mistakes:</b> no normalization (0.840 instead of 0.894), features in training mode (batch-dependent features, drifting statistics).</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: find the head, match the channels</div>
+<p>Where is the head of a network you have never used? Ask it. MobileNetV3-small, built for phones, keeps its head in <code class="inline">classifier</code>, not <code class="inline">fc</code>. Building the architecture with <code class="inline">weights=None</code> needs no download.</p>
+<pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+<span class="k">from</span> torchvision <span class="k">import</span> models
+
+mobile = models.mobilenet_v3_small(weights=<span class="k">None</span>)      <span class="c"># architecture only: no download needed</span>
+print(mobile.classifier)
+print(<span class="s">f"parameters: {sum(p.numel() for p in mobile.parameters()):,}"</span>)</pre>
+<pre class="out">Sequential(
+  (0): Linear(in_features=576, out_features=1024, bias=True)
+  (1): Hardswish()
+  (2): Dropout(p=0.2, inplace=True)
+  (3): Linear(in_features=1024, out_features=1000, bias=True)
+)
+parameters: 2,542,856</pre><p>Its head is four layers ending in 1,000 ImageNet classes. Replace the whole <code class="inline">classifier</code> and the network outputs its features:</p>
+<pre class="code">mobile.classifier = nn.Identity()
+mobile.eval()
+<span class="k">with</span> torch.no_grad():
+    print(tuple(mobile(torch.zeros(<span class="s">2</span>, <span class="s">3</span>, <span class="s">128</span>, <span class="s">128</span>)).shape))</pre>
+<pre class="out">(2, 576)</pre><p>576 features per image (ResNet-18 gives 512). And a grayscale image? Repeat its one channel three times so it fits the RGB stem:</p>
+<pre class="code">gray = torch.rand(<span class="s">4</span>, <span class="s">1</span>, <span class="s">128</span>, <span class="s">128</span>)                     <span class="c"># four grayscale images</span>
+rgb_like = gray.repeat(<span class="s">1</span>, <span class="s">3</span>, <span class="s">1</span>, <span class="s">1</span>)                     <span class="c"># copy the one channel three times</span>
+<span class="k">with</span> torch.no_grad():
+    print(tuple(rgb_like.shape), <span class="s">"-&gt;"</span>, tuple(mobile(rgb_like).shape))</pre>
+<pre class="out">(4, 3, 128, 128) -&gt; (4, 576)</pre><p>Three habits in one example: find the head by printing the model, replace it with <code class="inline">nn.Identity()</code> for features, and match the channels the backbone expects. Setting <code class="inline">mobile.fc = nn.Identity()</code> instead would raise no error and change nothing: always check the output shape.</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-09/l10_5-transfer-learning/feature_table_starter.py</code>. Frozen ResNet-18 features of 3,000 new tiles, loaded from <code class="inline">_fixtures/</code> in a second: a baseline, a cross-validated head, k-nearest neighbors, the weakest classes and a "send to a human" queue.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">freeze_audit_starter.py</code> in the same folder. Audit a fine-tuning setup on one batch: what is trainable, what the optimizer received, what changes after one step.</li>
+  <li>Done when your numbers match the "Expected when done" lines. Finished early? <code class="inline">debug_transfer.py</code>: four bugs, two of them silent.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction first, then run the code.</p>
+<div class="q"><div class="qn">P1</div><div class="qt">Predict the output, then run it. (A head for MobileNetV3-small's 576 features and 10 classes.)</div><pre class="code"><span class="k">from</span> torch <span class="k">import</span> nn
+head = nn.Linear(<span class="s">576</span>, <span class="s">10</span>)
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> head.parameters()))</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P2</div><div class="qt">Predict the output, then run it. (Normalize subtracts the mean, then divides by the std.)</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torchvision <span class="k">import</span> transforms
+norm = transforms.Normalize(mean=[<span class="s">0.5</span>, <span class="s">0.5</span>, <span class="s">0.5</span>], std=[<span class="s">0.25</span>, <span class="s">0.25</span>, <span class="s">0.25</span>])
+x = torch.full((<span class="s">3</span>, <span class="s">2</span>, <span class="s">2</span>), <span class="s">0.75</span>)
+print(norm(x)[:, <span class="s">0</span>, <span class="s">0</span>])</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>The land-cover classifier</b> (lesson page, "Project: A Land-Cover Classifier"). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: <code class="inline">2000 500 1000</code> from one seeded permutation</li>
+  <li>☐ Step 2: 5,130 trainable parameters; validation 0.164 before training</li>
+  <li>☐ Step 3: stage 1, two epochs: validation about 0.824 then 0.876 (yours may vary slightly)</li>
+  <li>☐ Step 4: stage 2 with layer4 unfrozen at 1e-4: keep it only if validation improves (about 0.924)</li>
+  <li>☐ Step 5: test once (about 0.928); weakest class and the confusion matrix</li>
+  <li>☐ Step 6: <code class="inline">landcover_resnet18.pt</code> reloads with <code class="inline">weights_only=True</code></li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="1"><div class="qn">Q1</div><div class="qt">With a frozen backbone, the lesson computes the 512 features of every tile ONCE and then trains the head on that table. Why is that allowed?</div><div class="opts"><div class="opt">A) Frozen weights never change, so each tile's features are the same in every epoch</div><div class="opt">B) Computing features once is required by PyTorch for pretrained models</div><div class="opt">C) The head needs the features as NumPy arrays, not tensors</div><div class="opt">D) Features computed once are more accurate than features computed every epoch</div></div></div>
+<div class="q" data-sc="2" data-kind="short"><div class="qn">Q2</div><div class="qt">What does this print?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torch <span class="k">import</span> nn
+<span class="k">from</span> torchvision <span class="k">import</span> models
+m = models.mobilenet_v3_small(weights=<span class="k">None</span>)
+<span class="k">for</span> p <span class="k">in</span> m.parameters():
+    p.requires_grad = <span class="k">False</span>
+m.classifier = nn.Linear(<span class="s">576</span>, <span class="s">3</span>)
+print(sum(p.numel() <span class="k">for</span> p <span class="k">in</span> m.parameters() <span class="k">if</span> p.requires_grad))</pre><div class="write"></div></div>
+<div class="q" data-sc="3"><div class="qn">Q3</div><div class="qt">The label curve: frozen features reach 0.755 with 100 labeled tiles and 0.902 with 2,000; the from-scratch CNN reached 0.719 with 2,000. Pinecrest offers to pay for 5,000 more labels for the frozen-feature model. Your advice?</div><div class="opts"><div class="opt">A) Yes: accuracy always keeps growing with more labels</div><div class="opt">B) Yes: the from-scratch CNN would then beat transfer learning</div><div class="opt">C) Probably not: the curve has flattened (1,000 to 2,000 added under a point); fine-tuning is the better next step</div><div class="opt">D) No: transfer learning cannot use more than 2,000 labels</div></div></div>
+<div class="q" data-sc="4"><div class="qn">Q4</div><div class="qt">A learner extracts features with a freshly created ResNet-18 (never called <code class="inline">.eval()</code>) under <code class="inline">torch.no_grad()</code>. What goes wrong?</div><div class="opts"><div class="opt">A) Nothing: no_grad already switches the model to evaluation mode</div><div class="opt">B) Batch normalization uses each batch's statistics, so a tile's features depend on its batch, and the stored ImageNet statistics are overwritten</div><div class="opt">C) PyTorch raises an error because the model is in training mode</div><div class="opt">D) The features are computed with dropout, so they are all zero</div></div></div>
+<div class="q" data-sc="5"><div class="qn">Q5</div><div class="qt">What happens when this runs?</div><pre class="code"><span class="k">import</span> torch
+<span class="k">from</span> torchvision <span class="k">import</span> models
+net = models.resnet18(weights=<span class="k">None</span>).eval()
+net(torch.zeros(<span class="s">1</span>, <span class="s">1</span>, <span class="s">64</span>, <span class="s">64</span>))</pre><div class="opts"><div class="opt">A) It returns 1,000 ImageNet scores for the image</div><div class="opt">B) It returns 512 features because the model is in eval() mode</div><div class="opt">C) <code class="inline">ValueError</code>: the image must be resized to 224 pixels first</div><div class="opt">D) <code class="inline">RuntimeError</code>: the first convolution expects 3 channels and the image has 1</div></div></div>
+<div class="q" data-sc="6" data-kind="short"><div class="qn">Q6</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> torchvision <span class="k">import</span> models
+print(models.resnet18(weights=<span class="k">None</span>).fc)</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the experienced photo editor using the words backbone, head, frozen and fine-tune. Write the three accuracies side by side and the number of labels at which frozen features passed the from-scratch CNN. Would you pay for 5,000 more labels? What evidence would you show?</p>
+</div>
+    </div>
+  </section>
+
+  <section class="lesson">
+    <div class="lesson-head"><span class="lcode">11.1</span><h3>Text Classification</h3></div>
+    <div class="lesson-body">
+<div class="blk"><div class="h">By the end you can</div>
+<ul class="tick">
+  <li>Clean and tokenize text with Python's <code class="inline">re</code> module, and explain what scikit-learn's vectorizers do to a sentence</li>
+  <li>Build bag-of-words and TF-IDF feature matrices, and read the sparse matrix and vocabulary they produce</li>
+  <li>Train a leak-free sentiment classifier with a <code class="inline">Pipeline</code> of <code class="inline">TfidfVectorizer</code> and <code class="inline">LogisticRegression</code>, and compare it with a baseline</li>
+  <li>Explain the stop-word trap, and use bigrams so that "not waterproof" and "not bad" become features of their own</li>
+  <li>Describe what word embeddings add over TF-IDF, and when the simpler model is the right choice</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Key ideas</div>
+<ul class="tick">
+  <li><b>The tally sheet.</b> A bag of words counts which words appear, ignoring order. Text becomes a fixed-length row of numbers; the rest is ordinary scikit-learn.</li>
+  <li><b>Vectorizers tokenize for you.</b> Lowercase, runs of 2+ word characters: one-letter words disappear. <code class="inline">build_analyzer()</code> shows exactly what happens to a sentence.</li>
+  <li><b>Sparse matrices.</b> Mostly zeros, so only non-zero values are stored (5.3% here). Never <code class="inline">.toarray()</code> a real one.</li>
+  <li><b>TF-IDF</b> weighs a count by rarity: <code class="inline">idf = ln((1 + n) / (1 + df)) + 1</code>, then each row is scaled to length 1. A word in every document gets exactly 1.</li>
+  <li><b>Pipeline = no leak.</b> Vocabulary and IDF are learned in <code class="inline">fit</code>, from training text only, also inside every CV fold.</li>
+  <li><b>The numbers:</b> baseline 0.745; TF-IDF + logistic regression 0.877; stop words removed 0.864.</li>
+  <li><b>Read the words, probe with sentences.</b> "bad" pulls positive (Not bad at all). The English stop-word list removes not, no, never: never use it unread for sentiment.</li>
+  <li><b>Bigrams</b> give "not waterproof" and "not bad" their own columns. Choose a threshold from cross-validated probabilities, then grade once on test.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Worked example: bigrams and IDF by hand</div>
+<p>Four short notes about a sleeping bag. With <code class="inline">ngram_range=(1, 2)</code> and <code class="inline">min_df=2</code>, which terms survive?</p>
+<pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> TfidfVectorizer
+notes = [<span class="s">"warm bag"</span>, <span class="s">"not warm"</span>, <span class="s">"not warm at all"</span>, <span class="s">"light and warm"</span>]
+vec = TfidfVectorizer(ngram_range=(<span class="s">1</span>, <span class="s">2</span>), min_df=<span class="s">2</span>).fit(notes)
+print(vec.get_feature_names_out())</pre>
+<pre class="out">['not' 'not warm' 'warm']</pre><p>Only terms in at least two notes are kept: <code class="inline">not</code>, <code class="inline">not warm</code> and <code class="inline">warm</code>. Now the weights:</p>
+<pre class="code"><span class="k">import</span> pandas <span class="k">as</span> pd
+print(pd.Series(vec.idf_, index=vec.get_feature_names_out()).round(<span class="s">3</span>).to_dict())
+print(pd.DataFrame(vec.transform([<span class="s">"not warm"</span>, <span class="s">"warm bag"</span>]).toarray(),
+                   columns=vec.get_feature_names_out()).round(<span class="s">2</span>))</pre>
+<pre class="out">{'not': 1.511, 'not warm': 1.511, 'warm': 1.0}
+    not  not warm  warm
+0  0.64      0.64  0.42
+1  0.00      0.00  1.00</pre><p><code class="inline">warm</code> is in all four notes, so its IDF is exactly 1; <code class="inline">not</code> and <code class="inline">not warm</code> are in two: ln(5/3) + 1 = 1.511. In the row for "not warm" the pair <code class="inline">not warm</code> carries as much weight as <code class="inline">not</code>, so a model can give the phrase its own coefficient. "warm bag" keeps only <code class="inline">warm</code> (bag is in one note, below <code class="inline">min_df</code>).</p>
+</div>
+<div class="blk lab"><div class="h">Guided lab</div>
+<ul class="tick">
+  <li><b>Lab A:</b> <code class="inline">labs/module-09/l11_1-text-classification/recommend_flag_starter.py</code>. Predict the "would recommend" checkbox from the text of all 4,000 reviews: three vectorizer settings, one test, the words, accuracy by star rating, probes.</li>
+  <li><b>Lab B (pairs):</b> <code class="inline">category_router_starter.py</code>: route a message to one of ten product teams.</li>
+  <li>Finished early? <code class="inline">debug_text_pipeline.py</code>: four bugs.</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Predict, then run</div>
+<p>Write your prediction first, then run the code.</p>
+<div class="q"><div class="qn">P3</div><div class="qt">Predict the output, then run it. (One document, unigrams and bigrams.)</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+print(CountVectorizer(ngram_range=(<span class="s">1</span>, <span class="s">2</span>)).fit([<span class="s">"not warm at all"</span>]).get_feature_names_out())</pre><div class="write"></div></div>
+<div class="q"><div class="qn">P4</div><div class="qt">Predict the output, then run it. (n = 4 documents; count the documents each word is in.)</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> TfidfVectorizer
+<span class="k">import</span> pandas <span class="k">as</span> pd
+v = TfidfVectorizer().fit([<span class="s">"tent leaked"</span>, <span class="s">"tent warm"</span>, <span class="s">"warm bag"</span>, <span class="s">"warm boots"</span>])
+print(pd.Series(v.idf_, index=v.get_feature_names_out()).round(<span class="s">3</span>).to_dict())</pre><div class="write"></div></div>
+</div>
+<div class="blk"><div class="h">Lesson project: start in class, finish at home</div>
+<p><b>Review triage</b> (lesson page, "Project: Review Triage"). In class: Steps 1 to 3. At home: Steps 4 to 6.</p>
+<ul class="tick">
+  <li>☐ Step 1: <code class="inline">2321 train, 774 test, 905 three-star reviews held aside</code></li>
+  <li>☐ Step 2: bigram pipeline, 0.877 at the 0.5 cut-off</li>
+  <li>☐ Step 3: cross-validated recall 0.570 / 0.756 / 0.851 / 0.926 for thresholds 0.5 / 0.4 / 0.3 / 0.2; choose 0.3</li>
+  <li>☐ Step 4: test recall 0.858, precision 0.698</li>
+  <li>☐ Step 5: read the five worst mistakes with their titles</li>
+  <li>☐ Step 6: <code class="inline">review_follow_up.csv</code>, 698 reviews</li>
+</ul>
+</div>
+<div class="blk"><div class="h">Self-check</div>
+<div class="q" data-sc="7" data-kind="short"><div class="qn">Q7</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+print(CountVectorizer().build_analyzer()(<span class="s">"I am a 2-person tent fan!"</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="8"><div class="qn">Q8</div><div class="qt">Why does the lesson put <code class="inline">TfidfVectorizer</code> inside the pipeline instead of vectorizing all 3,095 reviews first?</div><div class="opts"><div class="opt">A) Pipelines make TF-IDF faster on sparse matrices</div><div class="opt">B) A vectorizer outside a pipeline cannot produce bigrams</div><div class="opt">C) The vocabulary and IDF values are learned from data, so they must come from the training text only (also inside every CV fold)</div><div class="opt">D) LogisticRegression refuses a sparse matrix that was not produced inside a pipeline</div></div></div>
+<div class="q" data-sc="9"><div class="qn">Q9</div><div class="qt">What does this print?</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> CountVectorizer
+print(CountVectorizer(stop_words=<span class="s">"english"</span>).build_analyzer()(<span class="s">"Would not buy it again."</span>))</pre><div class="opts"><div class="opt">A) <code class="inline">['buy']</code></div><div class="opt">B) <code class="inline">['would', 'not', 'buy', 'again']</code></div><div class="opt">C) <code class="inline">['not', 'buy']</code></div><div class="opt">D) <code class="inline">['would', 'buy', 'again']</code></div></div></div>
+<div class="q" data-sc="10"><div class="qn">Q10</div><div class="qt">The training matrix is 2,321 × 333 with 5.3% of cells filled. Why does scikit-learn return it as a sparse matrix?</div><div class="opts"><div class="opt">A) Sparse matrices make logistic regression more accurate</div><div class="opt">B) So that it can be turned into a pandas DataFrame</div><div class="opt">C) Because TF-IDF values are always between 0 and 1</div><div class="opt">D) Almost every cell is zero, so storing only the non-zero values saves memory, which matters with real vocabularies</div></div></div>
+<div class="q" data-sc="11" data-kind="short"><div class="qn">Q11</div><div class="qt">What does this print? (scikit-learn's default IDF is ln((1 + n) / (1 + df)) + 1.)</div><pre class="code"><span class="k">from</span> sklearn.feature_extraction.text <span class="k">import</span> TfidfVectorizer
+v = TfidfVectorizer().fit([<span class="s">"warm tent"</span>, <span class="s">"warm bag"</span>, <span class="s">"light tent"</span>, <span class="s">"light bag"</span>])
+print(round(v.idf_[v.vocabulary_[<span class="s">"warm"</span>]], <span class="s">3</span>))</pre><div class="write"></div></div>
+<div class="q" data-sc="12"><div class="qn">Q12</div><div class="qt">In the review-triage project, lowering the flagging threshold for P(negative) from 0.5 to 0.3 does what?</div><div class="opts"><div class="opt">A) Raises both recall and precision for negative reviews</div><div class="opt">B) Catches more unhappy customers (recall up) at the cost of more false alarms (precision down)</div><div class="opt">C) Changes the model's coefficients</div><div class="opt">D) Leaks the test set into training</div></div></div>
+</div>
+<div class="blk"><div class="h">Journal</div>
+<p>Explain the tally sheet in your own words. Write one sentence a bag of words gets wrong and the change that fixes it. Name one kind of text in your work that a model like this could sort, and what a false alarm and a miss would cost.</p>
+</div>
+    </div>
+  </section>
+
+  <div class="sec"><h2>Exit Ticket</h2><span class="rule"></span></div>
+<div class="q"><div class="qn">E1</div><div class="qt">Name the backbone and the head of a pretrained ResNet-18, and say which one you replace and which one you freeze for feature extraction.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E2</div><div class="qt">Give one sentence a unigram bag of words gets wrong and the change that fixes it.</div><div class="write"></div></div>
+<div class="q"><div class="qn">E3</div><div class="qt">Name one thing that must be learned from the training data only, in each lesson.</div><div class="write"></div></div>
+
+  <div class="sec"><h2>Notes</h2><span class="rule"></span></div>
+<div class="notes-lines"></div>
+
+  <div class="sec"><h2>Homework Checklist</h2><span class="rule"></span></div>
+<ul class="tick">
+  <li>☐ Finish the land-cover classifier (Steps 4 to 6) and save <code class="inline">landcover_resnet18.pt</code></li>
+  <li>☐ Finish review triage (Steps 4 to 6) and save <code class="inline">review_follow_up.csv</code></li>
+  <li>☐ Lesson 10.5 Exercises 1 to 3; Lesson 11.1 Exercises 1 to 3 (Exercise 4 of each is a stretch)</li>
+  <li>☐ Both Quick Quizzes and both journal entries</li>
+  <li>☐ Lab A of each lesson to its Expected line</li>
+  <li>☐ 11.1 "Before the Next Lesson": five sentences of my own through the bigram model; <code class="inline">.head()</code> and <code class="inline">.shape</code> of <code class="inline">products_ml.csv</code> and <code class="inline">interactions.csv</code></li>
+  <li>☐ Bring to Session 10: a READY laptop (MLflow and skops), <code class="inline">data/</code> and <code class="inline">labs/</code>, <code class="inline">landcover_resnet18.pt</code>, my 11.1 notebook and <code class="inline">review_follow_up.csv</code>, this workbook</li>
+</ul>
+
+  <div class="sec"><h2>Glossary</h2><span class="rule"></span></div>
+<table class="timing">
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>transfer learning</td><td>Reusing a model trained on a large dataset and training only what is specific to your task</td></tr>
+<tr><td>backbone</td><td>The pretrained convolutional layers that turn an image into features</td></tr>
+<tr><td>head</td><td>The final layer(s) that turn features into class scores (<code class="inline">fc</code> in ResNet, <code class="inline">classifier</code> in MobileNet)</td></tr>
+<tr><td>feature extraction</td><td>Using a frozen backbone's outputs as inputs for a new, small model</td></tr>
+<tr><td>fine-tuning</td><td>Letting some pretrained layers keep learning, with a small learning rate</td></tr>
+<tr><td><code class="inline">requires_grad</code></td><td>Per-tensor switch: False freezes the tensor (no gradient, no update)</td></tr>
+<tr><td>parameter groups</td><td>Optimizer groups with their own learning rate (layer4 1e-4, head 1e-3)</td></tr>
+<tr><td>label curve</td><td>Accuracy against the number of labeled training examples: is labeling more worth it?</td></tr>
+<tr><td>token / tokenizing</td><td>A unit of text that is counted (usually a word) / cutting text into tokens</td></tr>
+<tr><td>bag of words</td><td>A document represented by word counts, ignoring order</td></tr>
+<tr><td>sparse matrix</td><td>Stores only non-zero cells and their positions</td></tr>
+<tr><td>TF-IDF</td><td>Term frequency times inverse document frequency: counts weighted by rarity, rows scaled to length 1</td></tr>
+<tr><td>stop words</td><td>Very common words some tools remove; the English list includes not, no, never</td></tr>
+<tr><td>n-gram / bigram</td><td>A run of n consecutive tokens / a pair of words</td></tr>
+<tr><td>embedding</td><td>A dense vector for a word or text, learned so that similar meanings are close</td></tr>
+</tbody>
+</table>
+
+  <div class="foot">
+    <div class="who">
+      <span class="bio">© 2026 Ray de la Paz · Advanced Machine Learning</span>
+    </div>
+    <div class="ver">Instructor Kit · Session 9 · Participant Workbook · v1.0</div>
+  </div>
+
+</div>
+</body>
+</html>

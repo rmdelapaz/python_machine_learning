@@ -3,1394 +3,953 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Master advanced ensemble methods in machine learning. Learn voting, stacking, blending, and build powerful ensemble systems for superior performance.">
-    <title>Advanced Ensemble Methods - Python Machine Learning</title>
+    <meta name="description" content="Combine logistic regression, a random forest and gradient boosting with voting and stacking, avoid the out-of-fold leak, and decide with a bootstrap whether an ensemble is worth shipping. Python Machine Learning Lesson 5.4.">
+    <meta name="author" content="Ray de la Paz">
+    <title>Voting and Stacking - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
+    </nav>
+
     <main id="main-content">
-    <header role="banner">
-        <h1>Advanced Ensemble Methods: The Power of Many</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Advanced Techniques</a>
-        <span class="separator">›</span>
-        <span class="current">Advanced Ensemble Methods</span>
-    </nav>
+        <div class="container">
+            <header>
+                <h1>🤝 Lesson 5.4: Voting and Stacking</h1>
+                <p class="lead">Combine different kinds of models into one team, learn when the team really beats its best player, and decide like a professional whether the extra complexity is worth shipping.</p>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Explain why combining diverse models can reduce variance and/or bias and beat any single model</li>
-            <li>Distinguish the main ensemble families: bagging, boosting, voting, and stacking</li>
-            <li>Build voting and stacking ensembles in scikit-learn from several base learners</li>
-            <li>Understand the central role of model <em>diversity</em> and proper cross-validation in a strong ensemble</li>
-            <li>Judge when an ensemble's added complexity and compute cost are worth it — and when they aren't</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Build a voting ensemble and a stacking ensemble from several base learners, then compare their performance against the best single model.</p>
-    </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Explain why a group of models beats its members only when their errors differ, and measure that diversity</li>
+                        <li>Build hard and soft <code>VotingClassifier</code> ensembles from complete preprocessing pipelines</li>
+                        <li>Build a stack by hand from out-of-fold predictions, then with <code>StackingClassifier</code>, and explain why in-sample predictions leak</li>
+                        <li>Judge whether an ensemble's gain is real (bootstrap) and worth its cost in training time, latency and explainability</li>
+                    </ul>
+                </div>
 
-    <h2>Ensemble Learning: When One Model Isn't Enough 🎭</h2>
-    
-    <blockquote>
-        <p>"In diversity there is strength." This principle lies at the heart of ensemble methods. By combining multiple models that make different errors, we create a collective intelligence that outperforms any individual model. From Kaggle competitions to production systems, ensembles are the secret weapon of top data scientists.</p>
-    </blockquote>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 95 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="trees_gradient_boosting.html">Lesson 5.3: Gradient Boosting</a> (and <a href="evaluation_cross_validation.html">Lesson 1.3</a> for cross-validation, <a href="pipelines_composite.html">Lesson 2.2</a> for pipelines)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A churn-model bake-off: three single models against a voting and a stacking ensemble, with a ship-or-skip recommendation backed by a bootstrap</li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code> (exercise 4 uses <code>data/weekly_demand.csv</code>)</li>
+                </ul>
+            </header>
 
-    <h2>The Mathematics of Ensemble Learning</h2>
-    
-    <div class="mermaid">
-    graph TD
-        A[Ensemble Methods] --> B[Bagging]
-        A --> C[Boosting]
-        A --> D[Stacking]
-        A --> E[Blending]
-        
-        B --> F[Random Forest]
-        B --> G[Extra Trees]
-        B --> H[Bagging Classifier]
-        
-        C --> I[AdaBoost]
-        C --> J[Gradient Boosting]
-        C --> K[XGBoost/LightGBM]
-        
-        D --> L[Meta-Learning]
-        D --> M[Multi-Level Stacking]
-        
-        E --> N[Weighted Average]
-        E --> O[Dynamic Blending]
-        
-        style A fill:#667eea,color:#fff
-        style B fill:#51cf66
-        style C fill:#ff6b6b
-        style D fill:#4ecdc4
-        style E fill:#ffd93d
-    </div>
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">The Wisdom of a Diverse Crowd</a></li>
+                        <li><a href="#members" class="toc-link">Three Different Members</a></li>
+                        <li><a href="#voting" class="toc-link">Voting</a></li>
+                        <li><a href="#stacking" class="toc-link">Stacking: Learning Whom to Trust</a></li>
+                        <li><a href="#worth-it" class="toc-link">Blending, Layers and the Bill</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: Should Pinecrest Ship the Ensemble?</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
 
-    <pre class="language-python"><code># Understanding the Theory Behind Ensembles
-import numpy as np
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 The Wisdom of a Diverse Crowd</h2>
+
+                <p>You have already met two ensembles. A random forest (Lesson 5.2) averages many trees of the same kind trained on different samples. Gradient boosting (Lesson 5.3) adds trees one after another. This lesson combines models of <em>different kinds</em>: a logistic regression, a forest and a booster, each seeing the customers in its own way.</p>
+
+                <div class="card card-info">
+                    <h4>💡 Mental Model: The Gear-Testing Panel</h4>
+                    <p>Pinecrest asks a panel of three testers whether a new jacket is waterproof enough to stock. If each tester is right 70% of the time and they judge <em>independently</em>, a majority vote is right more often than any one of them: their mistakes rarely line up. But if all three read the same online review and repeat it, the panel is no better than the review. A crowd is only wise when its members make <strong>different mistakes</strong>.</p>
+                    <p>Voting is the panel counting hands. Stacking is a manager who has watched the panel for a season and learned whose opinion to trust, and how much.</p>
+                </div>
+
+                <p>Simulate it. Each "voter" is right with probability 0.7. With probability <code>shared</code>, a voter copies a common opinion (itself right 70% of the time) instead of judging independently, which makes the voters' errors correlated.</p>
+
+                <pre><code class="language-python">import numpy as np
+
+rng = np.random.default_rng(42)
+
+def crowd_accuracy(n_voters, shared, p_correct=0.7, n_cases=20_000):
+    common = rng.random(n_cases) &lt; p_correct                  # the shared opinion
+    own = rng.random((n_cases, n_voters)) &lt; p_correct         # each voter's own judgment
+    copies = rng.random((n_cases, n_voters)) &lt; shared         # who copies the shared opinion
+    correct = np.where(copies, common[:, None], own)
+    return (correct.sum(axis=1) &gt; n_voters / 2).mean()        # majority vote right?
+
+for shared in [0.0, 0.5, 0.9]:
+    accs = [crowd_accuracy(n, shared) for n in (1, 5, 25)]
+    print(f"shared {shared:.1f}:  1 voter {accs[0]:.3f}   5 voters {accs[1]:.3f}   25 voters {accs[2]:.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>shared 0.0:  1 voter 0.695   5 voters 0.837   25 voters 0.982
+shared 0.5:  1 voter 0.704   5 voters 0.754   25 voters 0.721
+shared 0.9:  1 voter 0.703   5 voters 0.699   25 voters 0.702</code></pre>
+                </div>
+
+                <p>Independent voters improve fast: five 70%-voters reach about 84% together, which matches the binomial formula for a majority of five:</p>
+                <p class="text-center"><strong>P(majority right) = Σ<sub>k ≥ 3</sub> C(5, k) · 0.7<sup>k</sup> · 0.3<sup>5−k</sup> ≈ 0.837</strong></p>
+                <p>With half the voters copying, the gain shrinks; at 90% copying, adding voters barely helps. Real models trained on the same data are never independent: they see the same customers and the same strong signals. The question for any ensemble is how different their errors still are.</p>
+
+                <pre><code class="language-python">import matplotlib.pyplot as plt
+
+sizes = range(1, 52, 2)
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+for shared, color in [(0.0, "#667eea"), (0.5, "#2a9d8f"), (0.9, "gray")]:
+    ax.plot(sizes, [crowd_accuracy(n, shared) for n in sizes], marker="o", markersize=3,
+            color=color, label=f"{shared:.0%} of votes copied")
+ax.axhline(0.7, color="black", linestyle="--", linewidth=1, label="one voter (70%)")
+ax.set_xlabel("Number of voters (majority vote)")
+ax.set_ylabel("Share of cases decided correctly")
+ax.set_title("A crowd helps only as much as its members disagree")
+ax.legend()
+plt.show()</code></pre>
+
+                <figure>
+                    <img src="images/ensemble_methods_crowd.png" alt="Line chart of majority-vote accuracy against the number of voters, each 70 percent accurate. Independent voters climb quickly towards 100 percent. With half the votes copied, accuracy rises only slightly, to about 72 to 75 percent. With 90 percent copied, the line stays close to the 70 percent of a single voter." width="990" height="440" loading="lazy">
+                    <figcaption>Same voters, same individual accuracy: what changes is how often their mistakes coincide.</figcaption>
+                </figure>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="members" class="lesson-section">
+                <h2>👥 Three Different Members</h2>
+
+                <p>Build three churn models that see the data differently. Each is a complete pipeline (Lesson 2.2), so each brings its own preprocessing into the ensemble and nothing can leak during cross-validation:</p>
+                <ul>
+                    <li><strong>Logistic regression</strong>: imputes, scales and one-hot encodes; draws one smooth boundary.</li>
+                    <li><strong>Random forest</strong>: imputes and one-hot encodes; averages deep trees.</li>
+                    <li><strong>HistGradientBoosting</strong>: native missing values and categories; small trees added in sequence.</li>
+                </ul>
+
+                <pre><code class="language-python">import pandas as pd
+from sklearn.compose import make_column_transformer
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import average_precision_score, roc_auc_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+           "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+           "email_opens_90d"]
+categorical = ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"]
+
+X = customers[numeric + categorical].copy()
+X[categorical] = X[categorical].astype("category")
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
+
+impute_encode = make_pipeline(SimpleImputer(strategy="most_frequent"),
+                              OneHotEncoder(handle_unknown="ignore", sparse_output=False))
+logreg = make_pipeline(
+    make_column_transformer((make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric),
+                            (impute_encode, categorical)),
+    LogisticRegression(max_iter=1000),
+)
+forest = make_pipeline(
+    make_column_transformer((SimpleImputer(strategy="median"), numeric), (impute_encode, categorical)),
+    RandomForestClassifier(n_estimators=200, min_samples_leaf=5, random_state=42, n_jobs=-1),
+)
+boost = HistGradientBoostingClassifier(random_state=42)
+
+members = [("logreg", logreg), ("forest", forest), ("boost", boost)]
+test_proba = pd.DataFrame(index=X_test.index)
+for name, model in members:
+    model.fit(X_train, y_train)
+    test_proba[name] = model.predict_proba(X_test)[:, 1]
+    print(f"{name:7s} ROC AUC {roc_auc_score(y_test, test_proba[name]):.3f}"
+          f"  AP {average_precision_score(y_test, test_proba[name]):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>logreg  ROC AUC 0.826  AP 0.493
+forest  ROC AUC 0.861  AP 0.606
+boost   ROC AUC 0.862  AP 0.609</code></pre>
+                </div>
+
+                <p>These match the earlier lessons to within a thousandth or two (Lesson 5.2's forest, set up a little differently, reached 0.863; Lesson 2.2's boosting pipeline 0.863). The two tree models are close, and both clearly beat logistic regression (whose straight-line view cannot represent the recency threshold or the tenure U-shape unless you build them as features, as in Lesson 2.3). Now the key question: how different are their mistakes? Measuring that on the test set would mean peeking, so use <strong>out-of-fold</strong> (OOF) predictions on the training rows instead. <code>cross_val_predict</code> splits the training data into five folds and predicts each fold with a model trained on the other four, so every training customer gets a prediction from a model that never saw them.</p>
+
+                <pre><code class="language-python">from sklearn.model_selection import StratifiedKFold, cross_val_predict
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+oof = pd.DataFrame(index=X_train.index)
+for name, model in members:
+    oof[name] = cross_val_predict(model, X_train, y_train, cv=cv, method="predict_proba")[:, 1]
+
+print(oof.head(3).round(3))
+print()
+print("correlation of out-of-fold probabilities:")
+print(oof.corr().round(3))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>      logreg  forest  boost
+1556   0.111   0.207  0.034
+965    0.061   0.046  0.068
+5145   0.014   0.115  0.087
+
+correlation of out-of-fold probabilities:
+        logreg  forest  boost
+logreg   1.000   0.841  0.745
+forest   0.841   1.000  0.890
+boost    0.745   0.890  1.000</code></pre>
+                </div>
+
+                <p>The forest and the booster agree strongly: both are tree ensembles reading the same splits. Logistic regression is the odd one out, weaker but different. That is the trade-off of every ensemble: the most <em>different</em> member is often the <em>weakest</em> one, and the team gains only if the difference outweighs the weakness.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="voting" class="lesson-section">
+                <h2>🗳️ Voting</h2>
+
+                <p>The simplest combination is an average. <strong>Soft voting</strong> averages the predicted probabilities; <strong>hard voting</strong> lets each model vote 0 or 1 and takes the majority. Because you already have each member's test probabilities, soft voting is one line:</p>
+
+                <pre><code class="language-python">soft_avg = test_proba.mean(axis=1)
+print(f"average of all three   ROC AUC {roc_auc_score(y_test, soft_avg):.3f}")
+for pair in [["forest", "boost"], ["logreg", "boost"], ["logreg", "forest"]]:
+    print(f"average of {' + '.join(pair):15s} ROC AUC {roc_auc_score(y_test, test_proba[pair].mean(axis=1)):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>average of all three   ROC AUC 0.863
+average of forest + boost  ROC AUC 0.865
+average of logreg + boost  ROC AUC 0.858
+average of logreg + forest ROC AUC 0.853</code></pre>
+                </div>
+
+                <p>The team edges past its best member, but only by a few thousandths. Averaging the logistic regression with the booster does not even match the booster alone: when one member is clearly weaker, an equal vote drags the team down. Remember these sizes; deciding whether a gain this small is real is the point of the project.</p>
+
+                <p>scikit-learn packages this as <code>VotingClassifier</code>. It takes a list of <em>(name, estimator)</em> pairs, fits clones of all of them, and combines their outputs. It gives you one object to fit, cross-validate, tune and save:</p>
+
+                <pre><code class="language-python">from sklearn.ensemble import VotingClassifier
+
+soft_vote = VotingClassifier(members, voting="soft").fit(X_train, y_train)
+hard_vote = VotingClassifier(members, voting="hard").fit(X_train, y_train)
+
+p_soft = soft_vote.predict_proba(X_test)[:, 1]
+print("same as the hand-made average:", np.allclose(p_soft, soft_avg))
+print(f"soft voting  accuracy {soft_vote.score(X_test, y_test):.3f}  ROC AUC {roc_auc_score(y_test, p_soft):.3f}")
+print(f"hard voting  accuracy {hard_vote.score(X_test, y_test):.3f}  (no probabilities, so no ROC AUC)")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>same as the hand-made average: True
+soft voting  accuracy 0.859  ROC AUC 0.863
+hard voting  accuracy 0.859  (no probabilities, so no ROC AUC)</code></pre>
+                </div>
+
+                <div class="card card-info">
+                    <h4>💡 Prefer Soft Voting</h4>
+                    <p>Hard voting throws information away: a 0.51 and a 0.99 count the same. It also has no <code>predict_proba</code>, so you cannot rank customers, draw a ROC curve or move the threshold (Lesson 1.4). Use soft voting whenever every member gives sensible probabilities. <code>weights=[1, 2, 2]</code> gives some members a bigger say, but choose weights on validation or out-of-fold data, never on the test set (exercise 1).</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="stacking" class="lesson-section">
+                <h2>🏗️ Stacking: Learning Whom to Trust</h2>
+
+                <p>Voting uses fixed weights. <strong>Stacking</strong> (stacked generalization) <em>learns</em> the weights: the members' predictions become the input features of a second model, the <strong>meta-model</strong> (or final estimator), which is trained to predict the real target from them.</p>
+
+                <div class="mermaid">
+graph TD
+    A["Training rows"] --> B["5-fold out-of-fold predictions"]
+    B --> C["logreg, forest, boost columns"]
+    C --> D["Meta-model learns the weights"]
+    A --> E["Members refit on all training rows"]
+    E --> F["Member predictions on new rows"]
+    D --> G["Final prediction"]
+    F --> G
+                </div>
+
+                <p>The out-of-fold predictions you computed for the correlation table are exactly the training data a meta-model needs. Fit a logistic regression on them:</p>
+
+                <pre><code class="language-python">meta = LogisticRegression().fit(oof, y_train)
+print("meta-model weights:", dict(zip(oof.columns, meta.coef_[0].round(2).tolist())))
+print(f"intercept: {meta.intercept_[0]:.2f}")
+
+p_stack_hand = meta.predict_proba(test_proba)[:, 1]
+print(f"hand-made stack  ROC AUC {roc_auc_score(y_test, p_stack_hand):.3f}"
+      f"  AP {average_precision_score(y_test, p_stack_hand):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>meta-model weights: {'logreg': 1.03, 'forest': 5.23, 'boost': 1.55}
+intercept: -3.37
+hand-made stack  ROC AUC 0.864  AP 0.611</code></pre>
+                </div>
+
+                <p>At prediction time the members were trained on all the training rows (the earlier loop), and their test probabilities, <code>test_proba</code>, go through the meta-model. Read the weights as "how much the meta-model leans on each member's opinion, given the others". They describe how the <em>models</em> combine; they say nothing about which customer traits cause churn.</p>
+
+                <p><code>StackingClassifier</code> does all of this in one estimator: out-of-fold predictions with your <code>cv</code>, the meta-model fit, and the members refitted on all training rows. With the same folds it produces the same meta-model:</p>
+
+                <pre><code class="language-python">from sklearn.ensemble import StackingClassifier
+
+stack = StackingClassifier(estimators=members, final_estimator=LogisticRegression(), cv=cv)
+stack.fit(X_train, y_train)
+
+p_stack = stack.predict_proba(X_test)[:, 1]
+print("meta-model weights:", stack.final_estimator_.coef_[0].round(2))
+print("same as the hand-made stack:", np.allclose(p_stack, p_stack_hand))
+print(f"StackingClassifier ROC AUC {roc_auc_score(y_test, p_stack):.3f}  AP {average_precision_score(y_test, p_stack):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>meta-model weights: [1.03 5.23 1.55]
+same as the hand-made stack: True
+StackingClassifier ROC AUC 0.864  AP 0.611</code></pre>
+                </div>
+
+                <div class="card card-accent">
+                    <h4>🔑 Stacking Settings Worth Knowing</h4>
+                    <p><code>cv</code>: how the out-of-fold predictions are made (an integer means stratified k-fold for classifiers). <code>stack_method</code>: which member output becomes a feature; "auto" uses <code>predict_proba</code>, and for a two-class problem keeps only the positive-class column. <code>final_estimator</code>: keep it simple, usually a (regularized) logistic or linear regression, because it learns from only a few columns and overfits easily. <code>passthrough=True</code>: also hands the original features to the meta-model; rarely worth it, and those features then need scaling.</p>
+                </div>
+
+                <h3>🔍 Why Out-of-Fold?</h3>
+                <p>Why not fit the meta-model on each member's ordinary predictions for the training rows? Because flexible models are much more confident about rows they have already seen. Look at how well each fitted member "predicts" its own training data, compared with the honest out-of-fold version:</p>
+
+                <pre><code class="language-python">for name, model in members:
+    in_sample = roc_auc_score(y_train, model.predict_proba(X_train)[:, 1])
+    print(f"{name:7s} training-row ROC AUC: in-sample {in_sample:.3f}   out-of-fold {roc_auc_score(y_train, oof[name]):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>logreg  training-row ROC AUC: in-sample 0.842   out-of-fold 0.832
+forest  training-row ROC AUC: in-sample 0.981   out-of-fold 0.867
+boost   training-row ROC AUC: in-sample 0.999   out-of-fold 0.859</code></pre>
+                </div>
+
+                <p>On rows it trained on, the booster looks almost perfect and the forest nearly so, while their honest out-of-fold scores are about 0.86. The logistic regression, a simple model, barely changes. A meta-model trained on those numbers would learn "always trust the most overconfident member", then meet honest predictions on new data and be wrong-footed. Mistake 4 below shows the damage. Out-of-fold predictions look like the predictions the members will make in real life, so the meta-model learns the right lesson.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="worth-it" class="lesson-section">
+                <h2>⚖️ Blending, Layers and the Bill</h2>
+
+                <p><strong>Blending</strong> is stacking with a single holdout instead of k folds: train the members on, say, 75% of the training rows, predict the other 25%, and fit the meta-model on that holdout. It is simpler and cheaper, but the meta-model learns from fewer rows (exercise 3). <strong>Multi-level stacking</strong> stacks stacks; it appears in competition write-ups and is almost never worth its complexity in a business system.</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Cost</th><th>Single booster</th><th>Three-member stack (5-fold)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Models fitted during <code>fit</code></td><td class="num">1</td><td class="num">3 × 5 + 3 + 1 = 19</td></tr>
+                            <tr><td>Models run for each prediction</td><td class="num">1</td><td class="num">4</td></tr>
+                            <tr><td>Pieces to monitor, retrain and version</td><td>one pipeline</td><td>three pipelines and a meta-model</td></tr>
+                            <tr><td>Explaining one decision</td><td>one model to explain (Module 7)</td><td>three models plus their weights</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Small Gains Need Proof</h4>
+                    <p>On churn, the ensembles beat the best single model by a few thousandths of ROC AUC on one test set of 1,500 customers. A different split could easily reverse that. Before shipping an ensemble, check that its gain is larger than the noise of your evaluation (the project does it with a bootstrap) and that it changes a decision someone cares about, such as who gets a retention call.</p>
+                </div>
+
+                <div class="card card-success">
+                    <h4>✅ When Ensembles Pay Off</h4>
+                    <p>Combining models helps most when the members are individually strong <em>and</em> different: a tree model with a linear model on data that has both smooth trends and sharp thresholds, a text model with a tabular model, models trained on different feature sets. It helps least when you combine near-copies, such as two tree ensembles on the same columns, which is the situation the correlation table warned you about.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <p>Ensembles inherit every mistake their members can make, plus a few of their own. The last one is the most expensive because it raises no error.</p>
+
+                <h3>1. Members Without Names</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">VotingClassifier([logreg, forest, boost], voting="soft").fit(X_train, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Invalid 'estimators' attribute, 'estimators' should be a non-empty list of (string, estimator) tuples.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> voting and stacking estimators need a name for every member, so that parameters can be addressed later (<code>forest__randomforestclassifier__n_estimators</code> in a grid search) and the members can be found in <code>named_estimators_</code>. <strong>Fix:</strong> pass <code>[("logreg", logreg), ("forest", forest), ("boost", boost)]</code>; names must be unique.</p>
+
+                <h3>2. Asking a Hard Vote for Probabilities</h3>
+
+                <pre data-raises="AttributeError"><code class="language-python">hard_vote.predict_proba(X_test)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>AttributeError: This 'VotingClassifier' has no attribute 'predict_proba'</code></pre>
+                </div>
+                <p><strong>What it means:</strong> a hard vote only counts 0/1 labels, so there is no probability to return, and anything that needs one (ROC AUC, <code>cross_val_score(..., scoring="roc_auc")</code>, a churn ranking) fails. <strong>Fix:</strong> <code>voting="soft"</code>, with members that all have <code>predict_proba</code>.</p>
+
+                <h3>3. A Time-Series Splitter for Stacking</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">from sklearn.model_selection import TimeSeriesSplit
+
+StackingClassifier(estimators=[("logreg", logreg)], cv=TimeSeriesSplit(n_splits=5)).fit(X_train, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: cross_val_predict only works for partitions</code></pre>
+                </div>
+                <p><strong>What it means:</strong> the meta-model needs exactly one out-of-fold prediction for <em>every</em> training row. <code>TimeSeriesSplit</code> never predicts its first chunk (there is no past to train on), so it is not a partition of the rows. <strong>Fix:</strong> for time-ordered data use <code>KFold(n_splits=5)</code> <em>without</em> shuffling on rows sorted by time (each fold is a block of consecutive weeks), or blend on a later time period instead (exercise 3 shows blending). And keep the final test period strictly after the training period, as in Lesson 5.3's project.</p>
+
+                <h3>4. Training the Meta-Model on In-Sample Predictions</h3>
+
+                <pre><code class="language-python">in_sample = pd.DataFrame({name: model.predict_proba(X_train)[:, 1] for name, model in members},
+                         index=X_train.index)
+leaky_meta = LogisticRegression().fit(in_sample, y_train)
+
+print("weights:", dict(zip(in_sample.columns, leaky_meta.coef_[0].round(2).tolist())))
+print(f"leaky stack test ROC AUC {roc_auc_score(y_test, leaky_meta.predict_proba(test_proba)[:, 1]):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>weights: {'logreg': -3.25, 'forest': 2.69, 'boost': 12.66}
+leaky stack test ROC AUC 0.854</code></pre>
+                </div>
+                <p><strong>What happened:</strong> on the rows they were trained on, the members look far better than they are, the booster most of all, so the meta-model piles weight onto it and even turns the logistic regression's vote negative. On the test set those weights are wrong, and the "ensemble" scores below its own best member. Nothing warns you: the code runs and prints a respectable-looking number. <strong>Fix:</strong> build meta-features with <code>cross_val_predict</code>, or let <code>StackingClassifier</code> do it with its <code>cv</code> argument.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: Should Pinecrest Ship the Ensemble?</h2>
+
+                <p>Pinecrest's care team calls the riskiest 10% of customers each quarter. A colleague proposes replacing the single gradient-boosted churn model with a stack of three models. Your job is to run a fair bake-off and write a recommendation: does the stack find more churners, is the gain larger than the noise, and is it worth four times the moving parts? Work in a new notebook, <code>lesson_5_4_project</code>. Allow about 40 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Data and members <span class="step-time">(8 min)</span></h3>
+                    <p>Same split and the same three member pipelines as the lesson, written compactly for a fresh notebook.</p>
+                    <pre><code class="language-python">import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.model_selection import train_test_split, cross_val_score, KFold
-from sklearn.datasets import make_classification, make_regression
-from sklearn.metrics import accuracy_score, mean_squared_error
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.compose import make_column_transformer
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier, StackingClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import average_precision_score, roc_auc_score
+from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-# Set style
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+           "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+           "email_opens_90d"]
+categorical = ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"]
+X = customers[numeric + categorical].copy()
+X[categorical] = X[categorical].astype("category")
+y = customers["churned"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y, random_state=42)
 
-print("="*60)
-print("THE MATHEMATICS OF ENSEMBLE LEARNING")
-print("="*60)
-
-# Demonstration: Why Ensembles Work
-np.random.seed(42)
-
-# Create a challenging dataset
-X, y = make_classification(
-    n_samples=1000,
-    n_features=20,
-    n_informative=15,
-    n_redundant=5,
-    n_clusters_per_class=2,
-    flip_y=0.1,  # Add noise
-    random_state=42
-)
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-
-# Simulate multiple weak learners with different errors
-n_models = 100
-predictions = []
-
-for i in range(n_models):
-    # Each model has 65% accuracy (weak learner)
-    # But makes different mistakes
-    np.random.seed(i)
-    
-    # Simulate predictions with controlled accuracy
-    correct_mask = np.random.random(len(y_test)) < 0.65
-    model_pred = y_test.copy()
-    model_pred[~correct_mask] = 1 - model_pred[~correct_mask]  # Flip incorrect predictions
-    predictions.append(model_pred)
-
-predictions = np.array(predictions)
-
-# Individual model performance
-individual_accuracies = [accuracy_score(y_test, pred) for pred in predictions]
-print(f"Individual Model Performance:")
-print(f"  Mean accuracy: {np.mean(individual_accuracies):.3f}")
-print(f"  Std deviation: {np.std(individual_accuracies):.3f}")
-
-# Ensemble by majority voting
-ensemble_pred = (predictions.mean(axis=0) > 0.5).astype(int)
-ensemble_accuracy = accuracy_score(y_test, ensemble_pred)
-print(f"\nEnsemble Performance (Majority Vote):")
-print(f"  Accuracy: {ensemble_accuracy:.3f}")
-print(f"  Improvement: +{(ensemble_accuracy - np.mean(individual_accuracies)):.3f}")
-
-# Visualize the power of ensembling
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-# Plot 1: Accuracy vs number of models
-ensemble_scores = []
-for n in range(1, n_models + 1):
-    partial_ensemble = (predictions[:n].mean(axis=0) > 0.5).astype(int)
-    ensemble_scores.append(accuracy_score(y_test, partial_ensemble))
-
-axes[0].plot(range(1, n_models + 1), ensemble_scores, 'b-', linewidth=2)
-axes[0].axhline(np.mean(individual_accuracies), color='r', linestyle='--', 
-                label='Mean Individual Accuracy')
-axes[0].set_xlabel('Number of Models in Ensemble')
-axes[0].set_ylabel('Accuracy')
-axes[0].set_title('Ensemble Performance vs Number of Models')
-axes[0].legend()
-axes[0].grid(True, alpha=0.3)
-
-# Plot 2: Error correlation
-correlation_matrix = np.corrcoef(predictions)
-sns.heatmap(correlation_matrix[:10, :10], cmap='coolwarm', center=0, 
-            ax=axes[1], cbar_kws={'label': 'Correlation'})
-axes[1].set_title('Error Correlation Between Models (First 10)')
-
-plt.tight_layout()
-plt.show()
-
-print("\n💡 Key Insight:")
-print("Even though individual models are weak (65% accuracy),")
-print("the ensemble achieves much higher accuracy because models")
-print("make different errors (low correlation).")</code></pre>
-
-    <h2>Advanced Voting Methods</h2>
-    
-    <pre class="language-python"><code>from sklearn.ensemble import VotingClassifier, VotingRegressor
-from sklearn.linear_model import LogisticRegression, Ridge
-from sklearn.svm import SVC, SVR
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.neighbors import KNeighborsClassifier
-
-print("\n" + "="*60)
-print("ADVANCED VOTING METHODS")
-print("="*60)
-
-# 1. HARD VS SOFT VOTING
-print("\n1. Hard vs Soft Voting Comparison")
-print("-" * 40)
-
-# Create diverse base models
-base_models = [
-    ('lr', LogisticRegression(random_state=42)),
-    ('svc', SVC(probability=True, random_state=42)),  # Need probability=True for soft voting
-    ('nb', GaussianNB()),
-    ('rf', RandomForestClassifier(n_estimators=50, random_state=42))
+encode = make_pipeline(SimpleImputer(strategy="most_frequent"), OneHotEncoder(handle_unknown="ignore", sparse_output=False))
+members = [
+    ("logreg", make_pipeline(make_column_transformer(
+        (make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric), (encode, categorical)),
+        LogisticRegression(max_iter=1000))),
+    ("forest", make_pipeline(make_column_transformer(
+        (SimpleImputer(strategy="median"), numeric), (encode, categorical)),
+        RandomForestClassifier(n_estimators=200, min_samples_leaf=5, random_state=42, n_jobs=-1))),
+    ("boost", HistGradientBoostingClassifier(random_state=42)),
 ]
+print(X_train.shape, X_test.shape, [name for name, _ in members])</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>(4500, 16) (1500, 16) ['logreg', 'forest', 'boost']</code></pre>
+                    </div>
+                </div>
 
-# Hard voting (majority vote)
-hard_voting = VotingClassifier(estimators=base_models, voting='hard')
-hard_voting.fit(X_train, y_train)
-hard_score = hard_voting.score(X_test, y_test)
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Five contenders, one table <span class="step-time">(8 min)</span></h3>
+                    <p>Fit each member once, average them for the soft vote, and fit a stack. Collect every contender's test probabilities in one DataFrame.</p>
+                    <pre><code class="language-python">scores = pd.DataFrame(index=X_test.index)
+for name, model in members:
+    scores[name] = model.fit(X_train, y_train).predict_proba(X_test)[:, 1]
+scores["soft vote"] = scores[["logreg", "forest", "boost"]].mean(axis=1)
 
-# Soft voting (average probabilities)
-soft_voting = VotingClassifier(estimators=base_models, voting='soft')
-soft_voting.fit(X_train, y_train)
-soft_score = soft_voting.score(X_test, y_test)
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+stack = StackingClassifier(estimators=members, final_estimator=LogisticRegression(), cv=cv).fit(X_train, y_train)
+scores["stack"] = stack.predict_proba(X_test)[:, 1]
 
-print(f"Hard Voting Accuracy: {hard_score:.3f}")
-print(f"Soft Voting Accuracy: {soft_score:.3f}")
+table = pd.DataFrame({
+    "ROC AUC": [roc_auc_score(y_test, scores[c]) for c in scores],
+    "avg precision": [average_precision_score(y_test, scores[c]) for c in scores],
+}, index=scores.columns)
+print(table.round(3))</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>           ROC AUC  avg precision
+logreg       0.826          0.493
+forest       0.861          0.606
+boost        0.862          0.609
+soft vote    0.863          0.608
+stack        0.864          0.611</code></pre>
+                    </div>
+                </div>
 
-# Individual model scores
-print("\nIndividual Model Performance:")
-for name, model in base_models:
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: The number the care team cares about <span class="step-time">(7 min)</span></h3>
+                    <p>The team calls the top 10% of the list: 150 of the 1,500 test customers. Count how many real churners each contender puts in its top 150.</p>
+                    <pre><code class="language-python">calls = 150
+hits = {c: int(y_test.loc[scores[c].nlargest(calls).index].sum()) for c in scores}
+print(f"real churners among the top {calls} (a random list would reach {calls * y_test.mean():.0f}):")
+for c, h in hits.items():
+    print(f"  {c:10s} {h}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>real churners among the top 150 (a random list would reach 25):
+  logreg     87
+  forest     96
+  boost      98
+  soft vote  96
+  stack      98</code></pre>
+                    </div>
+                    <p>Compare the stack with the booster in calls, not in thousandths of AUC: that difference is how many more (or fewer) at-risk customers would get a call each quarter.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Is the gain real? A paired bootstrap <span class="step-time">(10 min)</span></h3>
+                    <p>One test set is one sample of customers. Resample it with replacement 1,000 times, recompute both models' AUC on each resample, and look at the spread of the <em>difference</em>. Using the same resampled rows for both models (a <strong>paired</strong> bootstrap) cancels the luck that affects both equally.</p>
+                    <pre><code class="language-python">rng = np.random.default_rng(42)
+y_arr = y_test.to_numpy()
+diffs = {"stack": [], "soft vote": []}
+for _ in range(1000):
+    idx = rng.integers(0, len(y_arr), len(y_arr))
+    base = roc_auc_score(y_arr[idx], scores["boost"].to_numpy()[idx])
+    for c in diffs:
+        diffs[c].append(roc_auc_score(y_arr[idx], scores[c].to_numpy()[idx]) - base)
+
+for c, d in diffs.items():
+    d = np.array(d)
+    low, high = np.percentile(d, [2.5, 97.5])
+    print(f"{c:9s} minus boost: mean {d.mean():+.4f}   95% interval [{low:+.4f}, {high:+.4f}]   better in {(d &gt; 0).mean():.0%} of resamples")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>stack     minus boost: mean +0.0023   95% interval [-0.0070, +0.0124]   better in 69% of resamples
+soft vote minus boost: mean +0.0008   95% interval [-0.0089, +0.0109]   better in 56% of resamples</code></pre>
+                    </div>
+                    <p>If the interval includes zero comfortably, this test set cannot tell the stack and the single booster apart. That is not proof that they are equal; it means the evidence for the extra complexity is not there yet. Lesson 6.1 adds the other half of the picture, comparing models across cross-validation folds.</p>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: The bill and the recommendation <span class="step-time">(7 min)</span></h3>
+                    <p>Measure what each option costs to train and to score the 1,500 customers, then write the recommendation from your own variables.</p>
+                    <pre><code class="language-python">import time
+from sklearn.base import clone
+
+timings = {}
+for name, model in [("boost", HistGradientBoostingClassifier(random_state=42)), ("stack", clone(stack))]:
+    start = time.perf_counter()
     model.fit(X_train, y_train)
-    score = model.score(X_test, y_test)
-    print(f"  {name}: {score:.3f}")
+    fit_s = time.perf_counter() - start
+    start = time.perf_counter()
+    model.predict_proba(X_test)
+    timings[name] = (fit_s, time.perf_counter() - start)
+    print(f"{name:6s} fit {fit_s:5.2f} s   score 1,500 customers {timings[name][1] * 1000:6.1f} ms")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output (your numbers will differ)</h4>
+                        <pre><code>boost  fit  0.32 s   score 1,500 customers   23.6 ms
+stack  fit  8.91 s   score 1,500 customers   77.6 ms</code></pre>
+                    </div>
+                    <pre><code class="language-python">low, high = np.percentile(diffs["stack"], [2.5, 97.5])
+extra_calls = hits["stack"] - hits["boost"]
+ship = low &gt; 0 and extra_calls &gt; 0
+print(f"""Recommendation: {'ship the stack' if ship else 'keep the single booster'}
+Stack vs booster, ROC AUC  : {table.loc['stack', 'ROC AUC']:.3f} vs {table.loc['boost', 'ROC AUC']:.3f} (95% interval of the gain {low:+.3f} to {high:+.3f})
+Churners in the top {calls}   : {hits['stack']} vs {hits['boost']} ({extra_calls:+d} per quarter)
+Moving parts               : 3 pipelines + a meta-model vs 1 pipeline
+Revisit when               : more data arrives, or a member brings genuinely new information""")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>Recommendation: keep the single booster
+Stack vs booster, ROC AUC  : 0.864 vs 0.862 (95% interval of the gain -0.007 to +0.012)
+Churners in the top 150   : 98 vs 98 (+0 per quarter)
+Moving parts               : 3 pipelines + a meta-model vs 1 pipeline
+Revisit when               : more data arrives, or a member brings genuinely new information</code></pre>
+                    </div>
+                </div>
 
-# 2. WEIGHTED VOTING
-print("\n2. Weighted Voting")
-print("-" * 40)
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>All five contenders were scored on the same 1,500 test customers, and the test set was used only for evaluation</li>
+                        <li>The stack's meta-model was trained on out-of-fold predictions (through <code>cv</code>)</li>
+                        <li>You counted real churners in each contender's top 150 and compared with a random list</li>
+                        <li>You ran a paired bootstrap and can say whether the stack's gain is distinguishable from zero</li>
+                        <li>You measured the training and scoring time of the booster and the stack</li>
+                        <li>Your recommendation is printed from your variables, not typed by hand</li>
+                    </ul>
+                </div>
+            </section>
 
-# Calculate weights based on cross-validation performance
-from sklearn.model_selection import cross_val_score
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
 
-weights = []
-for name, model in base_models:
-    cv_scores = cross_val_score(model, X_train, y_train, cv=5)
-    weight = cv_scores.mean()
-    weights.append(weight)
-    print(f"{name} weight (CV score): {weight:.3f}")
+                <p>These continue in the project notebook, so <code>members</code>, <code>scores</code>, <code>cv</code> and the split already exist.</p>
 
-# Normalize weights
-weights = np.array(weights)
-weights = weights / weights.sum()
-print(f"\nNormalized weights: {weights}")
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Choose Voting Weights the Honest Way</h3>
+                    <p>Compute out-of-fold probabilities for the three members with <code>cross_val_predict</code> and <code>cv</code>. For each weight triple (logreg, forest, boost) in <code>[(1, 1, 1), (0, 1, 1), (1, 2, 2), (0, 1, 2), (1, 1, 3)]</code>, print the out-of-fold ROC AUC of the weighted average. Pick the best triple using the out-of-fold numbers only, then report its test ROC AUC once.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>np.average(oof_p, axis=1, weights=w)</code> computes a weighted average across columns. The test probabilities are already in <code>scores[["logreg", "forest", "boost"]]</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.model_selection import cross_val_predict
 
-# Weighted voting
-weighted_voting = VotingClassifier(
-    estimators=base_models,
-    voting='soft',
-    weights=weights
+oof_p = np.column_stack([cross_val_predict(m, X_train, y_train, cv=cv, method="predict_proba")[:, 1]
+                         for _, m in members])
+results = {}
+for w in [(1, 1, 1), (0, 1, 1), (1, 2, 2), (0, 1, 2), (1, 1, 3)]:
+    results[w] = roc_auc_score(y_train, np.average(oof_p, axis=1, weights=w))
+    print(f"weights {w}  out-of-fold ROC AUC {results[w]:.4f}")
+
+best_w = max(results, key=results.get)
+test_p = np.average(scores[["logreg", "forest", "boost"]], axis=1, weights=best_w)
+print(f"chosen {best_w}: test ROC AUC {roc_auc_score(y_test, test_p):.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>weights (1, 1, 1)  out-of-fold ROC AUC 0.8664
+weights (0, 1, 1)  out-of-fold ROC AUC 0.8681
+weights (1, 2, 2)  out-of-fold ROC AUC 0.8683
+weights (0, 1, 2)  out-of-fold ROC AUC 0.8664
+weights (1, 1, 3)  out-of-fold ROC AUC 0.8663
+chosen (1, 2, 2): test ROC AUC 0.865</code></pre>
+                        </div>
+                        <p>The out-of-fold differences between weightings are tiny, which is itself the finding: on this data the weights barely matter. Choosing them on out-of-fold data keeps the test score honest; choosing them on the test set would quietly overfit it, the same mistake as early-stopping on the test set in Lesson 5.3.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 2: A Different but Weaker Member</h3>
+                    <p>Add a k-nearest-neighbors member (<code>KNeighborsClassifier(n_neighbors=50)</code> after the same impute, scale and encode steps as the logistic regression). Print its test ROC AUC, then build a <code>StackingClassifier</code> with all four members and the same <code>cv</code>, and print the meta-model weights and the stack's test ROC AUC. Did the new member earn a weight? Did the stack improve?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Copy the logistic regression's preprocessing into a new <code>make_pipeline</code> and swap the final step. Then <code>StackingClassifier(estimators=members + [("knn", knn)], ...)</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.neighbors import KNeighborsClassifier
+
+knn = make_pipeline(make_column_transformer(
+    (make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric), (encode, categorical)),
+    KNeighborsClassifier(n_neighbors=50))
+knn.fit(X_train, y_train)
+print(f"knn alone   ROC AUC {roc_auc_score(y_test, knn.predict_proba(X_test)[:, 1]):.3f}")
+
+stack4 = StackingClassifier(estimators=members + [("knn", knn)], final_estimator=LogisticRegression(),
+                            cv=cv).fit(X_train, y_train)
+print("weights (logreg, forest, boost, knn):", stack4.final_estimator_.coef_[0].round(2))
+print(f"4-member stack ROC AUC {roc_auc_score(y_test, stack4.predict_proba(X_test)[:, 1]):.3f}"
+      f"   (3-member stack {table.loc['stack', 'ROC AUC']:.3f})")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>knn alone   ROC AUC 0.835
+weights (logreg, forest, boost, knn): [0.6  4.96 1.5  1.06]
+4-member stack ROC AUC 0.865   (3-member stack 0.864)</code></pre>
+                        </div>
+                        <p>The meta-model gives the newcomer some weight and takes a little from the others, and the stack's score barely moves. Diversity helps only when the new member knows something the others do not; k-nearest neighbors sees the same features through a different lens, but not new information.</p>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Blending by Hand</h3>
+                    <p>Blend instead of stack. Split the training rows 75/25 (stratified, <code>random_state=42</code>). Fit a fresh copy of each member on the 75% part, predict the 25% holdout, train a logistic-regression meta-model on those holdout predictions, and score the test set with the 75%-trained members plus the meta-model. Compare the test ROC AUC with the stack's.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>clone(model)</code> (from <code>sklearn.base</code>, imported in Step 5) gives an unfitted copy, so you do not disturb the fitted members.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">X_part, X_hold, y_part, y_hold = train_test_split(
+    X_train, y_train, test_size=0.25, stratify=y_train, random_state=42
 )
-weighted_voting.fit(X_train, y_train)
-weighted_score = weighted_voting.score(X_test, y_test)
+hold_p, test_p = {}, {}
+for name, model in members:
+    fitted = clone(model).fit(X_part, y_part)
+    hold_p[name] = fitted.predict_proba(X_hold)[:, 1]
+    test_p[name] = fitted.predict_proba(X_test)[:, 1]
 
-print(f"\nWeighted Voting Accuracy: {weighted_score:.3f}")
-print(f"Improvement over uniform soft voting: +{(weighted_score - soft_score):.3f}")
+blender = LogisticRegression().fit(pd.DataFrame(hold_p), y_hold)
+p_blend = blender.predict_proba(pd.DataFrame(test_p))[:, 1]
+print("blend weights:", blender.coef_[0].round(2), f"(learned from {len(y_hold)} rows)")
+print(f"blend ROC AUC {roc_auc_score(y_test, p_blend):.3f}   stack ROC AUC {table.loc['stack', 'ROC AUC']:.3f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>blend weights: [1.54 3.15 2.5 ] (learned from 1125 rows)
+blend ROC AUC 0.862   stack ROC AUC 0.864</code></pre>
+                        </div>
+                        <p>Blending is simple and fast, and it is the natural choice when rows are ordered in time (blend on the most recent period). It pays twice for its simplicity: the members learn from only 75% of the training rows, and the meta-model from only 1,125 rows, so its weights are noisier than the stack's, which learned from out-of-fold predictions for all 4,500.</p>
+                    </details>
+                </div>
 
-# 3. DYNAMIC VOTING (Custom Implementation)
-print("\n3. Dynamic Voting (Confidence-Based)")
-print("-" * 40)
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Stacking a Demand Forecast (Stretch)</h3>
+                    <p>Return to Lesson 5.3's demand data (train 2024, test 2025, same ten features with category dtypes). Stack three regressors: <code>HistGradientBoostingRegressor(loss="poisson", random_state=42)</code>, a <code>Ridge()</code> pipeline that one-hot encodes the three category columns and scales the numeric ones, and a <code>RandomForestRegressor(n_estimators=100, min_samples_leaf=3, random_state=42, n_jobs=-1)</code> after one-hot encoding. Use <code>StackingRegressor</code> with <code>final_estimator=LinearRegression(positive=True)</code> and <code>cv=KFold(n_splits=5)</code> (no shuffle: blocks of weeks). Print each member's test MAE, the stack's MAE and the meta-model weights. What did the meta-model decide?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p><code>positive=True</code> keeps the weights non-negative, which makes them readable as "how much of each member's forecast to use". The rows are sorted by week, so unshuffled <code>KFold</code> folds are consecutive stretches of 2024.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor, StackingRegressor
+from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import KFold
 
-class DynamicVotingClassifier:
-    """
-    Dynamic voting based on prediction confidence.
-    Models with higher confidence get more weight.
-    """
-    
-    def __init__(self, estimators):
-        self.estimators = estimators
-        self.fitted_estimators_ = []
-        
-    def fit(self, X, y):
-        """Fit all base estimators"""
-        self.fitted_estimators_ = []
-        
-        for name, estimator in self.estimators:
-            fitted_est = estimator.fit(X, y)
-            self.fitted_estimators_.append((name, fitted_est))
-        
-        return self
-    
-    def predict_proba(self, X):
-        """Predict with dynamic weights based on confidence"""
-        probas = []
-        weights = []
-        
-        for name, estimator in self.fitted_estimators_:
-            proba = estimator.predict_proba(X)
-            
-            # Calculate confidence (max probability per sample)
-            confidence = np.max(proba, axis=1)
-            
-            probas.append(proba)
-            weights.append(confidence)
-        
-        # Stack and weight predictions
-        probas = np.array(probas)
-        weights = np.array(weights)
-        
-        # Normalize weights per sample
-        weights = weights / weights.sum(axis=0)
-        
-        # Weighted average
-        weighted_proba = np.zeros_like(probas[0])
-        for i, proba in enumerate(probas):
-            weighted_proba += proba * weights[i].reshape(-1, 1)
-        
-        return weighted_proba
-    
-    def predict(self, X):
-        """Predict class labels"""
-        probas = self.predict_proba(X)
-        return np.argmax(probas, axis=1)
-    
-    def score(self, X, y):
-        """Calculate accuracy"""
-        return accuracy_score(y, self.predict(X))
+demand = pd.read_csv("data/weekly_demand.csv")
+d_feats = ["store", "product_id", "category", "week_of_year", "list_price",
+           "discount_pct", "price", "promo", "holiday_week", "avg_high_temp_f"]
+d_cats = ["store", "product_id", "category"]
+d_nums = [f for f in d_feats if f not in d_cats]
+X_d = demand[d_feats].copy()
+X_d[d_cats] = X_d[d_cats].astype("category")
+is_train = demand["year"] == 2024
+Xd_train, Xd_test = X_d[is_train], X_d[~is_train]
+yd_train, yd_test = demand.loc[is_train, "units_sold"], demand.loc[~is_train, "units_sold"]
 
-# Test dynamic voting
-dynamic_voting = DynamicVotingClassifier(base_models)
-dynamic_voting.fit(X_train, y_train)
-dynamic_score = dynamic_voting.score(X_test, y_test)
-
-print(f"Dynamic Voting Accuracy: {dynamic_score:.3f}")
-
-# Compare all voting methods
-voting_comparison = pd.DataFrame({
-    'Method': ['Hard Voting', 'Soft Voting', 'Weighted Voting', 'Dynamic Voting'],
-    'Accuracy': [hard_score, soft_score, weighted_score, dynamic_score]
-})
-print("\n" + voting_comparison.to_string(index=False))</code></pre>
-
-    <h2>Advanced Stacking Techniques</h2>
-    
-    <pre class="language-python"><code>from sklearn.ensemble import StackingClassifier, StackingRegressor
-from sklearn.linear_model import LogisticRegression, RidgeCV
-from sklearn.model_selection import StratifiedKFold
-
-print("\n" + "="*60)
-print("ADVANCED STACKING TECHNIQUES")
-print("="*60)
-
-# 1. MULTI-LEVEL STACKING
-print("\n1. Multi-Level Stacking")
-print("-" * 40)
-
-# Level 0: Base models
-level_0_models = [
-    ('rf', RandomForestClassifier(n_estimators=100, random_state=42)),
-    ('gb', GradientBoostingClassifier(n_estimators=100, random_state=42)),
-    ('svc', SVC(probability=True, random_state=42))
+regressors = [
+    ("boost", HistGradientBoostingRegressor(loss="poisson", random_state=42)),
+    ("ridge", make_pipeline(make_column_transformer(
+        (OneHotEncoder(handle_unknown="ignore"), d_cats), (StandardScaler(), d_nums)), Ridge())),
+    ("forest", make_pipeline(make_column_transformer(
+        (OneHotEncoder(handle_unknown="ignore", sparse_output=False), d_cats), remainder="passthrough"),
+        RandomForestRegressor(n_estimators=100, min_samples_leaf=3, random_state=42, n_jobs=-1))),
 ]
-
-# Level 1: Stacking on base predictions
-level_1_models = [
-    ('stack1', StackingClassifier(
-        estimators=level_0_models,
-        final_estimator=LogisticRegression(),
-        cv=5
-    ))
-]
-
-# Level 2: Final stacking
-multi_level_stacker = StackingClassifier(
-    estimators=level_1_models + [('knn', KNeighborsClassifier())],
-    final_estimator=LogisticRegression(),
-    cv=3
-)
-
-print("Multi-Level Stacking Structure:")
-print("  Level 0: RF, GB, SVC")
-print("  Level 1: Stacking(Level 0) + KNN")
-print("  Level 2: LogisticRegression(Level 1)")
-
-# Train (using smaller dataset for speed)
-X_small = X_train[:500]
-y_small = y_train[:500]
-
-multi_level_stacker.fit(X_small, y_small)
-multi_level_score = multi_level_stacker.score(X_test, y_test)
-print(f"\nMulti-Level Stacking Accuracy: {multi_level_score:.3f}")
-
-# 2. STACKING WITH FEATURE ENGINEERING
-print("\n2. Stacking with Feature Engineering")
-print("-" * 40)
-
-class FeatureStackingClassifier:
-    """
-    Stacking that includes original features along with predictions
-    """
-    
-    def __init__(self, base_estimators, meta_estimator, use_probas=True, 
-                 use_features=True, cv=5):
-        self.base_estimators = base_estimators
-        self.meta_estimator = meta_estimator
-        self.use_probas = use_probas
-        self.use_features = use_features
-        self.cv = cv
-        
-    def fit(self, X, y):
-        """Fit the stacking classifier"""
-        self.fitted_base_ = []
-        kfold = StratifiedKFold(n_splits=self.cv, shuffle=True, random_state=42)
-        
-        # Prepare meta features
-        if self.use_probas:
-            # For probability predictions
-            n_classes = len(np.unique(y))
-            meta_features = np.zeros((X.shape[0], len(self.base_estimators) * n_classes))
-        else:
-            meta_features = np.zeros((X.shape[0], len(self.base_estimators)))
-        
-        # Generate out-of-fold predictions
-        for i, (name, estimator) in enumerate(self.base_estimators):
-            oof_preds = np.zeros((X.shape[0], n_classes)) if self.use_probas else np.zeros(X.shape[0])
-            
-            for train_idx, val_idx in kfold.split(X, y):
-                X_fold_train, X_fold_val = X[train_idx], X[val_idx]
-                y_fold_train = y[train_idx]
-                
-                # Fit on fold
-                est_fold = estimator.__class__(**estimator.get_params())
-                est_fold.fit(X_fold_train, y_fold_train)
-                
-                # Predict on validation fold
-                if self.use_probas:
-                    oof_preds[val_idx] = est_fold.predict_proba(X_fold_val)
-                else:
-                    oof_preds[val_idx] = est_fold.predict(X_fold_val)
-            
-            # Store predictions
-            if self.use_probas:
-                meta_features[:, i*n_classes:(i+1)*n_classes] = oof_preds
-            else:
-                meta_features[:, i] = oof_preds
-            
-            # Fit on full training set
-            fitted_est = estimator.fit(X, y)
-            self.fitted_base_.append((name, fitted_est))
-        
-        # Combine with original features if requested
-        if self.use_features:
-            self.meta_features_ = np.hstack([X, meta_features])
-        else:
-            self.meta_features_ = meta_features
-        
-        # Fit meta estimator
-        self.meta_estimator.fit(self.meta_features_, y)
-        
-        return self
-    
-    def predict(self, X):
-        """Make predictions"""
-        # Generate base predictions
-        if self.use_probas:
-            base_preds = []
-            for name, estimator in self.fitted_base_:
-                base_preds.append(estimator.predict_proba(X))
-            base_preds = np.hstack(base_preds)
-        else:
-            base_preds = np.column_stack([
-                est.predict(X) for _, est in self.fitted_base_
-            ])
-        
-        # Combine with features if needed
-        if self.use_features:
-            meta_features = np.hstack([X, base_preds])
-        else:
-            meta_features = base_preds
-        
-        return self.meta_estimator.predict(meta_features)
-    
-    def score(self, X, y):
-        return accuracy_score(y, self.predict(X))
-
-# Test feature stacking
-feature_stacker = FeatureStackingClassifier(
-    base_estimators=[
-        ('rf', RandomForestClassifier(n_estimators=50, random_state=42)),
-        ('gb', GradientBoostingClassifier(n_estimators=50, random_state=42))
-    ],
-    meta_estimator=LogisticRegression(),
-    use_features=True
-)
-
-feature_stacker.fit(X_small, y_small)
-feature_stacking_score = feature_stacker.score(X_test, y_test)
-
-print(f"Feature Stacking Accuracy: {feature_stacking_score:.3f}")
-
-# 3. BLENDING
-print("\n3. Blending (Holdout Stacking)")
-print("-" * 40)
-
-class BlendingClassifier:
-    """
-    Blending uses a holdout validation set instead of cross-validation
-    """
-    
-    def __init__(self, base_estimators, meta_estimator, blend_size=0.2):
-        self.base_estimators = base_estimators
-        self.meta_estimator = meta_estimator
-        self.blend_size = blend_size
-        
-    def fit(self, X, y):
-        # Split into blend and train
-        from sklearn.model_selection import train_test_split
-        X_blend, X_train, y_blend, y_train = train_test_split(
-            X, y, test_size=1-self.blend_size, random_state=42, stratify=y
-        )
-        
-        # Train base models on train set
-        self.fitted_base_ = []
-        blend_features = []
-        
-        for name, estimator in self.base_estimators:
-            # Fit on training portion
-            fitted_est = estimator.fit(X_train, y_train)
-            self.fitted_base_.append((name, fitted_est))
-            
-            # Predict on blend portion
-            if hasattr(estimator, 'predict_proba'):
-                blend_pred = estimator.predict_proba(X_blend)
-            else:
-                blend_pred = estimator.predict(X_blend).reshape(-1, 1)
-            
-            blend_features.append(blend_pred)
-        
-        # Stack blend predictions
-        if blend_features[0].ndim == 2:
-            blend_features = np.hstack(blend_features)
-        else:
-            blend_features = np.column_stack(blend_features)
-        
-        # Train meta model on blend predictions
-        self.meta_estimator.fit(blend_features, y_blend)
-        
-        return self
-    
-    def predict(self, X):
-        # Get base predictions
-        base_preds = []
-        
-        for name, estimator in self.fitted_base_:
-            if hasattr(estimator, 'predict_proba'):
-                pred = estimator.predict_proba(X)
-            else:
-                pred = estimator.predict(X).reshape(-1, 1)
-            base_preds.append(pred)
-        
-        # Stack predictions
-        if base_preds[0].ndim == 2:
-            meta_features = np.hstack(base_preds)
-        else:
-            meta_features = np.column_stack(base_preds)
-        
-        return self.meta_estimator.predict(meta_features)
-    
-    def score(self, X, y):
-        return accuracy_score(y, self.predict(X))
-
-# Test blending
-blender = BlendingClassifier(
-    base_estimators=[
-        ('rf', RandomForestClassifier(n_estimators=50, random_state=42)),
-        ('gb', GradientBoostingClassifier(n_estimators=50, random_state=42)),
-        ('svc', SVC(probability=True, random_state=42))
-    ],
-    meta_estimator=LogisticRegression(),
-    blend_size=0.2
-)
-
-blender.fit(X_train, y_train)
-blending_score = blender.score(X_test, y_test)
-
-print(f"Blending Accuracy: {blending_score:.3f}")
-
-# Compare stacking methods
-stacking_comparison = pd.DataFrame({
-    'Method': ['Multi-Level Stacking', 'Feature Stacking', 'Blending'],
-    'Accuracy': [multi_level_score, feature_stacking_score, blending_score]
-})
-print("\n" + stacking_comparison.to_string(index=False))</code></pre>
-
-    <h2>Advanced Boosting Strategies</h2>
-    
-    <pre class="language-python"><code>from sklearn.ensemble import AdaBoostClassifier, GradientBoostingClassifier
-import xgboost as xgb
-import lightgbm as lgb
-
-print("\n" + "="*60)
-print("ADVANCED BOOSTING STRATEGIES")
-print("="*60)
-
-# 1. CUSTOM BOOSTING WITH SAMPLE WEIGHTS
-print("\n1. Custom Adaptive Boosting")
-print("-" * 40)
-
-class CustomAdaBoost:
-    """
-    Custom implementation of AdaBoost to understand the algorithm
-    """
-    
-    def __init__(self, base_estimator, n_estimators=50):
-        self.base_estimator = base_estimator
-        self.n_estimators = n_estimators
-        self.estimators_ = []
-        self.estimator_weights_ = []
-        
-    def fit(self, X, y):
-        n_samples = X.shape[0]
-        
-        # Initialize weights uniformly
-        sample_weights = np.ones(n_samples) / n_samples
-        
-        for i in range(self.n_estimators):
-            # Train base estimator with current weights
-            estimator = self.base_estimator.__class__(**self.base_estimator.get_params())
-            estimator.fit(X, y, sample_weight=sample_weights)
-            
-            # Make predictions
-            y_pred = estimator.predict(X)
-            
-            # Calculate weighted error
-            incorrect = y_pred != y
-            error = np.sum(sample_weights[incorrect]) / np.sum(sample_weights)
-            
-            # Calculate estimator weight (alpha)
-            if error >= 0.5:
-                # Stop if error is too high
-                if i == 0:
-                    self.estimators_.append(estimator)
-                    self.estimator_weights_.append(1.0)
-                break
-            
-            alpha = 0.5 * np.log((1 - error) / error)
-            
-            # Update sample weights
-            sample_weights *= np.exp(-alpha * y * (2 * y_pred - 1))
-            sample_weights /= np.sum(sample_weights)
-            
-            # Store estimator and weight
-            self.estimators_.append(estimator)
-            self.estimator_weights_.append(alpha)
-            
-            if i % 10 == 0:
-                print(f"  Iteration {i}: Error = {error:.3f}, Alpha = {alpha:.3f}")
-        
-        return self
-    
-    def predict(self, X):
-        # Weighted majority vote
-        predictions = np.zeros(X.shape[0])
-        
-        for estimator, weight in zip(self.estimators_, self.estimator_weights_):
-            predictions += weight * (2 * estimator.predict(X) - 1)
-        
-        return (predictions > 0).astype(int)
-    
-    def score(self, X, y):
-        return accuracy_score(y, self.predict(X))
-
-# Test custom AdaBoost
-from sklearn.tree import DecisionTreeClassifier
-
-custom_ada = CustomAdaBoost(
-    base_estimator=DecisionTreeClassifier(max_depth=1),
-    n_estimators=50
-)
-custom_ada.fit(X_train, y_train)
-custom_score = custom_ada.score(X_test, y_test)
-
-print(f"\nCustom AdaBoost Accuracy: {custom_score:.3f}")
-
-# Compare with sklearn AdaBoost
-sklearn_ada = AdaBoostClassifier(n_estimators=50, random_state=42)
-sklearn_ada.fit(X_train, y_train)
-sklearn_score = sklearn_ada.score(X_test, y_test)
-
-print(f"Sklearn AdaBoost Accuracy: {sklearn_score:.3f}")
-
-# 2. GRADIENT BOOSTING VARIATIONS
-print("\n2. Gradient Boosting Variations")
-print("-" * 40)
-
-# Standard Gradient Boosting
-gb_standard = GradientBoostingClassifier(
-    n_estimators=100,
-    learning_rate=0.1,
-    max_depth=3,
-    random_state=42
-)
-
-# Stochastic Gradient Boosting (with subsampling)
-gb_stochastic = GradientBoostingClassifier(
-    n_estimators=100,
-    learning_rate=0.1,
-    max_depth=3,
-    subsample=0.8,  # Use 80% of samples
-    max_features='sqrt',  # Use sqrt(n_features) at each split
-    random_state=42
-)
-
-# Histogram-based Gradient Boosting (faster)
-from sklearn.ensemble import HistGradientBoostingClassifier
-gb_hist = HistGradientBoostingClassifier(
-    max_iter=100,
-    learning_rate=0.1,
-    max_depth=3,
-    random_state=42
-)
-
-# Compare different GB variations
-gb_models = {
-    'Standard GB': gb_standard,
-    'Stochastic GB': gb_stochastic,
-    'Histogram GB': gb_hist
-}
-
-gb_results = {}
-for name, model in gb_models.items():
-    import time
-    start_time = time.time()
-    model.fit(X_train, y_train)
-    train_time = time.time() - start_time
-    
-    score = model.score(X_test, y_test)
-    gb_results[name] = {'accuracy': score, 'time': train_time}
-    
-    print(f"{name:15} - Accuracy: {score:.3f}, Time: {train_time:.2f}s")
-
-# 3. EXTREME GRADIENT BOOSTING (XGBoost)
-print("\n3. XGBoost Advanced Features")
-print("-" * 40)
-
-# Prepare data for XGBoost
-dtrain = xgb.DMatrix(X_train, label=y_train)
-dtest = xgb.DMatrix(X_test, label=y_test)
-
-# XGBoost with early stopping
-params = {
-    'objective': 'binary:logistic',
-    'max_depth': 3,
-    'learning_rate': 0.1,
-    'n_estimators': 1000,
-    'eval_metric': 'logloss'
-}
-
-# Train with early stopping
-evals = [(dtrain, 'train'), (dtest, 'eval')]
-xgb_model = xgb.train(
-    params,
-    dtrain,
-    num_boost_round=1000,
-    evals=evals,
-    early_stopping_rounds=10,
-    verbose=False
-)
-
-# Get predictions
-xgb_pred = (xgb_model.predict(dtest) > 0.5).astype(int)
-xgb_score = accuracy_score(y_test, xgb_pred)
-
-print(f"XGBoost with Early Stopping:")
-print(f"  Best iteration: {xgb_model.best_iteration}")
-print(f"  Accuracy: {xgb_score:.3f}")
-
-# Feature importance
-importance = xgb_model.get_score(importance_type='gain')
-print(f"  Top 5 important features: {list(importance.keys())[:5]}")
-
-# 4. LIGHTGBM
-print("\n4. LightGBM (Gradient Boosting on Leaves)")
-print("-" * 40)
-
-# Prepare LightGBM dataset
-lgb_train = lgb.Dataset(X_train, y_train)
-lgb_eval = lgb.Dataset(X_test, y_test, reference=lgb_train)
-
-# LightGBM parameters
-lgb_params = {
-    'objective': 'binary',
-    'metric': 'binary_logloss',
-    'num_leaves': 31,
-    'learning_rate': 0.1,
-    'feature_fraction': 0.9,
-    'bagging_fraction': 0.8,
-    'bagging_freq': 5,
-    'verbose': -1
-}
-
-# Train LightGBM
-lgb_model = lgb.train(
-    lgb_params,
-    lgb_train,
-    valid_sets=[lgb_eval],
-    num_boost_round=100,
-    callbacks=[lgb.early_stopping(10), lgb.log_evaluation(0)]
-)
-
-# Predictions
-lgb_pred = (lgb_model.predict(X_test) > 0.5).astype(int)
-lgb_score = accuracy_score(y_test, lgb_pred)
-
-print(f"LightGBM Accuracy: {lgb_score:.3f}")
-print(f"Number of trees: {lgb_model.num_trees()}")</code></pre>
-
-    <h2>Ensemble Selection and Optimization</h2>
-    
-    <pre class="language-python"><code>print("\n" + "="*60)
-print("ENSEMBLE SELECTION AND OPTIMIZATION")
-print("="*60)
-
-# 1. GREEDY ENSEMBLE SELECTION
-print("\n1. Greedy Ensemble Selection")
-print("-" * 40)
-
-class GreedyEnsembleSelector:
-    """
-    Greedy algorithm to select best subset of models
-    """
-    
-    def __init__(self, models, metric=accuracy_score, n_best=None):
-        self.models = models
-        self.metric = metric
-        self.n_best = n_best
-        self.selected_models_ = []
-        self.selection_path_ = []
-        
-    def fit(self, X, y):
-        """Select best ensemble greedily"""
-        from sklearn.model_selection import train_test_split
-        
-        # Split for validation
-        X_train, X_val, y_train, y_val = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
-        )
-        
-        # Fit all models
-        fitted_models = []
-        for name, model in self.models:
-            model.fit(X_train, y_train)
-            fitted_models.append((name, model))
-        
-        # Get predictions for all models
-        predictions = {}
-        for name, model in fitted_models:
-            predictions[name] = model.predict(X_val)
-        
-        # Greedy selection
-        available_models = list(predictions.keys())
-        selected = []
-        
-        n_to_select = self.n_best or len(available_models)
-        
-        for i in range(n_to_select):
-            best_score = -np.inf
-            best_model = None
-            
-            for model in available_models:
-                # Try adding this model
-                trial_ensemble = selected + [model]
-                
-                # Ensemble prediction (majority vote)
-                ensemble_pred = np.zeros(len(y_val))
-                for m in trial_ensemble:
-                    ensemble_pred += predictions[m]
-                ensemble_pred = (ensemble_pred > len(trial_ensemble) / 2).astype(int)
-                
-                # Calculate score
-                score = self.metric(y_val, ensemble_pred)
-                
-                if score > best_score:
-                    best_score = score
-                    best_model = model
-            
-            # Add best model if it improves score
-            if best_model and (not selected or best_score > self.selection_path_[-1][1]):
-                selected.append(best_model)
-                available_models.remove(best_model)
-                self.selection_path_.append((best_model, best_score))
-                print(f"  Step {i+1}: Added {best_model}, Score: {best_score:.3f}")
-            else:
-                break
-        
-        # Store selected models
-        self.selected_models_ = [(name, model) for name, model in fitted_models 
-                                 if name in selected]
-        
-        return self
-    
-    def predict(self, X):
-        """Predict using selected ensemble"""
-        predictions = np.zeros(X.shape[0])
-        
-        for name, model in self.selected_models_:
-            predictions += model.predict(X)
-        
-        return (predictions > len(self.selected_models_) / 2).astype(int)
-    
-    def score(self, X, y):
-        return accuracy_score(y, self.predict(X))
-
-# Test greedy selection
-candidate_models = [
-    ('lr', LogisticRegression(random_state=42)),
-    ('svc', SVC(random_state=42)),
-    ('rf', RandomForestClassifier(n_estimators=50, random_state=42)),
-    ('gb', GradientBoostingClassifier(n_estimators=50, random_state=42)),
-    ('nb', GaussianNB()),
-    ('knn', KNeighborsClassifier()),
-    ('dt', DecisionTreeClassifier(max_depth=5, random_state=42))
-]
-
-greedy_selector = GreedyEnsembleSelector(candidate_models, n_best=5)
-greedy_selector.fit(X_train, y_train)
-
-print(f"\nSelected {len(greedy_selector.selected_models_)} models")
-greedy_score = greedy_selector.score(X_test, y_test)
-print(f"Greedy Ensemble Accuracy: {greedy_score:.3f}")
-
-# 2. BAYESIAN OPTIMIZATION FOR ENSEMBLE WEIGHTS
-print("\n2. Bayesian Optimization for Ensemble Weights")
-print("-" * 40)
-
-from scipy.optimize import minimize
-from sklearn.metrics import log_loss
-
-class BayesianEnsembleOptimizer:
-    """
-    Find optimal weights using Bayesian optimization
-    """
-    
-    def __init__(self, models):
-        self.models = models
-        self.weights_ = None
-        
-    def objective(self, weights, X, y, predictions):
-        """Objective function to minimize"""
-        # Normalize weights
-        weights = weights / weights.sum()
-        
-        # Weighted average of predictions
-        ensemble_pred = np.zeros_like(predictions[0])
-        for i, pred in enumerate(predictions):
-            ensemble_pred += weights[i] * pred
-        
-        # Calculate negative log loss (to minimize)
-        return log_loss(y, ensemble_pred)
-    
-    def fit(self, X, y):
-        """Find optimal weights"""
-        from sklearn.model_selection import train_test_split
-        
-        # Split for validation
-        X_train, X_val, y_train, y_val = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
-        )
-        
-        # Fit models and get predictions
-        predictions = []
-        self.fitted_models_ = []
-        
-        for name, model in self.models:
-            model.fit(X_train, y_train)
-            self.fitted_models_.append((name, model))
-            
-            if hasattr(model, 'predict_proba'):
-                pred = model.predict_proba(X_val)[:, 1]
-            else:
-                pred = model.predict(X_val)
-            predictions.append(pred)
-        
-        # Initial weights (uniform)
-        n_models = len(self.models)
-        initial_weights = np.ones(n_models) / n_models
-        
-        # Constraints: weights sum to 1, all non-negative
-        constraints = {'type': 'eq', 'fun': lambda w: w.sum() - 1}
-        bounds = [(0, 1)] * n_models
-        
-        # Optimize
-        result = minimize(
-            self.objective,
-            initial_weights,
-            args=(X_val, y_val, predictions),
-            method='SLSQP',
-            bounds=bounds,
-            constraints=constraints
-        )
-        
-        self.weights_ = result.x / result.x.sum()
-        
-        print("Optimized weights:")
-        for (name, _), weight in zip(self.models, self.weights_):
-            print(f"  {name}: {weight:.3f}")
-        
-        return self
-    
-    def predict_proba(self, X):
-        """Predict probabilities"""
-        predictions = []
-        
-        for name, model in self.fitted_models_:
-            if hasattr(model, 'predict_proba'):
-                pred = model.predict_proba(X)[:, 1]
-            else:
-                pred = model.predict(X)
-            predictions.append(pred)
-        
-        # Weighted average
-        ensemble_pred = np.zeros_like(predictions[0])
-        for i, pred in enumerate(predictions):
-            ensemble_pred += self.weights_[i] * pred
-        
-        return ensemble_pred
-    
-    def predict(self, X):
-        return (self.predict_proba(X) > 0.5).astype(int)
-    
-    def score(self, X, y):
-        return accuracy_score(y, self.predict(X))
-
-# Test Bayesian optimization
-bayesian_optimizer = BayesianEnsembleOptimizer(candidate_models[:4])
-bayesian_optimizer.fit(X_train, y_train)
-bayesian_score = bayesian_optimizer.score(X_test, y_test)
-
-print(f"\nBayesian Optimized Ensemble Accuracy: {bayesian_score:.3f}")</code></pre>
-
-    <h2>Production-Ready Ensemble System</h2>
-    
-    <pre class="language-python"><code>print("\n" + "="*60)
-print("PRODUCTION-READY ENSEMBLE SYSTEM")
-print("="*60)
-
-class ProductionEnsemble:
-    """
-    Complete ensemble system for production use
-    """
-    
-    def __init__(self, 
-                 ensemble_type='voting',
-                 base_models=None,
-                 cv_folds=5,
-                 optimize_weights=True,
-                 use_calibration=True,
-                 save_models=True):
-        
-        self.ensemble_type = ensemble_type
-        self.base_models = base_models or self._get_default_models()
-        self.cv_folds = cv_folds
-        self.optimize_weights = optimize_weights
-        self.use_calibration = use_calibration
-        self.save_models = save_models
-        
-        self.fitted_models_ = []
-        self.weights_ = None
-        self.calibrators_ = []
-        self.performance_metrics_ = {}
-        
-    def _get_default_models(self):
-        """Default diverse model set"""
-        return [
-            ('rf', RandomForestClassifier(n_estimators=100, random_state=42)),
-            ('gb', GradientBoostingClassifier(n_estimators=100, random_state=42)),
-            ('lr', LogisticRegression(max_iter=1000, random_state=42)),
-            ('svc', SVC(probability=True, random_state=42))
-        ]
-    
-    def _calibrate_probabilities(self, X, y):
-        """Calibrate probability predictions"""
-        from sklearn.calibration import CalibratedClassifierCV
-        
-        calibrated_models = []
-        
-        for name, model in self.fitted_models_:
-            if hasattr(model, 'predict_proba'):
-                calibrator = CalibratedClassifierCV(
-                    model, method='sigmoid', cv=3
-                )
-                calibrator.fit(X, y)
-                calibrated_models.append((name, calibrator))
-            else:
-                calibrated_models.append((name, model))
-        
-        return calibrated_models
-    
-    def fit(self, X, y):
-        """Fit the production ensemble"""
-        print("Training Production Ensemble...")
-        print("-" * 40)
-        
-        # Step 1: Train base models
-        print("Step 1: Training base models...")
-        for name, model in self.base_models:
-            print(f"  Training {name}...")
-            model.fit(X, y)
-            
-            # Cross-validation score
-            cv_scores = cross_val_score(model, X, y, cv=self.cv_folds)
-            self.performance_metrics_[name] = {
-                'cv_mean': cv_scores.mean(),
-                'cv_std': cv_scores.std()
-            }
-            
-            self.fitted_models_.append((name, model))
-        
-        # Step 2: Calibrate probabilities if requested
-        if self.use_calibration:
-            print("\nStep 2: Calibrating probabilities...")
-            self.fitted_models_ = self._calibrate_probabilities(X, y)
-        
-        # Step 3: Optimize weights if requested
-        if self.optimize_weights:
-            print("\nStep 3: Optimizing ensemble weights...")
-            self._optimize_weights(X, y)
-        else:
-            # Use CV scores as weights
-            scores = [self.performance_metrics_[name]['cv_mean'] 
-                     for name, _ in self.fitted_models_]
-            self.weights_ = np.array(scores) / np.sum(scores)
-        
-        # Step 4: Calculate final metrics
-        self._calculate_final_metrics(X, y)
-        
-        print("\n✅ Ensemble training complete!")
-        
-        return self
-    
-    def _optimize_weights(self, X, y):
-        """Optimize ensemble weights"""
-        # Similar to BayesianEnsembleOptimizer
-        # Implementation omitted for brevity
-        n_models = len(self.fitted_models_)
-        self.weights_ = np.ones(n_models) / n_models
-    
-    def _calculate_final_metrics(self, X, y):
-        """Calculate and store performance metrics"""
-        ensemble_pred = self.predict(X)
-        
-        self.performance_metrics_['ensemble'] = {
-            'accuracy': accuracy_score(y, ensemble_pred),
-            'models_used': len(self.fitted_models_),
-            'weights': self.weights_.tolist()
-        }
-    
-    def predict_proba(self, X):
-        """Predict probabilities"""
-        probas = []
-        
-        for (name, model), weight in zip(self.fitted_models_, self.weights_):
-            if hasattr(model, 'predict_proba'):
-                proba = model.predict_proba(X)[:, 1]
-            else:
-                proba = model.predict(X)
-            
-            probas.append(proba * weight)
-        
-        return np.sum(probas, axis=0)
-    
-    def predict(self, X):
-        """Predict classes"""
-        if self.ensemble_type == 'voting':
-            return (self.predict_proba(X) > 0.5).astype(int)
-        else:
-            # Other ensemble types can be implemented here
-            return (self.predict_proba(X) > 0.5).astype(int)
-    
-    def score(self, X, y):
-        """Calculate accuracy"""
-        return accuracy_score(y, self.predict(X))
-    
-    def get_model_importance(self):
-        """Get importance of each model in ensemble"""
-        importance = pd.DataFrame({
-            'Model': [name for name, _ in self.fitted_models_],
-            'Weight': self.weights_,
-            'CV_Score': [self.performance_metrics_[name]['cv_mean'] 
-                        for name, _ in self.fitted_models_]
-        })
-        return importance.sort_values('Weight', ascending=False)
-    
-    def save(self, filepath):
-        """Save ensemble to disk"""
-        import joblib
-        
-        ensemble_data = {
-            'models': self.fitted_models_,
-            'weights': self.weights_,
-            'metrics': self.performance_metrics_,
-            'config': {
-                'ensemble_type': self.ensemble_type,
-                'cv_folds': self.cv_folds,
-                'use_calibration': self.use_calibration
-            }
-        }
-        
-        joblib.dump(ensemble_data, filepath)
-        print(f"Ensemble saved to {filepath}")
-    
-    @classmethod
-    def load(cls, filepath):
-        """Load ensemble from disk"""
-        import joblib
-        
-        ensemble_data = joblib.load(filepath)
-        
-        # Create new instance
-        ensemble = cls(
-            ensemble_type=ensemble_data['config']['ensemble_type'],
-            cv_folds=ensemble_data['config']['cv_folds'],
-            use_calibration=ensemble_data['config']['use_calibration']
-        )
-        
-        # Restore state
-        ensemble.fitted_models_ = ensemble_data['models']
-        ensemble.weights_ = ensemble_data['weights']
-        ensemble.performance_metrics_ = ensemble_data['metrics']
-        
-        return ensemble
-
-# Test production ensemble
-production_ensemble = ProductionEnsemble(
-    ensemble_type='voting',
-    optimize_weights=False,
-    use_calibration=False  # Set to False for speed
-)
-
-production_ensemble.fit(X_train, y_train)
-
-print("\nModel Importance:")
-print(production_ensemble.get_model_importance())
-
-print(f"\nProduction Ensemble Test Accuracy: {production_ensemble.score(X_test, y_test):.3f}")
-
-# Performance comparison summary
-print("\n" + "="*60)
-print("ENSEMBLE METHODS PERFORMANCE SUMMARY")
-print("="*60)
-
-all_results = {
-    'Hard Voting': hard_score,
-    'Soft Voting': soft_score,
-    'Weighted Voting': weighted_score,
-    'Dynamic Voting': dynamic_score,
-    'Feature Stacking': feature_stacking_score,
-    'Blending': blending_score,
-    'Greedy Selection': greedy_score,
-    'Bayesian Optimized': bayesian_score,
-    'Production Ensemble': production_ensemble.score(X_test, y_test)
-}
-
-results_df = pd.DataFrame.from_dict(all_results, orient='index', columns=['Accuracy'])
-results_df = results_df.sort_values('Accuracy', ascending=False)
-
-print(results_df.to_string())
-print(f"\nBest Method: {results_df.index[0]} with {results_df.iloc[0, 0]:.3f} accuracy")</code></pre>
-
-    <h2>Practice Exercises</h2>
-    
-    <h3>Exercise 1: Custom Ensemble Framework</h3>
-    <p>Build a flexible ensemble framework that:</p>
-    <ol>
-        <li>Supports multiple ensemble strategies (voting, stacking, blending)</li>
-        <li>Automatically selects best base models</li>
-        <li>Optimizes ensemble weights</li>
-        <li>Provides confidence intervals for predictions</li>
-        <li>Handles both classification and regression</li>
-    </ol>
-
-    <h3>Exercise 2: Ensemble Diversity Analysis</h3>
-    <p>Create tools to analyze ensemble diversity:</p>
-    <ol>
-        <li>Calculate pairwise model correlation</li>
-        <li>Measure diversity metrics (Q-statistic, disagreement measure)</li>
-        <li>Visualize model agreement/disagreement patterns</li>
-        <li>Select diverse models for optimal ensemble</li>
-    </ol>
-
-    <h3>Exercise 3: Competition-Grade Ensemble</h3>
-    <p>Build a Kaggle-competition-ready ensemble:</p>
-    <ol>
-        <li>Implement multi-level stacking</li>
-        <li>Use out-of-fold predictions</li>
-        <li>Include feature engineering in the pipeline</li>
-        <li>Implement cross-validation strategy</li>
-        <li>Create submission file generator</li>
-    </ol>
-
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>🎯 Ensemble methods combine multiple models to achieve better performance</li>
-        <li>🗳️ Voting ensembles: Simple but effective (hard, soft, weighted)</li>
-        <li>📚 Stacking: Use meta-learner to combine base model predictions</li>
-        <li>🔄 Blending: Similar to stacking but uses holdout validation</li>
-        <li>⚡ Boosting: Sequential learning with focus on errors</li>
-        <li>🎨 Diversity is key: Models should make different errors</li>
-        <li>⚖️ Weight optimization can significantly improve performance</li>
-        <li>🏗️ Multi-level stacking can capture complex patterns</li>
-        <li>📊 Greedy selection finds optimal model subset</li>
-        <li>🏭 Production ensembles need calibration and monitoring</li>
-    </ul>
-
-    <h2>Summary</h2>
-    <p>Advanced ensemble methods represent the pinnacle of classical machine learning. By intelligently combining diverse models, we can achieve performance that surpasses any individual algorithm. The techniques covered here—from sophisticated voting schemes to multi-level stacking—are the same methods that win machine learning competitions and power production systems. Remember: the key to successful ensembles is diversity, proper validation, and careful optimization. Master these techniques, and you'll have the tools to tackle the most challenging machine learning problems!</p>
-
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> The key to a strong ensemble is diversity among its members. Where in
-            your ensemble did diversity clearly help — and where did adding a similar model add cost without any real benefit?</p>
+for name, reg in regressors:
+    reg.fit(Xd_train, yd_train)
+    print(f"{name:7s} MAE {mean_absolute_error(yd_test, reg.predict(Xd_test)):.2f}")
+
+stack_d = StackingRegressor(regressors, final_estimator=LinearRegression(positive=True),
+                            cv=KFold(n_splits=5)).fit(Xd_train, yd_train)
+print(f"stack   MAE {mean_absolute_error(yd_test, stack_d.predict(Xd_test)):.2f}")
+print("weights (boost, ridge, forest):", stack_d.final_estimator_.coef_.round(2))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>boost   MAE 8.05
+ridge   MAE 11.31
+forest  MAE 8.47
+stack   MAE 8.15
+weights (boost, ridge, forest): [0.93 0.04 0.  ]</code></pre>
+                        </div>
+                        <p>The meta-model put nearly all its weight on the booster: once the booster's forecast is known, the other two add nothing it can use. The stack ends up as a slightly rescaled booster that costs three models to run, and here it is even a little worse than the booster alone. That is a perfectly good outcome of stacking: it is an honest way of finding out that you do not need an ensemble.</p>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> Five classifiers are each 70% accurate, but they always make exactly the same predictions. What is the accuracy of their majority vote?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="That is the figure for five INDEPENDENT voters. What happens when every voter is wrong on the same cases?">
+                                A) About 84%
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A vote cannot be more right than its members on the cases where all of them are wrong. How many such cases are there?">
+                                B) 100%
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="Identical voters are one voter repeated five times. Their mistakes coincide on every case, so the majority is wrong exactly when each of them is: 30% of the time.">
+                                C) 70%
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> Why does a stacking meta-model learn from out-of-fold predictions instead of each member's predictions on its own training rows?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Flexible members are overconfident on rows they were trained on (the booster's training-row AUC is far above its honest one). Out-of-fold predictions behave like predictions on new customers, so the meta-model learns weights that still work on the test set.">
+                                A) In-sample predictions are overconfident, so the meta-model would learn to over-trust the most flexible member
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Out-of-fold predictions need five extra fits per member. Is speed really the reason?">
+                                B) Out-of-fold predictions are faster to compute
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="A logistic regression can be fitted on any numeric columns. What went wrong in Mistake 4, where it was fitted on in-sample predictions?">
+                                C) LogisticRegression can only be fitted on out-of-fold data
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> Three models give one customer these churn probabilities. What does this print?</p>
+                        <pre><code class="language-python">quiz_probs = np.array([[0.2, 0.9, 0.7]])
+print(quiz_probs.mean(axis=1).round(2), (quiz_probs &gt; 0.5).sum(axis=1))</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="The first number is an average of all three probabilities, not the largest one.">
+                                A) <code>[0.9] [3]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="The soft vote is the average, (0.2 + 0.9 + 0.7) / 3 = 0.6, and two of the three models are above 0.5, so a hard vote also says churn, by 2 votes to 1.">
+                                B) <code>[0.6] [2]</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Add the three probabilities and divide by three. Then count how many are above 0.5.">
+                                C) <code>[0.7] [1]</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> A stack's logistic-regression meta-model has weights of about 1.0 (logreg), 5.2 (forest) and 1.6 (boost). What is a fair reading?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="The weights describe how the meta-model combines the members' probabilities: given the other two, the forest's opinion moves the final prediction most. They are a statement about the models, not about customers.">
+                                A) Given the other two members' predictions, the forest's probability moves the final prediction the most
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The test AUCs of the members were close. Do weights measure accuracy, or how much each opinion adds given the others?">
+                                B) The forest is several times as accurate as the logistic regression
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The meta-model never sees a customer feature, only three probabilities. Can it say anything about why customers leave?">
+                                C) Churn is mainly caused by the features the forest relies on
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> In which situation is a single model the better choice than a stack?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Strong, different members are exactly when stacking helps most. Look for the option where the gain is doubtful and the costs are real.">
+                                A) The members are individually strong and their out-of-fold predictions are only weakly correlated
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Having time for cross-validation helps you build a stack correctly; it is not a reason to avoid one.">
+                                B) You have enough time to compute out-of-fold predictions
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="When the bootstrap interval of the gain includes zero, you would be paying for several models, slower predictions and harder explanations with no evidence of a benefit.">
+                                C) The stack's gain is within the noise of a bootstrap, and the model must score customers quickly and be explained
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
+
+                <details>
+                    <summary>Isn't a random forest already a voting ensemble?</summary>
+                    <p>Yes: a forest is a soft vote of many trees of the <em>same</em> kind, made different by random rows and columns (Lesson 5.2). Gradient boosting is an ensemble too, built in sequence. This lesson's ensembles are <em>heterogeneous</em>: different algorithms that see the data differently. The principle is the same in all three: the team gains only where members disagree.</p>
+                </details>
+                <details>
+                    <summary>Can the meta-model be a gradient-boosted model instead of a logistic regression?</summary>
+                    <p>It can, and with many diverse members and lots of rows it sometimes helps. With three highly correlated inputs and a few thousand rows, a flexible meta-model mostly learns noise. Start with logistic regression (or <code>RidgeCV</code> for regression); move to something more flexible only if cross-validation shows a real gain.</p>
+                </details>
+                <details>
+                    <summary>Should I tune the members before stacking them?</summary>
+                    <p>Yes. A stack of untuned members is a stack of avoidable weaknesses. Tune each member with cross-validation (Lesson 6.2), then stack the tuned versions. You can tune the whole stack at once with a grid over names like <code>boost__learning_rate</code>, but it multiplies the cost by the number of folds.</p>
+                </details>
+                <details>
+                    <summary>How do I explain a prediction from a stack?</summary>
+                    <p>Model-agnostic tools treat the stack as one black box: permutation importance, partial dependence and SHAP's model-agnostic explainers (Module 7) all work on anything with <code>predict_proba</code>, just more slowly. The meta-model's weights tell you how the members are combined, never why a customer is at risk.</p>
+                </details>
+                <details>
+                    <summary>Do voting and stacking work for regression?</summary>
+                    <p>Yes, with the same API: <code>VotingRegressor</code> averages predictions, and <code>StackingRegressor</code> fits a meta-regressor on out-of-fold predictions. Exercise 4 stacks three demand forecasters.</p>
+                </details>
+
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>One split is one opinion. Repeat the bake-off for five different splits (<code>random_state</code> 0 to 4 in <code>train_test_split</code>) and record, for each, the test ROC AUC of the booster and the stack and their churners in the top 150. In how many of the five splits does the stack win? Write two sentences for the colleague who proposed the stack, using the spread across splits as evidence. Lesson 6.1 turns this idea into repeated cross-validation.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Think of a decision you make by weighing several opinions (reviews, friends, forecasts). How do you learn whose advice to trust, and how is that like a meta-model trained on out-of-fold predictions? Then write down your project's recommendation in one sentence, and the single number that would change your mind.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
+
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>A group of models beats its members only when their mistakes differ; measure diversity with the correlation of out-of-fold predictions</li>
+                        <li>Soft voting averages probabilities and keeps <code>predict_proba</code>; hard voting counts labels and loses it</li>
+                        <li>Stacking trains a simple meta-model on out-of-fold member predictions; <code>StackingClassifier(..., cv=...)</code> does this for you</li>
+                        <li>In-sample meta-features leak: the meta-model over-trusts overconfident members and can end up worse than its best member</li>
+                        <li>Blending uses one holdout instead of folds: simpler, noisier, natural for time-ordered data</li>
+                        <li>Choose weights and meta-models on validation or out-of-fold data, never on the test set</li>
+                        <li>Ship an ensemble only when its gain survives a bootstrap or cross-validation and is worth the extra training, latency and explanation cost</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You simulated why crowds are wise and when they are not</li>
+                        <li>You built voting and stacking ensembles from full preprocessing pipelines, by hand and with scikit-learn</li>
+                        <li>You watched a leaky stack fail silently and know how to prevent it</li>
+                        <li>You ran a paired bootstrap and wrote an evidence-based ship-or-skip recommendation</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="evaluation_model_selection.html"><strong>Lesson 6.1: Model Selection and Learning Curves</strong></a> you will compare models the rigorous way: the same cross-validation folds for every candidate, learning curves that show whether more data would help, and validation curves that show where a hyperparameter starts to overfit. It turns today's "is the gain real?" question into a routine.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep your project notebook: Lesson 6.1 compares the same members with cross-validation.</li>
+                    <li>Run <code>cross_val_score(stack, X_train, y_train, cv=cv, scoring="roc_auc")</code> and time it. Count how many models it fits in total (hint: five stacks of nineteen).</li>
+                    <li>Write down which of the five contenders you would put in production, and why, in two sentences.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>Today you did something many practitioners skip: you built the fancy model and then asked whether it was worth it, with evidence. Sometimes the honest answer is "keep the simpler one", and that answer is a success, not a failure. You now have the full classic-ensemble toolbox, bagging, boosting, voting and stacking, and the judgment to use it. Module 6 sharpens that judgment further.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="trees_gradient_boosting.html" class="prev-lesson">← Previous: Gradient Boosting</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="evaluation_model_selection.html" class="next-lesson">Next: Model Selection and Learning Curves →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Ensembles combine multiple models to outperform any single one — and diversity among members is the key ingredient.</li>
-                <li>Bagging (e.g. random forests) reduces variance by averaging parallel models; boosting reduces bias by training models sequentially.</li>
-                <li>Voting averages or majority-votes base predictions; stacking trains a meta-model to combine them.</li>
-                <li>More models means more compute and less interpretability — validate carefully and watch for overfitting the meta-learner.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now combine diverse learners into voting and stacking ensembles that rival the techniques used in
-        competition-winning and production machine learning systems.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>What's the difference between bagging and boosting?</summary>
-            <p>Bagging trains models in parallel on bootstrap samples to cut variance. Boosting trains models sequentially, each
-            one focusing on the errors of the last, to cut bias.</p>
-        </details>
-        <details>
-            <summary>What makes stacking work?</summary>
-            <p>A meta-model learns how best to combine the base models' outputs. To avoid leakage, train the meta-model on
-            cross-validated (out-of-fold) predictions rather than in-sample ones.</p>
-        </details>
-        <details>
-            <summary>Are ensembles always the better choice?</summary>
-            <p>They're usually more accurate but slower and harder to interpret. Sometimes a single well-tuned model is the
-            better trade-off — measure both before deciding.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Next you'll learn how to interpret and explain these more complex models, so their added power doesn't come at the
-        cost of being a black box.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Build a <code>VotingClassifier</code> and a <code>StackingClassifier</code> and compare both to the best base model.</li>
-            <li>Deliberately add a model from a different algorithm family and measure the effect of the added diversity.</li>
-            <li>Write your Learning Journal entry for this lesson.</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>You now wield the same techniques that top competitors and production teams rely on. Combine your models wisely
-            and they'll punch well above their weight — keep experimenting!</p>
-        </div>
-    </section>
-
-    <!-- Navigation -->
-    <nav class="lesson-nav" aria-label="Lesson navigation">
-        <a href="pipelines_composite.html" class="prev-lesson">Previous: Pipelines & Composite Estimators</a>
-        <a href="index.html" class="home-link">Course Home</a>
-        <a href="model_interpretation.html" class="next-lesson">Next: Model Interpretation & Explainability</a>
-    </nav>
-    
-    <script src="js/clipboard.js"></script>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1398,6 +957,10 @@ print(f"\nBest Method: {results_df.index[0]} with {results_df.iloc[0, 0]:.3f} ac
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>

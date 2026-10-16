@@ -3,1126 +3,982 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Master hyperparameter tuning in machine learning. Learn GridSearchCV, RandomizedSearchCV, and Bayesian optimization for optimal model performance.">
+    <meta name="description" content="Tune machine-learning models with grid search, random search, successive halving and Optuna, and report a tuned model's score honestly with nested cross-validation. Python Machine Learning Lesson 6.2.">
+    <meta name="author" content="Ray de la Paz">
     <title>Hyperparameter Tuning - Python Machine Learning</title>
     <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/enhanced.css">
-    <link rel="stylesheet" href="styles/standard.css">
-    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Mermaid: rendered (and re-rendered on theme change) by js/course-enhancements.js -->
     <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        window.__mermaid = mermaid;
+        mermaid.initialize({ startOnLoad: false });
+        document.dispatchEvent(new Event('mermaid-ready'));
     </script>
-    <script src="js/course-enhancements.js" defer></script>
 </head>
 <body>
-    <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="skip-to-main">Skip to main content</a>
-    
-    <!-- Progress indicator -->
+
     <div class="progress-indicator" role="progressbar" aria-label="Page scroll progress">
         <div class="progress-bar"></div>
     </div>
-    
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">🤖 Python Machine Learning</a>
+            <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-expanded="false" aria-controls="nav-links">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#modules">All Modules</a>
+                <span class="nav-divider"></span>
+                <a href="https://rays-home.netlify.app/">Ray's House of Fun</a>
+                <a href="https://rays-home.netlify.app/contact">Contact</a>
+                <button id="theme-toggle" aria-label="Toggle dark/light mode">🌙</button>
+            </div>
+        </div>
+    </nav>
+
     <main id="main-content">
-    <header role="banner">
-        <h1>Hyperparameter Tuning: Finding the Perfect Model Configuration</h1>
-        <div class="reading-time" aria-label="Estimated reading time"></div>
-    </header>
-    
-    <!-- Breadcrumb Navigation -->
-    <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="index.html">Home</a>
-        <span class="separator">›</span>
-        <a href="#">Machine Learning Module</a>
-        <span class="separator">›</span>
-        <a href="#">Model Optimization</a>
-        <span class="separator">›</span>
-        <span class="current">Hyperparameter Tuning</span>
-    </nav>
+        <div class="container">
+            <header>
+                <h1>🎛️ Lesson 6.2: Hyperparameter Tuning</h1>
+                <p class="lead">Stop guessing at model settings: search for them systematically with four strategies, spend your computing budget where it counts, and report the tuned model's score without fooling yourself.</p>
 
-    <!-- What You'll Learn (learning objectives) -->
-    <div class="card card-info">
-        <h2>📚 What You'll Learn</h2>
-        <p>By the end of this lesson, you will be able to:</p>
-        <ul>
-            <li>Distinguish hyperparameters (set by you) from parameters (learned from data)</li>
-            <li>Run exhaustive Grid Search with <code>GridSearchCV</code> and read its results</li>
-            <li>Use Random Search to explore large search spaces far more efficiently</li>
-            <li>Apply Bayesian optimization to focus the search on promising regions</li>
-            <li>Combine tuning with cross-validation (including nested CV) for unbiased estimates</li>
-            <li>Choose sensible search ranges for common algorithms and avoid overfitting the validation set</li>
-        </ul>
-        <p><strong>⏱️ Estimated Time:</strong> 45–60 minutes</p>
-        <p><strong>🎯 Project:</strong> Tune a classifier three ways — Grid, Random, and Bayesian search — and compare the best score, wall-clock time, and number of trials for each.</p>
-    </div>
+                <div class="card card-info">
+                    <h2>🎯 Learning Objectives</h2>
+                    <p>By the end of this lesson, you will be able to:</p>
+                    <ul>
+                        <li>Tune a whole pipeline with <code>GridSearchCV</code> and <code>RandomizedSearchCV</code>, naming its hyperparameters as <code>step__param</code>, and read <code>cv_results_</code></li>
+                        <li>Choose sensible search ranges (log scales, distributions from <code>scipy.stats</code>) and explain why random search usually beats a grid of the same size</li>
+                        <li>Speed up a search with successive halving (<code>HalvingRandomSearchCV</code>)</li>
+                        <li>Run a seeded Optuna study that learns where to search next</li>
+                        <li>Explain why <code>best_score_</code> is optimistic, estimate a tuned model honestly with nested cross-validation, and use the test set once</li>
+                    </ul>
+                </div>
 
-    <h2>The Art and Science of Model Optimization 🎯</h2>
-    
-    <blockquote>
-        <p>The difference between a good model and a great model often lies in the hyperparameters. While a model learns parameters from data, hyperparameters are the knobs we turn to control how the learning happens. Master hyperparameter tuning, and you'll unlock your models' true potential!</p>
-    </blockquote>
+                <ul class="lesson-meta">
+                    <li><span class="meta-label">⏱️ Time</span> 105 minutes</li>
+                    <li><span class="meta-label">📋 Prerequisites</span> <a href="evaluation_model_selection.html">Lesson 6.1: Model Selection and Learning Curves</a> (and the pipelines of <a href="pipelines_composite.html">Lesson 2.2</a>)</li>
+                    <li><span class="meta-label">🛠️ You will build</span> A tuned gradient-boosting churn model for the retention shortlist, compared honestly with the default, with its settings saved to <code>best_params.json</code></li>
+                    <li><span class="meta-label">📂 Data</span> <code>data/customers_churn.csv</code></li>
+                </ul>
+            </header>
 
-    <h2>Understanding Hyperparameters vs Parameters</h2>
-    
-    <div class="mermaid">
-    graph TD
-        A[Machine Learning Model] --> B[Parameters]
-        A --> C[Hyperparameters]
-        
-        B --> D[Learned from Data]
-        B --> E[Weights, Biases]
-        B --> F[Updated during training]
-        
-        C --> G[Set before training]
-        C --> H[Control learning process]
-        C --> I[Need optimization]
-        
-        I --> J[Grid Search]
-        I --> K[Random Search]
-        I --> L[Bayesian Optimization]
-        I --> M[Genetic Algorithms]
-        
-        style A fill:#667eea,color:#fff
-        style C fill:#ff6b6b
-        style B fill:#51cf66
-    </div>
+            <details class="card toc-card" open>
+                <summary aria-label="Toggle table of contents">
+                    <span class="toc-icon" aria-hidden="true">📑</span>
+                    <span class="toc-label">In This Lesson</span>
+                    <span class="toc-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <nav aria-label="Table of Contents">
+                    <ol>
+                        <li><a href="#idea" class="toc-link">Settings You Choose, Settings It Learns</a></li>
+                        <li><a href="#grid" class="toc-link">Grid Search</a></li>
+                        <li><a href="#random" class="toc-link">Random Search</a></li>
+                        <li><a href="#halving" class="toc-link">Successive Halving</a></li>
+                        <li><a href="#optuna" class="toc-link">Optuna: Learning Where to Look</a></li>
+                        <li><a href="#honest" class="toc-link">Honest Scores After Tuning</a></li>
+                        <li><a href="#mistakes" class="toc-link">Common Mistakes</a></li>
+                        <li><a href="#project" class="toc-link">Project: Tune the Retention Model</a></li>
+                        <li><a href="#exercises" class="toc-link">Hands-on Exercises</a></li>
+                        <li><a href="#quiz" class="toc-link">Quick Quiz</a></li>
+                        <li><a href="#faq" class="toc-link">Common Questions</a></li>
+                        <li><a href="#journal" class="toc-link">Learning Journal</a></li>
+                        <li><a href="#summary" class="toc-link">Lesson Summary</a></li>
+                    </ol>
+                </nav>
+            </details>
 
-    <pre class="language-python"><code># Understanding the difference
-import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+            <!-- ============================================================ -->
+            <section id="idea" class="lesson-section">
+                <h2>🧭 Settings You Choose, Settings It Learns</h2>
 
-# Parameters vs Hyperparameters Example
+                <p>Lesson 6.1 ended with a puzzle. Default gradient boosting lost, narrowly but consistently, to a random forest on Pinecrest's churn data, and its learning curve showed a perfect training score: it was overfitting. Boosting has settings that control exactly that, such as how many leaves each tree may grow and how big each correction step is. The defaults are a reasonable guess for a typical dataset, not a choice made for yours. This lesson is about making that choice with evidence.</p>
 
-# For Logistic Regression:
-# - Parameters: weights (coefficients) and bias (intercept) - learned from data
-# - Hyperparameters: C (regularization), penalty type, solver, max_iter
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th></th><th>Parameters</th><th>Hyperparameters</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Who sets them</td><td>The model, during <code>fit</code></td><td>You, in the constructor, before <code>fit</code></td></tr>
+                            <tr><td>Examples</td><td>Logistic regression's <code>coef_</code>; the split points inside each tree</td><td><code>C</code>, <code>max_depth</code>, <code>learning_rate</code>, <code>max_leaf_nodes</code></td></tr>
+                            <tr><td>How to find good values</td><td><code>fit</code> does it</td><td>Search: try values, score each with cross-validation, keep the best</td></tr>
+                        </tbody>
+                    </table>
+                </div>
 
-# For Random Forest:
-# - Parameters: individual tree structures, split values - learned from data  
-# - Hyperparameters: n_estimators, max_depth, min_samples_split, etc.
+                <div class="card card-info">
+                    <h4>💡 Mental Model: Dialing In a Camp Stove</h4>
+                    <p>A camp stove has two knobs: fuel flow and air. Turn either too far and the flame sputters or roars. You cannot calculate the best setting from the manual; you try a setting, boil a pot, time it, and adjust. Every trial costs fuel and minutes, so a smart camper does not try every combination in order. They try a few spread-out settings, notice which knob matters more, and spend the remaining fuel near the best results.</p>
+                    <p>Hyperparameter tuning is the same loop. A trial is a full cross-validation run (several fits), the fuel is computing time, and the search strategy decides which settings get tried. The four strategies in this lesson differ only in how cleverly they spend the fuel.</p>
+                </div>
 
-# Example: Hyperparameters control HOW the model learns
-rf = RandomForestClassifier(
-    n_estimators=100,      # Hyperparameter: number of trees
-    max_depth=10,          # Hyperparameter: tree depth
-    min_samples_split=5,   # Hyperparameter: minimum samples to split
-    random_state=42
-)
+                <div class="mermaid">
+graph TD
+    A["Search space and budget"] --> B["Propose a setting"]
+    B --> C["Cross-validate on training data"]
+    C --> D["Record the score"]
+    D --> B
+    D --> E["Refit the best on all training data"]
+    E --> F["Test once"]
+                </div>
 
-# When we fit, the model learns its parameters
-# rf.fit(X_train, y_train)  # This learns the actual tree structures
+                <p>Three ingredients define every search: the <strong>search space</strong> (which hyperparameters, which ranges), the <strong>budget</strong> (how many trials you can afford), and the <strong>objective</strong> (the cross-validated metric, decided before you start). Start with the setup from Lesson 6.1. This time the pipeline steps get short names of your own, <code>"prep"</code> and <code>"model"</code>, which keeps the hyperparameter names short.</p>
 
-# The importance of hyperparameter tuning
-print("""
-Why Hyperparameter Tuning Matters:
-1. Default values are rarely optimal for your specific problem
-2. Can improve model performance by 10-30% or more
-3. Helps prevent overfitting/underfitting
-4. Different datasets require different configurations
-5. Computational resources vs performance trade-off
-""")</code></pre>
-
-    <h2>Method 1: Grid Search - Exhaustive Search</h2>
-    
-    <pre class="language-python"><code>import numpy as np
+                <pre><code class="language-python">import numpy as np
 import pandas as pd
-from sklearn.model_selection import GridSearchCV, cross_val_score
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
-from sklearn.datasets import load_breast_cancer
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
-import seaborn as sns
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.ensemble import HistGradientBoostingClassifier
 
-# Load and prepare data
-data = load_breast_cancer()
-X = data.data
-y = data.target
-
-# Split the data
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+           "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+           "email_opens_90d"]
+categorical = ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"]
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
+    customers[numeric + categorical], customers["churned"],
+    test_size=0.25, stratify=customers["churned"], random_state=42)
 
-# Scale features (important for SVM)
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
 
-print("Dataset ready:")
-print(f"Training set: {X_train.shape}")
-print(f"Test set: {X_test.shape}")
+def make_preprocess():
+    return ColumnTransformer([
+        ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric),
+        ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"),
+                              OneHotEncoder(handle_unknown="ignore")), categorical),
+    ])
 
-# 1. GRID SEARCH: Systematic exploration of parameter space
-print("\n" + "="*60)
-print("GRID SEARCH DEMONSTRATION")
-print("="*60)
 
-# Define parameter grid for Random Forest
-param_grid_rf = {
-    'n_estimators': [50, 100, 200],
-    'max_depth': [None, 10, 20, 30],
-    'min_samples_split': [2, 5, 10],
-    'min_samples_leaf': [1, 2, 4],
-    'max_features': ['auto', 'sqrt', 'log2']
-}
+hgb = Pipeline([("prep", make_preprocess()),
+                ("model", HistGradientBoostingClassifier(random_state=42))])
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
-# Calculate total combinations
-total_combinations = 1
-for param, values in param_grid_rf.items():
-    total_combinations *= len(values)
-print(f"\nTotal parameter combinations to test: {total_combinations}")
+default_auc = cross_val_score(hgb, X_train, y_train, cv=cv, scoring="roc_auc")
+print(f"default boosting, 5-fold AUC: {default_auc.mean():.4f} +/- {default_auc.std():.4f}")
+print([name for name in hgb.get_params() if name.startswith("model__")][:8])</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>default boosting, 5-fold AUC: 0.8615 +/- 0.0132
+['model__categorical_features', 'model__class_weight', 'model__early_stopping', 'model__interaction_cst', 'model__l2_regularization', 'model__learning_rate', 'model__loss', 'model__max_bins']</code></pre>
+                </div>
 
-# Create and configure GridSearchCV
-grid_search_rf = GridSearchCV(
-    estimator=RandomForestClassifier(random_state=42),
-    param_grid=param_grid_rf,
-    cv=5,                        # 5-fold cross-validation
-    scoring='accuracy',          # Optimization metric
-    n_jobs=-1,                  # Use all CPU cores
-    verbose=1,                  # Show progress
-    return_train_score=True     # Track training scores
-)
+                <p>That is the number to beat. The list shows how the pipeline names its hyperparameters: the step name, two underscores, then the parameter. <code>model__learning_rate</code> is the boosting step's learning rate; <code>prep__num__simpleimputer__strategy</code> would even let you tune the imputer. Every search tool in this lesson uses these names.</p>
+            </section>
 
-# Perform grid search
-print("\nPerforming Grid Search... (this may take a while)")
-grid_search_rf.fit(X_train, y_train)
+            <!-- ============================================================ -->
+            <section id="grid" class="lesson-section">
+                <h2>🔲 Grid Search</h2>
 
-# Best parameters and score
-print(f"\nBest parameters found: {grid_search_rf.best_params_}")
-print(f"Best cross-validation score: {grid_search_rf.best_score_:.4f}")
+                <p><code>GridSearchCV</code> tries <strong>every combination</strong> of the values you list. Start small, with logistic regression's single regularization knob <code>C</code> (Lesson 3.2: smaller <code>C</code> means stronger regularization). Regularization strengths matter by orders of magnitude, so the values are spaced on a log scale: each one ten times the last.</p>
 
-# Evaluate on test set
-best_model = grid_search_rf.best_estimator_
-test_score = best_model.score(X_test, y_test)
-print(f"Test set score: {test_score:.4f}")
+                <pre><code class="language-python">from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GridSearchCV
 
-# Visualize Grid Search Results
-results_df = pd.DataFrame(grid_search_rf.cv_results_)
+logit = Pipeline([("prep", make_preprocess()), ("model", LogisticRegression(max_iter=1000))])
+logit_search = GridSearchCV(logit, {"model__C": [0.001, 0.01, 0.1, 1, 10, 100]},
+                            cv=cv, scoring="roc_auc")
+logit_search.fit(X_train, y_train)
 
-# Plot: Impact of each hyperparameter
-fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-axes = axes.flatten()
+results = pd.DataFrame(logit_search.cv_results_)
+print(results[["param_model__C", "mean_test_score", "std_test_score", "rank_test_score"]].round(4).to_string(index=False))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code> param_model__C  mean_test_score  std_test_score  rank_test_score
+          0.001           0.8267          0.0218                6
+          0.010           0.8336          0.0240                1
+          0.100           0.8330          0.0235                2
+          1.000           0.8324          0.0229                3
+         10.000           0.8320          0.0228                4
+        100.000           0.8320          0.0228                5</code></pre>
+                </div>
 
-for idx, param in enumerate(['n_estimators', 'max_depth', 'min_samples_split']):
-    # Get unique values for this parameter
-    param_col = f'param_{param}'
-    if param_col in results_df.columns:
-        param_values = results_df[param_col].unique()
-        mean_scores = []
-        std_scores = []
-        
-        for value in param_values:
-            mask = results_df[param_col] == value
-            mean_scores.append(results_df[mask]['mean_test_score'].mean())
-            std_scores.append(results_df[mask]['std_test_score'].mean())
-        
-        # Handle None values in max_depth
-        if param == 'max_depth':
-            param_values = ['None' if v is None else str(v) for v in param_values]
-        
-        axes[idx].bar(range(len(param_values)), mean_scores, yerr=std_scores, 
-                     capsize=5, alpha=0.7)
-        axes[idx].set_xlabel(param)
-        axes[idx].set_ylabel('Mean CV Score')
-        axes[idx].set_title(f'Impact of {param}')
-        axes[idx].set_xticks(range(len(param_values)))
-        axes[idx].set_xticklabels(param_values, rotation=45)
+                <p><code>cv_results_</code> is a dictionary with one entry per setting; as a DataFrame it is the full record of the search. Two lessons here. First, only the very strongest regularization hurts; from 0.01 upward the scores differ by less than their standard deviations. With 4,500 customers and 40-odd features, logistic regression is not overfitting, so <code>C</code> barely matters, exactly what its flat learning curve in Lesson 6.1 predicted. Second, tuning cannot fix a model's basic shape: no value of <code>C</code> lifts logistic regression to boosting's level.</p>
 
-# Heatmap of top combinations
-top_results = results_df.nlargest(20, 'mean_test_score')
-pivot_table = top_results.pivot_table(
-    values='mean_test_score',
-    index='param_max_depth',
-    columns='param_n_estimators',
-    aggfunc='mean'
-)
+                <p>Now a model where settings matter. For boosting, the knobs that control overfitting are the <code>learning_rate</code> (how big each correction step is) and <code>max_leaf_nodes</code> (how complex each tree may be; the default is 31). Three values each make a 3 x 3 grid:</p>
 
-axes[3].axis('off')  # Hide unused subplot
+                <pre><code class="language-python">grid = {"model__learning_rate": [0.05, 0.1, 0.2],
+        "model__max_leaf_nodes": [7, 15, 31]}
+grid_search = GridSearchCV(hgb, grid, cv=cv, scoring="roc_auc", n_jobs=-1)
+grid_search.fit(X_train, y_train)
 
-# Create heatmap in a larger subplot
-ax_heatmap = plt.subplot2grid((2, 3), (1, 1), colspan=2)
-sns.heatmap(pivot_table, annot=True, fmt='.3f', cmap='YlOrRd', 
-           cbar_kws={'label': 'CV Score'}, ax=ax_heatmap)
-ax_heatmap.set_title('Grid Search Heatmap: max_depth vs n_estimators')
+n_settings = len(grid_search.cv_results_["params"])
+print(f"{n_settings} settings x {cv.get_n_splits()} folds = {n_settings * cv.get_n_splits()} fits, plus 1 refit")
+print("best:", grid_search.best_params_)
+print(f"best CV AUC: {grid_search.best_score_:.4f}")
 
-plt.tight_layout()
+grid_table = pd.DataFrame(grid_search.cv_results_).sort_values("rank_test_score")
+print(grid_table[["param_model__learning_rate", "param_model__max_leaf_nodes",
+                  "mean_test_score", "std_test_score"]].head(5).round(4).to_string(index=False))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>9 settings x 5 folds = 45 fits, plus 1 refit
+best: {'model__learning_rate': 0.05, 'model__max_leaf_nodes': 7}
+best CV AUC: 0.8795
+ param_model__learning_rate  param_model__max_leaf_nodes  mean_test_score  std_test_score
+                       0.05                            7           0.8795          0.0152
+                       0.10                            7           0.8773          0.0151
+                       0.05                           15           0.8725          0.0165
+                       0.05                           31           0.8695          0.0148
+                       0.10                           15           0.8682          0.0153</code></pre>
+                </div>
+
+                <p>Small trees win. Cutting each tree from 31 leaves to 7 tames the overfitting that Lesson 6.1's learning curve showed, and boosting now beats the default by well over a standard error of the fold scores. Notice the cost line: 9 settings meant 45 fits. A grid's cost is the <em>product</em> of the list lengths, so adding a third knob with five values would make it 225 fits, and a fourth would make it more than a thousand. That explosion is the grid's weakness.</p>
+
+                <div class="card card-info">
+                    <h4>💡 What refit Did</h4>
+                    <p>By default (<code>refit=True</code>) the search finishes by fitting the best setting on <em>all</em> of <code>X_train</code>. The result is in <code>grid_search.best_estimator_</code>, and <code>grid_search.predict_proba(...)</code> uses it directly, so the search object behaves like a fitted model.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="random" class="lesson-section">
+                <h2>🎲 Random Search</h2>
+
+                <p>Random search samples each setting from a range or a distribution, for a fixed number of trials. It sounds sloppier than a grid, and usually it does better for the same budget. The reason is that in most problems only one or two hyperparameters really matter, and you rarely know in advance which ones. A grid wastes trials repeating the same few values of the important knob; random sampling gives every trial a fresh value of every knob.</p>
+
+                <pre><code class="language-python">rng = np.random.default_rng(42)
+grid_points = np.array([(a, b) for a in [0.2, 0.5, 0.8] for b in [0.2, 0.5, 0.8]])
+random_points = rng.uniform(0.05, 0.95, size=(9, 2))
+
+fig, axes = plt.subplots(1, 2, figsize=(9, 4), sharey=True, layout="constrained")
+for ax, points, title in [(axes[0], grid_points, "Grid: 9 trials, 3 distinct values"),
+                          (axes[1], random_points, "Random: 9 trials, 9 distinct values")]:
+    ax.scatter(points[:, 0], points[:, 1], color="#667eea", s=60, label="trial")
+    ax.plot(points[:, 0], np.zeros(len(points)), "|", color="black", markersize=18,
+            label="values of the important knob")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(-0.08, 1)
+    ax.set_xlabel("important hyperparameter")
+    ax.set_title(title)
+axes[0].set_ylabel("unimportant hyperparameter")
+handles, labels = axes[0].get_legend_handles_labels()
+fig.legend(handles, labels, loc="outside lower center", ncols=2)
 plt.show()
+print("distinct values of the important knob:", len(set(grid_points[:, 0])), "vs", len(set(random_points[:, 0])))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>distinct values of the important knob: 3 vs 9</code></pre>
+                </div>
 
-# Convergence plot
-fig, ax = plt.subplots(figsize=(10, 6))
-iterations = range(1, len(results_df) + 1)
-best_scores = [results_df.iloc[:i]['mean_test_score'].max() for i in iterations]
-ax.plot(iterations, best_scores, 'b-', linewidth=2)
-ax.set_xlabel('Number of Parameter Combinations Tested')
-ax.set_ylabel('Best CV Score Found')
-ax.set_title('Grid Search Convergence')
-ax.grid(True, alpha=0.3)
-plt.show()
+                <figure>
+                    <img src="images/hyperparameter_tuning_grid_vs_random.png" alt="Two scatter plots of nine trials each over two hyperparameters. On the left, a 3 by 3 grid tests only three distinct values of the important hyperparameter, shown as three tick marks on the horizontal axis. On the right, nine random trials test nine different values of the important hyperparameter." width="990" height="440" loading="lazy">
+                    <figcaption>With the same nine trials, the grid tests three values of the knob that matters; random search tests nine. This argument comes from Bergstra and Bengio's 2012 paper on random search.</figcaption>
+                </figure>
 
-print("\n💡 Grid Search Insights:")
-print("• Pros: Exhaustive, guaranteed to find best combination in grid")
-print("• Cons: Computationally expensive, curse of dimensionality")
-print(f"• Time complexity: O(n^p) where n=values per parameter, p=number of parameters")</code></pre>
+                <p><code>RandomizedSearchCV</code> takes distributions instead of lists. <code>loguniform(0.01, 0.3)</code> samples evenly across orders of magnitude (as many values between 0.01 and 0.03 as between 0.1 and 0.3), the right choice for rates and regularization strengths. <code>randint(4, 64)</code> samples whole numbers from 4 to 63. This search also opens two more knobs, <code>min_samples_leaf</code> and <code>l2_regularization</code>, which a grid could not afford.</p>
 
-    <h2>Method 2: Random Search - Efficient Exploration</h2>
-    
-    <pre class="language-python"><code>from sklearn.model_selection import RandomizedSearchCV
-from scipy.stats import uniform, randint
+                <pre><code class="language-python">from scipy.stats import loguniform, randint
+from sklearn.model_selection import RandomizedSearchCV
 
-print("\n" + "="*60)
-print("RANDOM SEARCH DEMONSTRATION")
-print("="*60)
+space = {"model__learning_rate": loguniform(0.01, 0.3),
+         "model__max_leaf_nodes": randint(4, 64),
+         "model__min_samples_leaf": randint(10, 200),
+         "model__l2_regularization": loguniform(1e-3, 10)}
+random_search = RandomizedSearchCV(hgb, space, n_iter=12, cv=cv, scoring="roc_auc",
+                                   random_state=42, n_jobs=-1)
+random_search.fit(X_train, y_train)
 
-# Define parameter distributions for Random Forest
-param_dist_rf = {
-    'n_estimators': randint(50, 500),           # Integer distribution
-    'max_depth': [None] + list(range(5, 50)),   # Mix of None and integers
-    'min_samples_split': randint(2, 20),        # Integer distribution
-    'min_samples_leaf': randint(1, 10),         # Integer distribution
-    'max_features': ['auto', 'sqrt', 'log2'],   # Categorical
-    'bootstrap': [True, False],                 # Boolean
-    'criterion': ['gini', 'entropy']            # Categorical
-}
+print(f"best CV AUC: {random_search.best_score_:.4f}")
+print({k: round(float(v), 4) if isinstance(v, float) else int(v)
+       for k, v in random_search.best_params_.items()})</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>best CV AUC: 0.8764
+{'model__l2_regularization': 0.0292, 'model__learning_rate': 0.0472, 'model__max_leaf_nodes': 50, 'model__min_samples_leaf': 199}</code></pre>
+                </div>
 
-# Random search with more iterations
-random_search_rf = RandomizedSearchCV(
-    estimator=RandomForestClassifier(random_state=42),
-    param_distributions=param_dist_rf,
-    n_iter=100,                 # Number of random combinations to try
-    cv=5,                       # 5-fold cross-validation
-    scoring='accuracy',
-    n_jobs=-1,
-    verbose=1,
-    random_state=42,
-    return_train_score=True
-)
+                <p>Twelve trials over four knobs land close to the nine-point grid over two, and far above the default. Look at the winning setting: its trees may have up to 50 leaves, but every leaf must hold at least 199 customers and the learning rate is small. That is a different route to the same cure the grid found: trees that cannot chase small groups of unusual customers. Several different settings can be about equally good, which is normal. <code>random_state=42</code> fixes which settings are drawn, so your search draws the same twelve.</p>
 
-# Perform random search
-print("\nPerforming Random Search...")
-random_search_rf.fit(X_train, y_train)
+                <div class="card card-success">
+                    <h4>✅ A Good Default Workflow</h4>
+                    <p>Start with a random search over generous ranges (log scales for anything that spans orders of magnitude). Look at the results table to see which knobs matter and where the good region is. If you want to, finish with a small grid or a narrower random search inside that region.</p>
+                </div>
+            </section>
 
-# Results
-print(f"\nBest parameters found: {random_search_rf.best_params_}")
-print(f"Best cross-validation score: {random_search_rf.best_score_:.4f}")
+            <!-- ============================================================ -->
+            <section id="halving" class="lesson-section">
+                <h2>✂️ Successive Halving</h2>
 
-# Compare with test set
-test_score_random = random_search_rf.best_estimator_.score(X_test, y_test)
-print(f"Test set score: {test_score_random:.4f}")
+                <p>Most settings in a random search are obviously poor, and you could tell after a quick, cheap look. <strong>Successive halving</strong> turns that into a tournament. Round 1: every candidate is cross-validated on a small slice of the training rows. Only the best third goes through to round 2, which gives each survivor three times as many rows. Repeat until a few finalists are scored on all the data.</p>
 
-# Compare Grid vs Random Search
-comparison_data = {
-    'Method': ['Grid Search', 'Random Search'],
-    'Combinations Tested': [total_combinations, 100],
-    'Best CV Score': [grid_search_rf.best_score_, random_search_rf.best_score_],
-    'Test Score': [test_score, test_score_random],
-    'Time Efficiency': ['Low', 'High']
-}
+                <p>scikit-learn ships it as an experimental feature, so it needs one extra import line that switches it on before you can import the class.</p>
 
-comparison_df = pd.DataFrame(comparison_data)
-print("\n📊 Comparison: Grid vs Random Search")
-print(comparison_df.to_string(index=False))
+                <pre><code class="language-python">from sklearn.experimental import enable_halving_search_cv  # noqa: F401  (switches the feature on)
+from sklearn.model_selection import HalvingRandomSearchCV
 
-# Visualize Random Search exploration
-random_results_df = pd.DataFrame(random_search_rf.cv_results_)
+halving = HalvingRandomSearchCV(hgb, space, n_candidates=27, factor=3, min_resources=500,
+                                cv=cv, scoring="roc_auc", random_state=42, n_jobs=-1)
+halving.fit(X_train, y_train)
 
-fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+rounds = pd.DataFrame(halving.cv_results_).groupby("iter").agg(
+    candidates=("n_resources", "size"), rows_per_candidate=("n_resources", "first"),
+    best_auc=("mean_test_score", "max"))
+print(rounds.round(4))
+print(f"best CV AUC: {halving.best_score_:.4f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>      candidates  rows_per_candidate  best_auc
+iter
+0             27                 500    0.8192
+1              9                1500    0.8555
+2              3                4500    0.8729
+best CV AUC: 0.8729</code></pre>
+                </div>
 
-# Scatter plot: n_estimators vs max_depth
-max_depths = [d if d is not None else 0 for d in random_results_df['param_max_depth']]
-scatter = axes[0].scatter(
-    random_results_df['param_n_estimators'],
-    max_depths,
-    c=random_results_df['mean_test_score'],
-    cmap='viridis',
-    alpha=0.6,
-    s=50
-)
-axes[0].set_xlabel('n_estimators')
-axes[0].set_ylabel('max_depth (0 = None)')
-axes[0].set_title('Random Search: Parameter Space Exploration')
-plt.colorbar(scatter, ax=axes[0], label='CV Score')
+                <p>27 candidates started on 500 rows each; 9 moved on to 1,500 rows; 3 finalists were scored on all 4,500. Count the work in "rows fitted": 27 x 500 + 9 x 1,500 + 3 x 4,500 = 40,500, the same as only 9 full-size candidates, yet it screened 27. The catch is that a setting that needs lots of data to shine can be knocked out early on a small slice, so the winner is good but not guaranteed to be the best of the 27. Halving pays off most when single fits are expensive and you have many candidates to screen.</p>
 
-# Distribution of scores
-axes[1].hist(random_results_df['mean_test_score'], bins=30, edgecolor='black', alpha=0.7)
-axes[1].axvline(random_search_rf.best_score_, color='r', linestyle='--', 
-               label=f'Best: {random_search_rf.best_score_:.4f}')
-axes[1].set_xlabel('CV Score')
-axes[1].set_ylabel('Frequency')
-axes[1].set_title('Distribution of CV Scores')
-axes[1].legend()
+                <div class="card card-warning">
+                    <h4>⚠️ The Resource Does Not Have to Be Rows</h4>
+                    <p><code>resource="n_samples"</code> (the default) grows the training rows. You can instead grow a hyperparameter that controls cost, such as <code>resource="model__max_iter"</code> for boosting rounds; Exercise 4 tries it. <code>HalvingGridSearchCV</code> is the grid version.</p>
+                </div>
+            </section>
 
-# Convergence comparison
-iterations = range(1, min(len(results_df), len(random_results_df)) + 1)
-grid_best = [results_df.iloc[:i]['mean_test_score'].max() for i in iterations]
-random_best = [random_results_df.iloc[:i]['mean_test_score'].max() for i in iterations]
+            <!-- ============================================================ -->
+            <section id="optuna" class="lesson-section">
+                <h2>🧠 Optuna: Learning Where to Look</h2>
 
-axes[2].plot(iterations, grid_best[:len(iterations)], 'b-', label='Grid Search', linewidth=2)
-axes[2].plot(iterations, random_best[:len(iterations)], 'r-', label='Random Search', linewidth=2)
-axes[2].set_xlabel('Number of Iterations')
-axes[2].set_ylabel('Best Score Found')
-axes[2].set_title('Convergence Comparison')
-axes[2].legend()
-axes[2].grid(True, alpha=0.3)
+                <p>Grid and random search never learn from their own results: trial 12 is chosen with no idea how trials 1 to 11 went. <strong>Optuna</strong>, a popular open-source tuning library, does learn. Its default sampler, TPE (Tree-structured Parzen Estimator), starts with 10 random trials, then splits the trials so far into "good" and "the rest" and proposes new settings that look more like the good ones. It is the camper who notices that low flame worked well and spends the remaining fuel near it.</p>
 
-plt.tight_layout()
-plt.show()
+                <p>You write the trial as a function: Optuna passes in a <code>trial</code> object, you ask it for values with <code>suggest_float</code> and <code>suggest_int</code>, and you return the score. The study calls your function as many times as you allow.</p>
 
-# Advanced: Random Search for SVM with continuous parameters
-print("\n" + "="*60)
-print("RANDOM SEARCH WITH CONTINUOUS PARAMETERS (SVM)")
-print("="*60)
+                <pre><code class="language-python">import optuna
 
-param_dist_svm = {
-    'C': uniform(0.1, 100),              # Continuous uniform distribution
-    'gamma': uniform(0.0001, 1),         # Continuous uniform distribution
-    'kernel': ['rbf', 'poly', 'sigmoid'], # Categorical
-    'degree': randint(2, 5),             # For poly kernel
-    'coef0': uniform(0, 10)              # For poly and sigmoid
-}
+optuna.logging.set_verbosity(optuna.logging.WARNING)   # hide one log line per trial
 
-random_search_svm = RandomizedSearchCV(
-    estimator=SVC(random_state=42),
-    param_distributions=param_dist_svm,
-    n_iter=50,
-    cv=5,
-    scoring='accuracy',
-    n_jobs=-1,
-    verbose=0,
-    random_state=42
-)
 
-# Use scaled data for SVM
-random_search_svm.fit(X_train_scaled, y_train)
-
-print(f"Best SVM parameters: {random_search_svm.best_params_}")
-print(f"Best CV score: {random_search_svm.best_score_:.4f}")
-print(f"Test score: {random_search_svm.score(X_test_scaled, y_test):.4f}")</code></pre>
-
-    <h2>Method 3: Bayesian Optimization - Smart Search</h2>
-    
-    <pre class="language-python"><code># Note: Requires installation of scikit-optimize
-# pip install scikit-optimize
-
-# Bayesian Optimization using scikit-optimize
-print("\n" + "="*60)
-print("BAYESIAN OPTIMIZATION (Advanced)")
-print("="*60)
-
-# Simulated Bayesian Optimization (conceptual demonstration)
-# In practice, you would use: from skopt import BayesSearchCV
-
-class BayesianOptimizationDemo:
-    """
-    Demonstration of Bayesian Optimization concepts.
-    Real implementation would use scikit-optimize or optuna.
-    """
-    
-    def __init__(self, param_space, n_calls=50):
-        self.param_space = param_space
-        self.n_calls = n_calls
-        self.history = []
-        
-    def gaussian_process_predict(self, X_observed, y_observed, X_new):
-        """Simplified Gaussian Process prediction"""
-        # This is a conceptual demo - real GP is much more complex
-        if len(X_observed) == 0:
-            return np.random.random(), 1.0
-        
-        # Simple weighted average based on distance
-        distances = np.abs(X_new - np.array(X_observed))
-        weights = np.exp(-distances)
-        weights /= weights.sum()
-        
-        mean = np.sum(weights * y_observed)
-        uncertainty = 1.0 / (len(X_observed) + 1)
-        
-        return mean, uncertainty
-    
-    def acquisition_function(self, mean, std, best_score):
-        """Expected Improvement acquisition function"""
-        # Balance exploration (high std) and exploitation (high mean)
-        z = (mean - best_score) / (std + 1e-10)
-        ei = std * (z * stats.norm.cdf(z) + stats.norm.pdf(z))
-        return ei
-    
-    def optimize(self, objective_func):
-        """Main optimization loop"""
-        X_observed = []
-        y_observed = []
-        best_score = -np.inf
-        
-        for i in range(self.n_calls):
-            if i < 5:  # Initial random exploration
-                x_next = np.random.uniform(self.param_space[0], self.param_space[1])
-            else:
-                # Use acquisition function to select next point
-                x_candidates = np.linspace(self.param_space[0], self.param_space[1], 100)
-                acquisition_values = []
-                
-                for x in x_candidates:
-                    mean, std = self.gaussian_process_predict(X_observed, y_observed, x)
-                    acq_value = self.acquisition_function(mean, std, best_score)
-                    acquisition_values.append(acq_value)
-                
-                x_next = x_candidates[np.argmax(acquisition_values)]
-            
-            # Evaluate objective
-            y_next = objective_func(x_next)
-            
-            # Update observations
-            X_observed.append(x_next)
-            y_observed.append(y_next)
-            
-            if y_next > best_score:
-                best_score = y_next
-            
-            self.history.append({
-                'iteration': i,
-                'x': x_next,
-                'y': y_next,
-                'best': best_score
-            })
-        
-        return self.history
-
-# Demonstrate on a simple function
-def objective_function(x):
-    """Example objective: finding optimal regularization parameter"""
-    # Simulating model performance as function of hyperparameter
-    return -(x - 3.7)**2 + 10 + np.random.normal(0, 0.1)
-
-# Run Bayesian Optimization demo
-bayes_demo = BayesianOptimizationDemo(param_space=[0, 10], n_calls=30)
-history = bayes_demo.optimize(objective_function)
-
-# Visualize Bayesian Optimization process
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-# Plot 1: Optimization trajectory
-history_df = pd.DataFrame(history)
-axes[0].scatter(history_df['x'], history_df['y'], c=history_df['iteration'], 
-               cmap='viridis', s=50, alpha=0.6)
-axes[0].plot(history_df['x'], history_df['y'], 'k-', alpha=0.2)
-axes[0].set_xlabel('Hyperparameter Value')
-axes[0].set_ylabel('Objective Function Value')
-axes[0].set_title('Bayesian Optimization: Exploration Pattern')
-axes[0].grid(True, alpha=0.3)
-
-# Add colorbar
-sm = plt.cm.ScalarMappable(cmap='viridis', norm=plt.Normalize(vmin=0, vmax=30))
-sm.set_array([])
-cbar = plt.colorbar(sm, ax=axes[0])
-cbar.set_label('Iteration')
-
-# Plot 2: Convergence
-axes[1].plot(history_df['iteration'], history_df['best'], 'b-', linewidth=2)
-axes[1].set_xlabel('Iteration')
-axes[1].set_ylabel('Best Score Found')
-axes[1].set_title('Bayesian Optimization: Convergence')
-axes[1].grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.show()
-
-print("\n🧠 Bayesian Optimization Concepts:")
-print("""
-1. Surrogate Model: Uses Gaussian Process to model objective function
-2. Acquisition Function: Balances exploration vs exploitation
-3. Sequential Design: Each iteration uses all previous information
-4. Efficiency: Often finds optimum in 10x fewer iterations than random search
-5. Best for: Expensive objective functions (deep learning, large datasets)
-""")</code></pre>
-
-    <h2>Advanced Techniques and Best Practices</h2>
-    
-    <pre class="language-python"><code># Advanced hyperparameter tuning strategies
-
-print("\n" + "="*60)
-print("ADVANCED TECHNIQUES")
-print("="*60)
-
-# 1. Successive Halving / Hyperband
-print("\n1. SUCCESSIVE HALVING")
-print("-" * 40)
-
-class SuccessiveHalving:
-    """
-    Early stopping of poor performing configurations.
-    Allocates more resources to promising candidates.
-    """
-    
-    def __init__(self, n_configs=64, min_resource=1, max_resource=100):
-        self.n_configs = n_configs
-        self.min_resource = min_resource
-        self.max_resource = max_resource
-        
-    def run(self, configurations, evaluate_func):
-        """Run successive halving"""
-        n = len(configurations)
-        r = self.min_resource
-        
-        # Successive halving rounds
-        while n > 1:
-            # Evaluate all configurations with r resources
-            scores = []
-            for config in configurations[:n]:
-                score = evaluate_func(config, resources=r)
-                scores.append((score, config))
-            
-            # Keep top half
-            scores.sort(reverse=True)
-            n = n // 2
-            configurations = [config for _, config in scores[:n]]
-            
-            # Double resources
-            r = min(r * 2, self.max_resource)
-            
-            print(f"Round: {n} configurations remaining, {r} resources each")
-        
-        return configurations[0] if configurations else None
-
-# 2. Multi-fidelity Optimization
-print("\n2. MULTI-FIDELITY OPTIMIZATION")
-print("-" * 40)
-
-def multi_fidelity_optimization(param_space, budget):
-    """
-    Use cheap approximations (small data, fewer epochs) for initial search,
-    then refine with full resources.
-    """
-    
-    strategies = [
-        {"data_fraction": 0.1, "epochs": 5, "n_iter": 100},    # Cheap
-        {"data_fraction": 0.3, "epochs": 20, "n_iter": 20},    # Medium
-        {"data_fraction": 1.0, "epochs": 100, "n_iter": 5},    # Expensive
-    ]
-    
-    best_params = None
-    
-    for level, strategy in enumerate(strategies):
-        print(f"Level {level + 1}: {strategy}")
-        
-        # Narrow search space based on previous level
-        if best_params:
-            # Reduce search space around best params
-            param_space = narrow_search_space(param_space, best_params)
-        
-        # Run search at this fidelity level
-        # best_params = search_at_fidelity(param_space, strategy)
-    
-    return best_params
-
-# 3. Ensemble of Searches
-print("\n3. ENSEMBLE APPROACH")
-print("-" * 40)
-
-def ensemble_hyperparameter_search(X, y, model_class):
-    """
-    Combine multiple search strategies and vote on best parameters.
-    """
-    
-    searches = []
-    
-    # Strategy 1: Coarse grid search
-    coarse_grid = {
-        'n_estimators': [50, 100, 200],
-        'max_depth': [5, 10, None]
+def objective(trial):
+    params = {
+        "model__learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+        "model__max_leaf_nodes": trial.suggest_int("max_leaf_nodes", 4, 64),
+        "model__min_samples_leaf": trial.suggest_int("min_samples_leaf", 10, 200),
+        "model__l2_regularization": trial.suggest_float("l2_regularization", 1e-3, 10, log=True),
     }
-    grid_search = GridSearchCV(model_class(), coarse_grid, cv=3)
-    grid_search.fit(X, y)
-    searches.append(('Grid', grid_search.best_params_, grid_search.best_score_))
-    
-    # Strategy 2: Random search
-    random_dist = {
-        'n_estimators': randint(50, 300),
-        'max_depth': [5, 10, 20, 30, None]
-    }
-    random_search = RandomizedSearchCV(model_class(), random_dist, n_iter=20, cv=3)
-    random_search.fit(X, y)
-    searches.append(('Random', random_search.best_params_, random_search.best_score_))
-    
-    # Strategy 3: Domain knowledge based
-    expert_params = {
-        'n_estimators': 150,
-        'max_depth': 15
-    }
-    expert_model = model_class(**expert_params)
-    expert_score = cross_val_score(expert_model, X, y, cv=3).mean()
-    searches.append(('Expert', expert_params, expert_score))
-    
-    # Select best
-    best_search = max(searches, key=lambda x: x[2])
-    
-    print("Search Results:")
-    for name, params, score in searches:
-        print(f"  {name:10} Score: {score:.4f} Params: {params}")
-    print(f"\nBest: {best_search[0]} with score {best_search[2]:.4f}")
-    
-    return best_search[1]
+    model = hgb.set_params(**params)
+    return cross_val_score(model, X_train, y_train, cv=cv, scoring="roc_auc", n_jobs=-1).mean()
 
-# Demonstrate ensemble approach
-ensemble_params = ensemble_hyperparameter_search(
-    X_train[:1000], y_train[:1000], RandomForestClassifier
-)
 
-# 4. Learning Curves for Hyperparameter Selection
-print("\n4. LEARNING CURVES ANALYSIS")
-print("-" * 40)
+study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=42))
+study.optimize(objective, n_trials=20)
 
-from sklearn.model_selection import learning_curve
+print(f"best CV AUC: {study.best_value:.4f} (trial number {study.best_trial.number}, counting from 0)")
+print({k: round(v, 4) for k, v in study.best_params.items()})</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>best CV AUC: 0.8793 (trial number 12, counting from 0)
+{'learning_rate': 0.0609, 'max_leaf_nodes': 5, 'min_samples_leaf': 183, 'l2_regularization': 0.0094}</code></pre>
+                </div>
 
-def plot_learning_curves_for_hyperparams(X, y, param_sets):
-    """
-    Compare learning curves for different hyperparameter settings
-    to detect overfitting/underfitting.
-    """
-    
-    fig, axes = plt.subplots(1, len(param_sets), figsize=(15, 5))
-    
-    for idx, (name, params) in enumerate(param_sets.items()):
-        model = RandomForestClassifier(**params, random_state=42)
-        
-        train_sizes, train_scores, val_scores = learning_curve(
-            model, X, y, cv=5,
-            train_sizes=np.linspace(0.1, 1.0, 10),
-            scoring='accuracy',
-            n_jobs=-1
-        )
-        
-        # Plot
-        ax = axes[idx] if len(param_sets) > 1 else axes
-        ax.plot(train_sizes, train_scores.mean(axis=1), 'o-', label='Training score')
-        ax.plot(train_sizes, val_scores.mean(axis=1), 'o-', label='Validation score')
-        ax.fill_between(train_sizes, 
-                        train_scores.mean(axis=1) - train_scores.std(axis=1),
-                        train_scores.mean(axis=1) + train_scores.std(axis=1), 
-                        alpha=0.1)
-        ax.fill_between(train_sizes,
-                        val_scores.mean(axis=1) - val_scores.std(axis=1),
-                        val_scores.mean(axis=1) + val_scores.std(axis=1),
-                        alpha=0.1)
-        
-        ax.set_xlabel('Training Set Size')
-        ax.set_ylabel('Accuracy')
-        ax.set_title(f'{name}')
-        ax.legend(loc='best')
-        ax.grid(True, alpha=0.3)
-        
-        # Detect overfitting/underfitting
-        gap = train_scores.mean() - val_scores.mean()
-        if gap > 0.05:
-            ax.text(0.5, 0.2, 'Overfitting Detected!', 
-                   transform=ax.transAxes, color='red', fontweight='bold')
-        elif val_scores.mean() < 0.8:
-            ax.text(0.5, 0.2, 'Underfitting Detected!', 
-                   transform=ax.transAxes, color='orange', fontweight='bold')
-    
-    plt.tight_layout()
-    plt.show()
+                <p>Same search space and metric as the random search, eight more trials, and a better best score, level with the grid's. Whether differences of a few thousandths between these searches are real is a question you now know how to ask (Lesson 6.1): they are far smaller than the fold spread. What they agree on matters more: every search lands well above the default. Note <code>TPESampler(seed=42)</code>: without a seed every run explores differently. Even with a seed, running trials in parallel (<code>n_jobs</code> in <code>optimize</code>) makes the order, and so the results, vary; the lesson runs trials one at a time and parallelizes inside each cross-validation instead.</p>
 
-# Example hyperparameter sets
-param_sets = {
-    'Underfitting': {'n_estimators': 10, 'max_depth': 2},
-    'Good Fit': {'n_estimators': 100, 'max_depth': 10},
-    'Overfitting': {'n_estimators': 500, 'max_depth': None}
-}
+                <p>Compare how the two adaptive and non-adaptive searches spent their trials. <code>study.trials_dataframe()</code> holds Optuna's history; the random search's history is its <code>cv_results_</code>, in the order the settings were drawn.</p>
 
-plot_learning_curves_for_hyperparams(X_train[:2000], y_train[:2000], param_sets)</code></pre>
+                <pre><code class="language-python">optuna_scores = study.trials_dataframe()["value"]
+random_scores = pd.Series(random_search.cv_results_["mean_test_score"])
 
-    <h2>Hyperparameter Tuning Best Practices</h2>
-    
-    <pre class="language-python"><code># Best practices and tips for hyperparameter tuning
+fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+ax.plot(range(1, len(optuna_scores) + 1), optuna_scores.cummax(), marker="o", label="Optuna (TPE): best so far")
+ax.plot(range(1, len(random_scores) + 1), random_scores.cummax(), marker="s", label="random search: best so far")
+ax.scatter(range(1, len(optuna_scores) + 1), optuna_scores, color="#667eea", alpha=0.4, label="Optuna: each trial")
+ax.axhline(default_auc.mean(), color="black", linestyle="--", linewidth=1, label="default boosting")
+ax.set_xticks(range(1, len(optuna_scores) + 1))
+ax.set_xlabel("Trial")
+ax.set_ylabel("Mean 5-fold ROC AUC")
+ax.set_title("Both searches pass the default quickly; Optuna keeps finding good settings")
+ax.legend(loc="lower right")
+plt.show()
+print("Optuna trials above 0.875:", (optuna_scores &gt; 0.875).sum(), "of", len(optuna_scores))
+print("random trials above 0.875:", (random_scores &gt; 0.875).sum(), "of", len(random_scores))</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>Optuna trials above 0.875: 6 of 20
+random trials above 0.875: 2 of 12</code></pre>
+                </div>
 
-print("\n" + "="*60)
-print("HYPERPARAMETER TUNING BEST PRACTICES")
-print("="*60)
+                <figure>
+                    <img src="images/hyperparameter_tuning_optuna_history.png" alt="Line chart of the best mean ROC AUC found so far against trial number for an Optuna study of 20 trials and a random search of 12 trials, with each Optuna trial's own score as a faint dot and the default boosting score as a dashed line near 0.86. Both searches pass the default within a few trials. Every Optuna trial from the eleventh on scores above the default, and Optuna's best ends slightly above the random search's best, near 0.879." width="990" height="440" loading="lazy">
+                    <figcaption>Both searches beat the default within a few trials. Once Optuna starts learning from earlier trials (from trial 11), every trial it proposes beats the default.</figcaption>
+                </figure>
 
-# 1. Create a hyperparameter tuning pipeline
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.feature_selection import SelectKBest, f_classif
+                <div class="card card-info">
+                    <h4>💡 When Is Optuna Worth It?</h4>
+                    <p>When each trial is expensive (big data, deep networks) and the space has several knobs, learning from past trials saves real time. For a quick model with two knobs, a random search is simpler and nearly as good. Optuna also handles conditional spaces (for example "if the model is a forest, tune these; if boosting, tune those") and can stop unpromising trials early with <strong>pruning</strong>, which matters for neural networks in Module 10.</p>
+                </div>
+            </section>
 
-# Complete pipeline with preprocessing and model
-pipeline = Pipeline([
-    ('scaler', StandardScaler()),
-    ('feature_selection', SelectKBest(f_classif)),
-    ('classifier', RandomForestClassifier(random_state=42))
+            <!-- ============================================================ -->
+            <section id="honest" class="lesson-section">
+                <h2>🔍 Honest Scores After Tuning</h2>
+
+                <p>Here is the subtle part. <code>best_score_</code> is the <em>highest</em> of many cross-validated scores, and every one of them carries noise. Picking the maximum of noisy numbers picks, a little, the luckiest noise too. Statisticians call it the <strong>winner's curse</strong>: the best-looking setting usually looks better than it really is. The more settings you try, the stronger the effect.</p>
+
+                <p>The fix is <strong>nested cross-validation</strong>: treat "run the search, then refit the winner" as one big model-building procedure, and cross-validate <em>that</em>. An outer loop holds out a fold; an inner search tunes on the remaining rows only; the tuned model is then scored on the outer fold, which the search never saw.</p>
+
+                <div class="mermaid">
+graph TD
+    A["Outer fold k held out"] --> B["Inner search on the other rows"]
+    B --> C["Refit the inner winner"]
+    C --> D["Score it on outer fold k"]
+    D --> E["Average over outer folds"]
+                </div>
+
+                <p>In scikit-learn it is a single line, because a search object is itself an estimator: pass it to <code>cross_val_score</code>. To keep it fast, this inner search is small (6 settings, 3 folds) and the outer loop uses 3 folds.</p>
+
+                <pre><code class="language-python">inner = RandomizedSearchCV(hgb, space, n_iter=6, scoring="roc_auc", random_state=42, n_jobs=-1,
+                           cv=StratifiedKFold(n_splits=3, shuffle=True, random_state=0))
+outer_cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=1)
+nested = cross_val_score(inner, X_train, y_train, cv=outer_cv, scoring="roc_auc")
+print("outer-fold AUCs:", nested.round(4))
+print(f"nested estimate of the whole tuning procedure: {nested.mean():.4f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>outer-fold AUCs: [0.8609 0.8528 0.8907]
+nested estimate of the whole tuning procedure: 0.8681</code></pre>
+                </div>
+
+                <p>The nested estimate is the honest answer to "how good is a model I get by running this tuning procedure?" It comes out about 0.01 below the searches' best scores. Part of that gap is the winner's curse; part is that each inner search here was smaller and saw only two thirds of the training rows. It is still above the default's 0.8615, so the tuning gain is real, if a little smaller than <code>best_score_</code> claims. With hundreds of trials or a few hundred rows, the gap between <code>best_score_</code> and the nested estimate can be much larger, and this is how you would see it.</p>
+
+                <p>Finally, the one look at the test set. Build the model with Optuna's best settings, fit it on all the training data, and compare it with the default (scored on the test set for reference, not chosen by it):</p>
+
+                <pre><code class="language-python">from sklearn.base import clone
+from sklearn.metrics import roc_auc_score
+
+tuned = clone(hgb).set_params(**{f"model__{k}": v for k, v in study.best_params.items()})
+default = clone(hgb).set_params(model__learning_rate=0.1, model__max_leaf_nodes=31,
+                                model__min_samples_leaf=20, model__l2_regularization=0.0)
+for name, model in [("default boosting", default), ("tuned boosting", tuned)]:
+    model.fit(X_train, y_train)
+    print(f"{name:17s} test AUC {roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.3f}")</code></pre>
+                <div class="card card-output">
+                    <h4>Output</h4>
+                    <pre><code>default boosting  test AUC 0.860
+tuned boosting    test AUC 0.874</code></pre>
+                </div>
+
+                <p>The tuning gain survives contact with unseen customers: the tuned model ranks the test set clearly better than the default, and also passes the forest that won Lesson 6.1. <code>clone</code> makes a fresh, unfitted copy, which matters here because the Optuna objective kept changing <code>hgb</code>'s settings in place; the <code>default</code> line resets them explicitly to the library defaults.</p>
+
+                <div class="card card-warning">
+                    <h4>⚠️ Tuning Is Not a Substitute for Better Data</h4>
+                    <p>A gain of about 0.015 AUC is worth having, and it was cheap. But Lesson 6.1's learning-curve exercise showed that one good feature can do as much. When tuning gains flatten out, stop tuning and look at the features, the data and the problem framing instead.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="mistakes" class="lesson-section">
+                <h2>⚠️ Common Mistakes</h2>
+
+                <h3>1. A Hyperparameter Name Without the Step</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">GridSearchCV(logit, {"C": [0.1, 1, 10]}, cv=cv).fit(X_train, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: Invalid parameter 'C' for estimator Pipeline(steps=[('prep',
+...
+                ('model', LogisticRegression(max_iter=1000))]). Valid parameters are: ['memory', 'steps', 'transform_input', 'verbose'].</code></pre>
+                </div>
+                <p>The middle of the message (shortened here) prints the whole pipeline. <strong>What it means:</strong> the search sets parameters on the pipeline, and the pipeline itself has no <code>C</code>. The message ends by listing the pipeline's own parameters. <strong>Fix:</strong> prefix the step name: <code>"model__C"</code>. <code>sorted(logit.get_params())</code> lists every valid name.</p>
+
+                <h3>2. A Single Value Instead of a List</h3>
+
+                <pre data-raises="TypeError"><code class="language-python">GridSearchCV(logit, {"model__C": 1.0}, cv=cv).fit(X_train, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>TypeError: Parameter grid for parameter 'model__C' needs to be a list or a numpy array, but got 1.0 (of type float) instead. Single values need to be wrapped in a list with one element.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> a grid needs a list of values to try for each name, even if there is only one. You get the same error if you pass a <code>scipy.stats</code> distribution to <code>GridSearchCV</code>: distributions belong to <code>RandomizedSearchCV</code>. <strong>Fix:</strong> <code>{"model__C": [1.0]}</code>, or switch to the randomized search.</p>
+
+                <h3>3. Several Metrics but No Refit Choice</h3>
+
+                <pre data-raises="ValueError"><code class="language-python">GridSearchCV(logit, {"model__C": [0.1, 1]}, cv=cv,
+             scoring=["roc_auc", "average_precision"]).fit(X_train, y_train)</code></pre>
+                <div class="card card-output">
+                    <h4>Error</h4>
+                    <pre><code>ValueError: For multi-metric scoring, the parameter refit must be set to a scorer key or a callable to refit an estimator with the best parameter setting on the whole data and make the best_* attributes available for that metric. If this is not needed, refit should be set to False explicitly. True was passed.</code></pre>
+                </div>
+                <p><strong>What it means:</strong> with two metrics, "best" is ambiguous, so the search refuses to guess which one should choose the final model. <strong>Fix:</strong> name the deciding metric, <code>refit="average_precision"</code>; both metrics still appear in <code>cv_results_</code>. Exercise 3 does this.</p>
+
+                <h3>4. A Linear Grid for a Log-Scale Knob</h3>
+
+                <pre><code class="language-python">linear = GridSearchCV(logit, {"model__C": [1, 2, 3, 4, 5]}, cv=cv, scoring="roc_auc").fit(X_train, y_train)
+print(pd.Series(linear.cv_results_["mean_test_score"], index=[1, 2, 3, 4, 5]).round(4).to_string())</code></pre>
+                <div class="card card-output">
+                    <h4>Output (no error, and that is the problem)</h4>
+                    <pre><code>1    0.8324
+2    0.8321
+3    0.8321
+4    0.8321
+5    0.8321</code></pre>
+                </div>
+                <p><strong>What happened:</strong> five settings, five fits each, and the scores agree to three decimals. The grid looked like a search but explored almost nothing: from the model's point of view, 1 and 5 are neighbors. The interesting changes in <code>C</code> (and in learning rates and regularization strengths generally) happen across factors of ten. <strong>Fix:</strong> space such values on a log scale, <code>[0.001, 0.01, 0.1, 1, 10, 100]</code> or <code>np.logspace(-3, 2, 6)</code>, or sample them with <code>loguniform</code>.</p>
+
+                <h3>5. Reporting best_score_ as the Model's Performance</h3>
+                <p>This one cannot be shown with a single error message. <code>best_score_</code> is the winner of a contest among noisy scores, so it is biased upward (the winner's curse). It is fine for choosing; it is not the number to promise anyone. Report a nested cross-validation estimate, or the score on a test set that played no part in the search.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="project" class="lesson-section">
+                <h2>🛠️ Project: Tune the Retention Model</h2>
+
+                <p>The care team works from the top 50 customers of a risk-ranked list (Lesson 1.1). Your job: tune gradient boosting for <strong>average precision</strong>, the metric that rewards a clean top of the list, compare it honestly with the default, count how many of the top 50 test customers each model gets right, and save the winning settings so the model can be rebuilt later. Work in a new notebook called <code>lesson_6_2_project</code>. Allow about 40 minutes.</p>
+
+                <div class="card card-info">
+                    <h3>🛠️ Step 1: Set up and score the default <span class="step-time">(5 min)</span></h3>
+                    <pre><code class="language-python">import json
+import numpy as np
+import pandas as pd
+from scipy.stats import loguniform, randint
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score, RandomizedSearchCV
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.ensemble import HistGradientBoostingClassifier
+
+customers = pd.read_csv("data/customers_churn.csv")
+numeric = ["tenure_months", "orders_12m", "spend_12m", "avg_order_value", "days_since_last_order",
+           "returns_12m", "return_rate", "support_tickets_12m", "discount_share", "app_user",
+           "email_opens_90d"]
+categorical = ["home_store", "region", "age_group", "loyalty_tier", "preferred_category"]
+train, test = train_test_split(customers, test_size=0.25, stratify=customers["churned"], random_state=42)
+X_train, y_train = train[numeric + categorical], train["churned"]
+X_test, y_test = test[numeric + categorical], test["churned"]
+
+preprocess = ColumnTransformer([
+    ("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), numeric),
+    ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"),
+                          OneHotEncoder(handle_unknown="ignore")), categorical),
 ])
+pipe = Pipeline([("prep", preprocess), ("model", HistGradientBoostingClassifier(random_state=42))])
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
-# Hyperparameters for entire pipeline
-param_grid_pipeline = {
-    'feature_selection__k': [10, 15, 20, 'all'],  # Number of features
-    'classifier__n_estimators': [50, 100, 200],
-    'classifier__max_depth': [5, 10, None],
-    'classifier__min_samples_split': [2, 5, 10]
-}
+default_ap = cross_val_score(pipe, X_train, y_train, cv=cv, scoring="average_precision")
+print(f"default CV average precision: {default_ap.mean():.3f} +/- {default_ap.std():.3f}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>default CV average precision: 0.608 +/- 0.043</code></pre>
+                    </div>
+                    <p>The split keeps whole rows (<code>train</code>, <code>test</code>) so that customer IDs are available for the shortlist in Step 5.</p>
+                </div>
 
-# Grid search on pipeline
-grid_search_pipeline = GridSearchCV(
-    pipeline,
-    param_grid_pipeline,
-    cv=5,
-    scoring='accuracy',
-    n_jobs=-1,
-    verbose=0
-)
+                <div class="card card-info">
+                    <h3>🛠️ Step 2: Define the search space <span class="step-time">(5 min)</span></h3>
+                    <p>Log scales for the rate and the regularization strength, whole-number ranges for the tree-size knobs. Writing the space down before running anything is part of the discipline: it is your plan.</p>
+                    <pre><code class="language-python">space = {"model__learning_rate": loguniform(0.01, 0.3),
+         "model__max_leaf_nodes": randint(4, 64),
+         "model__min_samples_leaf": randint(10, 200),
+         "model__l2_regularization": loguniform(1e-3, 10)}
+budget = 15
+print(f"{budget} settings x {cv.get_n_splits()} folds = {budget * cv.get_n_splits()} fits")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>15 settings x 5 folds = 75 fits</code></pre>
+                    </div>
+                </div>
 
-# Fit pipeline
-grid_search_pipeline.fit(X_train, y_train)
+                <div class="card card-info">
+                    <h3>🛠️ Step 3: Run the search <span class="step-time">(10 min)</span></h3>
+                    <p>This is the lesson's space with the same <code>random_state</code>, so the first 12 settings drawn are the same ones as in the lesson; this time they are judged by average precision, and three more are added.</p>
+                    <pre><code class="language-python">search = RandomizedSearchCV(pipe, space, n_iter=budget, cv=cv, scoring="average_precision",
+                            random_state=42, n_jobs=-1)
+search.fit(X_train, y_train)
+best = {k.removeprefix("model__"): round(float(v), 4) if isinstance(v, float) else int(v)
+        for k, v in search.best_params_.items()}
+print(f"best CV average precision: {search.best_score_:.3f}")
+print(best)</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>best CV average precision: 0.636
+{'l2_regularization': 0.0292, 'learning_rate': 0.0472, 'max_leaf_nodes': 50, 'min_samples_leaf': 199}</code></pre>
+                    </div>
+                </div>
 
-print("Pipeline Hyperparameter Tuning:")
-print(f"Best parameters: {grid_search_pipeline.best_params_}")
-print(f"Best CV score: {grid_search_pipeline.best_score_:.4f}")
-print(f"Test score: {grid_search_pipeline.score(X_test, y_test):.4f}")
+                <div class="card card-info">
+                    <h3>🛠️ Step 4: Read the leaderboard <span class="step-time">(5 min)</span></h3>
+                    <p>How many settings are within one standard deviation of the best? If several are, the exact winner matters little; what they have in common matters more.</p>
+                    <pre><code class="language-python">board = pd.DataFrame(search.cv_results_).sort_values("rank_test_score")
+cols = ["param_model__learning_rate", "param_model__max_leaf_nodes", "param_model__min_samples_leaf",
+        "mean_test_score", "std_test_score"]
+print(board[cols].head(5).round(3).to_string(index=False))
+close = board["mean_test_score"] &gt;= search.best_score_ - board["std_test_score"].iloc[0]
+print(f"settings within one std of the best: {close.sum()} of {len(board)}")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code> param_model__learning_rate  param_model__max_leaf_nodes  param_model__min_samples_leaf  mean_test_score  std_test_score
+                      0.047                           50                            199            0.636           0.037
+                      0.038                           53                            113            0.633           0.039
+                      0.031                           43                            161            0.631           0.038
+                      0.057                           60                            140            0.631           0.037
+                      0.042                           57                            115            0.631           0.039
+settings within one std of the best: 12 of 15</code></pre>
+                    </div>
+                </div>
 
-# 2. Custom scoring functions
-from sklearn.metrics import make_scorer, f1_score
+                <div class="card card-info">
+                    <h3>🛠️ Step 5: Test once: default versus tuned on the shortlist <span class="step-time">(10 min)</span></h3>
+                    <p>Fit the default on all training rows (the tuned one is already refitted inside <code>search</code>), then score both on the test set and count real churners among each model's top 50.</p>
+                    <pre><code class="language-python">from sklearn.metrics import average_precision_score
 
-def custom_scorer(y_true, y_pred):
-    """
-    Custom scoring function that balances multiple metrics
-    """
-    f1 = f1_score(y_true, y_pred, average='weighted')
-    accuracy = np.mean(y_true == y_pred)
-    
-    # Weighted combination
-    return 0.7 * f1 + 0.3 * accuracy
+default_model = pipe.fit(X_train, y_train)
+for name, model in [("default", default_model), ("tuned", search)]:
+    p = model.predict_proba(X_test)[:, 1]
+    top50 = test.assign(p=p).nlargest(50, "p")
+    print(f"{name:8s} test AP {average_precision_score(y_test, p):.3f}   "
+          f"top-50 shortlist: {top50['churned'].sum()} real churners")</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>default  test AP 0.600   top-50 shortlist: 40 real churners
+tuned    test AP 0.614   top-50 shortlist: 43 real churners</code></pre>
+                    </div>
+                    <p>For reference, a random list of 50 would reach about 8 churners, and Lesson 1.1's forest reached 41.</p>
+                </div>
 
-# Create scorer
-custom_scoring = make_scorer(custom_scorer)
+                <div class="card card-info">
+                    <h3>🛠️ Step 6: Save the settings <span class="step-time">(5 min)</span></h3>
+                    <p>Save the tuned settings, the metric and the scores, so that anyone (including you in a month) can rebuild exactly this model. Lesson 12.1 turns this habit into proper experiment tracking.</p>
+                    <pre><code class="language-python">record = {"model": "HistGradientBoostingClassifier", "random_state": 42,
+          "metric": "average_precision", "cv": "StratifiedKFold(5, shuffle=True, random_state=42)",
+          "search": f"RandomizedSearchCV, n_iter={budget}, random_state=42",
+          "best_params": best, "cv_score": round(search.best_score_, 4),
+          "default_cv_score": round(default_ap.mean(), 4)}
+with open("best_params.json", "w") as f:
+    json.dump(record, f, indent=2)
 
-# 3. Nested Cross-Validation for unbiased evaluation
-from sklearn.model_selection import cross_val_score
+with open("best_params.json") as f:
+    print(json.load(f)["best_params"])</code></pre>
+                    <div class="card card-output">
+                        <h4>Output</h4>
+                        <pre><code>{'l2_regularization': 0.0292, 'learning_rate': 0.0472, 'max_leaf_nodes': 50, 'min_samples_leaf': 199}</code></pre>
+                    </div>
+                </div>
 
-def nested_cv_evaluation(X, y, param_grid, model_class, cv_outer=5, cv_inner=3):
-    """
-    Nested CV: Outer loop for evaluation, inner loop for hyperparameter tuning
-    """
-    
-    outer_scores = []
-    
-    # Outer CV
-    from sklearn.model_selection import StratifiedKFold
-    outer_cv = StratifiedKFold(n_splits=cv_outer, shuffle=True, random_state=42)
-    
-    for fold, (train_idx, test_idx) in enumerate(outer_cv.split(X, y)):
-        X_train_fold = X[train_idx]
-        y_train_fold = y[train_idx]
-        X_test_fold = X[test_idx]
-        y_test_fold = y[test_idx]
-        
-        # Inner CV for hyperparameter tuning
-        inner_search = GridSearchCV(
-            model_class(),
-            param_grid,
-            cv=cv_inner,
-            scoring='accuracy',
-            n_jobs=-1,
-            verbose=0
-        )
-        
-        inner_search.fit(X_train_fold, y_train_fold)
-        
-        # Evaluate on outer fold
-        score = inner_search.score(X_test_fold, y_test_fold)
-        outer_scores.append(score)
-        
-        print(f"Fold {fold + 1}: Best params: {inner_search.best_params_}, Score: {score:.4f}")
-    
-    print(f"\nNested CV Score: {np.mean(outer_scores):.4f} (+/- {np.std(outer_scores):.4f})")
-    return outer_scores
+                <div class="card card-success">
+                    <h3>✅ Project Completion Checklist</h3>
+                    <ul class="checklist">
+                        <li>The default model's cross-validated average precision is written down before any tuning</li>
+                        <li>The search space uses log scales for the learning rate and <code>l2_regularization</code></li>
+                        <li>The search ran on the training rows only, with <code>random_state=42</code> for repeatable draws</li>
+                        <li>You checked how many settings were within one standard deviation of the best</li>
+                        <li>The test set was used once, for both models, after the search finished</li>
+                        <li><code>best_params.json</code> holds the settings, metric, search description and scores</li>
+                    </ul>
+                </div>
+            </section>
 
-# Demonstrate nested CV
-simple_param_grid = {
-    'n_estimators': [50, 100],
-    'max_depth': [5, 10, None]
-}
+            <!-- ============================================================ -->
+            <section id="exercises" class="lesson-section">
+                <h2>🏋️ Hands-on Exercises</h2>
 
-print("\n" + "="*60)
-print("NESTED CROSS-VALIDATION")
-print("="*60)
+                <p>These continue in the project notebook, so <code>pipe</code>, <code>preprocess</code>, <code>cv</code>, <code>search</code>, <code>X_train</code> and <code>y_train</code> already exist.</p>
 
-nested_scores = nested_cv_evaluation(
-    X_train[:1000], y_train[:1000],  # Use subset for speed
-    simple_param_grid,
-    RandomForestClassifier,
-    cv_outer=3, cv_inner=3
-)
+                <div class="card">
+                    <h3>🏋️ Exercise 1: Which Knob Mattered?</h3>
+                    <p>Using the project search's <code>cv_results_</code>, compute the correlation between each numeric hyperparameter and <code>mean_test_score</code> across the 15 settings. Which knob is most strongly linked to the score, and in which direction?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>The <code>param_...</code> columns hold Python objects; convert them with <code>.astype(float)</code> before calling <code>.corr()</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">res = pd.DataFrame(search.cv_results_)
+knobs = ["learning_rate", "max_leaf_nodes", "min_samples_leaf", "l2_regularization"]
+for knob in knobs:
+    r = res[f"param_model__{knob}"].astype(float).corr(res["mean_test_score"])
+    print(f"{knob:18s} correlation with score: {r:+.2f}")</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>learning_rate      correlation with score: -0.77
+max_leaf_nodes     correlation with score: +0.27
+min_samples_leaf   correlation with score: +0.54
+l2_regularization  correlation with score: +0.18</code></pre>
+                        </div>
+                        <p>The learning rate is most strongly linked to the score, and negatively: slower learning does better. Larger leaves (<code>min_samples_leaf</code>) help too. Both are ways of making each tree's correction smaller and less specific, which fits the overfitting diagnosis from Lesson 6.1. With only 15 settings these correlations are rough (and a log-scale knob is better judged on its log), but this kind of quick look tells you where to focus a second, narrower search.</p>
+                    </details>
+                </div>
 
-# 4. Hyperparameter Importance Analysis
-def analyze_hyperparameter_importance(cv_results):
-    """
-    Analyze which hyperparameters have the most impact on performance
-    """
-    
-    results_df = pd.DataFrame(cv_results)
-    
-    # Calculate variance in scores for each hyperparameter
-    param_importance = {}
-    
-    for param in [col for col in results_df.columns if col.startswith('param_')]:
-        if param != 'param_random_state':
-            param_name = param.replace('param_', '')
-            
-            # Group by this parameter and calculate variance
-            grouped = results_df.groupby(param)['mean_test_score']
-            variance = grouped.mean().var()
-            
-            param_importance[param_name] = variance
-    
-    # Sort by importance
-    importance_df = pd.DataFrame.from_dict(param_importance, orient='index', columns=['Importance'])
-    importance_df = importance_df.sort_values('Importance', ascending=False)
-    
-    # Plot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    importance_df.plot(kind='barh', ax=ax)
-    ax.set_xlabel('Variance in Performance')
-    ax.set_title('Hyperparameter Importance')
-    plt.tight_layout()
-    plt.show()
-    
-    return importance_df
+                <div class="card">
+                    <h3>🏋️ Exercise 2: Grid Search for Nearest Neighbors</h3>
+                    <p>Tune a <code>KNeighborsClassifier</code> in a pipeline with the project's <code>preprocess</code>: <code>n_neighbors</code> in <code>[10, 25, 50, 100]</code> and <code>weights</code> in <code>["uniform", "distance"]</code>, scored by average precision with <code>cv</code>. Print the best setting and its score. Does tuning bring nearest neighbors anywhere near boosting?</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Name the steps <code>"prep"</code> and <code>"model"</code> so the grid keys are <code>model__n_neighbors</code> and <code>model__weights</code>. Wrap the shared <code>preprocess</code> in <code>clone()</code> so this pipeline gets its own copy.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.base import clone
+from sklearn.model_selection import GridSearchCV
+from sklearn.neighbors import KNeighborsClassifier
 
-# Analyze importance from grid search
-print("\n" + "="*60)
-print("HYPERPARAMETER IMPORTANCE ANALYSIS")
-print("="*60)
+knn = Pipeline([("prep", clone(preprocess)), ("model", KNeighborsClassifier())])
+knn_search = GridSearchCV(knn, {"model__n_neighbors": [10, 25, 50, 100],
+                                "model__weights": ["uniform", "distance"]},
+                          cv=cv, scoring="average_precision", n_jobs=-1).fit(X_train, y_train)
+print(knn_search.best_params_, round(knn_search.best_score_, 3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>{'model__n_neighbors': 25, 'model__weights': 'distance'} 0.54</code></pre>
+                        </div>
+                        <p>Tuning helps nearest neighbors a little, but its best is still well below tuned boosting. Tuning moves a model toward its own ceiling; it does not change which family has the higher ceiling. That is why model selection (Lesson 6.1) and tuning go together.</p>
+                    </details>
+                </div>
 
-importance = analyze_hyperparameter_importance(grid_search_rf.cv_results_)
-print("\nHyperparameter Importance (by variance):")
-print(importance)
+                <div class="card">
+                    <h3>🏋️ Exercise 3: Two Metrics, One Decider</h3>
+                    <p>Fix common mistake 3: run a <code>GridSearchCV</code> over logistic regression's <code>C</code> in <code>[0.01, 0.1, 1, 10]</code> with <code>scoring=["roc_auc", "average_precision"]</code> and <code>refit="average_precision"</code>. Print, for each <code>C</code>, both mean scores, and print <code>best_params_</code>.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>With several metrics, <code>cv_results_</code> has columns named <code>mean_test_roc_auc</code> and <code>mean_test_average_precision</code>.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.linear_model import LogisticRegression
 
-# 5. Save and load best models
-import joblib
+logit = Pipeline([("prep", clone(preprocess)), ("model", LogisticRegression(max_iter=1000))])
+two = GridSearchCV(logit, {"model__C": [0.01, 0.1, 1, 10]}, cv=cv,
+                   scoring=["roc_auc", "average_precision"], refit="average_precision").fit(X_train, y_train)
+table = pd.DataFrame(two.cv_results_)[["param_model__C", "mean_test_roc_auc", "mean_test_average_precision"]]
+print(table.round(4).to_string(index=False))
+print("chosen by average precision:", two.best_params_)</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code> param_model__C  mean_test_roc_auc  mean_test_average_precision
+           0.01             0.8336                       0.5278
+           0.10             0.8330                       0.5296
+           1.00             0.8324                       0.5282
+          10.00             0.8320                       0.5279
+chosen by average precision: {'model__C': 0.1}</code></pre>
+                        </div>
+                        <p>Both metrics are recorded, and <code>refit</code> says which one decides. Here the two even disagree: AUC prefers <code>C=0.01</code> and average precision prefers <code>C=0.1</code>. The differences are tiny (logistic regression is not overfitting), but when the metrics disagree by more, this is how you make the business metric win.</p>
+                    </details>
+                </div>
 
-# Save the best model and its hyperparameters
-best_model_data = {
-    'model': grid_search_rf.best_estimator_,
-    'params': grid_search_rf.best_params_,
-    'cv_score': grid_search_rf.best_score_,
-    'test_score': test_score,
-    'feature_names': data.feature_names
-}
+                <div class="card">
+                    <h3>🏋️ Exercise 4: Halving Over Boosting Rounds (Stretch)</h3>
+                    <p>Successive halving can grow a hyperparameter instead of the rows. Run a <code>HalvingGridSearchCV</code> over <code>model__learning_rate</code> in <code>[0.03, 0.1, 0.3]</code> and <code>model__max_leaf_nodes</code> in <code>[4, 8, 16]</code>, with <code>resource="model__max_iter"</code>, <code>min_resources=20</code>, <code>max_resources=180</code>, <code>factor=3</code> and the project's <code>cv</code>, scored by average precision. Print the rounds (candidates and boosting rounds per candidate) and the winner.</p>
+                    <details>
+                        <summary>💡 Hint</summary>
+                        <p>Remember the experimental import. In <code>cv_results_</code>, the <code>n_resources</code> column holds the number of boosting rounds each candidate got in that round.</p>
+                    </details>
+                    <details>
+                        <summary>✅ Solution</summary>
+                        <pre><code class="language-python">from sklearn.experimental import enable_halving_search_cv  # noqa: F401
+from sklearn.model_selection import HalvingGridSearchCV
 
-# joblib.dump(best_model_data, 'best_model_tuned.pkl')
-print("\n✅ Best model saved with hyperparameters")
+rounds_search = HalvingGridSearchCV(
+    pipe, {"model__learning_rate": [0.03, 0.1, 0.3], "model__max_leaf_nodes": [4, 8, 16]},
+    resource="model__max_iter", min_resources=20, max_resources=180, factor=3,
+    cv=cv, scoring="average_precision", n_jobs=-1).fit(X_train, y_train)
+r = pd.DataFrame(rounds_search.cv_results_)
+print(r.groupby("iter").agg(candidates=("n_resources", "size"), boosting_rounds=("n_resources", "first")))
+print(rounds_search.best_params_, round(rounds_search.best_score_, 3))</code></pre>
+                        <div class="card card-output">
+                            <h4>Output</h4>
+                            <pre><code>      candidates  boosting_rounds
+iter
+0              9               20
+1              3               60
+2              1              180
+{'model__learning_rate': 0.1, 'model__max_leaf_nodes': 8, 'model__max_iter': 180} 0.613</code></pre>
+                        </div>
+                        <p>Nine settings got 20 boosting rounds each, the best three got 60, and the finalist got 180. Short runs are a fair preview for boosting because early rounds already show whether a learning rate and tree size are sensible. Notice the bias, though: a small learning rate needs many rounds to shine, so it can be knocked out early. Halving is a speed tool, not a guarantee.</p>
+                    </details>
+                </div>
+            </section>
 
-# Summary of best practices
-print("\n" + "="*60)
-print("🎯 HYPERPARAMETER TUNING CHECKLIST")
-print("="*60)
+            <!-- ============================================================ -->
+            <section id="quiz" class="lesson-section">
+                <h2>🎯 Quick Quiz</h2>
+                <div class="card quiz-container">
+                    <h3>🎯 Check Your Understanding</h3>
 
-checklist = """
-□ Start with Random Search for initial exploration
-□ Use Grid Search for fine-tuning around best parameters
-□ Consider Bayesian Optimization for expensive models
-□ Always use cross-validation (nested CV for final evaluation)
-□ Monitor for overfitting with validation curves
-□ Use pipelines to tune preprocessing and model together
-□ Save computational time with:
-  - Successive halving / early stopping
-  - Multi-fidelity optimization
-  - Parallel processing (n_jobs=-1)
-□ Document best parameters and scores
-□ Consider domain knowledge in parameter ranges
-□ Use appropriate scoring metrics for your problem
-□ Perform importance analysis to focus future tuning
-"""
+                    <div class="quiz-question">
+                        <p><strong>Question 1:</strong> A <code>GridSearchCV</code> uses this grid with <code>cv=5</code>. How many fits does it run, not counting the final refit?</p>
+                        <pre><code class="language-python">from sklearn.model_selection import ParameterGrid
 
-print(checklist)</code></pre>
+quiz_grid = {"model__C": [0.01, 0.1, 1, 10], "model__class_weight": [None, "balanced"]}
+print(len(ParameterGrid(quiz_grid)) * 5)</code></pre>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Lists in a grid combine: every value of one is paired with every value of the other. How many combinations is that, before the folds?">
+                                A) 6
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="4 values of C times 2 values of class_weight is 8 settings, and each setting is cross-validated with 5 folds, so 40 fits. The refit on all training data is one more.">
+                                B) 40
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Count the settings first (the product of the list lengths), then multiply by the number of folds.">
+                                C) 30
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-    <h2>Common Hyperparameters by Algorithm</h2>
-    
-    <pre class="language-python"><code># Quick reference for common algorithms
+                    <div class="quiz-question">
+                        <p><strong>Question 2:</strong> Why is a search's <code>best_score_</code> usually a little optimistic?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Every cross-validated score includes some noise. Picking the maximum of many noisy scores also picks favorable noise, so the winner tends to look better than it is: the winner's curse. Nested cross-validation or an untouched test set corrects for it.">
+                                A) It is the highest of many noisy scores, so it partly reflects lucky noise
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The searches in this lesson only ever saw X_train. Where does the optimism come from if not from the test set?">
+                                B) It is computed on the test set
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="best_score_ is the mean of the validation folds, not a training score. What happens when you take the best of many such means?">
+                                C) It is the score on the training data the model was fitted on
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-hyperparameter_guide = {
-    'Random Forest': {
-        'n_estimators': 'Number of trees (100-1000)',
-        'max_depth': 'Maximum tree depth (None, 10-50)',
-        'min_samples_split': 'Minimum samples to split node (2-20)',
-        'min_samples_leaf': 'Minimum samples in leaf (1-10)',
-        'max_features': 'Features to consider at split (auto, sqrt, log2)',
-        'bootstrap': 'Whether to bootstrap samples (True/False)'
-    },
-    
-    'SVM': {
-        'C': 'Regularization parameter (0.001-1000)',
-        'kernel': 'Kernel type (linear, rbf, poly, sigmoid)',
-        'gamma': 'Kernel coefficient (scale, auto, 0.0001-10)',
-        'degree': 'Polynomial degree (2-5)',
-        'coef0': 'Independent term (0-10)'
-    },
-    
-    'Neural Network': {
-        'hidden_layer_sizes': 'Number and size of hidden layers',
-        'activation': 'Activation function (relu, tanh, logistic)',
-        'learning_rate': 'Learning rate (constant, invscaling, adaptive)',
-        'learning_rate_init': 'Initial learning rate (0.0001-1)',
-        'alpha': 'L2 regularization (0.0001-1)',
-        'batch_size': 'Mini-batch size (16-512)',
-        'max_iter': 'Maximum iterations (100-2000)'
-    },
-    
-    'XGBoost': {
-        'n_estimators': 'Number of boosting rounds (100-1000)',
-        'max_depth': 'Maximum tree depth (3-10)',
-        'learning_rate': 'Boosting learning rate (0.01-0.3)',
-        'subsample': 'Subsample ratio (0.5-1.0)',
-        'colsample_bytree': 'Column subsample ratio (0.5-1.0)',
-        'gamma': 'Minimum loss reduction (0-5)',
-        'reg_alpha': 'L1 regularization (0-10)',
-        'reg_lambda': 'L2 regularization (0-10)'
-    },
-    
-    'Logistic Regression': {
-        'C': 'Inverse regularization strength (0.001-1000)',
-        'penalty': 'Regularization type (l1, l2, elasticnet, none)',
-        'solver': 'Optimization algorithm (liblinear, lbfgs, sag, saga)',
-        'max_iter': 'Maximum iterations (100-1000)',
-        'l1_ratio': 'ElasticNet mixing parameter (0-1)'
-    }
-}
+                    <div class="quiz-question">
+                        <p><strong>Question 3:</strong> Two hyperparameters are tuned with 9 trials, and only the first one really affects the score. Why does random search tend to beat a 3 x 3 grid?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="Both strategies run the same 9 trials with the same cross-validation. What differs is which settings they try.">
+                                A) Random search uses more cross-validation folds
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Plain random search draws every trial independently; it does not look at earlier results. Which tool in the lesson does?">
+                                B) Random search learns from earlier trials where to look next
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="A 3 x 3 grid tests only 3 distinct values of the important hyperparameter, repeating each three times. Nine random trials test nine distinct values of it, so they are more likely to land near its best value.">
+                                C) It tries 9 distinct values of the important hyperparameter instead of 3
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-# Display as formatted table
-for algorithm, params in hyperparameter_guide.items():
-    print(f"\n{'='*60}")
-    print(f"{algorithm} Hyperparameters")
-    print('='*60)
-    for param, description in params.items():
-        print(f"  • {param:25} : {description}")
+                    <div class="quiz-question">
+                        <p><strong>Question 4:</strong> What happens in the first round of <code>HalvingRandomSearchCV</code> with <code>factor=3</code>?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="false" data-hint="That would make halving as expensive as a full random search. What does the first round save on?">
+                                A) Every candidate is scored on all the training rows
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="Halving refers to dropping candidates, and the factor sets how many survive. Does it drop half, and of what?">
+                                B) Half of the hyperparameters are removed from the space
+                            </button>
+                            <button class="quiz-option" data-correct="true" data-explanation="All candidates are cross-validated cheaply on a small slice of the rows; the best third move on to the next round, where each gets three times as many rows.">
+                                C) Every candidate is scored on a small slice of rows, and the best third go on
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
 
-print("\n💡 Pro Tip: Start with default values, then tune the most important ones first!")</code></pre>
+                    <div class="quiz-question">
+                        <p><strong>Question 5:</strong> A pipeline is built as <code>Pipeline([("prep", preprocess), ("model", HistGradientBoostingClassifier())])</code>. Which key tunes the boosting learning rate in a search?</p>
+                        <div class="quiz-options">
+                            <button class="quiz-option" data-correct="true" data-explanation="Pipeline parameters are named step name, two underscores, parameter name. The step is called model, so the key is model__learning_rate.">
+                                A) <code>"model__learning_rate"</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="The search sets parameters on the pipeline, and the pipeline itself has no learning_rate. How do you point at a step inside it?">
+                                B) <code>"learning_rate"</code>
+                            </button>
+                            <button class="quiz-option" data-correct="false" data-hint="That naming would apply with make_pipeline, which names steps after their class. What name did this pipeline give the step?">
+                                C) <code>"histgradientboostingclassifier__learning_rate"</code>
+                            </button>
+                        </div>
+                        <div class="quiz-feedback"></div>
+                    </div>
+                </div>
+            </section>
 
-    <h2>Practice Exercises</h2>
-    
-    <h3>Exercise 1: Complete Hyperparameter Tuning Pipeline</h3>
-    <p>Build a complete pipeline that:</p>
-    <ol>
-        <li>Loads a dataset of your choice</li>
-        <li>Performs initial Random Search to identify promising ranges</li>
-        <li>Refines with Grid Search around best parameters</li>
-        <li>Validates with nested cross-validation</li>
-        <li>Compares multiple algorithms with their optimal hyperparameters</li>
-    </ol>
+            <!-- ============================================================ -->
+            <section id="faq" class="lesson-section">
+                <h2>❓ Common Questions at This Stage</h2>
 
-    <h3>Exercise 2: Custom Search Strategy</h3>
-    <p>Implement a custom search strategy that:</p>
-    <ol>
-        <li>Uses domain knowledge to set initial parameter ranges</li>
-        <li>Adaptively narrows the search space based on results</li>
-        <li>Implements early stopping for poor configurations</li>
-        <li>Combines multiple scoring metrics</li>
-    </ol>
+                <details>
+                    <summary>Which strategy should I reach for first?</summary>
+                    <p>A random search over generous ranges, with a budget you can afford (often 20 to 60 trials). Use a grid when there are only one or two knobs with a handful of meaningful values. Add successive halving when single fits are slow and you want to screen many candidates. Reach for Optuna when trials are expensive, the space has many or conditional knobs, or you want pruning.</p>
+                </details>
+                <details>
+                    <summary>How many trials are enough?</summary>
+                    <p>Watch the best-so-far curve. When it has been flat for a third of your trials, more trials are unlikely to pay off. A classic rule of thumb from the random-search literature: 60 random trials have a 95% chance of landing in the best 5% of the space, whatever its size.</p>
+                </details>
+                <details>
+                    <summary>Should I tune the decision threshold too?</summary>
+                    <p>The threshold that turns a probability into a yes or no is a separate, later decision, made for the business cost of each kind of error (Lesson 1.4). Tune the model for a ranking metric first; then pick the threshold, for example with <code>TunedThresholdClassifierCV</code>, on top of the tuned model.</p>
+                </details>
+                <details>
+                    <summary>Is it worth tuning preprocessing settings, like the imputer strategy?</summary>
+                    <p>Sometimes, and it is free to try because the pipeline exposes them (<code>prep__num__simpleimputer__strategy</code>). On this data the choice barely matters because few values are missing. Feature choices that change what the model can see, such as a recency threshold, usually matter much more than preprocessing switches.</p>
+                </details>
+                <details>
+                    <summary>What about AutoML tools that tune everything for me?</summary>
+                    <p>They automate exactly this lesson: a search over models and settings, with cross-validation. They are useful, and they are only as honest as their evaluation, so the habits here (fixed metric, untouched test set, nested estimates) still apply. The <a href="future_automl.html">AutoML reading</a> in the Going Further section looks at them.</p>
+                </details>
 
-    <h3>Exercise 3: Hyperparameter Analysis Dashboard</h3>
-    <p>Create an analysis dashboard that:</p>
-    <ol>
-        <li>Visualizes the impact of each hyperparameter</li>
-        <li>Shows learning curves for different configurations</li>
-        <li>Identifies signs of overfitting/underfitting</li>
-        <li>Recommends next parameters to try</li>
-    </ol>
+                <div class="card card-accent">
+                    <h3>🌟 Going Further: Bonus Challenge</h3>
+                    <p>Tune the random forest from Lesson 6.1 with Optuna (<code>n_estimators</code> 100 to 400, <code>max_features</code> 0.2 to 1.0, <code>min_samples_leaf</code> 1 to 30) for 15 trials, scored by ROC AUC. Then put tuned boosting and tuned forest through Lesson 6.1's paired comparison on identical folds. Does tuning change which family wins, and is the gap bigger than the noise?</p>
+                </div>
+            </section>
 
-    <h2>Key Takeaways</h2>
-    <ul>
-        <li>🎯 Hyperparameter tuning can improve model performance by 10-30% or more</li>
-        <li>🔍 Grid Search is exhaustive but expensive; use for fine-tuning</li>
-        <li>🎲 Random Search is often more efficient than Grid Search</li>
-        <li>🧠 Bayesian Optimization is best for expensive models</li>
-        <li>⚡ Use multi-fidelity approaches to save computation time</li>
-        <li>📊 Always use cross-validation to avoid overfitting to validation set</li>
-        <li>🔄 Nested CV provides unbiased performance estimates</li>
-        <li>📈 Monitor learning curves to detect overfitting</li>
-        <li>💾 Save best parameters and models for reproducibility</li>
-        <li>🎨 Consider domain knowledge when setting parameter ranges</li>
-    </ul>
+            <!-- ============================================================ -->
+            <section id="journal" class="lesson-section">
+                <h2>📓 Learning Journal</h2>
+                <div class="card card-accent">
+                    <p>Take five minutes to write in your learning journal (the <code>journal.md</code> file you started in Lesson 0.1, or a paper notebook). Jot down:</p>
+                    <ul>
+                        <li><strong>Key concepts</strong> you learned today</li>
+                        <li><strong>Techniques that clicked</strong> (and the ones that have not, yet)</li>
+                        <li><strong>Questions or confusion</strong> to come back to</li>
+                        <li><strong>Ideas to try</strong> on your own</li>
+                        <li><strong>Progress and feelings</strong>: how did this lesson go for you?</li>
+                    </ul>
+                    <p><strong>✍️ This lesson's prompt:</strong> Write down three numbers from today: the default model's cross-validated score, the best tuned score, and the nested or test score. Explain to an imagined manager, in two or three sentences, why the middle number is not the one to promise. Then describe the camp stove analogy for one of the four search strategies.</p>
+                </div>
+            </section>
 
-    <h2>Summary</h2>
-    <p>Hyperparameter tuning is both an art and a science. While automated methods like Grid Search and Bayesian Optimization are powerful, combining them with domain knowledge and careful analysis yields the best results. Remember that the goal isn't always the absolute best performance, but finding a good balance between model performance, training time, and generalization ability.</p>
+            <!-- ============================================================ -->
+            <section id="summary" class="lesson-section">
+                <h2>📝 Lesson Summary</h2>
 
-    <!-- Learning Journal (REQUIRED per the Courseware Authoring Standard) -->
-    <section id="journal" class="lesson-section">
-        <h2>📓 Learning Journal</h2>
-        <div class="card card-info">
-            <p>Keep a learning journal — digital or physical. After this lesson, take a few minutes to write down:</p>
-            <ul>
-                <li><strong>Key concepts</strong> you learned</li>
-                <li><strong>Techniques that clicked</strong> for you</li>
-                <li><strong>Questions or confusion points</strong> to revisit</li>
-                <li><strong>Ideas you want to try</strong></li>
-                <li><strong>Your progress and feelings</strong> about learning this</li>
-            </ul>
-            <p><strong>✍️ This lesson's prompt:</strong> Random and Bayesian search often beat Grid Search using fewer trials.
-            Why do you think spending your compute budget "smartly" can outperform trying every combination — and where
-            might that intuition apply beyond machine learning?</p>
+                <div class="card card-success">
+                    <h3>🎓 Key Takeaways</h3>
+                    <ul>
+                        <li>Hyperparameters are chosen by you before <code>fit</code>; tuning searches for good ones with cross-validation on the training data</li>
+                        <li>Searches work on whole pipelines; keys are <code>step__param</code>, and <code>get_params()</code> lists them</li>
+                        <li><code>GridSearchCV</code> tries every combination; its cost is the product of the list lengths</li>
+                        <li><code>RandomizedSearchCV</code> samples from distributions (<code>loguniform</code>, <code>randint</code>) and usually beats a grid of the same size</li>
+                        <li>Successive halving screens many candidates cheaply on a growing resource, at the risk of dropping slow starters</li>
+                        <li>Optuna's TPE sampler learns from past trials; seed it, and run trials sequentially for repeatable results</li>
+                        <li><code>best_score_</code> is optimistic (the winner's curse): report a nested cross-validation estimate or a one-time test score</li>
+                        <li>On Pinecrest churn, smaller trees fixed boosting's overfitting and lifted it past the forest; tuning cannot lift a weaker model family to a stronger one's level</li>
+                    </ul>
+                </div>
+
+                <div class="card card-info">
+                    <h3>🏆 What You've Accomplished</h3>
+                    <ul>
+                        <li>You ran all four major tuning strategies on the same problem and compared what each one cost</li>
+                        <li>You turned Lesson 6.1's overfitting diagnosis into a measurable improvement</li>
+                        <li>You estimated a tuned model honestly with nested cross-validation</li>
+                        <li>You tuned the retention model for the business metric, checked it on the shortlist, and saved its settings for later</li>
+                    </ul>
+                </div>
+
+                <h3>🔭 Looking Ahead</h3>
+                <p>In <a href="model_interpretation.html"><strong>Lesson 7.1: Interpreting Models</strong></a> you will open up a gradient-boosting churn model and ask what it learned: which features drive its predictions, how a prediction changes as one feature changes, and how to tell those descriptions of the model apart from claims about cause and effect.</p>
+
+                <h3>📋 Before the Next Lesson</h3>
+                <ul>
+                    <li>Keep <code>best_params.json</code> and your project notebook: the Lesson 13.1 case study tunes a churn booster the same way, and the file is a record of your settings for your own capstone.</li>
+                    <li>Rerun the project search with <code>n_iter=30</code>. Does the best score move by more than one standard deviation? Write down what you conclude about the budget.</li>
+                    <li>Predict which two features a churn booster leans on most. Lesson 7.1 will tell you if you were right.</li>
+                </ul>
+
+                <div class="card card-accent">
+                    <h3>🌱 Encouragement for the Journey</h3>
+                    <p>You just did what separates a careful practitioner from a button-pusher: you tuned a model, measured the gain, and refused to oversell it. Tuning can feel like a slot machine at first, pulling levers and hoping for a higher number. Now you know how to spend a budget deliberately, read what the search tells you about the data, and report a number you can stand behind. Module 7 builds directly on this: a model worth explaining is a model you can trust.</p>
+                </div>
+            </section>
+
+            <nav class="lesson-nav" aria-label="Lesson Navigation">
+                <a href="evaluation_model_selection.html" class="prev-lesson">← Previous: Model Selection and Learning Curves</a>
+                <a href="index.html" class="home-link">🏠 Course Home</a>
+                <a href="model_interpretation.html" class="next-lesson">Next: Interpreting Models →</a>
+            </nav>
         </div>
-    </section>
-
-    <!-- Lesson Summary (full standard block) -->
-    <section id="summary" class="lesson-section">
-        <h2>📝 Lesson Summary</h2>
-        <div class="card card-success">
-            <h3>🎓 Key Takeaways</h3>
-            <ul>
-                <li>Hyperparameters control <em>how</em> a model learns; you set them before training, unlike the parameters learned from data.</li>
-                <li>Grid Search is exhaustive but expensive; Random Search covers large spaces more efficiently for the same budget.</li>
-                <li>Bayesian optimization uses past trials to decide where to look next, converging faster on strong settings.</li>
-                <li>Always tune with cross-validation and keep a held-out test set so you don't overfit to the validation folds.</li>
-            </ul>
-        </div>
-        <h3>🎉 What You've Accomplished</h3>
-        <p>You can now systematically search for a model's best configuration instead of guessing — choosing the right
-        search strategy for your time and compute budget and validating the result honestly.</p>
-        <h3>❓ Common Questions at This Stage</h3>
-        <details>
-            <summary>Grid or Random Search — which should I reach for first?</summary>
-            <p>Start with Random Search. For the same number of trials it usually finds better settings, especially when
-            only a few hyperparameters really matter. Use Grid Search when the space is small and you want full coverage.</p>
-        </details>
-        <details>
-            <summary>Why do I need nested cross-validation?</summary>
-            <p>If you tune and evaluate on the same folds, your reported score is optimistic. Nested CV tunes in an inner
-            loop and measures on an outer loop, giving an unbiased estimate of real-world performance.</p>
-        </details>
-        <details>
-            <summary>When is more tuning not worth it?</summary>
-            <p>When gains flatten out. Past a point, better data, features, or a different model class will help more than
-            squeezing the last fraction of a percent from hyperparameters — and over-tuning risks fitting the validation noise.</p>
-        </details>
-        <h3>🔭 Looking Ahead</h3>
-        <p>Once you can tune a model, the next step is packaging preprocessing and the tuned estimator together so the
-        whole workflow is reproducible and leak-free.</p>
-        <h3>✅ Before the Next Lesson</h3>
-        <ul>
-            <li>Tune one model with both <code>GridSearchCV</code> and <code>RandomizedSearchCV</code> and compare the time each took.</li>
-            <li>Wrap your search in a cross-validation loop and confirm the best parameters are stable across folds.</li>
-            <li>Write your Learning Journal entry for this lesson</li>
-        </ul>
-        <div class="card card-accent" style="text-align: center; padding: 2rem;">
-            <h3>🌟 Encouragement for the Journey</h3>
-            <p>Tuning rewards patience and curiosity, not luck. Each search teaches you how a model responds to its knobs —
-            and that intuition is what separates careful practitioners from button-pushers. You're building it now.</p>
-        </div>
-    </section>
-
-    <!-- Navigation -->
-    <nav class="lesson-nav" aria-label="Lesson navigation">
-        <a href="evaluation_model_selection.html" class="prev-lesson">Previous: Model Selection</a>
-        <a href="index.html" class="home-link">Course Home</a>
-        <a href="pipelines_composite.html" class="next-lesson">Next: Pipelines & Composite Estimators</a>
-    </nav>
-    
-    <script src="js/clipboard.js"></script>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <p>&copy; 2026 Ray de la Paz. Python Machine Learning. All rights reserved.</p>
         <div class="footer-links">
@@ -1130,6 +986,10 @@ print("\n💡 Pro Tip: Start with default values, then tune the most important o
             <a href="https://rays-home.netlify.app/contact">Contact</a>
             <a href="#" id="print-button">Print Page</a>
         </div>
+        <p><small>Press <kbd>?</kbd> for keyboard shortcuts</small></p>
     </footer>
+
+    <script src="js/clipboard.js"></script>
+    <script src="js/course-enhancements.js"></script>
 </body>
 </html>
